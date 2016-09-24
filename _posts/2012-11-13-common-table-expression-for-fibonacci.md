@@ -27,7 +27,7 @@ More for my amusement than anything; the following t-sql query utilizing a <a hr
 	FROM
 		[Fibonacci]
 	WHERE
-		[Index] &lt; 25
+		[Index] < 25
 )
 SELECT
 	[Number],
