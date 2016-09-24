@@ -101,4 +101,4 @@ Or how about a more complicated example. Let's say you were writing a genetic al
         });
 {% endhighlight %}
 
-You can view the results of the tests <a href="/examples/crossovertests.htm" target="_blank">here</a>. Notice that you can click on each of the tests in the results to get more details. If any of the tests had failed, the failing tests would be marked in red, and expanded, showing the expected value, and the actual value, along with other helpful information.
+You can view the results of the tests <a href="/crossovertests">here</a>. Notice that you can click on each of the tests in the results to get more details. If any of the tests had failed, the failing tests would be marked in red, and expanded, showing the expected value, and the actual value, along with other helpful information.

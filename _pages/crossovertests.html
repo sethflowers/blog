@@ -1,0 +1,100 @@
+---
+layout: null
+permalink: /crossovertests/
+---
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>CrossOver Tests</title>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/qunit/1.5.0/qunit.min.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/qunit/1.5.0/qunit.min.css" media="screen" />
+    
+    <script type="text/javascript">
+        $(function () {
+
+            var geneticAlgorithm = {
+                onePointCrossOver: function (mom, dad, index) {
+                    var result = [];
+
+                    result[result.length] = mom.slice(0, index)
+                        .concat(dad.slice(index));
+
+                    result[result.length] = dad.slice(0, index)
+                        .concat(mom.slice(index));
+
+                    return result;
+                },
+                twoPointCrossOver: function (mom, dad, indexA, indexB) {
+                    var indexAResult =
+                        this.onePointCrossOver(mom, dad, indexA);
+
+                    return this.onePointCrossOver(
+                        indexAResult[0], indexAResult[1], indexB);
+                }
+            };
+
+            function compareResults(actual, expected) {
+                equal(actual.length, expected.length,
+                    "The length should be the same.");
+                equal(actual.length, 2,
+                    "There should be two children.");
+
+                compareChild(actual[0], expected[0]);
+                compareChild(actual[1], expected[1]);
+            }
+
+            function compareChild(actual, expected) {
+                equal(actual.length, expected.length,
+                    "The number of genes should be the same.");
+
+                for (var i = 0; i < expected.length; i++) {
+                    equal(actual[i], expected[i],
+                        "The gene at '" + i + "' should be the same.");
+                }
+            }
+
+            module("Cross Over tests");
+
+            test("onePointCrossOver tests", function () {
+                var mom = [1, 2, 3, 4];
+                var dad = [5, 6, 7, 8];
+
+                var childA = [1, 2, 7, 8];
+                var childB = [5, 6, 3, 4];
+
+                var actual = geneticAlgorithm
+                    .onePointCrossOver(mom, dad, 2);
+                var expected = [childA, childB];
+
+                compareResults(actual, expected);
+            });
+
+            test("twoPointCrossOver tests", function () {
+                var mom = [1, 2, 3, 4, 5, 6];
+                var dad = [7, 8, 9, 10, 11, 12];
+
+                var childA = [1, 2, 9, 10, 5, 6];
+                var childB = [7, 8, 3, 4, 11, 12];
+
+                var actual = geneticAlgorithm
+                    .twoPointCrossOver(mom, dad, 2, 4);
+                var expected = [childA, childB];
+
+                compareResults(actual, expected);
+            });
+        });
+    </script>
+  
+</head>
+<body>
+    <h1 id="qunit-header">Cross Over Tests</h1>
+    <h2 id="qunit-banner"></h2>
+    <div id="qunit-testrunner-toolbar"></div>
+    <h2 id="qunit-userAgent"></h2>
+    <ol id="qunit-tests"></ol>
+    <div id="qunit-fixture"></div>
+</body>
+</html>

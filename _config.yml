@@ -24,5 +24,6 @@ github_username:  sethflowers
 # Build settings
 markdown: kramdown
 theme: minima
+include: ["_pages"]
 
 repository: sethflowers/blog
