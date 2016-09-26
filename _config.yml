@@ -18,7 +18,7 @@ title: Seth Flowers
 description: > # this means to ignore newlines until "baseurl:"
   ramblings of yet another mind
 baseurl: "/blog" # the subpath of your site, e.g. /blog
-url: "https://sethflowers.com" # the base hostname & protocol for your site
+#url: "https://sethflowers.com" # the base hostname & protocol for your site
 github_username:  sethflowers
 
 # Build settings
