@@ -37,3 +37,11 @@ $on-laptop:        800px;
 
 // Import partials from the `minima` theme.
 @import "minima";
+
+.blog-roll {
+  margin-top: 45px;
+
+  .blog-roll-header {
+    font-size: 1.5em;
+  }
+}
