@@ -4,6 +4,7 @@ title: Force StyleCop to Ignore a File
 date: 2012-07-30 22:44
 comments: true
 categories: []
+permalink: /blog/force-stylecop-to-ignore-a-file/
 ---
 There are multiple ways to cause <a href="http://stylecop.codeplex.com/" target="_blank">StyleCop</a> to ignore a file. You might want to do this for instance, if you turn on StyleCop for a legacy project. Rather than spending hours getting every file in the legacy project to pass StyleCop, you can have immediate benefits by turning it on for the project, and then selectively turning it off for the legacy files in the project that violate StyleCop. This means that any new files added to the project can have StyleCop enforced by default.
 
