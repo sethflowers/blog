@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Blog moved to github-pages"
+title:  "Blog moved to GitHub pPges"
 date:   2016-09-23 07:12:00 -0400
 #categories: jekyll github
 ---
@@ -15,7 +15,6 @@ I almost deleted my blog, for several reasons:
 I decided against it, and ended up moving the blog to [GitHub Pages](https://pages.github.com/). My reasons were the following:
 
 - Free
-- Free https
 - No more Wordpress
 - No more db
 - Faster
