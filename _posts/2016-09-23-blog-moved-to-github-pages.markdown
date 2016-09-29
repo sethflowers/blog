@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  "Blog moved to GitHub pPges"
+title:  "Blog moved to GitHub Pages"
 date:   2016-09-23 07:12:00 -0400
 #categories: jekyll github
 ---
