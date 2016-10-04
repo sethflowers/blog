@@ -4,6 +4,7 @@ title: Microsoft Fakes - Visual Studios Ultimate Mistake
 date: 2012-10-08 00:26
 comments: true
 categories: []
+permalink: /blog/microsoft-fakes-visual-studios-ultimate-mistake/
 ---
 Having just recently installed VS 2012 Ultimate, I naturally wanted to unit test a program I had begun coding. Being a big fan of <a href="http://en.wikipedia.org/wiki/Dependency_injection" title="Dependency Injection" target="_blank">Dependency Injection</a> and mocking, my first instinct was to <a href="http://nuget.org/" title="NuGet is a Visual Studio extension that makes it easy to install and update third-party libraries and tools in Visual Studio." target="_blank">Nuget</a> up a reference to <a href="http://code.google.com/p/moq/" title="The simplest mocking library for .NET and Silverlight" target="_blank">Moq</a> in my test project. I began to wonder what other options I might have new to me with VS 2012, and remembered reading that VS 2012 has natively subsumed the <a href="http://research.microsoft.com/en-us/projects/moles/" title="Moles is a lightweight framework for test stubs and detours in .NET that is based on delegates." target="_blank">Moles Framework</a>, and renamed it <a href="http://msdn.microsoft.com/en-us/library/hh549175(v=vs.110).aspx" title="Microsoft Fakes help you isolate the code you are testing by replacing other parts of the application with stubs or shims." target="_blank">Microsoft Fakes</a> after some modifications.
 
