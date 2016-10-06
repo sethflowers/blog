@@ -4,6 +4,7 @@ title: Forcing StyleCop Violations to Break a Build in Visual Studio and MSBuild
 date: 2012-07-30 21:59
 comments: true
 categories: []
+permalink: /blog/forcing-stylecop-violations-to-break-a-build-in-visual-studio-and-msbuild/
 ---
 From <a href="http://stylecop.codeplex.com/" target="_blank">StyleCop's</a> website:
 
