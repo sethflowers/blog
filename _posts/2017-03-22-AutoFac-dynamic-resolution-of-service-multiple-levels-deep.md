@@ -1,7 +1,7 @@
 ---
 layout: post
 title: AutoFac - Dynamic resolution of services multiple levels deep
-date: 2017-03-22 14:03
+date: 2017-03-22 20:33
 comments: false
 categories: []
 ---
@@ -9,10 +9,10 @@ categories: []
 
 Using the [AutoFac](https://autofac.org/) IOC container, I have a hierarchy of services that are three layers deep.
 
-- Each layer is being injected with an instance of the interface below it.
-- The bottom layer is an interface that has multiple implementations.
-- The middle layer is an interface that has a single implementation.
-- The middle layer is being injected with the interface in the bottom layer.
+- A service in each layer is being injected with an instance of an interface in the layer below it.
+- The bottom layer has a single interface that has multiple implementations.
+- The middle layer has a single interface that has a single implementation.
+- The middle layer's service is being injected with the interface in the bottom layer.
 - The top layer has multiple types that are injected with the single interface from the middle layer.
 
 The problem is that depending on the service in the top layer,
@@ -23,7 +23,7 @@ All documentation and examples for resolving different implementations of an int
 
 Adding a third layer, where the middle layer stays the same,
 but you want the bottom layer to change based on the service in the top layer,
-initially seems like a challenge, but can fortunately be solved using the same pattern. 
+initially seems like a challenge, but can fortunately be solved using the same pattern prescribed for the two layer scenario. 
 
 The following is an example unit test, showing how this problem can be solved:
 
