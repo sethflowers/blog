@@ -15,7 +15,7 @@ Without resorting to extensions, or user defined stylesheets, you could do eithe
 - A slightly quicker way is to write some javascript that does the same thing, and add a bookmarklet that just executes the javascript.
 
 These both have the drawback that they only work while viewing the page, and as soon as you refresh, the changes are gone.
-For my purposes, this is fine, since I don't have to do this very often.
+For my purposes, this is fine, since I don't have to do this very often. So, I use the bookmark approach, which is defined below.
 
 <strong>Javascript</strong>
 {% highlight javascript %}
