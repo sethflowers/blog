@@ -11,8 +11,8 @@ The container provides no horizontal scrollbar, so in order to see the end of th
 you've probably had to drag your mouse over the line, literally selecting to the end.
 
 Without resorting to extensions, or user defined stylesheets, you could do either of the following:
-* One hack to make this slightly easier is to pop into the dev tools, find the elements that aren't wide enough, and widen them.
-* A slightly quicker way is to write some javascript that does the same thing, and add a bookmarklet that just executes the javascript.
+- One hack to make this slightly easier is to pop into the dev tools, find the elements that aren't wide enough, and widen them.
+- A slightly quicker way is to write some javascript that does the same thing, and add a bookmarklet that just executes the javascript.
 
 These both have the drawback that they only work while viewing the page, and as soon as you refresh, the changes are gone.
 For my purposes, this is fine, since I don't have to do this very often.
