@@ -28,6 +28,6 @@ makeFullWidth(content);
 makeFullWidth(content.closest('.container'));
 {% endhighlight %}
 
-<strong>Bookmarklet</strong>
+<strong>Bookmarklet</strong><br>
 Drag the following link to your bookmarks.<br>
 <a href="javascript:var makeFullWidth = function(element) { element.style.width = document.body.clientWidth + 'px'; }; var content = document.getElementsByClassName('repository-content')[0]; makeFullWidth(content); makeFullWidth(content.closest('.container'));">GitHub Full Width</a>
