@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Visual Studio - Remove and Sort Usings Keyboard Shortcut
+title: Visual Studio Keyboard Shortcut - Remove and Sort Usings
 date: 2013-03-19 01:43
 comments: true
 categories: []
