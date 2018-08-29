@@ -23,7 +23,7 @@ github_username:  sethflowers
 
 # Build settings
 markdown: kramdown
-theme: minima
+theme: jekyll-theme-cayman
 include: ["_pages"]
 
 repository: sethflowers/blog
