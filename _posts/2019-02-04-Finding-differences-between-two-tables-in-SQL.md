@@ -11,7 +11,7 @@ Sometimes you need to determine if there are any differences between two sets of
 
 **Solution**
 
-This is simple to do generically, with a combination of the [union](https://docs.microsoft.com/en-us/sql/t-sql/language-elements/set-operators-union-transact-sql?view=sql-server-2017), [except, and intercept](https://docs.microsoft.com/en-us/sql/t-sql/language-elements/set-operators-except-and-intersect-transact-sql?view=sql-server-2017) set operators in T-SQL.
+This is simple to do generically, with a combination of the [union](https://docs.microsoft.com/en-us/sql/t-sql/language-elements/set-operators-union-transact-sql?view=sql-server-2017), [except, and intersect](https://docs.microsoft.com/en-us/sql/t-sql/language-elements/set-operators-except-and-intersect-transact-sql?view=sql-server-2017) set operators in T-SQL.
 
 **Example**
 
