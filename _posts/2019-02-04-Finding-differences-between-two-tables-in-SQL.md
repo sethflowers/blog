@@ -15,7 +15,7 @@ This is simple to do generically, with a combination of the [union](https://docs
 
 **Example**
 
-For example, given the following SQL, which creates two tables that differ in on their row with Id = 2, we can use this trick to see what is different:
+For example, given the following SQL, which creates two tables that differ on their row with Id = 2, we can use this trick to see what is different:
 
 {% highlight sql %}
   declare @Actual table ([Id] int, [First] nvarchar(30), [Last] nvarchar(30), [Age] int)
