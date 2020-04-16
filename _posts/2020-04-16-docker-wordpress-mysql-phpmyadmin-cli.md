@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Docker Compose on Windows for WordPress, MySQL, phpMyAdmin, and WordPress CLI
-date: 2019-02-11
+date: 2020-04-16
 comments: false
 categories: [Docker, Docker-Compose, WordPress, MySQL, phpMyAdmin, WordPress CLI]
 ---
