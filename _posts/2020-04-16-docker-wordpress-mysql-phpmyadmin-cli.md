@@ -13,7 +13,7 @@ Docker Compose can be used to quickly pull up the following:
 * A container exposing a phpMyAdmin site for inspecting the MySql container reachable at http://localhost:42333
 * A container running a WordPress CLI to configure the WordPress install in various ways (setting theme, creating users, importing data, etc)
 
-On top of this, the WordPress container runs a custom Shell script which can be used to configured the OS. For instance, I needed libxrender1 to be installed, so my shell script looked like the following:
+On top of this, the WordPress container runs a custom Shell script which can be used to configure the container OS. For instance, I needed libxrender1 to be installed to be able to use wkhtmltopdf, so my shell script looked like the following:
 
 {% highlight sh %}
 
