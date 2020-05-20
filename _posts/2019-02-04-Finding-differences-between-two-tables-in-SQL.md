@@ -46,3 +46,7 @@ This will result in the following output:
 |2  |Christine |Bateman |38  |
 |2  |Mora      |Grissom |12  |
 
+**Caveat**
+
+This approach does not let you know if there are duplicates in one table. For instance, if you have two rows in one table that are identical, and only one row in the second table that matches them, this query finds no differences between the tables. You may still need to rely on comparing the counts for a final verification.
+
