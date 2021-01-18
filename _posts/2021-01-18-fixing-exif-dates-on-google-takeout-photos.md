@@ -180,7 +180,7 @@ function Move-FilesMissingDatesAndTheirJsonFile() {
             # If any of them exist, move them to the expected path in the staging area.
             foreach ($jsonPath in $jsonPaths) {
                 if ([System.IO.File]::Exists($jsonPath)) {
-                    [System.IO.File]::Move($jsonPath, $newMediaFileAbsolutePath + ".json");
+                    [System.IO.File]::Copy($jsonPath, $newMediaFileAbsolutePath + ".json");
                     break;
                 }
             }
