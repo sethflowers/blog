@@ -55,254 +55,254 @@ Of these, about 1500 were missing dates, of which all but about 20 were fixed by
 Take it for what it's worth. It could use some love (parameterization, error-handling, etc), but I didn't care too much,
 as I hopefully never have to use this again.
 
-{% highlight ps %}
+```` powershell
 
-    function Create-OriginalFilesMissingDatesCSV() {
-        ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext mp4 --ext 3gp --ext json .\Takeout -if 'not $exif:datetimeoriginal' -csv > OriginalFilesMissingDates.csv
+function Create-OriginalFilesMissingDatesCSV() {
+    ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext mp4 --ext 3gp --ext json .\Takeout -if 'not $exif:datetimeoriginal' -csv > OriginalFilesMissingDates.csv
+}
+
+function Create-FilesMissingDatesAfterFixCSV() {
+    ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext mp4 --ext 3gp --ext json .\MissingDates -if 'not $exif:datetimeoriginal' -csv > FilesMissingDatesAfterFix.csv
+}
+
+function Get-FolderName() {
+    param (
+        $fullPath
+    )
+
+    return [System.IO.Path]::GetDirectoryName($fullPath);
+}
+
+function Get-FileName() {
+    param (
+        $fullPath
+    )
+
+    return [System.IO.Path]::GetFileName($fullPath);
+}
+
+function Get-FileNameWithoutExtension() {
+    param (
+        $fileName
+    )
+
+    return [System.IO.Path]::GetFileNameWithoutExtension($fileName);
+}
+
+function Get-FileExtension() {
+    param (
+        $fileName
+    )
+
+    return [System.IO.Path]::GetExtension($fileName);
+}
+
+function Get-JsonPaths () {
+    param (
+        $fullFileName
+    )
+    
+    $paths = New-Object Collections.Generic.List[String]
+    $fullPathWithoutExtension = join-path (Get-FolderName $fullFileName) (Get-FileNameWithoutExtension $fullFileName)
+                    
+    # Plus Json
+    $paths.Add($fullFileName + ".json");
+    
+    # Minus Extension, plus Json
+    $paths.Add($fullPathWithoutExtension + ".json");
+    
+    # Minus Extension and last char, plus Json
+    $paths.Add($fullPathWithoutExtension.Substring(0, $fullPathWithoutExtension.length - 1) + ".json");
+    
+    # Some .jpg files have a .jpeg.json file
+    if ((Get-FileExtension $fullFileName) -eq ".jpg") {
+        $paths.Add($fullPathWithoutExtension + ".jpeg.json");
+    } 
+    
+    # Some files have an -edited suffix, but don't have a json.
+    # We can try to get the non-edited json paths for these files.
+    if ($fullPathWithoutExtension.EndsWith("-edited")) {
+        $nonEditedMediaPath = $fullPathWithoutExtension.Substring(0, $fullPathWithoutExtension.Length - "-edited".Length) + (Get-FileExtension $fullFileName)
+        $paths.AddRange((Get-JsonPaths $nonEditedMediaPath))
     }
 
-    function Create-FilesMissingDatesAfterFixCSV() {
-        ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext mp4 --ext 3gp --ext json .\MissingDates -if 'not $exif:datetimeoriginal' -csv > FilesMissingDatesAfterFix.csv
-    }
+    # Powershell has an absolutely ridiculous way to return a typed list.
+    return @(,$paths)
+}
 
-    function Get-FolderName() {
-        param (
-            $fullPath
-        )
+function Copy-FilesMissingDatesAndTheirJsonFile() {
+    param (
+        $rootPath,
+        $missingDatesPath
+    )
 
-        return [System.IO.Path]::GetDirectoryName($fullPath);
-    }
+    Write-Log "File copy - Starting..."
 
-    function Get-FileName() {
-        param (
-            $fullPath
-        )
-
-        return [System.IO.Path]::GetFileName($fullPath);
-    }
-
-    function Get-FileNameWithoutExtension() {
-        param (
-            $fileName
-        )
-
-        return [System.IO.Path]::GetFileNameWithoutExtension($fileName);
-    }
-
-    function Get-FileExtension() {
-        param (
-            $fileName
-        )
-
-        return [System.IO.Path]::GetExtension($fileName);
-    }
-
-    function Get-JsonPaths () {
-        param (
-            $fullFileName
-        )
-        
-        $paths = New-Object Collections.Generic.List[String]
-        $fullPathWithoutExtension = join-path (Get-FolderName $fullFileName) (Get-FileNameWithoutExtension $fullFileName)
-                        
-        # Plus Json
-        $paths.Add($fullFileName + ".json");
-        
-        # Minus Extension, plus Json
-        $paths.Add($fullPathWithoutExtension + ".json");
-        
-        # Minus Extension and last char, plus Json
-        $paths.Add($fullPathWithoutExtension.Substring(0, $fullPathWithoutExtension.length - 1) + ".json");
-        
-        # Some .jpg files have a .jpeg.json file
-        if ((Get-FileExtension $fullFileName) -eq ".jpg") {
-            $paths.Add($fullPathWithoutExtension + ".jpeg.json");
-        } 
-        
-        # Some files have an -edited suffix, but don't have a json.
-        # We can try to get the non-edited json paths for these files.
-        if ($fullPathWithoutExtension.EndsWith("-edited")) {
-            $nonEditedMediaPath = $fullPathWithoutExtension.Substring(0, $fullPathWithoutExtension.Length - "-edited".Length) + (Get-FileExtension $fullFileName)
-            $paths.AddRange((Get-JsonPaths $nonEditedMediaPath))
-        }
-
-        # Powershell has an absolutely ridiculous way to return a typed list.
-        return @(,$paths)
-    }
-
-    function Copy-FilesMissingDatesAndTheirJsonFile() {
-        param (
-            $rootPath,
-            $missingDatesPath
-        )
-
-        Write-Log "File copy - Starting..."
-
-        Import-Csv OriginalFilesMissingDates.csv | select-object -First 10000000 |
-            foreach {
-                # Create paths to the files in question
-
-                # ./Takeout/Google Photos/Photos from 2011/164851_500612026600_191849341600_6448962_593910.jpg
-                $mediaFileRelativePath = $_.SourceFile; 
-                
-                # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2011\166631_500610536600_191849341600_6448902_553178.jpg
-                $mediaFileAbsolutePath = [System.IO.Path]::GetFullPath($rootPath + "\" + $mediaFileRelativePath);
-
-                # C:\Temp\Google Photos Takeout\ModifiedTest\Modified\Takeout\Google Photos\Photos from 2011\166631_500610536600_191849341600_6448902_553178.jpg
-                $newMediaFileAbsolutePath = [System.IO.Path]::GetFullPath($missingDatesPath + "\" + $mediaFileRelativePath);
-
-                # C:\Temp\Google Photos Takeout\ModifiedTest\Modified\Takeout\Google Photos\Photos from 2011
-                $newMediaFileFolder = split-path $newMediaFileAbsolutePath
-
-                # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2011\164851_500612026600_191849341600_6448962_593910.jpg.json
-                $jsonFilePath = $mediaFileAbsolutePath + ".json"
-
-                # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2011\164851_500612026600_191849341600_6448962_593910.json
-                $alternateJsonFilePath1 = [System.IO.Path]::ChangeExtension($mediaFileAbsolutePath, ".json")
-
-                # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2012\IMG_20120408_171316
-                $fullPathWithoutExtension = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($mediaFileAbsolutePath), [System.IO.Path]::GetFileNameWithoutExtension($mediaFileAbsolutePath))
-                            
-                # Some json paths are actually missing the last character of the media file name.
-                $alternateJsonFilePath2 = $fullPathWithoutExtension.Substring(0, $fullPathWithoutExtension.length - 1) + ".json"
-                
-                # Create the new directory if it does not exist
-                if ([System.IO.Directory]::Exists($newMediaFileFolder) -eq $false) {
-                    [System.IO.Directory]::CreateDirectory($newMediaFileFolder)
-                }
-                
-                # Copy the media file to the new location
-                Copy-Item -LiteralPath $mediaFileAbsolutePath -Destination $newMediaFileFolder
-
-                # Get potential JSON paths for the media file.
-                $jsonPaths = Get-JsonPaths $mediaFileAbsolutePath
-
-                # If any of them exist, copy them to the expected path in the staging area.
-                foreach ($jsonPath in $jsonPaths) {
-                    if ([System.IO.File]::Exists($jsonPath)) {
-                        [System.IO.File]::Copy($jsonPath, $newMediaFileAbsolutePath + ".json");
-                        break;
-                    }
-                }
-            }
-
-        Write-Log "File copy - Complete..."
-    }
-
-    function Fix-TimeZoneInJsonFiles() {
-        param (
-            $missingDatesPath
-        )
-
-        Write-Log "Correct TimeZone - Starting..."
-
-        # Cache the local timezone and the unix time epoch
-        $currentTimeZoneName = (Get-WmiObject win32_timezone).StandardName
-        $currentTimeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById($currentTimeZoneName)
-        $origin = [System.DateTime]::new(1970, 1, 1, 0, 0, 0, 0, [System.DateTimeKind]::Utc)
-            
-        # Loop through all .json files under this folder recursively
-        ls -r $missingDatesPath *.json |
+    Import-Csv OriginalFilesMissingDates.csv | select-object -First 10000000 |
         foreach {
-            # Get the json content
-            $json = (Get-Content -LiteralPath $_.FullName | ConvertFrom-JSON)
+            # Create paths to the files in question
 
-            # Update the timestamp timezone in the json file if it exists.
-            # This is necessary, since I can't figure out how to properly convert from UTC in the exiftool,
-            # with a conversion that takes into account DST.
-            # Instead, I will just convert the value in the JSON file into a non UTC value.
-            if ([bool]($json.PSobject.Properties.name -eq "photoTakenTime") -and
-                [bool]($json.photoTakenTime.PSobject.Properties.name -eq "timestamp") -and
-                [bool]([System.String]::IsNullOrWhiteSpace($json.photoTakenTime.timestamp) -ne $true)) {
-
-                # Get the UTC timestamp from the Json file, and convert into a local DateTime.
-                $timestampUTC = $json.photoTakenTime.timestamp
-                $photoTakenTimeUtc = $origin.AddSeconds($timestampUTC)
-                $photoTakenTimeLocal = [System.TimeZoneInfo]::ConvertTimeFromUtc($photoTakenTimeUtc, $currentTimeZone)
+            # ./Takeout/Google Photos/Photos from 2011/164851_500612026600_191849341600_6448962_593910.jpg
+            $mediaFileRelativePath = $_.SourceFile; 
             
-                # Convert the local Date time back into a timestamp, but this time as a local timestamp
-                $diff = $photoTakenTimeLocal - $origin;
-                $totalSecondsLocal = [System.Math]::Floor($diff.TotalSeconds);
+            # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2011\166631_500610536600_191849341600_6448902_553178.jpg
+            $mediaFileAbsolutePath = [System.IO.Path]::GetFullPath($rootPath + "\" + $mediaFileRelativePath);
 
-                # Update the timestamp in the Json file to the local time
-                $json.photoTakenTime.timestamp = $totalSecondsLocal.ToString()
+            # C:\Temp\Google Photos Takeout\ModifiedTest\Modified\Takeout\Google Photos\Photos from 2011\166631_500610536600_191849341600_6448902_553178.jpg
+            $newMediaFileAbsolutePath = [System.IO.Path]::GetFullPath($missingDatesPath + "\" + $mediaFileRelativePath);
 
-                # Write the json file back to disk
-                $json | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $_.FullName
+            # C:\Temp\Google Photos Takeout\ModifiedTest\Modified\Takeout\Google Photos\Photos from 2011
+            $newMediaFileFolder = split-path $newMediaFileAbsolutePath
+
+            # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2011\164851_500612026600_191849341600_6448962_593910.jpg.json
+            $jsonFilePath = $mediaFileAbsolutePath + ".json"
+
+            # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2011\164851_500612026600_191849341600_6448962_593910.json
+            $alternateJsonFilePath1 = [System.IO.Path]::ChangeExtension($mediaFileAbsolutePath, ".json")
+
+            # C:\Temp\Google Photos Takeout\ModifiedTest\Takeout\Google Photos\Photos from 2012\IMG_20120408_171316
+            $fullPathWithoutExtension = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($mediaFileAbsolutePath), [System.IO.Path]::GetFileNameWithoutExtension($mediaFileAbsolutePath))
+                        
+            # Some json paths are actually missing the last character of the media file name.
+            $alternateJsonFilePath2 = $fullPathWithoutExtension.Substring(0, $fullPathWithoutExtension.length - 1) + ".json"
+            
+            # Create the new directory if it does not exist
+            if ([System.IO.Directory]::Exists($newMediaFileFolder) -eq $false) {
+                [System.IO.Directory]::CreateDirectory($newMediaFileFolder)
+            }
+            
+            # Move the media file to the new location
+            [System.IO.File]::Move($mediaFileAbsolutePath, $newMediaFileAbsolutePath)
+
+            # Get potential JSON paths for the media file.
+            $jsonPaths = Get-JsonPaths $mediaFileAbsolutePath
+
+            # If any of them exist, move them to the expected path in the staging area.
+            foreach ($jsonPath in $jsonPaths) {
+                if ([System.IO.File]::Exists($jsonPath)) {
+                    [System.IO.File]::Move($jsonPath, $newMediaFileAbsolutePath + ".json");
+                    break;
+                }
             }
         }
 
-        Write-Log "Correct TimeZone - Complete..."
+    Write-Log "File copy - Complete..."
+}
+
+function Fix-TimeZoneInJsonFiles() {
+    param (
+        $missingDatesPath
+    )
+
+    Write-Log "Correct TimeZone - Starting..."
+
+    # Cache the local timezone and the unix time epoch
+    $currentTimeZoneName = (Get-WmiObject win32_timezone).StandardName
+    $currentTimeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById($currentTimeZoneName)
+    $origin = [System.DateTime]::new(1970, 1, 1, 0, 0, 0, 0, [System.DateTimeKind]::Utc)
+        
+    # Loop through all .json files under this folder recursively
+    ls -r $missingDatesPath *.json |
+    foreach {
+        # Get the json content
+        $json = (Get-Content -LiteralPath $_.FullName | ConvertFrom-JSON)
+
+        # Update the timestamp timezone in the json file if it exists.
+        # This is necessary, since I can't figure out how to properly convert from UTC in the exiftool,
+        # with a conversion that takes into account DST.
+        # Instead, I will just convert the value in the JSON file into a non UTC value.
+        if ([bool]($json.PSobject.Properties.name -eq "photoTakenTime") -and
+            [bool]($json.photoTakenTime.PSobject.Properties.name -eq "timestamp") -and
+            [bool]([System.String]::IsNullOrWhiteSpace($json.photoTakenTime.timestamp) -ne $true)) {
+
+            # Get the UTC timestamp from the Json file, and convert into a local DateTime.
+            $timestampUTC = $json.photoTakenTime.timestamp
+            $photoTakenTimeUtc = $origin.AddSeconds($timestampUTC)
+            $photoTakenTimeLocal = [System.TimeZoneInfo]::ConvertTimeFromUtc($photoTakenTimeUtc, $currentTimeZone)
+        
+            # Convert the local Date time back into a timestamp, but this time as a local timestamp
+            $diff = $photoTakenTimeLocal - $origin;
+            $totalSecondsLocal = [System.Math]::Floor($diff.TotalSeconds);
+
+            # Update the timestamp in the Json file to the local time
+            $json.photoTakenTime.timestamp = $totalSecondsLocal.ToString()
+
+            # Write the json file back to disk
+            $json | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $_.FullName
+        }
     }
 
-    function Move-FixedFiles() {
-        param (
-            $missingDatesPath,
-            $fixedPath
-        )
+    Write-Log "Correct TimeZone - Complete..."
+}
 
-        Write-Log "Move Fixed Files - Starting..."
+function Move-FixedFiles() {
+    param (
+        $missingDatesPath,
+        $fixedPath
+    )
 
-        ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext json $missingDatesPath -if '$exif:datetimeoriginal' -csv |
-            select-object -skip 1 | 
-            foreach {
-                $csvRow = $_;
-                $fixedMediaPath = [System.IO.Path]::GetFullPath($csvRow.Split(',')[0]);
-                $newPath = $fixedMediaPath.Replace($missingDatesPath, $fixedPath);
-                $newDirectory = [System.IO.Path]::GetDirectoryName($newPath);
+    Write-Log "Move Fixed Files - Starting..."
 
-                if ([System.IO.Directory]::Exists($newDirectory) -eq $false) {
-                    [System.IO.Directory]::CreateDirectory($newDirectory);
-                }
+    ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext json $missingDatesPath -if '$exif:datetimeoriginal' -csv |
+        select-object -skip 1 | 
+        foreach {
+            $csvRow = $_;
+            $fixedMediaPath = [System.IO.Path]::GetFullPath($csvRow.Split(',')[0]);
+            $newPath = $fixedMediaPath.Replace($missingDatesPath, $fixedPath);
+            $newDirectory = [System.IO.Path]::GetDirectoryName($newPath);
 
-                [System.IO.File]::Move($fixedMediaPath, $newPath);
-
-                if ([System.IO.File]::Exists($fixedMediaPath + ".json")) {
-                    [System.IO.File]::Move($fixedMediaPath + ".json", $newPath + ".json");
-                }
+            if ([System.IO.Directory]::Exists($newDirectory) -eq $false) {
+                [System.IO.Directory]::CreateDirectory($newDirectory);
             }
 
-        Write-Log "Move Fixed Files - Complete..."
-    }
+            [System.IO.File]::Move($fixedMediaPath, $newPath);
 
-    function Write-Log() {
-        param (
-            $message
-        )
+            if ([System.IO.File]::Exists($fixedMediaPath + ".json")) {
+                [System.IO.File]::Move($fixedMediaPath + ".json", $newPath + ".json");
+            }
+        }
 
+    Write-Log "Move Fixed Files - Complete..."
+}
+
+function Write-Log() {
+    param (
         $message
-    }
+    )
 
-    $rootPath = "C:\Temp\Google Photos Takeout\ModifiedTest"
-    $originalsPath = Join-Path $rootPath "Takeout"
-    $missingDatesPath = join-path $rootPath "MissingDates"
-    $fixedPath = join-path $rootPath "Fixed"
+    $message
+}
 
-    # Navigate to the root folder of our Google Photos.
-    cd $rootPath
+$rootPath = "C:\Temp\Google Photos Takeout\ModifiedTest"
+$originalsPath = Join-Path $rootPath "Takeout"
+$missingDatesPath = join-path $rootPath "MissingDates"
+$fixedPath = join-path $rootPath "Fixed"
 
-    # Create the CSV file for missing dates.
-    Create-OriginalFilesMissingDatesCSV
+# Navigate to the root folder of our Google Photos.
+cd $rootPath
 
-    # Copy the files in the CSV file into a new folder for modification
-    Copy-FilesMissingDatesAndTheirJsonFile $rootPath $missingDatesPath
+# Create the CSV file for missing dates.
+Create-OriginalFilesMissingDatesCSV
 
-    # Update the timezones in the json file to not be UTC, so we don't have to run 2 exiftool commands, 1 to set, and 1 to adjust.
-    Fix-TimeZoneInJsonFiles $missingDatesPath
+# Copy the files in the CSV file into a new folder for modification
+Copy-FilesMissingDatesAndTheirJsonFile $rootPath $missingDatesPath
 
-    # Run exiftool, updating the datetimeoriginal and filecreatedate based on the json files.
-    ."C:\program files\exiftool.exe" -r --ext html --ext json --ext csv -tagsfromfile %d%f.%e.json -if 'not $exif:datetimeoriginal' -m -q -q -description '-datetimeoriginal<PhotoTakenTimeTimestamp' "-FileCreateDate<PhotoTakenTimeTimestamp" -d %s $missingDatesPath -overwrite_original -progress
+# Update the timezones in the json file to not be UTC, so we don't have to run 2 exiftool commands, 1 to set, and 1 to adjust.
+Fix-TimeZoneInJsonFiles $missingDatesPath
 
-    # Run exiftool again, updating the datetimeoriginal and filecreatedate based on the file names.
-    ."C:\program files\exiftool.exe" -r -q -q --ext html --ext json -if 'not $exif:datetimeoriginal' "-DateTimeOriginal<Filename" "-FileCreateDate<Filename" $missingDatesPath -overwrite_original -progress
+# Run exiftool, updating the datetimeoriginal and filecreatedate based on the json files.
+."C:\program files\exiftool.exe" -r --ext html --ext json --ext csv -tagsfromfile %d%f.%e.json -if 'not $exif:datetimeoriginal' -m -q -q -description '-datetimeoriginal<PhotoTakenTimeTimestamp' "-FileCreateDate<PhotoTakenTimeTimestamp" -d %s $missingDatesPath -overwrite_original -progress
 
-    # Calculate how many files don't have a datetimeoriginal after our update.
-    ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext json $missingDatesPath -if 'not $exif:datetimeoriginal' -csv | select-object -skip 1 | Measure-Object -Line
+# Run exiftool again, updating the datetimeoriginal and filecreatedate based on the file names.
+."C:\program files\exiftool.exe" -r -q -q --ext html --ext json -if 'not $exif:datetimeoriginal' "-DateTimeOriginal<Filename" "-FileCreateDate<Filename" $missingDatesPath -overwrite_original -progress
 
-    # Move the fixed files into a Fixed folder
-    Move-FixedFiles $missingDatesPath $fixedPath
+# Calculate how many files don't have a datetimeoriginal after our update.
+."C:\program files\exiftool.exe" -r -q -filename --ext html --ext json $missingDatesPath -if 'not $exif:datetimeoriginal' -csv | select-object -skip 1 | Measure-Object -Line
 
-    # Create the CSV file for missing dates for the files we could not fix.
-    Create-FilesMissingDatesAfterFixCSV
+# Move the fixed files into a Fixed folder
+Move-FixedFiles $missingDatesPath $fixedPath
 
-{% endhighlight %}
+# Create the CSV file for missing dates for the files we could not fix.
+Create-FilesMissingDatesAfterFixCSV
+
+````
