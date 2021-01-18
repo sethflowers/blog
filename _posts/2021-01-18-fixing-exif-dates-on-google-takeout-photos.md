@@ -130,7 +130,7 @@ function Get-JsonPaths () {
     return @(,$paths)
 }
 
-function Copy-FilesMissingDatesAndTheirJsonFile() {
+function Move-FilesMissingDatesAndTheirJsonFile() {
     param (
         $rootPath,
         $missingDatesPath
@@ -284,8 +284,8 @@ cd $rootPath
 # Create the CSV file for missing dates.
 Create-OriginalFilesMissingDatesCSV
 
-# Copy the files in the CSV file into a new folder for modification
-Copy-FilesMissingDatesAndTheirJsonFile $rootPath $missingDatesPath
+# Move the files in the CSV file into a new folder for modification
+Move-FilesMissingDatesAndTheirJsonFile $rootPath $missingDatesPath
 
 # Update the timezones in the json file to not be UTC, so we don't have to run 2 exiftool commands, 1 to set, and 1 to adjust.
 Fix-TimeZoneInJsonFiles $missingDatesPath
