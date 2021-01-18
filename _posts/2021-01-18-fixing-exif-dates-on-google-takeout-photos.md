@@ -30,19 +30,19 @@ Alright, the following is what I intended on doing:
 * Use exiftool to identify media files in my takout library that were missing dates
 * Copy these media files into a staging area
 * Copy the corresponding json files into a staging area with a normalized name
-** I say normalized, because because Google didn't always create the json files with the same naming convention.
-*** For instance, if your media file was named abcde.jpg, most of the time, the json would be abcde.jpg.json.
-*** Sometimes it would be abcde.jpeg.json (notice the e in jpeg).
-*** Sometimes it would be abcde.json.
-*** Sometimes it would abcd.jpg.json.
-*** Sometimes there was no json file.
-*** And other oddities that are frustrating.
+  * I say normalized, because because Google didn't always create the json files with the same naming convention.
+    * For instance, if your media file was named abcde.jpg, most of the time, the json would be abcde.jpg.json.
+    * Sometimes it would be abcde.jpeg.json (notice the e in jpeg).
+    * Sometimes it would be abcde.json.
+    * Sometimes it would abcd.jpg.json.
+    * Sometimes there was no json file.
+    * And other oddities that are frustrating.
 * Modify the timestamp in the json files to be in my local timezone.
-** This is important, because if we didn't do this, the times would all be off in the files by 4 or 5 hours, depending on Daylight Savings.
-** Exiftool has a way to alter the time by an offset, but it doesn't take into account DST.
+  * This is important, because if we didn't do this, the times would all be off in the files by 4 or 5 hours, depending on Daylight Savings.
+  * Exiftool has a way to alter the time by an offset, but it doesn't take into account DST.
 * Use exiftool to batch update all the files in the staging folder using the dates in their corresponding json files
 * Use exiftool to batch update all the files in the staging folder still missing dates based on their filenames
-** This is helpful for files that didn't have a json file whose name was something like 2021-01-18.jpg.
+  * This is helpful for files that didn't have a json file whose name was something like 2021-01-18.jpg.
 * Use exiftool to identify files that were fixed in the staging folder, and then move these into a Fixed folder.
 
 At this point, all the media files in the staging folder were missing dates. Actually, only some of them.
@@ -60,7 +60,6 @@ as I hopefully never have to use this again.
     function Create-OriginalFilesMissingDatesCSV() {
         ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext mp4 --ext 3gp --ext json .\Takeout -if 'not $exif:datetimeoriginal' -csv > OriginalFilesMissingDates.csv
     }
-
 
     function Create-FilesMissingDatesAfterFixCSV() {
         ."C:\program files\exiftool.exe" -r -q -filename --ext html --ext mp4 --ext 3gp --ext json .\MissingDates -if 'not $exif:datetimeoriginal' -csv > FilesMissingDatesAfterFix.csv
@@ -273,7 +272,6 @@ as I hopefully never have to use this again.
 
         $message
     }
-
 
     $rootPath = "C:\Temp\Google Photos Takeout\ModifiedTest"
     $originalsPath = Join-Path $rootPath "Takeout"
