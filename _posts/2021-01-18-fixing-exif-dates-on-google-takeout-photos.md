@@ -23,23 +23,23 @@ One of them hadn't been updated in a few months, and the other looked more activ
 Google changed the folder structure for their Takout data, which broke their scripts. My takeout data happened to have the new folder structure.
 If you are looking for a solution, you might want to check out both of these repos.
 
-Alright, the following is what I intended on doing:
+The following is what I intended on doing:
 
 * Get acquainted with [https://exiftool.org/](exiftool), which is a popular utility to read and write the exif data in media files.
 * Write a powershell script that does the following:
-* Use exiftool to identify media files in my takout library that were missing dates
-* Copy these media files into a staging area
-* Copy the corresponding json files into a staging area with a normalized name
-  * I say normalized, because because Google didn't always create the json files with the same naming convention.
-    * For instance, if your media file was named abcde.jpg, most of the time, the json would be abcde.jpg.json.
-    * Sometimes it would be abcde.jpeg.json (notice the e in jpeg).
-    * Sometimes it would be abcde.json.
-    * Sometimes it would abcd.jpg.json.
-    * Sometimes there was no json file.
-    * And other oddities that are frustrating.
-* Modify the timestamp in the json files to be in my local timezone.
-  * This is important, because if we didn't do this, the times would all be off in the files by 4 or 5 hours, depending on Daylight Savings.
-  * Exiftool has a way to alter the time by an offset, but it doesn't take into account DST.
+  * Use exiftool to identify media files in my takout library that were missing dates
+  * Copy these media files into a staging area
+  * Copy the corresponding json files into a staging area with a normalized name
+    * I say normalized, because because Google didn't always create the json files with the same naming convention.
+      * For instance, if your media file was named abcde.jpg, most of the time, the json would be abcde.jpg.json.
+      * Sometimes it would be abcde.jpeg.json (notice the e in jpeg).
+      * Sometimes it would be abcde.json.
+      * Sometimes it would abcd.jpg.json.
+      * Sometimes there was no json file.
+      * And other oddities that are frustrating.
+  * Modify the timestamp in the json files to be in my local timezone.
+    * This is important, because if we didn't do this, the times would all be off in the files by 4 or 5 hours, depending on Daylight Savings.
+    * Exiftool has a way to alter the time by an offset, but it doesn't take into account DST.
 * Use exiftool to batch update all the files in the staging folder using the dates in their corresponding json files
 * Use exiftool to batch update all the files in the staging folder still missing dates based on their filenames
   * This is helpful for files that didn't have a json file whose name was something like 2021-01-18.jpg.
