@@ -48,5 +48,16 @@ This will result in the following output:
 
 **Caveat**
 
-This approach does not let you know if there are duplicates in one table. For instance, if you have two rows in one table that are identical, and only one row in the second table that matches them, this query finds no differences between the tables. You may still need to rely on comparing the counts for a final verification.
+This approach does not let you know if there are duplicates in one table. For instance, if you have two rows in one table that are identical, and only one row in the second table that matches them, this query finds no differences between the tables. You may still need to rely on comparing the counts for a final verification. For instance, the following is an example of this verification when comparing two views:
 
+{% highlight sql %}
+  select * into #Expected from [dbo].[vw_SomeView]
+  select * into #Actual from [dbo].[vw_SomeView_Modified]
+
+  select * from #Expected union select * from #Actual
+  except 
+  select * from #Expected intersect select * from #Actual
+
+  select count(1) from #Expected;
+  select count(1) from #Actual;
+{% endhighlight %}
