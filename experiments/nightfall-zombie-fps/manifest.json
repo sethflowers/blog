@@ -1,0 +1,15 @@
+{
+  "name": "Henry’s Nightfall",
+  "short_name": "Nightfall",
+  "description": "A first-person zombie survival shooter. Survive the waves as the night closes in.",
+  "start_url": "/experiments/nightfall-zombie-fps/",
+  "scope": "/experiments/nightfall-zombie-fps/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05070a",
+  "theme_color": "#05070a",
+  "icons": [
+    { "src": "/experiments/nightfall-zombie-fps/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/experiments/nightfall-zombie-fps/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
