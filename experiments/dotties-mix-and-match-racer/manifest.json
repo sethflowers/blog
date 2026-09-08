@@ -1,0 +1,15 @@
+{
+  "name": "Dottie’s Mix and Match Racer",
+  "short_name": "Mix & Match Racer",
+  "description": "Build a racer out of mixed-up animal parts, then race it against other mixed-up animals.",
+  "start_url": "/experiments/dotties-mix-and-match-racer/",
+  "scope": "/experiments/dotties-mix-and-match-racer/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#8fd3ff",
+  "theme_color": "#8fd3ff",
+  "icons": [
+    { "src": "/experiments/dotties-mix-and-match-racer/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/experiments/dotties-mix-and-match-racer/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
