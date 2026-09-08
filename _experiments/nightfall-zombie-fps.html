@@ -155,7 +155,7 @@ layout: null
 
 <div class="screen" id="start">
   <h1>NIGHTFALL<span>ZOMBIE SURVIVAL</span></h1>
-  <p>Left side of the screen moves you. Drag the right side to aim. Push the stick to the edge to sprint.<br>Headshots do triple damage. They get faster every wave.</p>
+  <p>Left side of the screen moves you. Drag the right side to aim. Push the stick to the edge to sprint.<br>Headshots do triple damage. They get faster every wave.<br>Best with sound on.</p>
   <button class="go" id="startBtn">ENTER THE STREET</button>
 </div>
 
@@ -754,7 +754,7 @@ var state={
   mag:30, magSize:30, reserve:150, reloading:false, reloadT:0,
   fireCd:0, recoil:0, recoilVel:0, spread:0,
   toSpawn:0, spawnT:0, zHP:95, waveBreak:0,
-  regenT:0, damageT:0, bob:0, torch:true,
+  regenT:0, damageT:0, bob:0, heartT:0, torch:true,
   yaw:0, pitch:0
 };
 
@@ -765,73 +765,194 @@ var player={
 
 /* ============================================================
    AUDIO (synthesised — no external files)
+   Everything routes through a master gain + compressor so stacked
+   sounds stay punchy without clipping. Until initAudio() runs (or
+   if the browser has no Web Audio) every effect is a harmless no-op.
    ============================================================ */
-var AC=null, sfx={};
+var AC=null, master=null, ambient=null, unmuteEl=null;
+var sfx={};
+['shot','dry','reload','hit','splat','zgrunt','hurt','heart','step','growl','impact','wave','clear','over']
+  .forEach(function(n){ sfx[n]=function(){}; });
+
 function initAudio(){
   if(AC) return;
   try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
-  var noiseBuf=AC.createBuffer(1, AC.sampleRate*1.2, AC.sampleRate);
+
+  var comp=AC.createDynamicsCompressor();
+  comp.threshold.value=-16; comp.knee.value=18; comp.ratio.value=6;
+  comp.attack.value=0.002; comp.release.value=0.16;
+  master=AC.createGain(); master.gain.value=0.9;
+  master.connect(comp); comp.connect(AC.destination);
+
+  var noiseBuf=AC.createBuffer(1, AC.sampleRate*2, AC.sampleRate);
   var d=noiseBuf.getChannelData(0);
   for(var i=0;i<d.length;i++) d[i]=Math.random()*2-1;
 
-  function noise(dur, freq, q, vol, type){
-    var s=AC.createBufferSource(); s.buffer=noiseBuf;
+  function now(){ return AC.currentTime; }
+  function env(g, vol, dur, t0){
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0+0.004);
+    g.gain.exponentialRampToValueAtTime(0.0006, t0+dur);
+  }
+  // filtered burst of white noise
+  function noise(dur, freq, q, vol, type, delay){
+    var t0=now()+(delay||0);
+    var s=AC.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    s.playbackRate.value=rand(0.92,1.08);
     var f=AC.createBiquadFilter(); f.type=type||'lowpass'; f.frequency.value=freq; f.Q.value=q||1;
-    var g=AC.createGain();
-    g.gain.setValueAtTime(vol, AC.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0008, AC.currentTime+dur);
-    s.connect(f); f.connect(g); g.connect(AC.destination);
-    s.start(); s.stop(AC.currentTime+dur+0.02);
+    var g=AC.createGain(); env(g, vol, dur, t0);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(t0, Math.random()*1.5); s.stop(t0+dur+0.03);
     return f;
   }
+  // oscillator sweeping from f0 to f1
+  function tone(type, f0, f1, dur, vol, delay, lp){
+    var t0=now()+(delay||0);
+    var o=AC.createOscillator(), g=AC.createGain();
+    o.type=type;
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20,f1), t0+dur);
+    env(g, vol, dur, t0);
+    if(lp){ var f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp; o.connect(f); f.connect(g); }
+    else o.connect(g);
+    g.connect(master); o.start(t0); o.stop(t0+dur+0.03);
+  }
+  // short metallic ping
+  function ping(freq, dur, vol, delay){ tone('sine', freq, freq*0.94, dur, vol, delay); }
+
+  /* ---- weapon ---- */
   sfx.shot=function(){
-    noise(0.16, 1900, 0.8, 0.32);
-    noise(0.42, 260, 1.2, 0.20);
-    var o=AC.createOscillator(), g=AC.createGain();
-    o.type='square'; o.frequency.setValueAtTime(160,AC.currentTime);
-    o.frequency.exponentialRampToValueAtTime(48,AC.currentTime+0.09);
-    g.gain.setValueAtTime(0.16,AC.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.12);
-    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+0.14);
+    var p=rand(0.9,1.1);
+    noise(0.025, 6500, 0.7, 0.55, 'highpass');          // click transient
+    noise(0.15,  2300*p, 0.9, 0.42);                    // crack
+    noise(0.38,  330*p, 1.1, 0.30);                     // body
+    noise(0.55,  900, 0.5, 0.10, 'bandpass');           // street echo tail
+    tone('sine', 150*p, 36, 0.17, 0.55);                // low thump
+    tone('square', 170*p, 46, 0.09, 0.14);              // bark
+    // brass hitting the asphalt a moment later
+    var t=0.26+Math.random()*0.14;
+    ping(rand(2300,3300), 0.07, 0.06, t);
+    ping(rand(3400,4400), 0.05, 0.035, t+0.07);
   };
-  sfx.dry=function(){ noise(0.05, 3200, 3, 0.12,'bandpass'); };
+  sfx.dry=function(){ noise(0.05, 3200, 3, 0.16,'bandpass'); ping(1900, 0.03, 0.05); };
   sfx.reload=function(){
-    noise(0.07, 2400, 4, 0.15,'bandpass');
-    setTimeout(function(){ noise(0.09, 1400, 3, 0.16,'bandpass'); }, 700);
-    setTimeout(function(){ noise(0.06, 3000, 5, 0.14,'bandpass'); }, 1450);
+    noise(0.07, 2400, 4, 0.18,'bandpass');              // mag release
+    noise(0.12, 420, 1.5, 0.20, 'lowpass', 0.70);       // mag seated
+    noise(0.09, 1400, 3, 0.18,'bandpass', 0.72);
+    noise(0.05, 3000, 5, 0.16,'bandpass', 1.45);        // bolt back
+    noise(0.06, 2200, 4, 0.18,'bandpass', 1.58);        // bolt forward
+    ping(2600, 0.05, 0.05, 1.59);
   };
-  sfx.splat=function(){ noise(0.22, 520, 0.7, 0.26); };
-  sfx.hurt=function(){
-    noise(0.3, 380, 0.8, 0.3);
-    var o=AC.createOscillator(), g=AC.createGain();
-    o.type='sawtooth'; o.frequency.setValueAtTime(90,AC.currentTime);
-    o.frequency.exponentialRampToValueAtTime(40,AC.currentTime+0.3);
-    g.gain.setValueAtTime(0.14,AC.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.34);
-    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+0.36);
+  sfx.impact=function(){ noise(0.09, 1200, 1.4, 0.16); ping(rand(1800,2600), 0.04, 0.04); };
+
+  /* ---- zombies ---- */
+  sfx.hit=function(head){
+    if(head){
+      noise(0.12, 1400, 1.2, 0.34);
+      noise(0.06, 3600, 2, 0.22, 'bandpass');
+      tone('square', 950, 280, 0.07, 0.13);
+      ping(2900, 0.05, 0.08);
+    } else {
+      noise(0.08, 900, 1.5, 0.24);
+      ping(1750, 0.045, 0.09);
+    }
+  };
+  sfx.zgrunt=function(){
+    tone('sawtooth', rand(120,185), rand(68,100), rand(0.18,0.28), 0.13, 0, 700);
+  };
+  sfx.splat=function(){
+    noise(0.28, 480, 0.7, 0.36);
+    noise(0.12, 2600, 1.5, 0.20, 'bandpass');
+    tone('sawtooth', rand(100,130), 42, 0.55, 0.17, 0.02, 520);   // death groan
   };
   sfx.growl=function(dist){
-    var vol=Math.max(0, 0.22*(1-dist/34));
+    var vol=Math.max(0, 0.24*(1-dist/34));
     if(vol<=0.005) return;
-    var o=AC.createOscillator(), g=AC.createGain(), f=AC.createBiquadFilter();
-    f.type='lowpass'; f.frequency.value=rand(300,700);
-    o.type='sawtooth'; o.frequency.setValueAtTime(rand(55,95),AC.currentTime);
-    o.frequency.linearRampToValueAtTime(rand(40,70),AC.currentTime+0.7);
-    g.gain.setValueAtTime(0,AC.currentTime);
-    g.gain.linearRampToValueAtTime(vol,AC.currentTime+0.15);
-    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+0.8);
-    o.connect(f); f.connect(g); g.connect(AC.destination);
-    o.start(); o.stop(AC.currentTime+0.85);
+    tone('sawtooth', rand(55,95), rand(40,70), 0.8, vol, 0, rand(300,700));
   };
-  sfx.impact=function(){ noise(0.09, 1200, 1.4, 0.14); };
+
+  /* ---- player ---- */
+  sfx.hurt=function(){
+    noise(0.3, 380, 0.8, 0.32);
+    tone('sawtooth', 90, 40, 0.32, 0.15);
+  };
+  sfx.heart=function(){
+    tone('sine', 72, 44, 0.13, 0.34);
+    tone('sine', 66, 40, 0.11, 0.24, 0.19);
+  };
+  sfx.step=function(sprint){
+    noise(sprint?0.075:0.06, (sprint?720:540)*rand(0.85,1.15), 0.9, sprint?0.14:0.09);
+    noise(0.03, 2200, 2, sprint?0.05:0.03, 'bandpass');
+  };
+
+  /* ---- flow ---- */
   sfx.wave=function(){
-    var o=AC.createOscillator(), g=AC.createGain();
-    o.type='sine'; o.frequency.setValueAtTime(140,AC.currentTime);
-    o.frequency.exponentialRampToValueAtTime(58,AC.currentTime+1.4);
-    g.gain.setValueAtTime(0.16,AC.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+1.5);
-    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime+1.55);
+    tone('sine', 140, 58, 1.5, 0.18);
+    tone('sine', 95, 30, 0.35, 0.4);                    // drum
+    noise(0.6, 200, 0.8, 0.12);
   };
+  sfx.clear=function(){
+    ping(440, 0.35, 0.10);
+    ping(660, 0.45, 0.10, 0.18);
+  };
+  sfx.over=function(){
+    tone('sawtooth', 110, 28, 1.8, 0.2, 0, 600);
+    noise(1.6, 260, 0.7, 0.14);
+    tone('sine', 60, 24, 1.4, 0.3, 0.1);
+  };
+
+  /* ---- ambient wind: one looping noise source, slowly wandering filter ---- */
+  ambient={
+    start:function(){
+      if(this.g) return;
+      var s=AC.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+      var f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=260; f.Q.value=0.7;
+      var lfo=AC.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.07;
+      var lfoG=AC.createGain(); lfoG.gain.value=140;
+      lfo.connect(lfoG); lfoG.connect(f.frequency);
+      var g=AC.createGain();
+      g.gain.setValueAtTime(0.0001, now());
+      g.gain.exponentialRampToValueAtTime(0.05, now()+2.5);
+      s.connect(f); f.connect(g); g.connect(master);
+      s.start(); lfo.start();
+      this.s=s; this.lfo=lfo; this.g=g;
+    },
+    stop:function(){
+      if(!this.g) return;
+      var g=this.g, s=this.s, lfo=this.lfo;
+      g.gain.cancelScheduledValues(now());
+      g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), now());
+      g.gain.exponentialRampToValueAtTime(0.0001, now()+1.2);
+      s.stop(now()+1.3); lfo.stop(now()+1.3);
+      this.s=this.lfo=this.g=null;
+    }
+  };
+}
+
+// Browsers suspend the context when the tab is backgrounded or a call comes in,
+// and iOS marks it 'interrupted'. Nudge it back to life on any interaction.
+function wakeAudio(){
+  if(AC && AC.state!=='running' && AC.resume){ var p=AC.resume(); if(p&&p.catch) p.catch(function(){}); }
+}
+document.addEventListener('touchstart', wakeAudio, {passive:true});
+document.addEventListener('mousedown', wakeAudio);
+document.addEventListener('keydown', wakeAudio);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) wakeAudio(); });
+
+// iOS silences Web Audio while the ringer switch is on mute. Keeping a
+// (silent) <audio> element playing moves the page onto the media channel,
+// which ignores the switch. Harmless everywhere else. Must be called from a tap.
+function unlockMobileAudio(){
+  try{
+    if(!unmuteEl){
+      unmuteEl=document.createElement('audio');
+      unmuteEl.setAttribute('playsinline','');
+      unmuteEl.setAttribute('webkit-playsinline','');
+      unmuteEl.loop=true;
+      unmuteEl.src='data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA=='; 
+    }
+    var p=unmuteEl.play(); if(p&&p.catch) p.catch(function(){});
+  }catch(e){}
 }
 
 /* ============================================================
@@ -993,7 +1114,7 @@ function shoot(){
   updateAmmo();
   sfx.shot();
 
-  state.recoilVel += 0.055 + state.spread*0.02;
+  state.recoilVel += 1.2 + state.spread*3;   // rad/s impulse, integrated per frame below
   state.spread = Math.min(0.055, state.spread + 0.011);
   gun.position.z = -0.36;
 
@@ -1027,6 +1148,8 @@ function shoot(){
       z.hp-=dmg; z.hitFlash=0.09;
       burst(hit.point, hit.face?hit.face.normal:null, head?9:5, 'blood');
       hitMark(head);
+      sfx.hit(head);
+      if(z.hp>0 && Math.random()<0.6) sfx.zgrunt();
       // stagger
       var kb=new THREE.Vector3().subVectors(z.group.position, player.pos).setY(0).normalize().multiplyScalar(head?0.22:0.11);
       z.group.position.add(kb);
@@ -1040,7 +1163,7 @@ function shoot(){
   }
 }
 
-var hitTimer=0;
+var hitTimer=0, lastStepIdx=0;
 function hitMark(head){
   ui.cross.classList.add('hit');
   hitTimer = head?0.14:0.08;
@@ -1134,6 +1257,8 @@ function gameOver(){
   ui.overScore.innerHTML = state.kills+' killed &nbsp;·&nbsp; reached wave '+state.wave;
   ui.over.classList.remove('hidden');
   if(document.pointerLockElement) document.exitPointerLock();
+  sfx.over();
+  if(ambient) ambient.stop();
 }
 
 /* ============================================================
@@ -1225,6 +1350,17 @@ function update(dt){
   var bobX = moving? Math.cos(state.bob*0.5)*(sprinting?0.038:0.02) : 0;
   camera.position.set(player.pos.x + bobX*0.4, player.pos.y + bobY, player.pos.z);
 
+  /* ---- footsteps: one per half bob cycle ---- */
+  var stepIdx=Math.floor(state.bob/Math.PI);
+  if(moving && stepIdx!==lastStepIdx) sfx.step(sprinting);
+  lastStepIdx=stepIdx;
+
+  /* ---- heartbeat when low ---- */
+  if(state.health<30){
+    state.heartT-=dt;
+    if(state.heartT<=0){ state.heartT=0.85; sfx.heart(); }
+  } else state.heartT=0;
+
   /* ---- weapon sway + recoil recovery ---- */
   gun.position.x += ((0.20 - bobX*0.5) - gun.position.x) * Math.min(1, dt*9);
   gun.position.y += ((-0.20 + bobY*0.6) - gun.position.y) * Math.min(1, dt*9);
@@ -1232,9 +1368,9 @@ function update(dt){
   gun.rotation.z += ((sprinting? -0.35 : 0) - gun.rotation.z) * Math.min(1, dt*7);
   gun.rotation.x += ((sprinting? 0.28 : -state.recoil*0.8) - gun.rotation.x) * Math.min(1, dt*10);
 
-  state.recoil += state.recoilVel;
-  state.recoilVel *= Math.pow(0.02, dt);
-  state.recoil += (0 - state.recoil) * Math.min(1, dt*7.5);
+  state.recoil += state.recoilVel*dt;
+  state.recoilVel *= Math.pow(0.0005, dt);
+  state.recoil += (0 - state.recoil) * Math.min(1, dt*12);
   state.spread += (0 - state.spread) * Math.min(1, dt*2.6);
 
   flashMat.opacity += (0 - flashMat.opacity) * Math.min(1, dt*26);
@@ -1293,6 +1429,7 @@ function update(dt){
     var anyAlive=false;
     for(var bi=0;bi<zombies.length;bi++) if(!zombies[bi].dead){ anyAlive=true; break; }
     if(!anyAlive){
+      if(state.waveBreak===0) sfx.clear();
       state.waveBreak+=dt;
       if(state.waveBreak>3.2){
         state.waveBreak=0;
@@ -1446,7 +1583,9 @@ function beginPlay(){
   if(state.running || now-lastStart<600) return;
   lastStart=now;
   initAudio();
-  if(AC && AC.state==='suspended') AC.resume();
+  wakeAudio();
+  unlockMobileAudio();
+  if(ambient) ambient.start();
   resetGame();
   ui.start.classList.add('hidden');
   ui.over.classList.add('hidden');
