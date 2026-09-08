@@ -1,0 +1,2300 @@
+---
+title: Dottie’s Mix and Match Racer
+description: Build a racer out of mixed-up animal parts, then race it in 3D against other mixed-up animals. Win coins to unlock more animals. Works on a phone.
+date: 2026-09-09
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#8fd3ff">
+<meta name="apple-mobile-web-app-title" content="Mix & Match Racer">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/experiments/dotties-mix-and-match-racer/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/dotties-mix-and-match-racer/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/dotties-mix-and-match-racer/icon-192.png">
+<title>Dottie’s Mix and Match Racer</title>
+<style>
+  :root{
+    --sky:#8fd3ff;
+    --grass:#6fcf5a;
+    --sun:#ffd166;
+    --ink:#1b2a41;
+    --ink-dim:rgba(27,42,65,.62);
+    --card:rgba(255,255,255,.94);
+    --coin:#ffb703;
+    --hot:#ef476f;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{
+    width:100%;height:100%;overflow:hidden;background:var(--sky);
+    touch-action:none;overscroll-behavior:none;
+    font-family:"Trebuchet MS","Segoe UI",Helvetica,Arial,sans-serif;
+    color:var(--ink);
+    -webkit-user-select:none;user-select:none;
+  }
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;}
+
+  /* ---------- shared screen shell ---------- */
+  .screen{
+    position:fixed;inset:0;z-index:30;display:flex;
+    align-items:center;justify-content:center;text-align:center;
+    padding:calc(env(safe-area-inset-top) + 18px) calc(env(safe-area-inset-right) + 18px)
+            calc(env(safe-area-inset-bottom) + 18px) calc(env(safe-area-inset-left) + 18px);
+    background:linear-gradient(170deg,#8fd3ff 0%,#bfe9ff 46%,#6fcf5a 100%);
+  }
+  .hidden{display:none !important;}
+
+  /* the garage and shop sit over the live 3d preview, so only their card is opaque */
+  .panel{background:transparent;flex-direction:row;align-items:stretch;justify-content:flex-end;}
+  .card{
+    width:40%;max-width:440px;min-width:300px;
+    background:var(--card);border-radius:20px;
+    box-shadow:0 10px 34px rgba(15,30,50,.28);
+    padding:16px 16px 14px;text-align:left;
+    display:flex;flex-direction:column;gap:11px;overflow:hidden;
+    -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+  }
+  /* the buttons live outside this, so RACE! is never below the fold */
+  .cardbody{
+    flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    display:flex;flex-direction:column;gap:11px;padding-right:2px;
+  }
+  @media (max-width:759px){
+    .panel{flex-direction:column;align-items:stretch;justify-content:flex-end;}
+    .card{width:100%;max-width:none;min-width:0;height:56%;border-radius:20px 20px 0 0;}
+    .slot{padding:4px 6px;}
+    .cyc{width:38px;height:38px;}
+    .slot .name span{font-size:14.5px;}
+  }
+
+  /* ---------- title ---------- */
+  #title h1{font-size:12vw;line-height:.92;font-weight:800;letter-spacing:-.01em;
+    color:#fff;text-shadow:0 5px 0 #3f9ad6,0 9px 22px rgba(15,40,70,.35);}
+  #title h1 span{display:block;font-size:.34em;letter-spacing:.06em;margin-top:12px;
+    color:var(--sun);text-shadow:0 3px 0 #b9781a,0 6px 14px rgba(40,25,0,.3);}
+  @media (min-width:640px){ #title h1{font-size:74px;} }
+  #title p{margin-top:24px;font-size:15px;line-height:1.75;color:var(--ink);
+    max-width:29em;background:rgba(255,255,255,.72);border-radius:14px;padding:14px 18px;}
+  .go{
+    margin-top:26px;padding:17px 34px;border:0;border-radius:999px;
+    font-family:inherit;font-size:16px;font-weight:800;letter-spacing:.08em;
+    color:#fff;background:var(--hot);box-shadow:0 5px 0 #b3305090;
+    min-height:52px;touch-action:manipulation;cursor:pointer;
+  }
+  .go:active{transform:translateY(3px);box-shadow:0 2px 0 #b3305090;}
+
+  /* ---------- garage + shop card contents ---------- */
+  .cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .cardhead h2{font-size:19px;font-weight:800;letter-spacing:.02em;}
+  .coins{display:flex;align-items:center;gap:7px;font-size:17px;font-weight:800;
+    background:rgba(255,183,3,.16);border-radius:999px;padding:6px 13px 6px 8px;white-space:nowrap;}
+  .coins i{width:19px;height:19px;border-radius:50%;background:var(--coin);
+    box-shadow:inset 0 0 0 2.5px #d99200;display:block;flex:0 0 auto;}
+
+  .slots{display:flex;flex-direction:column;gap:7px;}
+  .slot{display:flex;align-items:center;gap:9px;background:rgba(27,42,65,.055);
+    border-radius:13px;padding:5px 7px;}
+  .slot .name{flex:1;min-width:0;}
+  .slot .name b{display:block;font-size:9.5px;letter-spacing:.17em;color:var(--ink-dim);
+    text-transform:uppercase;font-weight:700;}
+  .slot .name span{display:block;font-size:15.5px;font-weight:800;line-height:1.25;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .cyc{width:42px;height:42px;flex:0 0 auto;border:0;border-radius:11px;background:#fff;
+    font-family:inherit;font-size:15px;font-weight:800;color:var(--ink);
+    box-shadow:0 2px 4px rgba(20,40,60,.16);touch-action:manipulation;cursor:pointer;}
+  .cyc:active{background:#e8eff5;}
+
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;}
+  .stat b{display:block;font-size:9.5px;letter-spacing:.14em;color:var(--ink-dim);
+    text-transform:uppercase;font-weight:700;margin-bottom:3px;}
+  .track{height:7px;border-radius:99px;background:rgba(27,42,65,.13);overflow:hidden;}
+  .track i{display:block;height:100%;border-radius:99px;background:#3f9ad6;
+    transition:width .22s ease-out;}
+  .stat[data-stat="swim"] .track i{background:#2ba6d9;}
+  .stat[data-stat="jump"] .track i{background:#7bc043;}
+  .stat[data-stat="stability"] .track i{background:#f2a71b;}
+  .stat[data-stat="handling"] .track i{background:#9b6fd6;}
+  .stat[data-stat="accel"] .track i{background:#ef476f;}
+
+  #quirks{list-style:none;display:flex;flex-direction:column;gap:4px;}
+  #quirks li{font-size:12.5px;line-height:1.45;color:var(--ink);padding-left:17px;position:relative;}
+  #quirks li:before{content:"";position:absolute;left:4px;top:6px;width:6px;height:6px;
+    border-radius:50%;background:var(--sun);}
+
+  .row{display:flex;gap:9px;flex:0 0 auto;}
+  .mini{flex:1;padding:14px 8px;border:0;border-radius:13px;background:rgba(27,42,65,.09);
+    font-family:inherit;font-size:12.5px;font-weight:800;letter-spacing:.1em;color:var(--ink);
+    min-height:46px;touch-action:manipulation;cursor:pointer;}
+  .mini:active{background:rgba(27,42,65,.19);}
+  .primary{flex:1.5;padding:14px 8px;border:0;border-radius:13px;background:var(--hot);
+    font-family:inherit;font-size:15px;font-weight:800;letter-spacing:.1em;color:#fff;
+    box-shadow:0 4px 0 #b3305090;min-height:46px;touch-action:manipulation;cursor:pointer;}
+  .primary:active{transform:translateY(2px);box-shadow:0 2px 0 #b3305090;}
+
+  /* shop rows */
+  #shopList{display:flex;flex-direction:column;gap:8px;}
+  .shopitem{display:flex;align-items:center;gap:10px;background:rgba(27,42,65,.055);
+    border-radius:13px;padding:9px 10px;}
+  .shopitem .chip{width:26px;height:26px;border-radius:8px;flex:0 0 auto;}
+  .shopitem .txt{flex:1;min-width:0;}
+  .shopitem .txt b{display:block;font-size:14.5px;font-weight:800;}
+  .shopitem .txt span{display:block;font-size:11.5px;line-height:1.4;color:var(--ink-dim);}
+  .buy{border:0;border-radius:10px;padding:10px 12px;background:var(--coin);
+    font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.06em;color:#4a3200;
+    min-height:42px;white-space:nowrap;touch-action:manipulation;cursor:pointer;}
+  .buy:active{filter:brightness(.92);}
+  .buy[disabled]{background:rgba(27,42,65,.11);color:var(--ink-dim);}
+  .owned{font-size:11.5px;font-weight:800;letter-spacing:.11em;color:#3f9ad6;
+    padding:0 8px;white-space:nowrap;}
+
+  /* ---------- race hud ---------- */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;
+       padding:calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 16px)
+               calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 16px);}
+  .hstat{position:absolute;text-shadow:0 2px 5px rgba(10,25,45,.5);color:#fff;}
+  #pos{left:calc(env(safe-area-inset-left) + 18px);top:calc(env(safe-area-inset-top) + 12px);
+       font-size:40px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;}
+  #lapBox{top:calc(env(safe-area-inset-top) + 16px);left:50%;transform:translateX(-50%);text-align:center;}
+  #lap{font-size:15px;font-weight:800;letter-spacing:.18em;}
+  #zoneTip{font-size:12px;font-weight:800;letter-spacing:.13em;color:var(--sun);margin-top:5px;
+    opacity:0;transition:opacity .25s;}
+  #timer{right:calc(env(safe-area-inset-right) + 18px);top:calc(env(safe-area-inset-top) + 14px);
+    font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  #boostWrap{left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 16px);
+    width:min(210px,44vw);text-align:center;}
+  #boostWrap b{display:block;font-size:9.5px;letter-spacing:.22em;font-weight:700;margin-bottom:4px;}
+  #boostTrack{height:9px;border-radius:99px;background:rgba(255,255,255,.32);overflow:hidden;
+    box-shadow:0 2px 6px rgba(10,25,45,.3);}
+  #boostFill{height:100%;width:100%;background:linear-gradient(90deg,#ffd166,#ef476f);
+    border-radius:99px;}
+  #countdown{position:fixed;inset:0;z-index:11;display:flex;align-items:center;justify-content:center;
+    pointer-events:none;font-size:22vw;font-weight:800;color:#fff;
+    text-shadow:0 6px 0 #3f9ad6,0 12px 30px rgba(10,30,55,.45);}
+  @media (min-width:640px){ #countdown{font-size:140px;} }
+
+  /* ---------- touch controls ---------- */
+  .tbtn{position:fixed;z-index:14;border:0;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.36);box-shadow:0 3px 10px rgba(10,30,55,.24);
+    font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.1em;color:var(--ink);
+    -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);touch-action:none;}
+  .tbtn.on{background:rgba(255,255,255,.72);}
+  #tLeft,#tRight{width:76px;height:76px;font-size:24px;bottom:calc(env(safe-area-inset-bottom) + 22px);}
+  #tLeft{left:calc(env(safe-area-inset-left) + 18px);}
+  #tRight{left:calc(env(safe-area-inset-left) + 104px);}
+  #tGas{width:96px;height:96px;right:calc(env(safe-area-inset-right) + 20px);
+    bottom:calc(env(safe-area-inset-bottom) + 20px);}
+  #tBoost{width:70px;height:70px;right:calc(env(safe-area-inset-right) + 30px);
+    bottom:calc(env(safe-area-inset-bottom) + 126px);font-size:10.5px;}
+
+  /* ---------- results ---------- */
+  #results h1{font-size:9vw;font-weight:800;color:#fff;line-height:1;
+    text-shadow:0 5px 0 #3f9ad6,0 9px 20px rgba(15,40,70,.32);}
+  @media (min-width:640px){ #results h1{font-size:58px;} }
+  #results .sheet{margin-top:22px;background:rgba(255,255,255,.9);border-radius:18px;
+    padding:18px 24px;display:flex;flex-direction:column;gap:8px;min-width:min(320px,86vw);}
+  #resultTime{font-size:15px;font-weight:700;}
+  #resultCoins{font-size:24px;font-weight:800;color:#b3820a;}
+  #resultBest{font-size:12.5px;color:var(--ink-dim);line-height:1.5;}
+  #results .row{margin-top:22px;gap:12px;width:min(340px,86vw);}
+
+  #loading{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:var(--sky);font-size:12px;letter-spacing:.3em;font-weight:800;color:#fff;}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<!-- ---------- title ---------- -->
+<div class="screen" id="title">
+  <div>
+    <h1>DOTTIE’S<span>MIX AND MATCH RACER</span></h1>
+    <p>Build a racer out of parts from different animals, then race it.
+       Every part changes how your animal runs, jumps, corners and swims.
+       Some combinations are brilliant. Some are a disaster.<br>
+       Win coins to unlock more animals.</p>
+    <button class="go" id="playBtn">BUILD YOUR RACER</button>
+  </div>
+</div>
+
+<!-- ---------- garage ---------- -->
+<div class="screen panel hidden" id="garage">
+  <div class="card">
+    <div class="cardhead">
+      <h2>Your Racer</h2>
+      <div class="coins"><i></i><span id="coinCount">0</span></div>
+    </div>
+
+    <div class="cardbody">
+    <div class="slots" id="slotList">
+      <div class="slot" data-slot="head">
+        <button class="cyc" data-dir="-1">◀</button>
+        <div class="name"><b>Head</b><span>—</span></div>
+        <button class="cyc" data-dir="1">▶</button>
+      </div>
+      <div class="slot" data-slot="body">
+        <button class="cyc" data-dir="-1">◀</button>
+        <div class="name"><b>Body</b><span>—</span></div>
+        <button class="cyc" data-dir="1">▶</button>
+      </div>
+      <div class="slot" data-slot="front">
+        <button class="cyc" data-dir="-1">◀</button>
+        <div class="name"><b>Front legs</b><span>—</span></div>
+        <button class="cyc" data-dir="1">▶</button>
+      </div>
+      <div class="slot" data-slot="back">
+        <button class="cyc" data-dir="-1">◀</button>
+        <div class="name"><b>Back legs</b><span>—</span></div>
+        <button class="cyc" data-dir="1">▶</button>
+      </div>
+      <div class="slot" data-slot="tail">
+        <button class="cyc" data-dir="-1">◀</button>
+        <div class="name"><b>Tail</b><span>—</span></div>
+        <button class="cyc" data-dir="1">▶</button>
+      </div>
+    </div>
+
+    <div class="stats" id="statList">
+      <div class="stat" data-stat="speed"><b>Speed</b><div class="track"><i></i></div></div>
+      <div class="stat" data-stat="accel"><b>Get going</b><div class="track"><i></i></div></div>
+      <div class="stat" data-stat="handling"><b>Cornering</b><div class="track"><i></i></div></div>
+      <div class="stat" data-stat="stability"><b>Steadiness</b><div class="track"><i></i></div></div>
+      <div class="stat" data-stat="jump"><b>Jump</b><div class="track"><i></i></div></div>
+      <div class="stat" data-stat="swim"><b>Swim</b><div class="track"><i></i></div></div>
+    </div>
+
+    <ul id="quirks"></ul>
+    </div>
+
+    <div class="row">
+      <button class="mini" id="randomBtn">RANDOM</button>
+      <button class="mini" id="shopBtn">SHOP</button>
+      <button class="primary" id="raceBtn">RACE!</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- shop ---------- -->
+<div class="screen panel hidden" id="shop">
+  <div class="card">
+    <div class="cardhead">
+      <h2>Animal Shop</h2>
+      <div class="coins"><i></i><span id="shopCoins">0</span></div>
+    </div>
+    <div class="cardbody"><div id="shopList"></div></div>
+    <div class="row">
+      <button class="primary" id="shopBack">BACK TO GARAGE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- race hud ---------- -->
+<div id="hud" class="hidden">
+  <div class="hstat" id="pos">1st</div>
+  <div class="hstat" id="lapBox">
+    <div id="lap">LAP 1 / 3</div>
+    <div id="zoneTip"></div>
+  </div>
+  <div class="hstat" id="timer">0:00.0</div>
+  <div class="hstat" id="boostWrap">
+    <b>BOOST</b>
+    <div id="boostTrack"><div id="boostFill"></div></div>
+  </div>
+</div>
+<div id="countdown" class="hidden"></div>
+
+<button class="tbtn hidden" id="tLeft">◀</button>
+<button class="tbtn hidden" id="tRight">▶</button>
+<button class="tbtn hidden" id="tGas">GAS</button>
+<button class="tbtn hidden" id="tBoost">BOOST</button>
+
+<!-- ---------- results ---------- -->
+<div class="screen hidden" id="results">
+  <div>
+    <h1 id="resultPlace">YOU CAME 1ST!</h1>
+    <div class="sheet">
+      <div id="resultTime">Race time 1:04.2</div>
+      <div id="resultCoins">+100 coins</div>
+      <div id="resultBest"></div>
+    </div>
+    <div class="row">
+      <button class="mini" id="garageBtn">GARAGE</button>
+      <button class="primary" id="againBtn">RACE AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<div id="loading">LOADING</div>
+
+<script src="/experiments/dotties-mix-and-match-racer/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   1. UTILS
+   ============================================================ */
+
+function rand(a,b){ return a+Math.random()*(b-a); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function angleDiff(a,b){ var d=(b-a)%(Math.PI*2); if(d>Math.PI)d-=Math.PI*2; if(d<-Math.PI)d+=Math.PI*2; return d; }
+function fmtTime(s){ var m=Math.floor(s/60), r=s-m*60; return m+':'+(r<10?'0':'')+r.toFixed(1); }
+function ordinal(n){ return n+(['th','st','nd','rd'][(n%100>10&&n%100<14)?0:(n%10<4?n%10:0)]); }
+// seeded rng so one race's npc line-up is drawn from a single reproducible stream
+function makeRng(seed){ var s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+function $(id){ return document.getElementById(id); }
+
+// Geometry cache. Parts are rebuilt often (six racers per race, a new preview on
+// every slot change) but there are only a few dozen distinct primitive sizes, so
+// geometries are shared and never disposed. Materials are per racer and are disposed.
+var GEOC = {};
+function G(key, make){ var g=GEOC[key]; if(!g){ g=GEOC[key]=make(); } return g; }
+function box(w,h,d){ return G('b'+w+'|'+h+'|'+d, function(){ return new THREE.BoxGeometry(w,h,d); }); }
+function sph(r,ws,hs){ ws=ws||10; hs=hs||8; return G('s'+r+'|'+ws+'|'+hs, function(){ return new THREE.SphereGeometry(r,ws,hs); }); }
+function cyl(rt,rb,h,rs){ rs=rs||8; return G('c'+rt+'|'+rb+'|'+h+'|'+rs, function(){ return new THREE.CylinderGeometry(rt,rb,h,rs); }); }
+function con(r,h,rs){ rs=rs||8; return G('n'+r+'|'+h+'|'+rs, function(){ return new THREE.ConeGeometry(r,h,rs); }); }
+
+// add a primitive to a group and hand the mesh back for extra rotation or scaling
+function add(parent, geo, mat, x, y, z){
+  var m=new THREE.Mesh(geo, mat);
+  m.position.set(x||0, y||0, z||0);
+  parent.add(m);
+  return m;
+}
+
+/* ============================================================
+   2. SAVE DATA
+   ============================================================ */
+
+var SAVE_KEY='dotties-racer-save-v1';
+var STARTERS=['cheetah','frog','duck','turtle'];
+var SLOTS=['head','body','front','back','tail'];
+var save=null;
+
+function defaultSave(){
+  return { coins:0, owned:STARTERS.slice(),
+    build:{head:'cheetah', body:'cheetah', front:'cheetah', back:'cheetah', tail:'cheetah'},
+    bestTime:null, bestLap:null, wins:0, races:0 };
+}
+
+function loadSave(){
+  var d=defaultSave(), raw=null;
+  try{ raw=window.localStorage.getItem(SAVE_KEY); }catch(e){}
+  if(raw){
+    try{
+      var p=JSON.parse(raw);
+      if(p && typeof p==='object'){
+        if(typeof p.coins==='number' && isFinite(p.coins)) d.coins=Math.max(0,Math.floor(p.coins));
+        if(typeof p.wins==='number' && isFinite(p.wins)) d.wins=Math.max(0,Math.floor(p.wins));
+        if(typeof p.races==='number' && isFinite(p.races)) d.races=Math.max(0,Math.floor(p.races));
+        if(typeof p.bestTime==='number' && isFinite(p.bestTime)) d.bestTime=p.bestTime;
+        if(typeof p.bestLap==='number' && isFinite(p.bestLap)) d.bestLap=p.bestLap;
+        // keep only animals this build of the game still knows about
+        if(p.owned && p.owned.length){
+          var own=[];
+          for(var i=0;i<p.owned.length;i++){
+            if(ANIMALS[p.owned[i]] && own.indexOf(p.owned[i])<0) own.push(p.owned[i]);
+          }
+          for(var s=0;s<STARTERS.length;s++){ if(own.indexOf(STARTERS[s])<0) own.push(STARTERS[s]); }
+          d.owned=own;
+        }
+        if(p.build){
+          for(var k=0;k<SLOTS.length;k++){
+            var key=p.build[SLOTS[k]];
+            d.build[SLOTS[k]] = (ANIMALS[key] && d.owned.indexOf(key)>=0) ? key : 'cheetah';
+          }
+        }
+      }
+    }catch(e){}
+  }
+  save=d;
+}
+
+function saveGame(){
+  try{ window.localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){}
+}
+
+/* ============================================================
+   3. ANIMAL CATALOG
+
+   Every animal defines all five slots in the same local frame, which is what
+   makes mixing work: a racer faces +Z, up is +Y, and a body publishes attach
+   points that any animal's legs, head or tail can be dropped onto.
+
+   Body builders  -> { group, len, height, width, attach, wings }
+   Leg builders   -> { group } with the hip at the origin and the foot at y=-len
+   Head builders  -> { group } with the neck base at the origin, facing +Z
+   Tail builders  -> { group } with the base at the origin, trailing towards -Z
+   ============================================================ */
+
+// a limb drawn between two points of the part's local frame
+function seg(parent, mat, r, ax,ay,az, bx,by,bz){
+  var a=new THREE.Vector3(ax,ay,az), b=new THREE.Vector3(bx,by,bz);
+  var d=new THREE.Vector3().subVectors(b,a);
+  var L=Math.max(0.02, Math.round(d.length()*100)/100);
+  var m=add(parent, cyl(r,r,L,7), mat, (ax+bx)/2, (ay+by)/2, (az+bz)/2);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), d.normalize());
+  return m;
+}
+
+function bodyAttach(len, width, height, o){
+  o=o||{};
+  var lx = o.legX!==undefined ? o.legX : width*0.44;
+  var fz = o.frontZ!==undefined ? o.frontZ : len*0.30;
+  var bz = o.backZ!==undefined ? o.backZ : -len*0.30;
+  var ly = -height/2;
+  return {
+    head: new THREE.Vector3(0, o.headY!==undefined?o.headY:height*0.20, o.headZ!==undefined?o.headZ:len*0.46),
+    tail: new THREE.Vector3(0, o.tailY!==undefined?o.tailY:height*0.16, -len*0.47),
+    fl: new THREE.Vector3( lx, ly, fz), fr: new THREE.Vector3(-lx, ly, fz),
+    bl: new THREE.Vector3( lx, ly, bz), br: new THREE.Vector3(-lx, ly, bz)
+  };
+}
+
+// two big eyes, used by most heads
+function eyes(g, M, spread, y, z, r){
+  var pupil=M(0x1a1a1a), white=M(0xffffff);
+  [spread,-spread].forEach(function(x){
+    add(g, sph(r,8,7), white, x, y, z);
+    add(g, sph(r*0.5,7,6), pupil, x*1.02, y, z+r*0.72);
+  });
+}
+
+// a straight leg: one tapered limb, one foot
+function straightLeg(pal, M, len, o){
+  var g=new THREE.Group(), th=o.th||0.085;
+  add(g, cyl(th, th*0.8, len, 7), M(o.color), 0, -len/2, 0);
+  var f=add(g, sph(o.foot||0.13, 8, 6), M(o.footColor||o.color), 0, -len+0.02, 0.03);
+  f.scale.set(1, 0.62, 1.35);
+  return { group:g };
+}
+
+var ANIMALS={
+
+  /* ---------------- cheetah ---------------- */
+  cheetah:{
+    name:'Cheetah', price:0,
+    blurb:'Long legs and a spotted coat. Fast on dry ground.',
+    palette:{main:0xe6b04a, second:0x3a2a14, accent:0xffffff},
+    parts:{
+      head:{ spd:6,acc:6,grip:5,stab:4,jmp:3,swm:1,mass:2, build:function(pal,M){
+        var g=new THREE.Group();
+        var sk=add(g, sph(0.26,10,8), M(pal.main), 0, 0.16, 0.06); sk.scale.set(0.95,0.92,1.12);
+        var mz=add(g, box(0.2,0.15,0.22), M(pal.main), 0, 0.09, 0.32);
+        add(g, sph(0.05,7,6), M(pal.second), 0, 0.11, 0.44);
+        [0.11,-0.11].forEach(function(x){
+          var e=add(g, con(0.075,0.11,7), M(pal.main), x, 0.38, 0.02); e.rotation.z=x>0?-0.2:0.2;
+        });
+        eyes(g, M, 0.115, 0.21, 0.24, 0.055);
+        // tear lines
+        [0.1,-0.1].forEach(function(x){
+          var t=add(g, box(0.028,0.11,0.02), M(pal.second), x, 0.13, 0.28);
+        });
+        add(g, cyl(0.11,0.13,0.16,7), M(pal.main), 0, 0.02, -0.02);
+        return { group:g };
+      }},
+      body:{ spd:7,acc:6,grip:5,stab:4,jmp:3,swm:1,mass:4, wings:0, build:function(pal,M){
+        var len=1.9, height=0.55, width=0.6;
+        var g=new THREE.Group();
+        var t=add(g, box(width,height,len*0.86), M(pal.main));
+        var ch=add(g, sph(0.32,10,8), M(pal.main), 0, 0.0, len*0.36); ch.scale.set(0.95,0.92,0.9);
+        var rp=add(g, sph(0.33,10,8), M(pal.main), 0, 0.03, -len*0.36); rp.scale.set(0.95,0.95,0.9);
+        var spots=[[0.22,0.14,0.5],[0.26,-0.02,0.2],[0.2,0.18,-0.1],[0.25,0.02,-0.42],
+                   [0.15,0.24,0.32],[0.18,0.22,-0.3],[0.24,-0.1,-0.06],[0.12,0.26,0.02]];
+        spots.forEach(function(p){
+          [1,-1].forEach(function(s){
+            var d=add(g, sph(0.055,6,5), M(pal.second), p[0]*s, p[1], p[2]);
+            d.scale.set(0.7,1,1.3);
+          });
+        });
+        return { group:g, len:len, height:height, width:width,
+                 attach:bodyAttach(len,width,height,{headY:0.16, frontZ:len*0.32, backZ:-len*0.31}) };
+      }},
+      front:{ spd:8,acc:7,grip:6,stab:4,jmp:4,swm:1,mass:3, len:0.9, build:function(pal,M,len){
+        return straightLeg(pal,M,len,{th:0.082, color:pal.main, footColor:pal.main});
+      }},
+      back:{ spd:9,acc:8,grip:5,stab:4,jmp:5,swm:1,mass:3, len:0.95, build:function(pal,M,len){
+        var g=new THREE.Group();
+        seg(g, M(pal.main), 0.1, 0,0,0, 0,-len*0.5,-len*0.16);
+        seg(g, M(pal.main), 0.075, 0,-len*0.5,-len*0.16, 0,-len,0);
+        var f=add(g, sph(0.13,8,6), M(pal.main), 0, -len+0.02, 0.04); f.scale.set(1,0.62,1.35);
+        return { group:g };
+      }},
+      tail:{ spd:5,acc:3,grip:7,stab:6,jmp:2,swm:1,mass:1, build:function(pal,M){
+        var g=new THREE.Group();
+        seg(g, M(pal.main), 0.055, 0,0,0, 0,0.06,-0.55);
+        seg(g, M(pal.main), 0.045, 0,0.06,-0.55, 0,0.02,-1.0);
+        add(g, sph(0.06,7,6), M(pal.second), 0, 0.02, -1.04);
+        return { group:g };
+      }}
+    }
+  },
+
+  /* ---------------- frog ---------------- */
+  frog:{
+    name:'Frog', price:0,
+    blurb:'Springy back legs and a taste for water. Jumps enormously.',
+    palette:{main:0x5ec24a, second:0x2f7a2a, accent:0xf6f3a0},
+    parts:{
+      head:{ spd:2,acc:4,grip:4,stab:5,jmp:6,swm:7,mass:1, build:function(pal,M){
+        var g=new THREE.Group();
+        var sk=add(g, sph(0.3,10,8), M(pal.main), 0, 0.14, 0.08); sk.scale.set(1.15,0.8,1.0);
+        add(g, box(0.34,0.05,0.06), M(pal.second), 0, 0.06, 0.34);
+        // bulging eyes sit on top of the skull
+        [0.17,-0.17].forEach(function(x){
+          add(g, sph(0.12,8,7), M(pal.main), x, 0.3, 0.1);
+          add(g, sph(0.085,8,7), M(0xffffff), x, 0.35, 0.14);
+          add(g, sph(0.045,7,6), M(0x1a1a1a), x, 0.365, 0.2);
+        });
+        add(g, cyl(0.13,0.15,0.14,7), M(pal.main), 0, 0.02, -0.02);
+        return { group:g };
+      }},
+      body:{ spd:3,acc:5,grip:4,stab:5,jmp:7,swm:7,mass:2, wings:0, build:function(pal,M){
+        var len=1.3, height=0.6, width=1.0;
+        var g=new THREE.Group();
+        var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(width/1.0, height/1.0, len/1.0);
+        var b=add(g, sph(0.44,10,8), M(pal.accent), 0, -0.12, 0.06); b.scale.set(0.9,0.5,1.2);
+        [[0.3,0.1,0.25],[0.34,0.02,-0.2],[0.22,0.2,-0.02]].forEach(function(p){
+          [1,-1].forEach(function(s){ add(g, sph(0.07,6,5), M(pal.second), p[0]*s, p[1], p[2]); });
+        });
+        return { group:g, len:len, height:height, width:width,
+                 attach:bodyAttach(len,width,height,{headY:0.14, legX:0.4, frontZ:0.36, backZ:-0.3}) };
+      }},
+      front:{ spd:3,acc:5,grip:5,stab:4,jmp:6,swm:6,mass:2, len:0.55, build:function(pal,M,len){
+        var g=new THREE.Group();
+        seg(g, M(pal.main), 0.075, 0,0,0, 0,-len*0.55,0.1);
+        seg(g, M(pal.main), 0.06, 0,-len*0.55,0.1, 0,-len,0.04);
+        // splayed webbed toes
+        [-0.09,0,0.09].forEach(function(x){
+          var t=add(g, box(0.05,0.035,0.17), M(pal.accent), x, -len+0.01, 0.13);
+          t.rotation.y=-x*1.6;
+        });
+        return { group:g };
+      }},
+      back:{ spd:4,acc:8,grip:3,stab:3,jmp:10,swm:6,mass:3, len:0.8, build:function(pal,M,len){
+        var g=new THREE.Group();
+        // folded Z: thigh sweeps back and up, shin drops forward to the foot
+        seg(g, M(pal.main), 0.12, 0,0,0, 0,-len*0.42,-len*0.44);
+        seg(g, M(pal.main), 0.085, 0,-len*0.42,-len*0.44, 0,-len,0.06);
+        [-0.11,0,0.11].forEach(function(x){
+          var t=add(g, box(0.06,0.04,0.22), M(pal.accent), x, -len+0.01, 0.18);
+          t.rotation.y=-x*1.5;
+        });
+        return { group:g };
+      }},
+      tail:{ spd:1,acc:2,grip:2,stab:3,jmp:3,swm:5,mass:1, build:function(pal,M){
+        var g=new THREE.Group();
+        var n=add(g, sph(0.13,8,7), M(pal.main), 0, 0, -0.1); n.scale.set(1,0.8,1.1);
+        return { group:g };
+      }}
+    }
+  },
+
+  /* ---------------- duck ---------------- */
+  duck:{
+    name:'Duck', price:0,
+    blurb:'Waddles on land, flies through water. Small hopeful wings.',
+    palette:{main:0xf5f0e6, second:0xf2a71b, accent:0x2b2b2b},
+    parts:{
+      head:{ spd:2,acc:3,grip:4,stab:6,jmp:2,swm:8,mass:1, build:function(pal,M){
+        var g=new THREE.Group();
+        add(g, cyl(0.1,0.12,0.28,8), M(pal.main), 0, 0.12, -0.02);
+        add(g, sph(0.21,10,8), M(pal.main), 0, 0.34, 0.04);
+        var bill=add(g, box(0.19,0.06,0.28), M(pal.second), 0, 0.3, 0.26);
+        add(g, box(0.15,0.04,0.1), M(pal.second), 0, 0.26, 0.36);
+        eyes(g, M, 0.105, 0.39, 0.15, 0.05);
+        return { group:g };
+      }},
+      body:{ spd:3,acc:4,grip:3,stab:6,jmp:4,swm:9,mass:3, wings:4, build:function(pal,M){
+        var len=1.4, height=0.7, width=0.8;
+        var g=new THREE.Group();
+        var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.8,0.72,1.42);
+        var br=add(g, sph(0.4,10,8), M(pal.main), 0, 0.06, -0.35); br.scale.set(0.85,0.8,0.8);
+        var wings=[1,-1].map(function(s){
+          var w=new THREE.Group();
+          w.position.set(s*width*0.42, 0.1, 0.02);
+          var pane=add(w, box(0.07,0.2,0.72), M(pal.main), s*0.05, -0.06, -0.08);
+          pane.rotation.x=0.06;
+          add(w, box(0.06,0.1,0.24), M(pal.second), s*0.06, -0.12, -0.42);
+          g.add(w);
+          return w;
+        });
+        return { group:g, len:len, height:height, width:width, wings:wings,
+                 attach:bodyAttach(len,width,height,{headY:0.18, legX:0.22, frontZ:0.2, backZ:-0.24}) };
+      }},
+      front:{ spd:2,acc:3,grip:3,stab:5,jmp:2,swm:7,mass:1, len:0.45, build:function(pal,M,len){
+        return duckLeg(pal,M,len);
+      }},
+      back:{ spd:2,acc:3,grip:3,stab:5,jmp:2,swm:8,mass:2, len:0.45, build:function(pal,M,len){
+        return duckLeg(pal,M,len);
+      }},
+      tail:{ spd:2,acc:2,grip:4,stab:6,jmp:1,swm:6,mass:1, build:function(pal,M){
+        var g=new THREE.Group();
+        var w=add(g, box(0.3,0.1,0.34), M(pal.main), 0, 0.08, -0.2); w.rotation.x=-0.5;
+        var c=add(g, box(0.16,0.07,0.2), M(pal.main), 0, 0.2, -0.32); c.rotation.x=-0.9;
+        return { group:g };
+      }}
+    }
+  },
+
+  /* ---------------- turtle ---------------- */
+  turtle:{
+    name:'Turtle', price:0,
+    blurb:'A rolling fortress. Nothing knocks it over, nothing hurries it.',
+    palette:{main:0x6b8f4e, second:0x4a6b33, accent:0xc9d6a3},
+    parts:{
+      head:{ spd:1,acc:1,grip:3,stab:9,jmp:0,swm:6,mass:3, build:function(pal,M){
+        var g=new THREE.Group();
+        add(g, cyl(0.11,0.13,0.3,8), M(pal.accent), 0, 0.14, 0.04);
+        var sk=add(g, sph(0.19,10,8), M(pal.main), 0, 0.3, 0.14); sk.scale.set(1,0.9,1.15);
+        add(g, box(0.16,0.04,0.05), M(pal.second), 0, 0.24, 0.31);
+        eyes(g, M, 0.095, 0.34, 0.22, 0.045);
+        return { group:g };
+      }},
+      body:{ spd:2,acc:1,grip:2,stab:10,jmp:0,swm:7,mass:9, wings:0, build:function(pal,M){
+        var len=1.6, height=0.72, width=1.1;
+        var g=new THREE.Group();
+        var base=add(g, box(width*0.9, height*0.34, len*0.82), M(pal.accent), 0, -height*0.24, 0);
+        var dome=add(g, sph(0.62,14,10), M(pal.second), 0, -height*0.1, 0);
+        dome.scale.set(width/1.24, height*0.95/0.62, len/1.24);
+        // shell plates
+        [[0,0.3,0],[0,0.26,0.42],[0,0.26,-0.42],[0.3,0.2,0.16],[-0.3,0.2,0.16],
+         [0.3,0.2,-0.2],[-0.3,0.2,-0.2]].forEach(function(p){
+          var pl=add(g, box(0.26,0.08,0.3), M(pal.main), p[0], p[1], p[2]);
+          pl.rotation.y=p[0]*0.6;
+        });
+        return { group:g, len:len, height:height, width:width,
+                 attach:bodyAttach(len,width,height,{headY:0.02, legX:0.46, frontZ:0.42, backZ:-0.4,
+                   headZ:len*0.42, tailY:-0.05}) };
+      }},
+      front:{ spd:1,acc:2,grip:4,stab:8,jmp:0,swm:6,mass:4, len:0.4, build:function(pal,M,len){
+        return turtleLeg(pal,M,len);
+      }},
+      back:{ spd:1,acc:2,grip:4,stab:8,jmp:0,swm:6,mass:4, len:0.4, build:function(pal,M,len){
+        return turtleLeg(pal,M,len);
+      }},
+      tail:{ spd:1,acc:1,grip:2,stab:8,jmp:0,swm:4,mass:2, build:function(pal,M){
+        var g=new THREE.Group();
+        var c=add(g, con(0.1,0.3,7), M(pal.accent), 0, 0, -0.16); c.rotation.x=-Math.PI/2;
+        return { group:g };
+      }}
+    }
+  }
+};
+
+// shared leg shapes for animals whose front and back legs match
+function duckLeg(pal,M,len){
+  var g=new THREE.Group();
+  add(g, cyl(0.05,0.05,len,7), M(pal.second), 0, -len/2, 0);
+  add(g, box(0.19,0.035,0.26), M(pal.second), 0, -len+0.01, 0.08);
+  return { group:g };
+}
+function turtleLeg(pal,M,len){
+  var g=new THREE.Group();
+  var l=add(g, box(0.19,len,0.24), M(pal.accent), 0, -len/2, 0);
+  var f=add(g, box(0.22,0.09,0.3), M(pal.main), 0, -len+0.04, 0.05);
+  return { group:g };
+}
+
+/* ---------------- rabbit ---------------- */
+ANIMALS.rabbit={
+  name:'Rabbit', price:150,
+  blurb:'Explosive back legs and quick feet. Hops away from a standing start.',
+  palette:{main:0xd9d3cc, second:0xf2b8c6, accent:0x2b2b2b},
+  parts:{
+    head:{ spd:4,acc:6,grip:6,stab:4,jmp:5,swm:1,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      add(g, cyl(0.1,0.12,0.18,7), M(pal.main), 0, 0.08, 0);
+      var sk=add(g, sph(0.23,10,8), M(pal.main), 0, 0.26, 0.06); sk.scale.set(0.95,0.95,1.1);
+      add(g, sph(0.09,8,7), M(pal.main), 0, 0.2, 0.26);
+      add(g, sph(0.04,7,6), M(pal.second), 0, 0.22, 0.33);
+      // tall ears, pink inside
+      [0.09,-0.09].forEach(function(x){
+        var e=new THREE.Group(); e.position.set(x, 0.42, 0.0); e.rotation.z=-x*1.1; g.add(e);
+        add(e, box(0.1,0.36,0.05), M(pal.main), 0, 0.16, 0);
+        add(e, box(0.055,0.28,0.03), M(pal.second), 0, 0.16, 0.026);
+      });
+      eyes(g, M, 0.135, 0.29, 0.16, 0.05);
+      return { group:g };
+    }},
+    body:{ spd:4,acc:7,grip:6,stab:4,jmp:6,swm:1,mass:2, wings:0, build:function(pal,M){
+      var len=1.5, height=0.65, width=0.7;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.7,0.66,1.5);
+      var hp=add(g, sph(0.36,10,8), M(pal.main), 0, 0.04, -len*0.3); hp.scale.set(1,1,0.95);
+      var ch=add(g, sph(0.28,10,8), M(pal.main), 0, -0.02, len*0.32);
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.16, legX:0.28, frontZ:0.4, backZ:-0.34}) };
+    }},
+    front:{ spd:4,acc:6,grip:7,stab:5,jmp:5,swm:1,mass:1, len:0.5, build:function(pal,M,len){
+      var g=new THREE.Group();
+      add(g, cyl(0.075,0.065,len,7), M(pal.main), 0, -len/2, 0.02);
+      var f=add(g, sph(0.1,8,6), M(pal.main), 0, -len+0.02, 0.05); f.scale.set(1,0.6,1.4);
+      return { group:g };
+    }},
+    back:{ spd:6,acc:9,grip:4,stab:3,jmp:9,swm:1,mass:2, len:0.85, build:function(pal,M,len){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.13, 0,0,0, 0,-len*0.45,-len*0.4);
+      seg(g, M(pal.main), 0.085, 0,-len*0.45,-len*0.4, 0,-len,0.0);
+      var f=add(g, box(0.16,0.07,0.4), M(pal.main), 0, -len+0.03, 0.13);
+      return { group:g };
+    }},
+    tail:{ spd:2,acc:3,grip:3,stab:5,jmp:2,swm:1,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      add(g, sph(0.15,9,7), M(0xffffff), 0, 0.04, -0.15);
+      return { group:g };
+    }}
+  }
+};
+
+/* ---------------- elephant ---------------- */
+ANIMALS.elephant={
+  name:'Elephant', price:300,
+  blurb:'Enormous and unstoppable. Ploughs through mud, hates getting started.',
+  palette:{main:0x9a9ea6, second:0x7c8088, accent:0xf4f4f4},
+  parts:{
+    head:{ spd:2,acc:1,grip:2,stab:8,jmp:0,swm:4,mass:6, build:function(pal,M){
+      var g=new THREE.Group();
+      var sk=add(g, sph(0.4,12,9), M(pal.main), 0, 0.3, 0.06); sk.scale.set(1,1,0.95);
+      add(g, box(0.3,0.34,0.24), M(pal.main), 0, 0.16, 0.24);
+      // flapping ears
+      [0.36,-0.36].forEach(function(x){
+        var e=add(g, box(0.05,0.46,0.4), M(pal.second), x, 0.3, -0.04);
+        e.rotation.z=x>0?-0.18:0.18; e.rotation.y=x>0?-0.3:0.3;
+      });
+      // trunk, three segments curving down
+      seg(g, M(pal.main), 0.12, 0,0.16,0.3, 0,-0.06,0.42);
+      seg(g, M(pal.main), 0.1, 0,-0.06,0.42, 0,-0.26,0.44);
+      seg(g, M(pal.main), 0.08, 0,-0.26,0.44, 0,-0.4,0.34);
+      [0.15,-0.15].forEach(function(x){
+        var t=add(g, con(0.05,0.3,7), M(pal.accent), x, 0.02, 0.32);
+        t.rotation.x=2.5; t.rotation.z=x>0?0.2:-0.2;
+      });
+      eyes(g, M, 0.24, 0.36, 0.26, 0.055);
+      return { group:g };
+    }},
+    body:{ spd:3,acc:2,grip:2,stab:9,jmp:0,swm:5,mass:10, wings:0, build:function(pal,M){
+      var len=2.2, height=1.3, width=1.2;
+      var g=new THREE.Group();
+      add(g, box(width, height, len*0.84), M(pal.main));
+      var f=add(g, sph(0.66,12,9), M(pal.main), 0, 0, len*0.4); f.scale.set(0.9,0.95,0.6);
+      var r=add(g, sph(0.66,12,9), M(pal.main), 0, 0, -len*0.4); r.scale.set(0.9,0.95,0.6);
+      var top=add(g, box(width*0.8, 0.2, len*0.6), M(pal.second), 0, height*0.48, 0);
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.3, legX:0.44, frontZ:0.62, backZ:-0.62}) };
+    }},
+    front:{ spd:5,acc:2,grip:3,stab:9,jmp:1,swm:3,mass:6, len:1.1, build:function(pal,M,len){
+      return elephantLeg(pal,M,len);
+    }},
+    back:{ spd:5,acc:2,grip:3,stab:9,jmp:1,swm:3,mass:6, len:1.1, build:function(pal,M,len){
+      return elephantLeg(pal,M,len);
+    }},
+    tail:{ spd:1,acc:1,grip:4,stab:6,jmp:0,swm:2,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.045, 0,0,0, 0,-0.16,-0.5);
+      add(g, sph(0.08,7,6), M(0x3a3a3a), 0, -0.18, -0.54);
+      return { group:g };
+    }}
+  }
+};
+function elephantLeg(pal,M,len){
+  var g=new THREE.Group();
+  add(g, cyl(0.2,0.23,len,9), M(pal.main), 0, -len/2, 0);
+  add(g, cyl(0.25,0.25,0.1,9), M(pal.second), 0, -len+0.05, 0);
+  return { group:g };
+}
+
+/* ---------------- eagle ---------------- */
+ANIMALS.eagle={
+  name:'Eagle', price:250,
+  blurb:'Real wings. Give it a light body and it glides off the ramp.',
+  palette:{main:0x5a3b22, second:0xf4f4f4, accent:0xf2b31b},
+  parts:{
+    head:{ spd:5,acc:4,grip:6,stab:5,jmp:4,swm:1,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      add(g, cyl(0.09,0.11,0.2,7), M(pal.second), 0, 0.1, 0);
+      var sk=add(g, sph(0.21,10,8), M(pal.second), 0, 0.3, 0.06); sk.scale.set(0.95,1,1.1);
+      var bk=add(g, con(0.09,0.24,7), M(pal.accent), 0, 0.26, 0.26); bk.rotation.x=Math.PI/2;
+      var br=add(g, box(0.24,0.05,0.12), M(pal.main), 0, 0.4, 0.14); br.rotation.x=0.25;
+      eyes(g, M, 0.11, 0.32, 0.16, 0.05);
+      return { group:g };
+    }},
+    body:{ spd:5,acc:4,grip:5,stab:5,jmp:6,swm:1,mass:3, wings:10, build:function(pal,M){
+      var len=1.6, height=0.6, width=0.65;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.65,0.6,1.6);
+      var ch=add(g, sph(0.3,10,8), M(pal.second), 0, -0.06, len*0.28); ch.scale.set(0.9,0.85,0.9);
+      var wings=[1,-1].map(function(s){
+        var w=new THREE.Group();
+        w.position.set(s*width*0.4, 0.12, 0.06);
+        w.rotation.z=s>0?-0.12:0.12;               // a little dihedral, not a plank
+        var pane=add(w, box(1.05,0.07,0.5), M(pal.main), s*0.58, 0, -0.06);
+        var tipf=add(w, box(0.42,0.06,0.34), M(0x2f2013), s*1.02, -0.02, -0.14);
+        [0.26,0.55,0.84].forEach(function(o){
+          add(w, box(0.16,0.05,0.16), M(pal.main), s*o, -0.02, -0.28);
+        });
+        g.add(w);
+        return w;
+      });
+      return { group:g, len:len, height:height, width:width, wings:wings,
+               attach:bodyAttach(len,width,height,{headY:0.18, legX:0.2, frontZ:0.22, backZ:-0.24}) };
+    }},
+    front:{ spd:3,acc:3,grip:6,stab:4,jmp:4,swm:1,mass:1, len:0.5, build:function(pal,M,len){
+      return eagleLeg(pal,M,len);
+    }},
+    back:{ spd:3,acc:3,grip:6,stab:4,jmp:4,swm:1,mass:1, len:0.5, build:function(pal,M,len){
+      return eagleLeg(pal,M,len);
+    }},
+    tail:{ spd:4,acc:3,grip:8,stab:6,jmp:3,swm:1,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      var fan=add(g, box(0.44,0.06,0.5), M(pal.main), 0, 0.04, -0.28); fan.rotation.x=-0.16;
+      var tip=add(g, box(0.4,0.05,0.14), M(pal.second), 0, 0.11, -0.54); tip.rotation.x=-0.16;
+      return { group:g };
+    }}
+  }
+};
+function eagleLeg(pal,M,len){
+  var g=new THREE.Group();
+  add(g, cyl(0.06,0.055,len,7), M(pal.accent), 0, -len/2, 0);
+  [-0.07,0,0.07].forEach(function(x){
+    var t=add(g, con(0.035,0.16,6), M(pal.accent), x, -len+0.01, 0.07);
+    t.rotation.x=1.9; t.rotation.z=-x*2;
+  });
+  return { group:g };
+}
+
+/* ---------------- shark ---------------- */
+ANIMALS.shark={
+  name:'Shark', price:250,
+  blurb:'Unbeatable in the splash zone. On dry land the fins are a problem.',
+  palette:{main:0x6f8fa8, second:0xd9e6ee, accent:0x22303a},
+  parts:{
+    head:{ spd:5,acc:3,grip:3,stab:5,jmp:1,swm:10,mass:4, build:function(pal,M){
+      var g=new THREE.Group();
+      var sk=add(g, sph(0.3,10,8), M(pal.main), 0, 0.16, 0.1); sk.scale.set(0.9,0.8,1.3);
+      var sn=add(g, con(0.22,0.42,8), M(pal.main), 0, 0.13, 0.44); sn.rotation.x=Math.PI/2;
+      var grin=add(g, box(0.3,0.055,0.12), M(0xffffff), 0, 0.02, 0.36); grin.rotation.x=0.2;
+      var jaw=add(g, box(0.34,0.1,0.2), M(pal.accent), 0, -0.04, 0.3);
+      [0.14,-0.14].forEach(function(x){ add(g, sph(0.05,7,6), M(pal.accent), x, 0.24, 0.26); });
+      [0.19,-0.19].forEach(function(x){
+        for(var i=0;i<3;i++) add(g, box(0.02,0.07,0.02), M(pal.accent), x, 0.14+i*0.07, 0.02);
+      });
+      return { group:g };
+    }},
+    body:{ spd:6,acc:4,grip:3,stab:6,jmp:1,swm:10,mass:7, wings:0, build:function(pal,M){
+      var len=2.0, height=0.7, width=0.7;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.7,0.7,2.0);
+      var belly=add(g, sph(0.44,10,8), M(pal.second), 0, -0.16, 0.04); belly.scale.set(0.7,0.4,1.9);
+      var dorsal=add(g, con(0.3,0.6,3), M(pal.main), 0, 0.5, -0.1);
+      dorsal.rotation.y=Math.PI/2; dorsal.scale.set(0.25,1,1);
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.1, legX:0.3, frontZ:0.5, backZ:-0.44}) };
+    }},
+    front:{ spd:1,acc:1,grip:2,stab:4,jmp:0,swm:10,mass:2, len:0.35, build:function(pal,M,len){
+      return sharkFin(pal,M,len);
+    }},
+    back:{ spd:1,acc:1,grip:2,stab:4,jmp:0,swm:10,mass:2, len:0.35, build:function(pal,M,len){
+      return sharkFin(pal,M,len);
+    }},
+    tail:{ spd:4,acc:4,grip:6,stab:5,jmp:1,swm:10,mass:3, build:function(pal,M){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.11, 0,0,0, 0,0.06,-0.42);
+      var up=add(g, box(0.06,0.52,0.3), M(pal.main), 0, 0.3, -0.6); up.rotation.x=0.4;
+      var dn=add(g, box(0.06,0.3,0.22), M(pal.main), 0, -0.08, -0.58); dn.rotation.x=-0.4;
+      return { group:g };
+    }}
+  }
+};
+// a pectoral fin, angled outward and back. it is asymmetric, so the right-hand
+// copy is mirrored by the assembler
+function sharkFin(pal,M,len){
+  var g=new THREE.Group();
+  var f=add(g, box(0.4,0.07,0.34), M(pal.main), 0.12, -len*0.75, -0.04);
+  f.rotation.z=0.75; f.rotation.y=-0.3;
+  add(g, box(0.1,len*0.5,0.16), M(pal.main), 0, -len*0.3, 0);
+  return { group:g };
+}
+
+var ANIMAL_KEYS=Object.keys(ANIMALS);
+
+/* ============================================================
+   4. RACER BUILDER
+
+   Assembles the five chosen parts into one group. The body sits at ride
+   height and tilts if the front and back legs are different lengths, which
+   keeps every foot on the ground no matter what was bolted together.
+   ============================================================ */
+
+function shadowGeo(){
+  return G('shadowDisc', function(){
+    var g=new THREE.CircleGeometry(0.9,20);
+    g.rotateX(-Math.PI/2);
+    return g;
+  });
+}
+
+function buildRacer(build){
+  var mats={};
+  function M(color){
+    var k='m'+color;
+    if(!mats[k]) mats[k]=new THREE.MeshStandardMaterial({
+      color:color, flatShading:true, roughness:0.85, metalness:0,
+      side:THREE.DoubleSide  // legs on one side are mirrored by a negative scale
+    });
+    return mats[k];
+  }
+
+  var group=new THREE.Group();
+  var A=ANIMALS;
+  var bodyDef=A[build.body].parts.body;
+  var bodyRes=bodyDef.build(A[build.body].palette, M);
+  var frontDef=A[build.front].parts.front, backDef=A[build.back].parts.back;
+  var frontLen=frontDef.len, backLen=backDef.len;
+
+  var rideHeight=(frontLen+backLen)/2 + bodyRes.height/2;
+  var bodyGroup=bodyRes.group;
+  var baseTilt=-Math.atan2(frontLen-backLen, bodyRes.len);
+  bodyGroup.position.y=rideHeight;
+  bodyGroup.rotation.x=baseTilt;
+  group.add(bodyGroup);
+
+  var att=bodyRes.attach, legs=[];
+  var specs=[['fl',frontDef,frontLen,build.front,1],
+             ['fr',frontDef,frontLen,build.front,-1],
+             ['bl',backDef,backLen,build.back,1],
+             ['br',backDef,backLen,build.back,-1]];
+  for(var i=0;i<specs.length;i++){
+    var sp=specs[i];
+    var res=sp[1].build(A[sp[3]].palette, M, sp[2]);
+    var pivot=new THREE.Group();
+    pivot.position.set(att[sp[0]].x, -bodyRes.height/2, att[sp[0]].z);
+    if(sp[4]<0) pivot.scale.x=-1;
+    pivot.add(res.group);
+    bodyGroup.add(pivot);
+    legs.push(pivot);
+  }
+
+  var headRes=A[build.head].parts.head.build(A[build.head].palette, M);
+  var headPivot=new THREE.Group();
+  headPivot.position.copy(att.head);
+  headPivot.add(headRes.group);
+  bodyGroup.add(headPivot);
+
+  var tailRes=A[build.tail].parts.tail.build(A[build.tail].palette, M);
+  var tailPivot=new THREE.Group();
+  tailPivot.position.copy(att.tail);
+  tailPivot.add(tailRes.group);
+  bodyGroup.add(tailPivot);
+
+  // flat blob shadow: it lives on the racer group rather than the body group so
+  // it stays on the ground while the racer is in the air
+  var shMat=new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.28});
+  mats.shadow=shMat;
+  var shadow=new THREE.Mesh(shadowGeo(), shMat);
+  shadow.position.y=0.02;
+  shadow.scale.set(bodyRes.width*0.85/0.9, 1, bodyRes.len*0.55/0.9);
+  group.add(shadow);
+
+  return {
+    group:group,
+    parts:{ body:bodyGroup, head:headPivot, tail:tailPivot, legs:legs,
+            wings:bodyRes.wings||null, shadow:shadow },
+    mats:mats,
+    bodyLen:bodyRes.len, bodyHeight:bodyRes.height,
+    rideHeight:rideHeight, baseTilt:baseTilt,
+    frontLen:frontLen, backLen:backLen, strideLen:frontLen+backLen
+  };
+}
+
+// geometries are shared and kept, materials belong to one racer
+function disposeRacer(view){
+  if(!view) return;
+  for(var k in view.mats){ if(view.mats[k] && view.mats[k].dispose) view.mats[k].dispose(); }
+  if(view.group.parent) view.group.parent.remove(view.group);
+}
+
+/* ============================================================
+   5. STATS
+   ============================================================ */
+
+function partsOf(build){
+  return {
+    head:ANIMALS[build.head].parts.head,
+    body:ANIMALS[build.body].parts.body,
+    front:ANIMALS[build.front].parts.front,
+    back:ANIMALS[build.back].parts.back,
+    tail:ANIMALS[build.tail].parts.tail
+  };
+}
+
+function computeStats(build){
+  var p=partsOf(build);
+  var list=[p.head,p.body,p.front,p.back,p.tail];
+  function sum(k){ var s=0; for(var i=0;i<5;i++) s+=list[i][k]; return s; }
+
+  var spdN=sum('spd')/50, accN=sum('acc')/50, gripN=sum('grip')/50,
+      stabN=sum('stab')/50, jmpN=sum('jmp')/50, swmN=sum('swm')/50, massN=sum('mass')/50;
+
+  // the widest leg-length gap in the catalog is elephant 1.1 against shark 0.35
+  var mismatch=clamp(Math.abs(p.front.len-p.back.len)/0.75, 0, 1);
+  var stabilityN=clamp(stabN - mismatch*0.45, 0, 1);
+
+  var s={
+    parts:p,
+    spdN:spdN, accN:accN, gripN:gripN, stabN:stabN, jmpN:jmpN, swmN:swmN, massN:massN,
+    mismatch:mismatch,
+    wobble:clamp(0.55-stabilityN, 0, 0.55),
+    topSpeed:17 + 15*spdN - 5*massN,
+    accel:7 + 12*accN - 3*massN,
+    turnRate:1.5 + 1.5*gripN - 0.5*massN,
+    brake:14,
+    jumpVel:6 + 9*jmpN,
+    glide:(p.body.wings/10)*clamp(1-massN*1.4, 0, 1),
+    waterMult:0.35 + 0.65*swmN,
+    mudMult:0.45 + 0.30*gripN + 0.25*massN,
+    offroadMult:0.55,
+    // the six garage bars
+    speed:spdN, accel_d:accN, handling:gripN, stability:stabilityN, jump:jmpN, swim:swmN
+  };
+  s.topSpeedEff=s.topSpeed;
+  return s;
+}
+
+function describeQuirks(build, s){
+  var p=s.parts, out=[];
+  function push(t){ if(out.length<4) out.push(t); }
+  if(s.mismatch>0.6) push('Wobbly! The front and back legs are very different lengths.');
+  if(p.body.wings>=4 && s.glide<0.2) push('Those wings cannot lift a body this heavy.');
+  if(p.body.wings>=4 && s.glide>=0.5) push('Glides after jumps.');
+  if(s.swmN>=0.7) push('Loves water. Fast in the splash zone.');
+  if(s.swmN<=0.2) push('Hates water. Very slow in the splash zone.');
+  if(p.front.swm>=9 || p.back.swm>=9) push('Fins instead of legs. Terrible on land.');
+  if(s.massN>=0.55) push('Heavy. Slow to start but ploughs through mud.');
+  if(s.jmpN>=0.7) push('Huge jumps at the ramp.');
+  if(s.gripN>=0.7) push('Corners like a dream.');
+  if(s.spdN>=0.75) push('Blazing top speed.');
+  if(s.spdN<=0.2) push('Very slow. Nothing on it was built for running.');
+  if(!out.length) out.push('A well balanced racer.');
+  return out;
+}
+
+/* ============================================================
+   6. RENDERER, SCENES, LIGHTS
+   ============================================================ */
+
+var canvas=$('c');
+var renderer=new THREE.WebGLRenderer({canvas:canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+
+var SKY=0x8fd3ff, GRASS=0x6fcf5a;
+
+function litScene(){
+  var s=new THREE.Scene();
+  s.background=new THREE.Color(SKY);
+  s.fog=new THREE.Fog(SKY, 120, 260);
+  s.add(new THREE.HemisphereLight(0xcfeaff, GRASS, 0.85));
+  var sun=new THREE.DirectionalLight(0xffffff, 0.72);
+  sun.position.set(40, 70, 25);
+  s.add(sun);
+  return s;
+}
+
+var raceScene=litScene();
+var garageScene=litScene();
+garageScene.fog=null;
+
+var camera=new THREE.PerspectiveCamera(62, 1, 0.1, 400);
+var garageCam=new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+
+function resize(){
+  var w=window.innerWidth, h=window.innerHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  garageCam.aspect=w/h; garageCam.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+/* ============================================================
+   7. TRACK  —  "Meadow Splash"
+   ============================================================ */
+
+var N=800, HALF_W=6, CHECKPOINTS=8;
+var RAMP_H=1.2, RAMP_RUN=6;
+var TRACK={ pts:[], tan:[], len:0, zones:[], coins:[] };
+
+(function buildTrackData(){
+  var cp=[[0,0],[40,-10],[80,-40],[95,-90],[70,-130],[20,-140],[-20,-120],
+          [-50,-140],[-90,-120],[-110,-70],[-90,-20],[-50,10],[-25,15]];
+  var v=cp.map(function(p){ return new THREE.Vector3(p[0],0,p[1]); });
+  var curve=new THREE.CatmullRomCurve3(v, true, 'centripetal');
+  curve.arcLengthDivisions=2000;
+  TRACK.curve=curve;
+  TRACK.len=curve.getLength();
+  for(var i=0;i<N;i++){
+    TRACK.pts.push(curve.getPointAt(i/N));
+    TRACK.tan.push(curve.getTangentAt(i/N).normalize());
+  }
+  TRACK.step=TRACK.len/N;                 // world units between samples
+  TRACK.rampT1=0.702;                     // the lip, where a racer is launched
+  TRACK.rampT0=TRACK.rampT1 - RAMP_RUN/TRACK.len;
+  TRACK.zones=[
+    {type:'mud',   t0:0.18, t1:0.26},
+    {type:'water', t0:0.42, t1:0.52},
+    {type:'ramp',  t0:TRACK.rampT0, t1:TRACK.rampT1},
+    {type:'water', t0:0.705, t1:0.725}    // the gap after the ramp
+  ];
+})();
+
+function zoneAt(t){
+  for(var i=0;i<TRACK.zones.length;i++){
+    var z=TRACK.zones[i];
+    if(t>=z.t0 && t<=z.t1) return z.type;
+  }
+  return null;
+}
+
+// the ramp is the only part of the course that is not at y=0
+function groundY(t){
+  if(t>=TRACK.rampT0 && t<=TRACK.rampT1){
+    return RAMP_H*(t-TRACK.rampT0)/(TRACK.rampT1-TRACK.rampT0);
+  }
+  return 0;
+}
+
+function normalAt(i){ var tn=TRACK.tan[i]; return { x:tn.z, z:-tn.x }; }
+
+// A flat ribbon laid along the samples. Used for the road, its kerb, the mud
+// and water patches and the ramp, so all of them follow the curve exactly.
+function ribbonGeo(i0, count, halfW, yFn, skipFn){
+  var pos=[], uv=[], idx=[], k, i;
+  for(k=0;k<=count;k++){
+    i=(i0+k)%N;
+    var p=TRACK.pts[i], nrm=normalAt(i), y=yFn?yFn(i/N):0;
+    pos.push(p.x+nrm.x*halfW, y, p.z+nrm.z*halfW);
+    pos.push(p.x-nrm.x*halfW, y, p.z-nrm.z*halfW);
+    uv.push(k, 0, k, 1);
+  }
+  for(k=0;k<count;k++){
+    i=(i0+k)%N;
+    if(skipFn && skipFn(i/N)) continue;
+    var a=k*2, b=k*2+1, c=(k+1)*2, d=(k+1)*2+1;
+    idx.push(a,b,c, b,d,c);
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  var nn=new Float32Array(pos.length);
+  for(var j=1;j<nn.length;j+=3) nn[j]=1;   // the whole course faces straight up
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nn,3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv,2));
+  g.setIndex(idx);
+  return g;
+}
+
+function flatMat(color, opacity){
+  var o={ color:color, side:THREE.DoubleSide };
+  if(opacity!==undefined){ o.transparent=true; o.opacity=opacity; }
+  return new THREE.MeshLambertMaterial(o);
+}
+
+var waterMat=null, coinGroup=null;
+
+function buildTrackMeshes(){
+  var g=new THREE.Group();
+
+  var ground=new THREE.Mesh(new THREE.PlaneGeometry(700,700), flatMat(GRASS));
+  ground.rotation.x=-Math.PI/2;
+  ground.position.y=-0.02;
+  g.add(ground);
+
+  function inGap(t){ return t>=0.705 && t<=0.725; }
+
+  // kerb sits a hair lower and wider than the road
+  g.add(new THREE.Mesh(ribbonGeo(0, N, HALF_W+0.5, function(t){ return groundY(t)+0.005; }, inGap),
+                       flatMat(0xf4f4f4)));
+  g.add(new THREE.Mesh(ribbonGeo(0, N, HALF_W, function(t){ return groundY(t)+0.02; }, inGap),
+                       flatMat(0xc9a46a)));
+
+  // mud
+  var mudI0=Math.round(0.18*N), mudCount=Math.round(0.08*N);
+  g.add(new THREE.Mesh(ribbonGeo(mudI0, mudCount, HALF_W-0.15, function(){ return 0.035; }),
+                       flatMat(0x6b4a2a)));
+  for(var m=0;m<14;m++){
+    var mi=(mudI0+Math.floor(rand(0,mudCount)))%N;
+    var mp=TRACK.pts[mi], mn=normalAt(mi), off=rand(-HALF_W+0.8, HALF_W-0.8);
+    var blob=new THREE.Mesh(sph(rand(0.3,0.6),8,6), flatMat(0x5a3c20));
+    blob.position.set(mp.x+mn.x*off, 0.06, mp.z+mn.z*off);
+    blob.scale.y=0.35;
+    g.add(blob);
+  }
+
+  // water: the splash zone and the landing pool after the ramp
+  waterMat=flatMat(0x3aa0e0, 0.75);
+  var wI0=Math.round(0.42*N), wCount=Math.round(0.10*N);
+  g.add(new THREE.Mesh(ribbonGeo(wI0, wCount, HALF_W+3, function(){ return 0.05; }), waterMat));
+  var gI0=Math.round(0.705*N), gCount=Math.round(0.020*N)+1;
+  g.add(new THREE.Mesh(ribbonGeo(gI0, gCount, HALF_W+3, function(){ return 0.05; }), waterMat));
+
+  // ramp, following the same y the simulation uses
+  var rI0=Math.round(TRACK.rampT0*N), rCount=Math.max(2, Math.round((TRACK.rampT1-TRACK.rampT0)*N));
+  g.add(new THREE.Mesh(ribbonGeo(rI0, rCount, HALF_W, function(t){ return groundY(t)+0.03; }),
+                       flatMat(0xf2a71b)));
+  for(var s=1;s<rCount;s+=2){
+    var si=(rI0+s)%N, sp=TRACK.pts[si], sn=normalAt(si);
+    var st=new THREE.Mesh(box(2.4,0.05,0.5), flatMat(0xffffff));
+    st.position.set(sp.x, groundY(si/N)+0.06, sp.z);
+    st.rotation.y=Math.atan2(TRACK.tan[si].x, TRACK.tan[si].z);
+    g.add(st);
+  }
+  // a block under the lip so the ramp reads as solid from the side
+  var lipI=(rI0+rCount)%N, lp=TRACK.pts[lipI];
+  var support=new THREE.Mesh(box(HALF_W*2, RAMP_H, 1.2), flatMat(0xd18f12));
+  support.position.set(lp.x, RAMP_H/2, lp.z);
+  support.rotation.y=Math.atan2(TRACK.tan[lipI].x, TRACK.tan[lipI].z);
+  g.add(support);
+
+  // start gate
+  var gate=new THREE.Group();
+  var gp=TRACK.pts[0], gn=normalAt(0);
+  gate.position.set(gp.x, 0, gp.z);
+  gate.rotation.y=Math.atan2(TRACK.tan[0].x, TRACK.tan[0].z);
+  [1,-1].forEach(function(sd){
+    var pole=new THREE.Mesh(cyl(0.22,0.26,5.4,8), flatMat(0xf4f4f4));
+    pole.position.set(sd*(HALF_W+0.6), 2.7, 0);
+    gate.add(pole);
+  });
+  var chk=document.createElement('canvas'); chk.width=64; chk.height=16;
+  var cx=chk.getContext('2d');
+  for(var r=0;r<2;r++) for(var cc=0;cc<8;cc++){
+    cx.fillStyle=((r+cc)%2)?'#ffffff':'#20272e';
+    cx.fillRect(cc*8, r*8, 8, 8);
+  }
+  var chkTex=new THREE.CanvasTexture(chk);
+  chkTex.magFilter=THREE.NearestFilter;
+  chkTex.wrapS=chkTex.wrapT=THREE.RepeatWrapping;
+  var banner=new THREE.Mesh(box((HALF_W+0.8)*2, 1.2, 0.12),
+    new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
+  banner.position.y=4.8;
+  gate.add(banner);
+  var line=new THREE.Mesh(ribbonGeo(N-4, 5, HALF_W, function(){ return 0.045; }),
+    new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
+  g.add(line);
+  g.add(gate);
+
+  // scenery, kept clear of the road
+  var bb={minx:1e9,maxx:-1e9,minz:1e9,maxz:-1e9};
+  TRACK.pts.forEach(function(p){
+    bb.minx=Math.min(bb.minx,p.x); bb.maxx=Math.max(bb.maxx,p.x);
+    bb.minz=Math.min(bb.minz,p.z); bb.maxz=Math.max(bb.maxz,p.z);
+  });
+  function clearOfRoad(x,z,margin){
+    for(var i=0;i<N;i+=4){
+      var p=TRACK.pts[i], dx=p.x-x, dz=p.z-z;
+      if(dx*dx+dz*dz < margin*margin) return false;
+    }
+    return true;
+  }
+  function scatter(count, margin, place){
+    var made=0, tries=0;
+    while(made<count && tries<count*40){
+      tries++;
+      var x=rand(bb.minx-45, bb.maxx+45), z=rand(bb.minz-45, bb.maxz+45);
+      if(!clearOfRoad(x,z,margin)) continue;
+      place(x,z,made); made++;
+    }
+  }
+  var TREES=140;
+  var trunkM=new THREE.InstancedMesh(cyl(0.26,0.34,1.6,6), flatMat(0x7a5230), TREES);
+  var leafM=new THREE.InstancedMesh(con(1.5,3.4,8), flatMat(0x4f9e3a), TREES);
+  var mtx=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(), pv=new THREE.Vector3();
+  var treeN=0;
+  scatter(TREES, HALF_W+4, function(x,z,i){
+    var s=rand(0.8,1.6);
+    sc.set(s,s,s);
+    q.setFromAxisAngle(new THREE.Vector3(0,1,0), rand(0,6.283));
+    pv.set(x, 0.8*s, z); mtx.compose(pv,q,sc); trunkM.setMatrixAt(i, mtx);
+    pv.set(x, (1.6+1.7)*s, z); mtx.compose(pv,q,sc); leafM.setMatrixAt(i, mtx);
+    treeN=i+1;
+  });
+  trunkM.count=treeN; leafM.count=treeN;
+  trunkM.instanceMatrix.needsUpdate=true; leafM.instanceMatrix.needsUpdate=true;
+  g.add(trunkM); g.add(leafM);
+
+  var ROCKS=40, rockN=0;
+  var rockM=new THREE.InstancedMesh(G('rock', function(){ return new THREE.IcosahedronGeometry(1,0); }),
+                                    flatMat(0x9aa3a8), ROCKS);
+  scatter(ROCKS, HALF_W+3, function(x,z,i){
+    var s=rand(0.5,1.3);
+    sc.set(s, s*0.75, s);
+    q.setFromAxisAngle(new THREE.Vector3(0,1,0), rand(0,6.283));
+    pv.set(x, s*0.4, z); mtx.compose(pv,q,sc); rockM.setMatrixAt(i, mtx);
+    rockN=i+1;
+  });
+  rockM.count=rockN; rockM.instanceMatrix.needsUpdate=true;
+  g.add(rockM);
+
+  // coins
+  coinGroup=new THREE.Group();
+  var coinGeo=new THREE.TorusGeometry(0.35,0.12,8,16);
+  // no environment map in this scene, so metalness would only render as black
+  var coinMat=new THREE.MeshStandardMaterial({color:0xffb703, roughness:0.45, metalness:0,
+    emissive:0x6b4400, emissiveIntensity:0.35, flatShading:true});
+  for(var ci=0;ci<24;ci++){
+    var ct=(ci+0.5)/24;
+    if(ct>0.695 && ct<0.735) ct=0.745;         // never over the gap
+    var cidx=Math.floor(ct*N)%N;
+    var cp2=TRACK.pts[cidx], cn=normalAt(cidx), coff=rand(-HALF_W+1, HALF_W-1);
+    var coin=new THREE.Mesh(coinGeo, coinMat);
+    coin.position.set(cp2.x+cn.x*coff, groundY(ct)+1.0, cp2.z+cn.z*coff);
+    coin.userData.taken=false;
+    coinGroup.add(coin);
+    TRACK.coins.push(coin);
+  }
+  g.add(coinGroup);
+
+  return g;
+}
+
+raceScene.add(buildTrackMeshes());
+
+// the garage pedestal the preview stands on
+(function buildGarageSet(){
+  var ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200), flatMat(GRASS));
+  ground.rotation.x=-Math.PI/2; ground.position.y=-0.31;
+  garageScene.add(ground);
+  var ped=new THREE.Mesh(cyl(1.9,2.05,0.3,28), flatMat(0xe8dfcf));
+  ped.position.y=-0.15;
+  garageScene.add(ped);
+  var rim=new THREE.Mesh(cyl(2.0,2.0,0.08,28), flatMat(0xf2a71b));
+  rim.position.y=-0.29;
+  garageScene.add(rim);
+})();
+
+/* ============================================================
+   8. RACER SIMULATION
+
+   An arcade kart model, not a solver. Parts decide the numbers; the numbers
+   decide the driving. Nothing here can tip over or fall apart.
+   ============================================================ */
+
+var state={
+  mode:'title', build:null, racers:[],
+  raceTime:0, countdown:0, laps:3, finishedOrder:[], finishDelay:0,
+  zoneTipTime:0, lastZone:null
+};
+var time=0;
+
+// The loop passes near itself once, so the nearest sample is searched outward
+// from where the racer was last frame instead of by raw distance.
+function nearestSample(r){
+  var best=0, bd=1e18, i, p, dx, dz, dd;
+  if(r.nearestIdx<0){
+    for(i=0;i<N;i++){
+      p=TRACK.pts[i]; dx=p.x-r.pos.x; dz=p.z-r.pos.z; dd=dx*dx+dz*dz;
+      if(dd<bd){ bd=dd; best=i; }
+    }
+    return best;
+  }
+  for(var k=-60;k<=60;k++){
+    i=(r.nearestIdx+k+N)%N;
+    p=TRACK.pts[i]; dx=p.x-r.pos.x; dz=p.z-r.pos.z; dd=dx*dx+dz*dz;
+    if(dd<bd){ bd=dd; best=i; }
+  }
+  return best;
+}
+
+function updateRacer(r, dt){
+  var s=r.stats, prevT=r.t;
+
+  // 1. where on the course
+  r.nearestIdx=nearestSample(r);
+  r.t=r.nearestIdx/N;
+  var p=TRACK.pts[r.nearestIdx], nrm=normalAt(r.nearestIdx);
+  var side=(r.pos.x-p.x)*nrm.x + (r.pos.z-p.z)*nrm.z;
+  var d=Math.abs(side);
+  var onRoad=d<=HALF_W;
+  var zone=zoneAt(r.t);
+  r.zone=onRoad?zone:null;
+
+  // 2. surface
+  var mult=1;
+  if(!onRoad) mult=s.offroadMult;
+  else if(zone==='water') mult=s.waterMult;
+  else if(zone==='mud') mult=s.mudMult;
+  if(mult<0.3) mult=0.3;                       // even a shark on land keeps crawling
+  if(r.boosting && r.boost>0){ mult*=1.35; r.boost=Math.max(0, r.boost-40*dt); }
+  else r.boost=Math.min(100, r.boost+8*dt);
+
+  // 3. speed
+  var top=r.isPlayer ? s.topSpeed : s.topSpeedEff;
+  var target=r.airborne ? top : top*mult;
+  if(r.gas>0){
+    if(r.speed<target) r.speed=Math.min(target, r.speed + s.accel*(r.boosting?1.5:1)*dt*r.gas);
+    else r.speed=Math.max(target, r.speed - s.brake*0.5*dt);
+  } else if(r.braking){
+    r.speed=Math.max(-top*0.25, r.speed - s.brake*dt);
+  } else {
+    if(r.speed>target) r.speed=Math.max(target, r.speed - s.brake*0.5*dt);
+    else if(r.speed>0) r.speed=Math.max(0, r.speed - 4*dt);
+    else r.speed=Math.min(0, r.speed + 4*dt);
+  }
+
+  // 4. steering, plus the wobble a mismatched build cannot help
+  var sf=clamp(Math.abs(r.speed)/8, 0, 1);
+  r.heading += r.steer * s.turnRate * (r.airborne?0.5:1) * dt * sf;
+  r.wobblePhase += dt*(3+Math.abs(r.speed)*0.15);
+  r.heading += Math.sin(r.wobblePhase*1.7)*s.wobble*0.9*dt*sf;
+
+  // 5. the ramp and the air
+  var gy=onRoad ? groundY(r.t) : 0;
+  if(r.airborne){
+    r.vy -= 22*dt*(1-s.glide*0.7);
+    r.pos.y += r.vy*dt;
+    if(r.pos.y<=gy){
+      r.pos.y=gy; r.airborne=false; r.vy=0; r.speed*=0.9;
+      sfx.land(nearPlayer(r));
+    }
+  } else {
+    var crossedLip = prevT<TRACK.rampT1 && r.t>=TRACK.rampT1 && prevT>TRACK.rampT0-0.03;
+    if(crossedLip && onRoad && r.speed>1){
+      r.airborne=true;
+      r.pos.y=RAMP_H;
+      r.vy=s.jumpVel*clamp(Math.abs(r.speed)/Math.max(1,s.topSpeed), 0.4, 1);
+      sfx.jump(nearPlayer(r));
+    } else {
+      r.pos.y=gy;
+    }
+  }
+
+  // 6. move
+  r.pos.x += Math.sin(r.heading)*r.speed*dt;
+  r.pos.z += Math.cos(r.heading)*r.speed*dt;
+
+  // 7. soft boundary instead of walls
+  if(d>HALF_W+3){
+    var sgn=side>0?1:-1;
+    r.pos.x -= nrm.x*sgn*6*dt;
+    r.pos.z -= nrm.z*sgn*6*dt;
+    if(r.speed>top*0.4) r.speed=top*0.4;
+  }
+
+  // 8. checkpoints and laps
+  if(r.crossedStart){
+    while(r.cpNext<=7 && r.t>=r.cpNext/CHECKPOINTS) r.cpNext++;
+  }
+  var wrapped = prevT>0.9 && r.t<0.1;
+  if(wrapped && !r.finished){
+    if(!r.crossedStart){
+      r.crossedStart=true; r.cpNext=1; r.lapStart=state.raceTime;
+    } else if(r.cpNext===CHECKPOINTS){
+      var lt=state.raceTime-r.lapStart;
+      if(r.bestLap===null || lt<r.bestLap) r.bestLap=lt;
+      r.lapStart=state.raceTime;
+      r.lap++; r.cpNext=1;
+      if(r.lap>=state.laps){
+        r.finished=true;
+        r.finishTime=state.raceTime;
+        r.finishOrder=state.finishedOrder.length;
+        state.finishedOrder.push(r);
+      }
+    }
+  }
+  r.progress=r.lap + r.t - (r.crossedStart?0:1);
+
+  // 9. coins, the player's alone
+  if(r.isPlayer && !r.finished){
+    for(var ci=0;ci<TRACK.coins.length;ci++){
+      var coin=TRACK.coins[ci];
+      if(coin.userData.taken) continue;
+      var cdx=coin.position.x-r.pos.x, cdz=coin.position.z-r.pos.z;
+      if(cdx*cdx+cdz*cdz < 1.96){
+        coin.userData.taken=true; coin.visible=false;
+        state.coinsThisRace+=5;
+        r.boost=Math.min(100, r.boost+25);
+        sfx.coin();
+      }
+    }
+  }
+
+  // the splash and mud hints, and the sound of hitting water
+  if(r.isPlayer){
+    if(r.zone!==state.lastZone){
+      if(r.zone==='water'){ sfx.splash(1); showZoneTip('SPLASH! Good swimmers go faster'); }
+      else if(r.zone==='mud'){ showZoneTip('MUD! Heavy racers push through'); }
+      else if(r.zone==='ramp'){ showZoneTip('RAMP! Big jumpers clear the gap'); }
+      state.lastZone=r.zone;
+    }
+  }
+}
+
+function nearPlayer(r){
+  if(r.isPlayer) return 1;
+  var pl=state.racers[0];
+  if(!pl) return 0;
+  var dx=r.pos.x-pl.pos.x, dz=r.pos.z-pl.pos.z;
+  var dist=Math.sqrt(dx*dx+dz*dz);
+  return dist>25 ? 0 : (1-dist/25)*0.7;
+}
+
+function resolveCollisions(){
+  var rs=state.racers;
+  for(var i=0;i<rs.length;i++){
+    for(var j=i+1;j<rs.length;j++){
+      var a=rs[i], b=rs[j];
+      var dx=b.pos.x-a.pos.x, dz=b.pos.z-a.pos.z;
+      var dsq=dx*dx+dz*dz;
+      if(dsq>2.56 || dsq<1e-6) continue;         // 1.6 units apart
+      var dist=Math.sqrt(dsq), ox=dx/dist, oz=dz/dist;
+      var overlap=1.6-dist;
+      var ma=a.stats.massN+0.15, mb=b.stats.massN+0.15;
+      var sa=mb/(ma+mb), sb=ma/(ma+mb);          // the lighter racer gives way
+      a.pos.x-=ox*overlap*sa; a.pos.z-=oz*overlap*sa;
+      b.pos.x+=ox*overlap*sb; b.pos.z+=oz*overlap*sb;
+      var av=a.speed, bv=b.speed;
+      a.speed=lerp(av,bv,0.15); b.speed=lerp(bv,av,0.15);
+    }
+  }
+}
+
+function ranked(){
+  var arr=state.racers.slice();
+  arr.sort(function(a,b){
+    if(a.finished&&b.finished) return a.finishOrder-b.finishOrder;
+    if(a.finished) return -1;
+    if(b.finished) return 1;
+    return b.progress-a.progress;
+  });
+  return arr;
+}
+
+/* ============================================================
+   9. NPC AI
+   ============================================================ */
+
+var NPC_NAMES=['Sir Wobbles','Gus','Pickle','Mango','Captain Fluff','Zoom',
+               'Beans','Waffle','Nibbles','Rocket','Doodle','Mr Splash'];
+
+function nameSprite(text){
+  var c=document.createElement('canvas'); c.width=128; c.height=32;
+  var x=c.getContext('2d');
+  x.font='bold 20px "Trebuchet MS",Helvetica,Arial,sans-serif';
+  x.textAlign='center'; x.textBaseline='middle';
+  x.lineWidth=5; x.strokeStyle='rgba(20,35,55,.85)';
+  x.strokeText(text, 64, 17);
+  x.fillStyle='#ffffff';
+  x.fillText(text, 64, 17);
+  var tex=new THREE.CanvasTexture(c);
+  var sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex, transparent:true}));
+  sp.scale.set(2.6, 0.65, 1);
+  return sp;
+}
+
+// how sharply the course turns over the next 30 samples
+function curveAhead(idx){
+  var a=TRACK.tan[idx], b=TRACK.tan[(idx+30)%N];
+  return Math.abs(angleDiff(Math.atan2(a.x,a.z), Math.atan2(b.x,b.z)));
+}
+
+function driveAI(r, dt){
+  var s=r.stats;
+  r.laneOffset=clamp(r.laneOffset + (Math.random()-0.5)*dt*2, -3.5, 3.5);
+
+  var aheadSamples=Math.max(4, Math.round((6+Math.abs(r.speed)*0.45)/TRACK.step));
+  var ti=(r.nearestIdx+aheadSamples)%N;
+  var tp=TRACK.pts[ti], tn=normalAt(ti);
+  var tx=tp.x+tn.x*r.laneOffset, tz=tp.z+tn.z*r.laneOffset;
+  var desired=Math.atan2(tx-r.pos.x, tz-r.pos.z);
+  r.steer=clamp(angleDiff(r.heading, desired)*2.5, -1, 1);
+
+  var bend=curveAhead(r.nearestIdx);
+  r.gas=(bend>0.55 && Math.abs(r.speed)>s.topSpeedEff*0.7) ? 0 : 1;
+  r.braking=false;
+  r.boosting=(bend<0.15 && r.boost>40);
+}
+
+function makeNpcBuild(rng){
+  var b={};
+  for(var i=0;i<SLOTS.length;i++){
+    b[SLOTS[i]]=ANIMAL_KEYS[Math.floor(rng()*ANIMAL_KEYS.length)%ANIMAL_KEYS.length];
+  }
+  return b;
+}
+
+/* ============================================================
+   10. ANIMATION AND CAMERA
+
+   The locomotion is procedural: legs swing on a sine wave keyed to speed and
+   leg length. A shaky build shakes because the stats say it should, which is
+   also why a shark on stilts looks as wrong as it drives.
+   ============================================================ */
+
+function updateAnimation(r, dt){
+  var v=r.view, s=r.stats, pr=v.parts;
+  var spd=Math.abs(r.speed);
+  var amp=clamp(spd/Math.max(1,s.topSpeed), 0, 1)*0.7;
+  var inWater=(r.zone==='water' && !r.airborne);
+
+  r.gaitPhase += dt*(spd/Math.max(0.35, v.strideLen))*2.2*(inWater?2:1);
+  var ph=r.gaitPhase;
+  var swing=Math.sin(ph)*amp*(inWater?0.5:1);
+
+  if(r.airborne){
+    pr.legs[0].rotation.x=lerp(pr.legs[0].rotation.x,  0.6, 0.16);
+    pr.legs[1].rotation.x=lerp(pr.legs[1].rotation.x,  0.6, 0.16);
+    pr.legs[2].rotation.x=lerp(pr.legs[2].rotation.x, -0.6, 0.16);
+    pr.legs[3].rotation.x=lerp(pr.legs[3].rotation.x, -0.6, 0.16);
+  } else {
+    pr.legs[0].rotation.x= swing;
+    pr.legs[1].rotation.x=-swing;
+    pr.legs[2].rotation.x=-swing;
+    pr.legs[3].rotation.x= swing;
+    // one footfall per half stride
+    var half=Math.floor(ph/Math.PI);
+    if(half!==r.lastHalf){
+      r.lastHalf=half;
+      if(amp>0.12) sfx.step(nearPlayer(r)*clamp(amp,0,1));
+    }
+  }
+
+  // wings: a real glider beats slowly, a hopeless one flaps twice as fast
+  if(pr.wings){
+    var wf, wa;
+    if(r.airborne){
+      if(s.glide>=0.35){ wf=9; wa=0.6; } else { wf=18; wa=0.4; }
+    } else { wf=2.4; wa=0.09*amp; }
+    var flap=Math.sin(time*wf)*wa;
+    pr.wings[0].rotation.z=-flap;
+    pr.wings[1].rotation.z= flap;
+  }
+
+  // stumbles for anything built badly enough to deserve them
+  if(s.wobble>0.25 && !r.airborne && spd>3){
+    r.stumbleIn-=dt;
+    if(r.stumbleIn<=0){
+      r.stumbleIn=rand(3,6);
+      r.dip=0.25;
+      r.stumbling=0.5;
+      sfx.boing(nearPlayer(r));
+    }
+  }
+  if(r.stumbling>0){
+    r.stumbling-=dt;
+    r.speed*=0.97;
+  }
+  r.dip=lerp(r.dip, 0, 1-Math.pow(0.02, dt));
+
+  var sf=clamp(spd/8, 0, 1);
+  var leanTarget=-r.steer*0.18*sf + Math.sin(r.wobblePhase)*s.wobble*0.35;
+  if(s.wobble>0.25) leanTarget += Math.sin(r.wobblePhase*2.3)*s.wobble*0.4;
+  r.lean=lerp(r.lean, leanTarget, 0.15);
+
+  var bob=Math.abs(Math.sin(ph*2))*0.06*amp + (inWater?Math.sin(time*3)*0.03:0);
+  pr.body.position.y=v.rideHeight+bob;
+  pr.body.rotation.x=v.baseTilt+r.dip;
+  pr.body.rotation.z=r.lean;
+  pr.head.rotation.x=Math.sin(ph*2)*0.08*amp;
+  pr.tail.rotation.y=Math.sin(ph*1.3+1)*0.35;
+
+  v.group.position.copy(r.pos);
+  v.group.rotation.y=r.heading;
+
+  // the blob shadow shrinks and fades with height
+  var k=1/(1+r.pos.y*0.15);
+  pr.shadow.position.y=0.02-r.pos.y;      // the group has risen, the shadow has not
+  pr.shadow.scale.x=v.bodyWidthScale*k;
+  pr.shadow.scale.z=v.bodyLenScale*k;
+  pr.shadow.material.opacity=0.28*k;
+}
+
+function updateCamera(dt){
+  var r=state.racers[0];
+  if(!r) return;
+  var fx=Math.sin(r.heading), fz=Math.cos(r.heading);
+  var back=7+r.view.bodyLen*1.2;
+  var up=3.2+r.view.bodyLen*0.4+r.pos.y*0.5;
+  var dx=r.pos.x-fx*back, dy=r.pos.y+up, dz=r.pos.z-fz*back;
+
+  if(state.mode==='countdown'){
+    // sweep in from a high wide shot while the lights count down
+    var k=clamp(state.countdown/3, 0, 1);
+    dx=lerp(dx, r.pos.x-fx*16, k);
+    dy=lerp(dy, r.pos.y+13, k);
+    dz=lerp(dz, r.pos.z-fz*16, k);
+  }
+  var blend=1-Math.pow(0.001, dt);
+  camera.position.x=lerp(camera.position.x, dx, blend);
+  camera.position.y=lerp(camera.position.y, dy, blend);
+  camera.position.z=lerp(camera.position.z, dz, blend);
+  if(camera.position.y<0.6) camera.position.y=0.6;
+  camera.lookAt(r.pos.x+fx*4, r.pos.y+1.2, r.pos.z+fz*4);
+
+  var wantFov=62+12*clamp(Math.abs(r.speed)/Math.max(1,r.stats.topSpeed),0,1)+(r.boosting?6:0);
+  camera.fov=lerp(camera.fov, wantFov, 0.08);
+  camera.updateProjectionMatrix();
+}
+
+/* ============================================================
+   11. AUDIO  —  everything is synthesised, nothing is downloaded
+   ============================================================ */
+
+var AC=null, master=null;
+var sfx={ step:function(){}, boost:function(){}, coin:function(){}, splash:function(){},
+          jump:function(){}, land:function(){}, boing:function(){}, count:function(){},
+          go:function(){}, finish:function(){}, click:function(){} };
+
+function initAudio(){
+  if(AC) return;
+  try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+
+  var comp=AC.createDynamicsCompressor();
+  comp.threshold.value=-16; comp.knee.value=18; comp.ratio.value=6;
+  comp.attack.value=0.003; comp.release.value=0.18;
+  master=AC.createGain(); master.gain.value=0.85;
+  master.connect(comp); comp.connect(AC.destination);
+
+  var noiseBuf=AC.createBuffer(1, AC.sampleRate*2, AC.sampleRate);
+  var nd=noiseBuf.getChannelData(0);
+  for(var i=0;i<nd.length;i++) nd[i]=Math.random()*2-1;
+
+  function now(){ return AC.currentTime; }
+  function env(g, vol, dur, t0){
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol), t0+0.005);
+    g.gain.exponentialRampToValueAtTime(0.0004, t0+dur);
+  }
+  function noise(dur, freq, q, vol, type, delay){
+    if(vol<=0.001) return;
+    var t0=now()+(delay||0);
+    var s=AC.createBufferSource(); s.buffer=noiseBuf; s.loop=true;
+    s.playbackRate.value=rand(0.92,1.08);
+    var f=AC.createBiquadFilter(); f.type=type||'lowpass'; f.frequency.value=freq; f.Q.value=q||1;
+    var g=AC.createGain(); env(g, vol, dur, t0);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(t0, Math.random()*1.5); s.stop(t0+dur+0.04);
+  }
+  function tone(type, f0, f1, dur, vol, delay, lp){
+    if(vol<=0.001) return;
+    var t0=now()+(delay||0);
+    var o=AC.createOscillator(), g=AC.createGain();
+    o.type=type;
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20,f1), t0+dur);
+    env(g, vol, dur, t0);
+    if(lp){ var f=AC.createBiquadFilter(); f.type='lowpass'; f.frequency.value=lp; o.connect(f); f.connect(g); }
+    else o.connect(g);
+    g.connect(master); o.start(t0); o.stop(t0+dur+0.04);
+  }
+  function ping(freq, dur, vol, delay){ tone('sine', freq, freq*0.94, dur, vol, delay); }
+
+  sfx.step=function(v){ noise(0.05, 500, 1, 0.12*(v===undefined?1:v)); };
+  sfx.boost=function(){ tone('sawtooth', 200, 600, 0.35, 0.18, 0, 1200); };
+  sfx.coin=function(){ ping(1568, 0.08, 0.2); ping(2093, 0.12, 0.2, 0.06); };
+  sfx.splash=function(v){ noise(0.35, 900, 0.8, 0.3*(v===undefined?1:v), 'bandpass'); };
+  sfx.jump=function(v){ tone('sine', 300, 700, 0.25, 0.2*(v===undefined?1:v)); };
+  sfx.land=function(v){ noise(0.12, 250, 1, 0.3*(v===undefined?1:v)); };
+  sfx.boing=function(v){ tone('sine', 500, 180, 0.3, 0.25*(v===undefined?1:v)); };
+  sfx.count=function(){ ping(880, 0.12, 0.3); };
+  sfx.go=function(){ ping(1320, 0.4, 0.4); };
+  sfx.finish=function(){
+    ping(880,0.16,0.3); ping(1108,0.16,0.3,0.14); ping(1568,0.4,0.34,0.28);
+    noise(1.2, 3000, 0.5, 0.15, 'highpass');
+  };
+  sfx.click=function(){ ping(1200, 0.04, 0.12); };
+}
+
+function wakeAudio(){
+  initAudio();
+  if(AC && AC.state==='suspended') AC.resume();
+}
+document.addEventListener('touchstart', wakeAudio, {passive:true});
+document.addEventListener('mousedown', wakeAudio);
+document.addEventListener('keydown', wakeAudio);
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && AC && AC.state==='suspended') AC.resume();
+});
+
+/* ============================================================
+   12. INPUT
+   ============================================================ */
+
+var keys={};
+var touchIn={ left:false, right:false, gas:false, boost:false };
+var hasTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+
+document.addEventListener('keydown', function(e){
+  keys[e.code]=true;
+  if(state.mode==='racing'||state.mode==='countdown'){
+    if(e.code==='ArrowUp'||e.code==='ArrowDown'||e.code==='ArrowLeft'||
+       e.code==='ArrowRight'||e.code==='Space') e.preventDefault();
+  }
+  if(e.code==='Enter'){
+    var primary={ title:'playBtn', garage:'raceBtn', shop:'shopBack', finished:'againBtn' }[state.mode];
+    if(state.mode==='finished' && $('results').classList.contains('hidden')) primary=null;
+    if(primary){ e.preventDefault(); $(primary).click(); }
+  }
+});
+document.addEventListener('keyup', function(e){ keys[e.code]=false; });
+
+function bindTouchBtn(id, key){
+  var el=$(id);
+  function on(e){
+    e.preventDefault();
+    touchIn[key]=true; el.classList.add('on');
+    if(el.setPointerCapture && e.pointerId!==undefined){
+      try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    }
+  }
+  function off(e){ touchIn[key]=false; el.classList.remove('on'); }
+  el.addEventListener('pointerdown', on);
+  el.addEventListener('pointerup', off);
+  el.addEventListener('pointercancel', off);
+  el.addEventListener('pointerleave', off);
+}
+bindTouchBtn('tLeft','left');
+bindTouchBtn('tRight','right');
+bindTouchBtn('tGas','gas');
+bindTouchBtn('tBoost','boost');
+
+function readPlayerInput(r, dt){
+  var steerIn=0;
+  if(keys.ArrowLeft||keys.KeyA||touchIn.left) steerIn-=1;
+  if(keys.ArrowRight||keys.KeyD||touchIn.right) steerIn+=1;
+  r.steer=lerp(r.steer, steerIn, 1-Math.pow(0.002, dt));
+  r.gas=(keys.ArrowUp||keys.KeyW||touchIn.gas)?1:0;
+  r.braking=!!(keys.ArrowDown||keys.KeyS);
+  var wantBoost=!!(keys.Space||keys.ShiftLeft||touchIn.boost);
+  if(wantBoost && !r.boosting && r.boost>5) sfx.boost();
+  r.boosting=wantBoost && r.boost>0;
+}
+
+/* ============================================================
+   13. UI AND STATE MACHINE
+   ============================================================ */
+
+var garagePreview=null;
+var wentFullscreen=false;
+
+function ownedList(){ return save.owned.slice(); }
+
+function showPreview(build){
+  if(garagePreview){ disposeRacer(garagePreview); garagePreview=null; }
+  garagePreview=buildRacer(build);
+  garagePreview.group.position.y=0;
+  garageScene.add(garagePreview.group);
+}
+
+// The card hides part of the canvas, so the preview is framed against the strip
+// that is actually left over. Both the distance and the aim come from that strip,
+// which is what keeps a racer on elephant stilts in shot on a short window.
+function updateGarageCam(){
+  var v=garagePreview;
+  var W=window.innerWidth;
+  var narrow=W<760;
+  var tall=v ? v.rideHeight + v.bodyHeight*0.6 + 0.5 : 1.7;   // about where the racer ends
+  var span=v ? Math.max(v.bodyLen, tall) : 2.2;
+  var tanH=Math.tan((garageCam.fov*Math.PI/180)/2);
+
+  var freeY=narrow ? 0.44 : 1;                   // the card takes the bottom 56%
+  var cardW=narrow ? 0 : Math.min(440, W*0.40);
+  var freeX=1-cardW/W;                           // or the right of a wide screen
+
+  var needY=tall/(1.25*freeY*tanH);
+  var needX=span/(1.4*freeX*tanH*Math.max(0.6, garageCam.aspect));
+  var dist=Math.max(3.4+span*1.3, needY, needX);
+
+  garageCam.position.set(dist*0.58, tall*0.55+span*0.3, dist*0.80);
+  var cx=0, cy=tall*0.5;
+  if(narrow) cy -= (1-freeY)*dist*tanH;
+  else cx += (cardW/W)*dist*tanH*garageCam.aspect;
+  garageCam.lookAt(cx, cy, 0);
+}
+
+function updateGarage(dt){
+  if(garagePreview){
+    var v=garagePreview, pr=v.parts;
+    v.group.rotation.y += dt*0.6;
+    pr.body.position.y=v.rideHeight+Math.sin(time*2)*0.02;
+    pr.body.rotation.x=v.baseTilt;
+    pr.tail.rotation.y=Math.sin(time*1.1)*0.3;
+    pr.head.rotation.y=Math.sin(time*0.7)*0.3;
+    if(pr.wings){
+      var f=Math.sin(time*1.8)*0.12;
+      pr.wings[0].rotation.z=-f; pr.wings[1].rotation.z=f;
+    }
+  }
+  updateGarageCam();
+}
+
+function refreshGarage(){
+  var s=computeStats(save.build);
+  $('coinCount').textContent=save.coins;
+  var rows=$('slotList').querySelectorAll('.slot');
+  for(var i=0;i<rows.length;i++){
+    var slot=rows[i].getAttribute('data-slot');
+    rows[i].querySelector('.name span').textContent=ANIMALS[save.build[slot]].name;
+  }
+  var bars={ speed:s.speed, accel:s.accel_d, handling:s.handling,
+             stability:s.stability, jump:s.jump, swim:s.swim };
+  var st=$('statList').querySelectorAll('.stat');
+  for(var j=0;j<st.length;j++){
+    var key=st[j].getAttribute('data-stat');
+    st[j].querySelector('.track i').style.width=Math.round(clamp(bars[key],0,1)*100)+'%';
+  }
+  var q=$('quirks');
+  q.innerHTML='';
+  describeQuirks(save.build, s).forEach(function(text){
+    var li=document.createElement('li');
+    li.textContent=text;
+    q.appendChild(li);
+  });
+}
+
+function refreshShop(){
+  $('shopCoins').textContent=save.coins;
+  var list=$('shopList');
+  list.innerHTML='';
+  ANIMAL_KEYS.forEach(function(key){
+    var a=ANIMALS[key], owned=save.owned.indexOf(key)>=0;
+    var row=document.createElement('div');
+    row.className='shopitem';
+    var chip=document.createElement('div');
+    chip.className='chip';
+    chip.style.background='#'+('000000'+a.palette.main.toString(16)).slice(-6);
+    var txt=document.createElement('div');
+    txt.className='txt';
+    var b=document.createElement('b'); b.textContent=a.name;
+    var sp=document.createElement('span'); sp.textContent=a.blurb;
+    txt.appendChild(b); txt.appendChild(sp);
+    row.appendChild(chip); row.appendChild(txt);
+    if(owned){
+      var o=document.createElement('div');
+      o.className='owned'; o.textContent='OWNED';
+      row.appendChild(o);
+    } else {
+      var btn=document.createElement('button');
+      btn.className='buy';
+      btn.textContent='BUY '+a.price;
+      btn.setAttribute('data-animal', key);
+      if(save.coins<a.price) btn.disabled=true;
+      btn.addEventListener('click', function(){
+        sfx.click();
+        var k=this.getAttribute('data-animal');
+        if(save.owned.indexOf(k)>=0 || save.coins<ANIMALS[k].price) return;
+        save.coins-=ANIMALS[k].price;
+        save.owned.push(k);
+        saveGame();
+        sfx.coin();
+        refreshShop();
+        refreshGarage();
+      });
+      row.appendChild(btn);
+    }
+    list.appendChild(row);
+  });
+}
+
+function showZoneTip(text){
+  var el=$('zoneTip');
+  el.textContent=text;
+  el.style.opacity='1';
+  state.zoneTipTime=2;
+}
+
+var SCREENS=['title','garage','shop','results'];
+function setMode(mode){
+  state.mode=mode;
+  SCREENS.forEach(function(id){ $(id).classList.add('hidden'); });
+  $('hud').classList.add('hidden');
+  $('countdown').classList.add('hidden');
+  ['tLeft','tRight','tGas','tBoost'].forEach(function(id){ $(id).classList.add('hidden'); });
+
+  if(mode==='title'){ $('title').classList.remove('hidden'); }
+  else if(mode==='garage'){
+    $('garage').classList.remove('hidden');
+    refreshGarage();
+    showPreview(save.build);
+  }
+  else if(mode==='shop'){
+    $('shop').classList.remove('hidden');
+    refreshShop();
+  }
+  else if(mode==='countdown'||mode==='racing'||mode==='finished'){
+    $('hud').classList.remove('hidden');
+    if(hasTouch){
+      ['tLeft','tRight','tGas','tBoost'].forEach(function(id){ $(id).classList.remove('hidden'); });
+    }
+  }
+}
+
+function makeRacer(build, isPlayer, name){
+  var stats=computeStats(build);
+  var view=buildRacer(build);
+  view.bodyWidthScale=view.parts.shadow.scale.x;
+  view.bodyLenScale=view.parts.shadow.scale.z;
+  var r={
+    isPlayer:isPlayer, name:name||'You', build:build, stats:stats, view:view,
+    pos:new THREE.Vector3(), heading:0, speed:0, vy:0, airborne:false,
+    steer:0, gas:0, braking:false, boosting:false, boost:100,
+    nearestIdx:-1, t:0, lap:0, cpNext:0, crossedStart:false, progress:-1,
+    finished:false, finishTime:0, finishOrder:0, lapStart:0, bestLap:null,
+    gaitPhase:0, lastHalf:0, lean:0, wobblePhase:Math.random()*6,
+    dip:0, stumbling:0, stumbleIn:rand(3,6), laneOffset:rand(-3,3), zone:null
+  };
+  raceScene.add(view.group);
+  return r;
+}
+
+function startRace(){
+  state.racers.forEach(function(r){
+    disposeRacer(r.view);
+    if(r.label){
+      if(r.label.parent) r.label.parent.remove(r.label);
+      if(r.label.material.map) r.label.material.map.dispose();
+      r.label.material.dispose();
+    }
+  });
+  state.racers=[];
+  state.finishedOrder=[];
+  state.raceTime=0;
+  state.coinsThisRace=0;
+  state.goTime=0;
+  state.lastZone=null;
+  TRACK.coins.forEach(function(c){ c.userData.taken=false; c.visible=true; });
+
+  var rng=makeRng(Date.now());
+  var names=NPC_NAMES.slice();
+  var npcSkill=clamp(0.92+save.wins*0.02, 0.92, 1.08);
+
+  var line=[makeRacer(save.build, true, 'You')];
+  for(var i=0;i<5;i++){
+    var nm=names.splice(Math.floor(rng()*names.length), 1)[0]||'Racer';
+    var npc=makeRacer(makeNpcBuild(rng), false, nm);
+    npc.stats.topSpeed*=npcSkill;
+    npc.stats.accel*=npcSkill;
+    npc.stats.topSpeedEff=npc.stats.topSpeed;
+    var label=nameSprite(nm);
+    label.position.y=npc.view.rideHeight+1.35;
+    npc.view.group.add(label);
+    npc.label=label;
+    line.push(npc);
+  }
+
+  for(var k=0;k<line.length;k++){
+    var idx=(N-2-k*4+N)%N;
+    var p=TRACK.pts[idx], nrm=normalAt(idx);
+    var off=((k%3)-1)*3.5;
+    var r=line[k];
+    r.pos.set(p.x+nrm.x*off, 0, p.z+nrm.z*off);
+    r.heading=Math.atan2(TRACK.tan[idx].x, TRACK.tan[idx].z);
+    r.nearestIdx=idx;
+    r.t=idx/N;
+    r.view.group.position.copy(r.pos);
+    r.view.group.rotation.y=r.heading;
+  }
+  state.racers=line;
+
+  var pl=line[0];
+  camera.position.set(pl.pos.x-Math.sin(pl.heading)*16, 13, pl.pos.z-Math.cos(pl.heading)*16);
+  state.countdown=3;
+  setMode('countdown');
+  $('countdown').textContent='3';
+  $('countdown').classList.remove('hidden');
+  $('zoneTip').style.opacity='0';
+}
+
+function updateHud(){
+  var pl=state.racers[0];
+  if(!pl) return;
+  var order=ranked();
+  var place=order.indexOf(pl)+1;
+  $('pos').textContent=ordinal(place);
+  $('lap').textContent='LAP '+Math.min(state.laps, pl.lap+1)+' / '+state.laps;
+  $('timer').textContent=fmtTime(state.raceTime);
+  $('boostFill').style.width=Math.round(pl.boost)+'%';
+}
+
+function showResults(){
+  var pl=state.racers[0];
+  var order=ranked();
+  var place=order.indexOf(pl)+1;
+  var reward=[100,60,40,20][Math.min(3, place-1)];
+  var total=reward+state.coinsThisRace;
+
+  save.coins+=total;
+  save.races++;
+  if(place===1) save.wins++;
+  var newBestTime=false, newBestLap=false;
+  if(pl.finished){
+    if(save.bestTime===null || pl.finishTime<save.bestTime){ save.bestTime=pl.finishTime; newBestTime=true; }
+  }
+  if(pl.bestLap!==null && (save.bestLap===null || pl.bestLap<save.bestLap)){
+    save.bestLap=pl.bestLap; newBestLap=true;
+  }
+  saveGame();
+
+  $('resultPlace').textContent='YOU CAME '+ordinal(place).toUpperCase()+'!';
+  $('resultTime').textContent='Race time '+fmtTime(pl.finished?pl.finishTime:state.raceTime);
+  $('resultCoins').textContent='+'+total+' coins'+(state.coinsThisRace?' ('+reward+' for '+ordinal(place)+' plus '+state.coinsThisRace+' picked up)':'');
+  var notes=[];
+  if(newBestTime) notes.push('New best race time!');
+  if(newBestLap) notes.push('New best lap!');
+  if(save.bestLap!==null) notes.push('Best lap '+fmtTime(save.bestLap));
+  notes.push('You have '+save.coins+' coins.');
+  $('resultBest').textContent=notes.join(' \u00b7 ');
+  $('results').classList.remove('hidden');
+  sfx.finish();
+}
+
+function updateRace(dt){
+  var pl=state.racers[0];
+  if(!pl) return;
+
+  if(state.mode==='countdown'){
+    var before=Math.ceil(state.countdown);
+    state.countdown-=dt;
+    var after=Math.ceil(state.countdown);
+    if(after!==before && after>0){ $('countdown').textContent=after; sfx.count(); }
+    if(state.countdown<=0){
+      $('countdown').textContent='GO!';
+      sfx.go();
+      state.mode='racing';
+      state.goTime=0.8;
+    }
+  } else {
+    state.raceTime+=dt;
+    if(state.goTime>0){
+      state.goTime-=dt;
+      if(state.goTime<=0) $('countdown').classList.add('hidden');
+    }
+    if(state.zoneTipTime>0){
+      state.zoneTipTime-=dt;
+      if(state.zoneTipTime<=0) $('zoneTip').style.opacity='0';
+    }
+  }
+
+  var counting=(state.mode==='countdown');
+  for(var i=0;i<state.racers.length;i++){
+    var r=state.racers[i];
+    if(counting){
+      r.steer=0; r.gas=0; r.braking=false; r.boosting=false;
+    } else if(r.isPlayer && !r.finished){
+      readPlayerInput(r, dt);
+    } else {
+      driveAI(r, dt);
+      if(!r.isPlayer){
+        // keep the pack in sight without making them unbeatable
+        r.stats.topSpeedEff=r.stats.topSpeed*clamp(1+(pl.progress-r.progress)*0.12, 0.93, 1.10);
+      }
+    }
+    updateRacer(r, dt);
+  }
+  resolveCollisions();
+  for(var j=0;j<state.racers.length;j++) updateAnimation(state.racers[j], dt);
+
+  for(var c=0;c<TRACK.coins.length;c++){
+    if(TRACK.coins[c].visible) TRACK.coins[c].rotation.y+=dt*3;
+  }
+  if(waterMat) waterMat.opacity=0.68+Math.sin(time*2.2)*0.07;
+
+  if(pl.finished && state.mode==='racing'){
+    state.mode='finished';
+    state.finishDelay=1.5;
+  }
+  if(state.mode==='finished' && state.finishDelay>0){
+    state.finishDelay-=dt;
+    if(state.finishDelay<=0) showResults();
+  }
+}
+
+/* ---------- buttons ---------- */
+function onClick(id, fn){
+  $(id).addEventListener('click', function(e){ sfx.click(); fn(e); });
+}
+onClick('playBtn', function(){ setMode('garage'); });
+onClick('shopBtn', function(){ setMode('shop'); });
+onClick('shopBack', function(){ setMode('garage'); });
+onClick('randomBtn', function(){
+  var own=ownedList();
+  SLOTS.forEach(function(s){ save.build[s]=own[Math.floor(Math.random()*own.length)]; });
+  saveGame();
+  refreshGarage();
+  showPreview(save.build);
+});
+onClick('raceBtn', function(){
+  if(!wentFullscreen){
+    wentFullscreen=true;
+    try{
+      var de=document.documentElement;
+      if(de.requestFullscreen) de.requestFullscreen();
+    }catch(e){}
+  }
+  startRace();
+});
+onClick('againBtn', function(){ startRace(); });
+onClick('garageBtn', function(){ setMode('garage'); });
+
+$('slotList').addEventListener('click', function(e){
+  var btn=e.target.closest ? e.target.closest('.cyc') : null;
+  if(!btn) return;
+  sfx.click();
+  var slot=btn.parentNode.getAttribute('data-slot');
+  var dir=parseInt(btn.getAttribute('data-dir'), 10);
+  var own=ownedList();
+  var at=own.indexOf(save.build[slot]);
+  if(at<0) at=0;
+  save.build[slot]=own[(at+dir+own.length)%own.length];
+  saveGame();
+  refreshGarage();
+  showPreview(save.build);
+});
+
+/* ============================================================
+   14. MAIN LOOP
+   ============================================================ */
+
+var clock=new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  var dt=Math.min(clock.getDelta(), 0.05);
+  time+=dt;
+  if(state.mode==='garage'||state.mode==='shop'){
+    updateGarage(dt);
+    renderer.render(garageScene, garageCam);
+    return;
+  }
+  if(state.mode==='countdown'||state.mode==='racing'||state.mode==='finished'){
+    updateRace(dt);
+    updateCamera(dt);
+    updateHud();
+    renderer.render(raceScene, camera);
+  }
+}
+
+loadSave();
+resize();
+setMode('title');
+$('loading').style.display='none';
+animate();
+
+})();
+
+// Offline support: once opened, the game and everything it needs stay cached.
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/experiments/dotties-mix-and-match-racer/sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
+
+{% endraw %}
