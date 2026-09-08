@@ -35,8 +35,10 @@ bundle exec jekyll s
 Standalone pages (games, toys, demos) live in `_experiments/` and are listed at `/experiments/`.
 
 1. Save the page as a single self-contained `.html` file in `_experiments/`, e.g. `_experiments/my-thing.html`.
-   External scripts from a CDN are fine. Any extra local assets can go in a folder like `experiments-assets/my-thing/`
-   and be referenced with absolute paths (`/experiments-assets/my-thing/foo.png`).
+   Any extra files it needs (scripts, images, a PWA manifest and service worker) go in a plain folder with the same
+   name, `experiments/my-thing/`, and are referenced with absolute paths (`/experiments/my-thing/foo.png`). Jekyll
+   copies that folder as-is, alongside the generated page. Keep scripts local rather than on a CDN if the page
+   should work offline.
 2. Add front matter at the very top, and wrap the rest of the file in `{% raw %}` / `{% endraw %}` so Jekyll
    doesn't try to interpret `{{ }}` or `{% %}` inside the page's JavaScript or CSS:
 
