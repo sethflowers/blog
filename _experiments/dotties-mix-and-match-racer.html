@@ -188,9 +188,9 @@ layout: null
   #tLeft,#tRight{width:76px;height:76px;font-size:24px;bottom:calc(env(safe-area-inset-bottom) + 22px);}
   #tLeft{left:calc(env(safe-area-inset-left) + 18px);}
   #tRight{left:calc(env(safe-area-inset-left) + 104px);}
-  #tGas{width:96px;height:96px;right:calc(env(safe-area-inset-right) + 20px);
+  #tBoost{width:96px;height:96px;right:calc(env(safe-area-inset-right) + 20px);
     bottom:calc(env(safe-area-inset-bottom) + 20px);}
-  #tBoost{width:70px;height:70px;right:calc(env(safe-area-inset-right) + 30px);
+  #tBrake{width:64px;height:64px;right:calc(env(safe-area-inset-right) + 36px);
     bottom:calc(env(safe-area-inset-bottom) + 126px);font-size:10.5px;}
 
   /* ---------- results ---------- */
@@ -220,6 +220,8 @@ layout: null
        Every part changes how your animal runs, jumps, corners and swims.
        Some combinations are brilliant. Some are a disaster.<br>
        Win coins to unlock more animals.</p>
+    <p>Your racer accelerates on its own. You just steer, and save the boost
+       for the straights.</p>
     <button class="go" id="playBtn">BUILD YOUR RACER</button>
   </div>
 </div>
@@ -312,8 +314,8 @@ layout: null
 
 <button class="tbtn hidden" id="tLeft">◀</button>
 <button class="tbtn hidden" id="tRight">▶</button>
-<button class="tbtn hidden" id="tGas">GAS</button>
 <button class="tbtn hidden" id="tBoost">BOOST</button>
+<button class="tbtn hidden" id="tBrake">SLOW</button>
 
 <!-- ---------- results ---------- -->
 <div class="screen hidden" id="results">
@@ -1440,7 +1442,7 @@ function updateRacer(r, dt){
     if(r.speed<target) r.speed=Math.min(target, r.speed + s.accel*(r.boosting?1.5:1)*dt*r.gas);
     else r.speed=Math.max(target, r.speed - s.brake*0.5*dt);
   } else if(r.braking){
-    r.speed=Math.max(-top*0.25, r.speed - s.brake*dt);
+    r.speed=Math.max(0, r.speed - s.brake*dt);   // slows to a stop, never reverses
   } else {
     if(r.speed>target) r.speed=Math.max(target, r.speed - s.brake*0.5*dt);
     else if(r.speed>0) r.speed=Math.max(0, r.speed - 4*dt);
@@ -1617,7 +1619,10 @@ function driveAI(r, dt){
   var bend=curveAhead(r.nearestIdx);
   r.gas=(bend>0.55 && Math.abs(r.speed)>s.topSpeedEff*0.7) ? 0 : 1;
   r.braking=false;
-  r.boosting=(bend<0.15 && r.boost>40);
+  // Only a twentieth of this lap bends less than 0.15rad, so that gate left the
+  // npcs never boosting at all while the player boosted at will. They now use
+  // the same policy a player can, which keeps the field honest.
+  r.boosting=(bend<0.28 && r.boost>55);
 }
 
 function makeNpcBuild(rng){
@@ -1826,7 +1831,7 @@ document.addEventListener('visibilitychange', function(){
    ============================================================ */
 
 var keys={};
-var touchIn={ left:false, right:false, gas:false, boost:false };
+var touchIn={ left:false, right:false, boost:false, brake:false };
 var hasTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
 
 document.addEventListener('keydown', function(e){
@@ -1860,16 +1865,21 @@ function bindTouchBtn(id, key){
 }
 bindTouchBtn('tLeft','left');
 bindTouchBtn('tRight','right');
-bindTouchBtn('tGas','gas');
 bindTouchBtn('tBoost','boost');
+bindTouchBtn('tBrake','brake');
 
 function readPlayerInput(r, dt){
+  // A racer faces +Z and heading grows towards +X, which is the racer's own
+  // left and so the camera's left as well. Positive steer therefore turns left
+  // and the right-hand control is the negative one.
   var steerIn=0;
-  if(keys.ArrowLeft||keys.KeyA||touchIn.left) steerIn-=1;
-  if(keys.ArrowRight||keys.KeyD||touchIn.right) steerIn+=1;
+  if(keys.ArrowLeft||keys.KeyA||touchIn.left) steerIn+=1;
+  if(keys.ArrowRight||keys.KeyD||touchIn.right) steerIn-=1;
   r.steer=lerp(r.steer, steerIn, 1-Math.pow(0.002, dt));
-  r.gas=(keys.ArrowUp||keys.KeyW||touchIn.gas)?1:0;
-  r.braking=!!(keys.ArrowDown||keys.KeyS);
+  // The racer accelerates on its own, so one thumb per hand is enough: the left
+  // steers and the right boosts. Slowing down still overrides the throttle.
+  r.braking=!!(keys.ArrowDown||keys.KeyS||touchIn.brake);
+  r.gas=r.braking?0:1;
   var wantBoost=!!(keys.Space||keys.ShiftLeft||touchIn.boost);
   if(wantBoost && !r.boosting && r.boost>5) sfx.boost();
   r.boosting=wantBoost && r.boost>0;
@@ -2014,7 +2024,7 @@ function setMode(mode){
   SCREENS.forEach(function(id){ $(id).classList.add('hidden'); });
   $('hud').classList.add('hidden');
   $('countdown').classList.add('hidden');
-  ['tLeft','tRight','tGas','tBoost'].forEach(function(id){ $(id).classList.add('hidden'); });
+  ['tLeft','tRight','tBoost','tBrake'].forEach(function(id){ $(id).classList.add('hidden'); });
 
   if(mode==='title'){ $('title').classList.remove('hidden'); }
   else if(mode==='garage'){
@@ -2029,7 +2039,7 @@ function setMode(mode){
   else if(mode==='countdown'||mode==='racing'||mode==='finished'){
     $('hud').classList.remove('hidden');
     if(hasTouch){
-      ['tLeft','tRight','tGas','tBoost'].forEach(function(id){ $(id).classList.remove('hidden'); });
+      ['tLeft','tRight','tBoost','tBrake'].forEach(function(id){ $(id).classList.remove('hidden'); });
     }
   }
 }
