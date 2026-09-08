@@ -1,0 +1,30 @@
+---
+layout: default
+title: Experiments
+permalink: /experiments/
+---
+
+<div class="home">
+
+  <h1 class="page-heading">Experiments</h1>
+
+  <p>Games, toys and other small things that don't fit in a blog post.</p>
+
+  <ul class="post-list">
+    {% assign experiments = site.experiments | sort: "date" | reverse %}
+    {% for experiment in experiments %}
+      <li>
+        <span class="post-meta">{{ experiment.date | date: "%b %-d, %Y" }}</span>
+
+        <h2>
+          <a class="post-link" href="{{ experiment.url | prepend: site.baseurl }}">{{ experiment.title | escape }}</a>
+        </h2>
+
+        {% if experiment.description %}
+          <p>{{ experiment.description | escape }}</p>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+
+</div>

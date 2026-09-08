@@ -27,3 +27,11 @@ theme: minima
 include: ["_pages"]
 
 repository: sethflowers/blog
+
+# Experiments: games and other standalone one-off pages.
+# Drop a self-contained .html file into _experiments/ with front matter (see README)
+# and it is published at /experiments/<file-name>/ and listed at /experiments/.
+collections:
+  experiments:
+    output: true
+    permalink: /experiments/:name/
