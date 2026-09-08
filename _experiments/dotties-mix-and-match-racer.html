@@ -2148,7 +2148,7 @@ function showResults(){
   if(newBestLap) notes.push('New best lap!');
   if(save.bestLap!==null) notes.push('Best lap '+fmtTime(save.bestLap));
   notes.push('You have '+save.coins+' coins.');
-  $('resultBest').textContent=notes.join('  ');
+  $('resultBest').textContent=notes.join(' \u00b7 ');
   $('results').classList.remove('hidden');
   sfx.finish();
 }
