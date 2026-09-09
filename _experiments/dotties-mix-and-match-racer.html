@@ -1,6 +1,6 @@
 ---
 title: Dottie’s Mix and Match Racer
-description: Build a racer out of mixed-up animal parts, then race it in 3D against other mixed-up animals. Win coins to unlock more animals. Works on a phone.
+description: Build a racer out of mixed-up animal parts, then race it in 3D across five tracks. Seventeen animals to collect, coins to pick up everywhere, and a house to decorate for the animals you own. Works on a phone.
 date: 2026-09-08 12:00:00 +0000
 layout: null
 ---
@@ -128,6 +128,7 @@ layout: null
     border-radius:50%;background:var(--sun);}
 
   .row{display:flex;gap:9px;flex:0 0 auto;}
+  .rows{display:flex;flex-direction:column;gap:8px;flex:0 0 auto;}
   .mini{flex:1;padding:14px 8px;border:0;border-radius:13px;background:rgba(27,42,65,.09);
     font-family:inherit;font-size:12.5px;font-weight:800;letter-spacing:.1em;color:var(--ink);
     min-height:46px;touch-action:manipulation;cursor:pointer;}
@@ -150,8 +151,18 @@ layout: null
     min-height:42px;white-space:nowrap;touch-action:manipulation;cursor:pointer;}
   .buy:active{filter:brightness(.92);}
   .buy[disabled]{background:rgba(27,42,65,.11);color:var(--ink-dim);}
-  .owned{font-size:11.5px;font-weight:800;letter-spacing:.11em;color:#3f9ad6;
-    padding:0 8px;white-space:nowrap;}
+  .owned{flex:0 0 auto;font-size:10.5px;font-weight:800;letter-spacing:.06em;color:#3f9ad6;
+    padding:0 6px;white-space:nowrap;}
+  .buy.pick{background:#3f9ad6;color:#fff;}
+
+  /* house: the collection, as a row of little name pills */
+  .subhead{font-size:11px;letter-spacing:.13em;font-weight:800;color:var(--ink-dim);
+    text-transform:uppercase;}
+  .pills{display:flex;flex-wrap:wrap;gap:5px;}
+  .pill{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;
+    background:rgba(27,42,65,.07);border-radius:999px;padding:4px 9px 4px 6px;white-space:nowrap;}
+  .pill i{width:11px;height:11px;border-radius:50%;display:block;flex:0 0 auto;
+    box-shadow:inset 0 0 0 1.5px rgba(20,35,55,.28);}
 
   /* ---------- race hud ---------- */
   #hud{position:fixed;inset:0;z-index:10;pointer-events:none;
@@ -204,6 +215,21 @@ layout: null
   #resultBest{font-size:12.5px;color:var(--ink-dim);line-height:1.5;}
   #results .row{margin-top:22px;gap:12px;width:min(340px,86vw);}
 
+  /* a phone held sideways is only about 390px tall, so the title and the result
+     sheet have to shrink rather than push their buttons off the screen */
+  #title, #results{overflow-y:auto;overscroll-behavior:contain;}
+  @media (max-height:560px){
+    /* the collection must not push the shopping list out of a short card */
+    .pills{max-height:5.4em;overflow-y:auto;overscroll-behavior:contain;}
+    #title h1{font-size:min(9vw,44px);}
+    #title p{margin-top:11px;font-size:12.5px;line-height:1.55;padding:10px 14px;}
+    .go{margin-top:14px;padding:13px 28px;min-height:46px;}
+    #results h1{font-size:min(7vw,34px);}
+    #results .sheet{margin-top:12px;padding:12px 18px;gap:5px;}
+    #resultCoins{font-size:20px;}
+    #results .row{margin-top:14px;}
+  }
+
   #loading{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
     background:var(--sky);font-size:12px;letter-spacing:.3em;font-weight:800;color:#fff;}
 </style>
@@ -219,9 +245,10 @@ layout: null
     <p>Build a racer out of parts from different animals, then race it.
        Every part changes how your animal runs, jumps, corners and swims.
        Some combinations are brilliant. Some are a disaster.<br>
-       Win coins to unlock more animals.</p>
+       Seventeen animals, five tracks, and coins scattered all over every one of them.</p>
     <p>Your racer accelerates on its own. You just steer, and save the boost
-       for the straights.</p>
+       for the straights. Spend your coins on new animals, new tracks, or
+       furniture for the Animal House.</p>
     <button class="go" id="playBtn">BUILD YOUR RACER</button>
   </div>
 </div>
@@ -275,10 +302,16 @@ layout: null
     <ul id="quirks"></ul>
     </div>
 
-    <div class="row">
-      <button class="mini" id="randomBtn">RANDOM</button>
-      <button class="mini" id="shopBtn">SHOP</button>
-      <button class="primary" id="raceBtn">RACE!</button>
+    <div class="rows">
+      <div class="row">
+        <button class="mini" id="randomBtn">RANDOM</button>
+        <button class="mini" id="shopBtn">SHOP</button>
+        <button class="mini" id="mapsBtn">TRACKS</button>
+        <button class="mini" id="houseBtn">HOUSE</button>
+      </div>
+      <div class="row">
+        <button class="primary" id="raceBtn">RACE!</button>
+      </div>
     </div>
   </div>
 </div>
@@ -293,6 +326,39 @@ layout: null
     <div class="cardbody"><div id="shopList"></div></div>
     <div class="row">
       <button class="primary" id="shopBack">BACK TO GARAGE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- track picker ---------- -->
+<div class="screen panel hidden" id="maps">
+  <div class="card">
+    <div class="cardhead">
+      <h2>Tracks</h2>
+      <div class="coins"><i></i><span id="mapCoins">0</span></div>
+    </div>
+    <div class="cardbody"><div id="mapList"></div></div>
+    <div class="row">
+      <button class="primary" id="mapsBack">BACK TO GARAGE</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---------- animal house ---------- -->
+<div class="screen panel hidden" id="house">
+  <div class="card">
+    <div class="cardhead">
+      <h2>Animal House</h2>
+      <div class="coins"><i></i><span id="houseCoins">0</span></div>
+    </div>
+    <div class="cardbody">
+      <div class="subhead" id="houseCount">Animals 0 / 0</div>
+      <div class="pills" id="housePills"></div>
+      <div class="subhead">Buy something for the house</div>
+      <div id="decorList"></div>
+    </div>
+    <div class="row">
+      <button class="primary" id="houseBack">BACK TO GARAGE</button>
     </div>
   </div>
 </div>
@@ -384,7 +450,8 @@ var save=null;
 function defaultSave(){
   return { coins:0, owned:STARTERS.slice(),
     build:{head:'cheetah', body:'cheetah', front:'cheetah', back:'cheetah', tail:'cheetah'},
-    bestTime:null, bestLap:null, wins:0, races:0 };
+    bestTime:null, bestLap:null, wins:0, races:0,
+    maps:FREE_MAPS.slice(), map:FREE_MAPS[0], decor:[] };
 }
 
 function loadSave(){
@@ -407,6 +474,23 @@ function loadSave(){
           }
           for(var s=0;s<STARTERS.length;s++){ if(own.indexOf(STARTERS[s])<0) own.push(STARTERS[s]); }
           d.owned=own;
+        }
+        // tracks and furniture, both filtered against what this build still has
+        if(p.maps && p.maps.length){
+          var mps=[];
+          for(var mi=0;mi<p.maps.length;mi++){
+            if(MAP_BY_KEY[p.maps[mi]] && mps.indexOf(p.maps[mi])<0) mps.push(p.maps[mi]);
+          }
+          for(var fi=0;fi<FREE_MAPS.length;fi++){ if(mps.indexOf(FREE_MAPS[fi])<0) mps.push(FREE_MAPS[fi]); }
+          d.maps=mps;
+        }
+        if(typeof p.map==='string' && d.maps.indexOf(p.map)>=0) d.map=p.map;
+        if(p.decor && p.decor.length){
+          var dec=[];
+          for(var di=0;di<p.decor.length;di++){
+            if(DECOR_BY_KEY[p.decor[di]] && dec.indexOf(p.decor[di])<0) dec.push(p.decor[di]);
+          }
+          d.decor=dec;
         }
         if(p.build){
           for(var k=0;k<SLOTS.length;k++){
@@ -926,7 +1010,569 @@ function sharkFin(pal,M,len){
   return { group:g };
 }
 
+/* ---------------- monkey ---------------- */
+ANIMALS.monkey={
+  name:'Monkey', price:200,
+  blurb:'Long grabby arms and a curly tail. Corners better than anything else in the shop.',
+  palette:{main:0x8a5a35, second:0xd9a66c, accent:0x3f2a17},
+  parts:{
+    head:{ spd:4,acc:5,grip:8,stab:5,jmp:6,swm:3,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      add(g, cyl(0.09,0.11,0.16,7), M(pal.main), 0, 0.07, 0);
+      var sk=add(g, sph(0.24,10,8), M(pal.main), 0, 0.26, 0.04); sk.scale.set(1,0.98,1.02);
+      // flat tan face plate with a little muzzle on it
+      var face=add(g, sph(0.19,10,8), M(pal.second), 0, 0.23, 0.14); face.scale.set(0.95,1.05,0.6);
+      var mz=add(g, sph(0.11,8,7), M(pal.second), 0, 0.16, 0.24); mz.scale.set(1.1,0.8,1);
+      add(g, sph(0.032,6,5), M(pal.accent), 0.035, 0.19, 0.31);
+      add(g, sph(0.032,6,5), M(pal.accent), -0.035, 0.19, 0.31);
+      var grin=add(g, box(0.11,0.02,0.02), M(pal.accent), 0, 0.12, 0.3);
+      // round ears stuck out sideways
+      [0.22,-0.22].forEach(function(x){
+        var e=add(g, sph(0.085,8,7), M(pal.second), x, 0.26, 0.0); e.scale.set(0.45,1,1);
+      });
+      // brow tuft
+      add(g, box(0.16,0.05,0.1), M(pal.accent), 0, 0.42, 0.02);
+      eyes(g, M, 0.085, 0.29, 0.22, 0.05);
+      return { group:g };
+    }},
+    body:{ spd:5,acc:6,grip:8,stab:5,jmp:7,swm:3,mass:2, wings:0, build:function(pal,M){
+      var len=1.35, height=0.6, width=0.6;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.6,0.62,1.3);
+      var belly=add(g, sph(0.34,10,8), M(pal.second), 0, -0.1, 0.08); belly.scale.set(0.85,0.8,1.1);
+      var sh=add(g, sph(0.3,10,8), M(pal.main), 0, 0.1, len*0.28); sh.scale.set(1.15,0.9,0.7);
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.16, legX:0.3, frontZ:0.4, backZ:-0.3}) };
+    }},
+    // the arms are long, which is where the reach and the grip come from
+    front:{ spd:4,acc:5,grip:9,stab:4,jmp:6,swm:4,mass:1, len:0.8, build:function(pal,M,len){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.07, 0,0,0, 0,-len*0.52,0.1);
+      seg(g, M(pal.main), 0.06, 0,-len*0.52,0.1, 0,-len+0.05,0.02);
+      var h=add(g, sph(0.1,8,7), M(pal.second), 0, -len+0.02, 0.05); h.scale.set(0.8,0.7,1.2);
+      [-0.05,0.02,0.07].forEach(function(x){
+        add(g, box(0.03,0.03,0.1), M(pal.second), x, -len+0.01, 0.12);
+      });
+      return { group:g };
+    }},
+    back:{ spd:5,acc:6,grip:8,stab:4,jmp:8,swm:4,mass:1, len:0.7, build:function(pal,M,len){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.09, 0,0,0, 0,-len*0.45,-len*0.28);
+      seg(g, M(pal.main), 0.07, 0,-len*0.45,-len*0.28, 0,-len,0.04);
+      var f=add(g, sph(0.11,8,7), M(pal.second), 0, -len+0.02, 0.06); f.scale.set(0.8,0.6,1.4);
+      return { group:g };
+    }},
+    tail:{ spd:4,acc:4,grip:9,stab:7,jmp:5,swm:3,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      // a curl: four short segments swinging up and round
+      var pts=[[0,0,0],[0,0.18,-0.34],[0,0.46,-0.52],[0.14,0.62,-0.32],[0.26,0.5,-0.14]];
+      for(var i=0;i<pts.length-1;i++){
+        seg(g, M(pal.main), 0.055-i*0.006, pts[i][0],pts[i][1],pts[i][2],
+                                            pts[i+1][0],pts[i+1][1],pts[i+1][2]);
+      }
+      add(g, sph(0.05,7,6), M(pal.second), 0.26, 0.5, -0.14);
+      return { group:g };
+    }}
+  }
+};
+
+/* ---------------- hedgehog ---------------- */
+ANIMALS.hedgehog={
+  name:'Hedgehog', price:150,
+  blurb:'Tiny, spiky and glued to the ground. Nothing tips it over, nothing hurries it either.',
+  palette:{main:0x8a7a68, second:0x46392c, accent:0xf0c6a8},
+  parts:{
+    head:{ spd:2,acc:3,grip:7,stab:8,jmp:2,swm:3,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      var sk=add(g, sph(0.19,10,8), M(pal.accent), 0, 0.15, 0.06); sk.scale.set(1,0.9,1.1);
+      var sn=add(g, con(0.1,0.24,8), M(pal.accent), 0, 0.11, 0.24); sn.rotation.x=Math.PI/2;
+      add(g, sph(0.038,7,6), M(0x2b2118), 0, 0.11, 0.36);
+      [0.11,-0.11].forEach(function(x){
+        var e=add(g, sph(0.055,7,6), M(pal.accent), x, 0.24, -0.02); e.scale.set(0.5,1,1);
+      });
+      // a fringe of spines over the brow
+      [-0.1,-0.035,0.035,0.1].forEach(function(x){
+        var s=add(g, con(0.028,0.12,5), M(pal.second), x, 0.28, -0.04); s.rotation.x=-0.5;
+      });
+      eyes(g, M, 0.085, 0.18, 0.16, 0.036);
+      return { group:g };
+    }},
+    body:{ spd:2,acc:4,grip:7,stab:9,jmp:2,swm:3,mass:3, wings:0, build:function(pal,M){
+      var len=1.0, height=0.5, width=0.7;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.accent)); t.scale.set(0.68,0.48,0.95);
+      var coat=add(g, sph(0.5,14,10), M(pal.second), 0, 0.04, -0.04); coat.scale.set(0.72,0.54,0.95);
+      // the spines: rings of little cones over the coat
+      for(var ring=0; ring<4; ring++){
+        var z=0.24-ring*0.19, r=0.3-Math.abs(ring-1.4)*0.04, n=7;
+        for(var k=0;k<n;k++){
+          var a=-1.15+ (k/(n-1))*2.3;
+          var sp=add(g, con(0.05,0.2,5), M(pal.second), Math.sin(a)*r, 0.06+Math.cos(a)*0.2, z);
+          sp.rotation.z=-a*0.9; sp.rotation.x=-0.2+ring*0.12;
+        }
+      }
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.02, legX:0.24, frontZ:0.28, backZ:-0.26,
+                 headZ:len*0.44, tailY:-0.02}) };
+    }},
+    front:{ spd:2,acc:4,grip:8,stab:8,jmp:2,swm:3,mass:1, len:0.3, build:function(pal,M,len){
+      return hedgehogLeg(pal,M,len);
+    }},
+    back:{ spd:2,acc:4,grip:8,stab:8,jmp:2,swm:3,mass:1, len:0.3, build:function(pal,M,len){
+      return hedgehogLeg(pal,M,len);
+    }},
+    tail:{ spd:1,acc:2,grip:5,stab:7,jmp:1,swm:2,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      var n=add(g, sph(0.08,7,6), M(pal.accent), 0, 0, -0.08); n.scale.set(1,0.8,1.3);
+      return { group:g };
+    }}
+  }
+};
+function hedgehogLeg(pal,M,len){
+  var g=new THREE.Group();
+  add(g, cyl(0.055,0.05,len,7), M(pal.accent), 0, -len/2, 0);
+  var f=add(g, sph(0.075,7,6), M(pal.accent), 0, -len+0.01, 0.03); f.scale.set(1,0.6,1.5);
+  return { group:g };
+}
+
+/* ---------------- penguin ---------------- */
+ANIMALS.penguin={
+  name:'Penguin', price:200,
+  blurb:'Flies through water in a smart little suit. On dry land it is doing its best.',
+  palette:{main:0x2b3038, second:0xf7f4ee, accent:0xf2a71b},
+  parts:{
+    head:{ spd:3,acc:3,grip:4,stab:6,jmp:2,swm:9,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      add(g, cyl(0.12,0.14,0.18,8), M(pal.main), 0, 0.08, 0);
+      var sk=add(g, sph(0.22,10,8), M(pal.main), 0, 0.26, 0.03); sk.scale.set(1,0.98,1.05);
+      var face=add(g, sph(0.17,10,8), M(pal.second), 0, 0.24, 0.12); face.scale.set(0.9,1,0.7);
+      var beak=add(g, con(0.075,0.24,7), M(pal.accent), 0, 0.22, 0.26); beak.rotation.x=Math.PI/2;
+      eyes(g, M, 0.095, 0.31, 0.16, 0.045);
+      return { group:g };
+    }},
+    body:{ spd:3,acc:4,grip:3,stab:7,jmp:3,swm:10,mass:3, wings:3, build:function(pal,M){
+      var len=1.25, height=0.85, width=0.72;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.72,0.9,1.15);
+      var front=add(g, sph(0.44,12,9), M(pal.second), 0, -0.02, 0.16); front.scale.set(0.72,0.88,0.85);
+      // stubby flippers, which is what this animal's "wings" are
+      var wings=[1,-1].map(function(s){
+        var w=new THREE.Group();
+        w.position.set(s*0.32, 0.14, 0.02);
+        var pane=add(w, box(0.08,0.44,0.24), M(pal.main), s*0.03, -0.2, -0.04);
+        pane.rotation.z=s>0?-0.14:0.14;
+        g.add(w);
+        return w;
+      });
+      return { group:g, len:len, height:height, width:width, wings:wings,
+               attach:bodyAttach(len,width,height,{headY:0.3, legX:0.2, frontZ:0.16, backZ:-0.18}) };
+    }},
+    front:{ spd:2,acc:3,grip:3,stab:5,jmp:2,swm:8,mass:1, len:0.35, build:function(pal,M,len){
+      return penguinLeg(pal,M,len);
+    }},
+    back:{ spd:2,acc:3,grip:3,stab:5,jmp:2,swm:8,mass:1, len:0.35, build:function(pal,M,len){
+      return penguinLeg(pal,M,len);
+    }},
+    tail:{ spd:2,acc:2,grip:4,stab:6,jmp:1,swm:8,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      var w=add(g, box(0.26,0.07,0.3), M(pal.main), 0, 0.02, -0.16); w.rotation.x=-0.3;
+      return { group:g };
+    }}
+  }
+};
+function penguinLeg(pal,M,len){
+  var g=new THREE.Group();
+  add(g, cyl(0.06,0.06,len,7), M(pal.accent), 0, -len/2, 0);
+  add(g, box(0.16,0.04,0.24), M(pal.accent), 0, -len+0.01, 0.07);
+  return { group:g };
+}
+
+/* ---------------- horse ---------------- */
+ANIMALS.horse={
+  name:'Horse', price:300,
+  blurb:'No tricks at all. Just fast, steady and good at everything on dry ground.',
+  palette:{main:0x8b5a2b, second:0x38230f, accent:0xf4f0e8},
+  parts:{
+    head:{ spd:7,acc:7,grip:6,stab:6,jmp:4,swm:2,mass:2, build:function(pal,M){
+      var g=new THREE.Group();
+      var nk=add(g, cyl(0.14,0.18,0.34,8), M(pal.main), 0, 0.16, 0.02); nk.rotation.x=-0.2;
+      var sk=add(g, box(0.19,0.22,0.3), M(pal.main), 0, 0.36, 0.14);
+      var mz=add(g, box(0.16,0.16,0.26), M(pal.main), 0, 0.28, 0.32);
+      add(g, box(0.13,0.05,0.06), M(pal.accent), 0, 0.24, 0.45);
+      add(g, sph(0.035,6,5), M(pal.second), 0.045, 0.28, 0.45);
+      add(g, sph(0.035,6,5), M(pal.second), -0.045, 0.28, 0.45);
+      [0.08,-0.08].forEach(function(x){
+        var e=add(g, con(0.055,0.14,6), M(pal.main), x, 0.51, 0.06); e.rotation.z=-x*1.3;
+      });
+      // mane down the back of the neck
+      [0,1,2,3].forEach(function(i){
+        add(g, box(0.07,0.13,0.09), M(pal.second), 0, 0.46-i*0.13, -0.02-i*0.05);
+      });
+      eyes(g, M, 0.105, 0.4, 0.24, 0.045);
+      return { group:g };
+    }},
+    body:{ spd:8,acc:7,grip:6,stab:6,jmp:4,swm:2,mass:5, wings:0, build:function(pal,M){
+      var len=1.9, height=0.75, width=0.68;
+      var g=new THREE.Group();
+      add(g, box(0.68, 0.75, len*0.8), M(pal.main));
+      var ch=add(g, sph(0.42,12,9), M(pal.main), 0, 0.02, len*0.36); ch.scale.set(0.85,0.95,0.8);
+      var hp=add(g, sph(0.44,12,9), M(pal.main), 0, 0.05, -len*0.36); hp.scale.set(0.85,0.95,0.8);
+      var back=add(g, box(0.5,0.1,len*0.66), M(pal.second), 0, 0.4, -0.06);
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.3, legX:0.28, frontZ:0.62, backZ:-0.6}) };
+    }},
+    front:{ spd:9,acc:8,grip:6,stab:6,jmp:5,swm:2,mass:4, len:1.0, build:function(pal,M,len){
+      return horseLeg(pal,M,len,1);
+    }},
+    back:{ spd:9,acc:8,grip:5,stab:6,jmp:6,swm:2,mass:4, len:1.05, build:function(pal,M,len){
+      return horseLeg(pal,M,len,-1);
+    }},
+    tail:{ spd:5,acc:4,grip:6,stab:6,jmp:2,swm:2,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      var t=add(g, cyl(0.09,0.05,0.62,7), M(pal.second), 0, -0.2, -0.24);
+      t.rotation.x=0.9;
+      add(g, sph(0.1,8,7), M(pal.second), 0, -0.46, -0.4);
+      return { group:g };
+    }}
+  }
+};
+function horseLeg(pal,M,len,dir){
+  var g=new THREE.Group();
+  seg(g, M(pal.main), 0.1, 0,0,0, 0,-len*0.5,dir*len*0.1);
+  seg(g, M(pal.main), 0.07, 0,-len*0.5,dir*len*0.1, 0,-len+0.06,0);
+  add(g, cyl(0.09,0.1,0.1,8), M(pal.second), 0, -len+0.05, 0.01);
+  return { group:g };
+}
+
+/* ---------------- ostrich ---------------- */
+ANIMALS.ostrich={
+  name:'Ostrich', price:350,
+  blurb:'Ridiculous legs, useless wings. The fastest thing on land in the whole shop.',
+  palette:{main:0x4a4038, second:0xefd9b4, accent:0xe8e2d8},
+  parts:{
+    head:{ spd:8,acc:8,grip:5,stab:3,jmp:4,swm:1,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      // an absurd neck, then a very small head on the end of it
+      seg(g, M(pal.second), 0.075, 0,0,0, 0,0.42,0.06);
+      seg(g, M(pal.second), 0.065, 0,0.42,0.06, 0,0.78,0.0);
+      var sk=add(g, sph(0.14,10,8), M(pal.second), 0, 0.88, 0.06); sk.scale.set(1,0.9,1.1);
+      var bk=add(g, con(0.06,0.18,7), M(0xd9a04a), 0, 0.85, 0.2); bk.rotation.x=Math.PI/2;
+      eyes(g, M, 0.075, 0.92, 0.11, 0.045);
+      return { group:g };
+    }},
+    body:{ spd:8,acc:8,grip:5,stab:4,jmp:5,swm:1,mass:3, wings:2, build:function(pal,M){
+      var len=1.4, height=0.9, width=0.85;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.85,0.88,1.3);
+      var ruff=add(g, sph(0.4,10,8), M(pal.main), 0, 0.12, 0.2); ruff.scale.set(0.9,0.7,0.7);
+      var wings=[1,-1].map(function(s){
+        var w=new THREE.Group();
+        w.position.set(s*0.36, 0.16, 0.0);
+        var pane=add(w, box(0.1,0.3,0.46), M(pal.accent), s*0.06, -0.1, -0.08);
+        pane.rotation.z=s>0?-0.2:0.2;
+        g.add(w);
+        return w;
+      });
+      return { group:g, len:len, height:height, width:width, wings:wings,
+               attach:bodyAttach(len,width,height,{headY:0.34, headZ:len*0.36, legX:0.24,
+                 frontZ:0.18, backZ:-0.2}) };
+    }},
+    front:{ spd:9,acc:9,grip:5,stab:3,jmp:5,swm:1,mass:2, len:1.2, build:function(pal,M,len){
+      return ostrichLeg(pal,M,len);
+    }},
+    back:{ spd:10,acc:10,grip:5,stab:3,jmp:5,swm:1,mass:2, len:1.25, build:function(pal,M,len){
+      return ostrichLeg(pal,M,len);
+    }},
+    tail:{ spd:5,acc:4,grip:6,stab:5,jmp:3,swm:1,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      var f=add(g, sph(0.26,10,8), M(pal.accent), 0, 0.04, -0.24); f.scale.set(1,0.7,1.2);
+      [0.12,-0.12].forEach(function(x){
+        var p=add(g, box(0.1,0.08,0.3), M(pal.accent), x, 0.02, -0.4); p.rotation.y=-x*1.4;
+      });
+      return { group:g };
+    }}
+  }
+};
+function ostrichLeg(pal,M,len){
+  var g=new THREE.Group();
+  seg(g, M(pal.second), 0.11, 0,0,0, 0,-len*0.44,-len*0.16);
+  seg(g, M(pal.second), 0.06, 0,-len*0.44,-len*0.16, 0,-len+0.02,0.04);
+  [0.05,-0.04].forEach(function(x){
+    var t=add(g, box(0.06,0.04,0.2), M(pal.second), x, -len+0.01, 0.09);
+    t.rotation.y=-x*2.4;
+  });
+  return { group:g };
+}
+
+/* ---------------- kangaroo ---------------- */
+ANIMALS.kangaroo={
+  name:'Kangaroo', price:350,
+  blurb:'Back legs like catapults. It leaves the ramp and keeps on going.',
+  palette:{main:0xb5763f, second:0xe4c7a2, accent:0x3a2416},
+  parts:{
+    head:{ spd:5,acc:6,grip:5,stab:5,jmp:7,swm:2,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      var nk=add(g, cyl(0.11,0.14,0.22,8), M(pal.main), 0, 0.1, 0.02);
+      var sk=add(g, sph(0.2,10,8), M(pal.main), 0, 0.3, 0.06); sk.scale.set(0.95,0.95,1.1);
+      var mz=add(g, box(0.14,0.12,0.26), M(pal.main), 0, 0.24, 0.26);
+      add(g, sph(0.04,6,5), M(pal.accent), 0, 0.27, 0.4);
+      // long ears that swivel outward
+      [0.1,-0.1].forEach(function(x){
+        var e=new THREE.Group(); e.position.set(x, 0.44, -0.02); e.rotation.z=-x*1.5; g.add(e);
+        add(e, box(0.09,0.3,0.06), M(pal.main), 0, 0.13, 0);
+        add(e, box(0.05,0.22,0.03), M(pal.second), 0, 0.13, 0.03);
+      });
+      eyes(g, M, 0.115, 0.33, 0.18, 0.05);
+      return { group:g };
+    }},
+    body:{ spd:5,acc:7,grip:5,stab:5,jmp:8,swm:2,mass:4, wings:0, build:function(pal,M){
+      var len=1.5, height=0.85, width=0.7;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,12,9), M(pal.main)); t.scale.set(0.7,0.85,1.2);
+      var hp=add(g, sph(0.42,12,9), M(pal.main), 0, -0.06, -len*0.28); hp.scale.set(0.95,1,0.85);
+      var ch=add(g, sph(0.3,10,8), M(pal.main), 0, 0.16, len*0.28); ch.scale.set(0.85,0.85,0.8);
+      // the pouch
+      var pouch=add(g, sph(0.28,10,8), M(pal.second), 0, -0.14, 0.18); pouch.scale.set(0.9,0.8,0.7);
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.3, legX:0.26, frontZ:0.34, backZ:-0.32}) };
+    }},
+    front:{ spd:3,acc:5,grip:6,stab:4,jmp:6,swm:2,mass:1, len:0.6, build:function(pal,M,len){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.065, 0,0,0, 0,-len*0.55,0.12);
+      seg(g, M(pal.main), 0.055, 0,-len*0.55,0.12, 0,-len,0.16);
+      [-0.04,0.03].forEach(function(x){
+        add(g, box(0.035,0.03,0.11), M(pal.second), x, -len+0.01, 0.22);
+      });
+      return { group:g };
+    }},
+    back:{ spd:6,acc:9,grip:4,stab:4,jmp:10,swm:3,mass:3, len:1.0, build:function(pal,M,len){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.15, 0,0,0, 0,-len*0.4,-len*0.42);
+      seg(g, M(pal.main), 0.095, 0,-len*0.4,-len*0.42, 0,-len+0.04,0.02);
+      var f=add(g, box(0.17,0.08,0.56), M(pal.main), 0, -len+0.04, 0.2);
+      return { group:g };
+    }},
+    tail:{ spd:4,acc:5,grip:6,stab:8,jmp:6,swm:3,mass:2, build:function(pal,M){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.13, 0,0,0, 0,-0.16,-0.5);
+      seg(g, M(pal.main), 0.09, 0,-0.16,-0.5, 0,-0.24,-0.95);
+      add(g, sph(0.08,7,6), M(pal.main), 0, -0.25, -0.99);
+      return { group:g };
+    }}
+  }
+};
+
+/* ---------------- giraffe ---------------- */
+ANIMALS.giraffe={
+  name:'Giraffe', price:400,
+  blurb:'A silly neck on top of four stilts. Enormous top speed, corners like a bus.',
+  palette:{main:0xe6bd6e, second:0x9a6b2f, accent:0x4a3a22},
+  parts:{
+    head:{ spd:8,acc:5,grip:2,stab:2,jmp:3,swm:1,mass:3, build:function(pal,M){
+      var g=new THREE.Group();
+      // the neck is part of the head, which is exactly why it is so daft
+      seg(g, M(pal.main), 0.14, 0,0,0, 0,0.6,0.14);
+      seg(g, M(pal.main), 0.12, 0,0.6,0.14, 0,1.15,0.22);
+      [[0,0.24,0.06],[0,0.5,0.12],[0,0.76,0.18],[0,1.0,0.22]].forEach(function(p){
+        var pt=add(g, sph(0.1,7,6), M(pal.second), p[0]+0.09, p[1], p[2]); pt.scale.set(0.5,0.8,0.8);
+        var pt2=add(g, sph(0.1,7,6), M(pal.second), p[0]-0.09, p[1], p[2]); pt2.scale.set(0.5,0.8,0.8);
+      });
+      var sk=add(g, sph(0.17,10,8), M(pal.main), 0, 1.26, 0.26); sk.scale.set(0.95,0.95,1.1);
+      var mz=add(g, box(0.13,0.12,0.24), M(pal.main), 0, 1.2, 0.44);
+      add(g, box(0.11,0.04,0.05), M(pal.accent), 0, 1.16, 0.56);
+      // ossicones
+      [0.07,-0.07].forEach(function(x){
+        add(g, cyl(0.03,0.035,0.14,6), M(pal.accent), x, 1.44, 0.2);
+        add(g, sph(0.045,6,5), M(pal.accent), x, 1.52, 0.2);
+      });
+      [0.13,-0.13].forEach(function(x){
+        var e=add(g, box(0.05,0.12,0.09), M(pal.main), x, 1.38, 0.16); e.rotation.z=-x*1.6;
+      });
+      eyes(g, M, 0.1, 1.3, 0.34, 0.05);
+      return { group:g };
+    }},
+    body:{ spd:9,acc:5,grip:2,stab:3,jmp:3,swm:2,mass:7, wings:0, build:function(pal,M){
+      var len=2.0, height=0.95, width=0.75;
+      var g=new THREE.Group();
+      add(g, box(0.75, 0.95, len*0.8), M(pal.main));
+      // the shoulders sit higher than the hips, so the back slopes
+      var sh=add(g, sph(0.5,12,9), M(pal.main), 0, 0.18, len*0.34); sh.scale.set(0.8,0.95,0.75);
+      var hp=add(g, sph(0.44,12,9), M(pal.main), 0, -0.06, -len*0.36); hp.scale.set(0.8,0.9,0.7);
+      var patches=[[0.3,0.2,0.5],[0.34,0,0.16],[0.3,0.24,-0.16],[0.34,-0.04,-0.5],
+                   [0.2,0.42,0.3],[0.22,0.4,-0.3]];
+      patches.forEach(function(p){
+        [1,-1].forEach(function(s){
+          var d=add(g, box(0.14,0.2,0.24), M(pal.second), p[0]*s, p[1], p[2]);
+          d.rotation.y=p[0]*s*0.4;
+        });
+      });
+      add(g, box(0.16,0.14,len*0.6), M(pal.accent), 0, 0.5, 0.1);
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.44, headZ:len*0.4, legX:0.3,
+                 frontZ:0.66, backZ:-0.66}) };
+    }},
+    front:{ spd:9,acc:5,grip:3,stab:2,jmp:4,swm:1,mass:5, len:1.25, build:function(pal,M,len){
+      return giraffeLeg(pal,M,len);
+    }},
+    back:{ spd:9,acc:5,grip:3,stab:2,jmp:4,swm:1,mass:5, len:1.2, build:function(pal,M,len){
+      return giraffeLeg(pal,M,len);
+    }},
+    tail:{ spd:4,acc:3,grip:5,stab:5,jmp:2,swm:1,mass:1, build:function(pal,M){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.045, 0,0,0, 0,-0.3,-0.42);
+      add(g, sph(0.08,7,6), M(pal.accent), 0, -0.34, -0.46);
+      return { group:g };
+    }}
+  }
+};
+function giraffeLeg(pal,M,len){
+  var g=new THREE.Group();
+  add(g, cyl(0.095,0.07,len*0.94,8), M(pal.main), 0, -len*0.47, 0);
+  add(g, sph(0.1,8,7), M(pal.second), 0, -len*0.5, 0);
+  add(g, cyl(0.085,0.09,0.1,8), M(pal.accent), 0, -len+0.05, 0);
+  return { group:g };
+}
+
+/* ---------------- crocodile ---------------- */
+ANIMALS.crocodile={
+  name:'Crocodile', price:450,
+  blurb:'Armoured, low and heavy. Ploughs through mud and is very much at home in water.',
+  palette:{main:0x4e6b3a, second:0x35502a, accent:0xf0ead6},
+  parts:{
+    head:{ spd:5,acc:3,grip:3,stab:7,jmp:1,swm:8,mass:5, build:function(pal,M){
+      var g=new THREE.Group();
+      var sk=add(g, box(0.34,0.18,0.34), M(pal.main), 0, 0.12, 0.02);
+      var sn=add(g, box(0.26,0.13,0.44), M(pal.main), 0, 0.1, 0.34);
+      var jaw=add(g, box(0.24,0.07,0.42), M(pal.second), 0, 0.02, 0.34);
+      // two rows of teeth
+      for(var i=0;i<5;i++){
+        [0.1,-0.1].forEach(function(x){
+          var t=add(g, con(0.022,0.07,4), M(pal.accent), x, 0.075, 0.16+i*0.1);
+          t.rotation.x=Math.PI;
+        });
+      }
+      // eyes ride on top, the way a crocodile watches you from a river
+      [0.11,-0.11].forEach(function(x){
+        add(g, sph(0.07,8,7), M(pal.main), x, 0.22, 0.06);
+        add(g, sph(0.045,7,6), M(0xf2d94e), x, 0.26, 0.1);
+        add(g, sph(0.02,6,5), M(0x1a1a1a), x, 0.275, 0.13);
+      });
+      [[0,0.24,-0.06],[0.08,0.22,-0.12],[-0.08,0.22,-0.12]].forEach(function(p){
+        var s=add(g, con(0.045,0.1,5), M(pal.second), p[0], p[1], p[2]);
+      });
+      return { group:g };
+    }},
+    body:{ spd:5,acc:3,grip:3,stab:8,jmp:0,swm:8,mass:8, wings:0, build:function(pal,M){
+      var len=2.1, height=0.5, width=0.9;
+      var g=new THREE.Group();
+      add(g, box(0.9, 0.5, len*0.86), M(pal.main));
+      var belly=add(g, box(0.8,0.16,len*0.8), M(pal.accent), 0, -0.2, 0);
+      var nose=add(g, sph(0.42,10,8), M(pal.main), 0, 0, len*0.4); nose.scale.set(1,0.6,0.7);
+      var back=add(g, sph(0.42,10,8), M(pal.main), 0, 0, -len*0.4); back.scale.set(1,0.6,0.7);
+      // two rows of scutes down the back
+      for(var i=0;i<6;i++){
+        [0.16,-0.16].forEach(function(x){
+          var s=add(g, con(0.09,0.18,5), M(pal.second), x, 0.28, 0.7-i*0.28);
+          s.rotation.z=-x*1.2;
+        });
+      }
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.02, headZ:len*0.44, legX:0.44,
+                 frontZ:0.52, backZ:-0.5, tailY:-0.02}) };
+    }},
+    front:{ spd:3,acc:3,grip:4,stab:8,jmp:0,swm:7,mass:4, len:0.35, build:function(pal,M,len){
+      return crocLeg(pal,M,len);
+    }},
+    back:{ spd:3,acc:3,grip:4,stab:8,jmp:0,swm:7,mass:4, len:0.35, build:function(pal,M,len){
+      return crocLeg(pal,M,len);
+    }},
+    tail:{ spd:5,acc:4,grip:5,stab:8,jmp:1,swm:9,mass:4, build:function(pal,M){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.19, 0,0,0, 0,0,-0.5);
+      seg(g, M(pal.main), 0.12, 0,0,-0.5, 0,0.02,-1.0);
+      add(g, con(0.1,0.24,6), M(pal.main), 0, 0.02, -1.1);
+      for(var i=0;i<4;i++){
+        var s=add(g, con(0.07,0.16,5), M(pal.second), 0, 0.2, -0.15-i*0.24);
+        s.scale.set(0.6,1-i*0.15,1);
+      }
+      return { group:g };
+    }}
+  }
+};
+function crocLeg(pal,M,len){
+  var g=new THREE.Group();
+  var l=add(g, cyl(0.1,0.09,len,7), M(pal.main), 0.06, -len/2, 0);
+  l.rotation.z=0.3;
+  var f=add(g, box(0.2,0.06,0.24), M(pal.second), 0.14, -len+0.02, 0.04);
+  [-0.06,0,0.06].forEach(function(x){
+    add(g, con(0.02,0.06,4), M(pal.accent), 0.14+x, -len+0.02, 0.15);
+  });
+  return { group:g };
+}
+
+/* ---------------- dolphin ---------------- */
+ANIMALS.dolphin={
+  name:'Dolphin', price:500,
+  blurb:'The best swimmer in the game by a mile. On dry land it is a lovely grey joke.',
+  palette:{main:0x6f93b8, second:0xdfeaf2, accent:0x27384a},
+  parts:{
+    head:{ spd:6,acc:5,grip:4,stab:5,jmp:3,swm:10,mass:3, build:function(pal,M){
+      var g=new THREE.Group();
+      var sk=add(g, sph(0.28,12,9), M(pal.main), 0, 0.16, 0.06); sk.scale.set(0.95,0.95,1.15);
+      var melon=add(g, sph(0.2,10,8), M(pal.main), 0, 0.26, 0.14); melon.scale.set(0.9,0.7,0.9);
+      var beak=add(g, cyl(0.06,0.11,0.3,8), M(pal.main), 0, 0.13, 0.38); beak.rotation.x=Math.PI/2;
+      add(g, sph(0.055,7,6), M(pal.main), 0, 0.14, 0.52);
+      // the permanent smile
+      var grin=add(g, box(0.16,0.025,0.2), M(pal.accent), 0, 0.07, 0.36); grin.rotation.x=0.22;
+      var chin=add(g, sph(0.18,10,8), M(pal.second), 0, 0.03, 0.16); chin.scale.set(0.9,0.5,1);
+      eyes(g, M, 0.15, 0.17, 0.2, 0.045);
+      add(g, cyl(0.03,0.04,0.03,6), M(pal.accent), 0, 0.42, 0.02);
+      return { group:g };
+    }},
+    body:{ spd:7,acc:6,grip:4,stab:6,jmp:3,swm:10,mass:5, wings:0, build:function(pal,M){
+      var len=2.0, height=0.66, width=0.62;
+      var g=new THREE.Group();
+      var t=add(g, sph(0.5,14,10), M(pal.main)); t.scale.set(0.62,0.66,1.9);
+      var belly=add(g, sph(0.44,12,9), M(pal.second), 0, -0.14, 0.1); belly.scale.set(0.62,0.42,1.7);
+      var dorsal=add(g, con(0.26,0.5,3), M(pal.main), 0, 0.42, -0.14);
+      dorsal.rotation.y=Math.PI/2; dorsal.scale.set(0.22,1,1); dorsal.rotation.z=-0.2;
+      return { group:g, len:len, height:height, width:width,
+               attach:bodyAttach(len,width,height,{headY:0.1, legX:0.28, frontZ:0.5, backZ:-0.44}) };
+    }},
+    front:{ spd:1,acc:1,grip:2,stab:4,jmp:0,swm:10,mass:2, len:0.3, build:function(pal,M,len){
+      return dolphinFlipper(pal,M,len);
+    }},
+    back:{ spd:1,acc:1,grip:2,stab:4,jmp:0,swm:10,mass:2, len:0.3, build:function(pal,M,len){
+      return dolphinFlipper(pal,M,len);
+    }},
+    tail:{ spd:6,acc:6,grip:6,stab:6,jmp:2,swm:10,mass:3, build:function(pal,M){
+      var g=new THREE.Group();
+      seg(g, M(pal.main), 0.12, 0,0,0, 0,0.02,-0.48);
+      // the fluke lies flat, unlike the shark's
+      var fl=add(g, box(0.72,0.07,0.3), M(pal.main), 0, 0.03, -0.66);
+      var notch=add(g, box(0.12,0.08,0.16), M(pal.main), 0, 0.03, -0.56);
+      [0.28,-0.28].forEach(function(x){
+        var tip=add(g, box(0.24,0.06,0.18), M(pal.main), x, 0.03, -0.76);
+        tip.rotation.y=-x*0.5;
+      });
+      return { group:g };
+    }}
+  }
+};
+// a pectoral flipper. asymmetric, so the assembler mirrors the right-hand copy
+function dolphinFlipper(pal,M,len){
+  var g=new THREE.Group();
+  var f=add(g, box(0.36,0.07,0.26), M(pal.main), 0.13, -len*0.7, -0.02);
+  f.rotation.z=0.65; f.rotation.y=-0.25;
+  add(g, box(0.1,len*0.55,0.16), M(pal.main), 0, -len*0.28, 0);
+  return { group:g };
+}
+
 var ANIMAL_KEYS=Object.keys(ANIMALS);
+// the shop lists the cheap animals first, so what a child can afford is at the top
+var SHOP_ORDER=ANIMAL_KEYS.slice().sort(function(a,b){
+  return (ANIMALS[a].price-ANIMALS[b].price) || (ANIMALS[a].name<ANIMALS[b].name?-1:1);
+});
 
 /* ============================================================
    4. RACER BUILDER
@@ -1046,8 +1692,8 @@ function computeStats(build){
   var spdN=sum('spd')/50, accN=sum('acc')/50, gripN=sum('grip')/50,
       stabN=sum('stab')/50, jmpN=sum('jmp')/50, swmN=sum('swm')/50, massN=sum('mass')/50;
 
-  // the widest leg-length gap in the catalog is elephant 1.1 against shark 0.35
-  var mismatch=clamp(Math.abs(p.front.len-p.back.len)/0.75, 0, 1);
+  // the widest leg-length gap in the catalog is giraffe 1.25 against dolphin 0.3
+  var mismatch=clamp(Math.abs(p.front.len-p.back.len)/0.95, 0, 1);
   var stabilityN=clamp(stabN - mismatch*0.45, 0, 1);
 
   var s={
@@ -1085,6 +1731,9 @@ function describeQuirks(build, s){
   if(s.gripN>=0.7) push('Corners like a dream.');
   if(s.spdN>=0.75) push('Blazing top speed.');
   if(s.spdN<=0.2) push('Very slow. Nothing on it was built for running.');
+  if(p.front.len>=1.15 && p.back.len>=1.15) push('Stilt legs. Enormous stride, wide turns.');
+  if(s.gripN<=0.3) push('Corners like a bus. Start turning early.');
+  if(s.massN>=0.75) push('Armoured and enormous. Bumps everything else aside.');
   if(!out.length) out.push('A well balanced racer.');
   return out;
 }
@@ -1103,10 +1752,13 @@ function litScene(){
   var s=new THREE.Scene();
   s.background=new THREE.Color(SKY);
   s.fog=new THREE.Fog(SKY, 120, 260);
-  s.add(new THREE.HemisphereLight(0xcfeaff, GRASS, 0.85));
+  var hemi=new THREE.HemisphereLight(0xcfeaff, GRASS, 0.85);
+  s.add(hemi);
   var sun=new THREE.DirectionalLight(0xffffff, 0.72);
   sun.position.set(40, 70, 25);
   s.add(sun);
+  s.userData.hemi=hemi;
+  s.userData.sun=sun;
   return s;
 }
 
@@ -1122,39 +1774,148 @@ function resize(){
   renderer.setSize(w,h,false);
   camera.aspect=w/h; camera.updateProjectionMatrix();
   garageCam.aspect=w/h; garageCam.updateProjectionMatrix();
+  if(typeof houseCam!=='undefined'){ houseCam.aspect=w/h; houseCam.updateProjectionMatrix(); }
 }
 window.addEventListener('resize', resize);
 
 /* ============================================================
-   7. TRACK  —  "Meadow Splash"
+   7. TRACKS
+
+   A track is data, not code: MAPS holds the shape, the theme, the zones, the
+   ramps, the barrier style and the coin layout, and buildTrackData/
+   buildTrackMeshes turn any one of them into a course. Switching tracks tears
+   the old one down first, so nothing accumulates in the scene.
    ============================================================ */
 
-var N=800, HALF_W=6, CHECKPOINTS=8;
-var RAMP_H=1.2, RAMP_RUN=6;
-var TRACK={ pts:[], tan:[], len:0, zones:[], coins:[] };
+var N=800, CHECKPOINTS=8;
+var TRACK={ pts:[], tan:[], len:0, zones:[], ramps:[], coins:[], halfW:6, laps:3, gravity:22 };
 
-(function buildTrackData(){
-  var cp=[[0,0],[40,-10],[80,-40],[95,-90],[70,-130],[20,-140],[-20,-120],
-          [-50,-140],[-90,-120],[-110,-70],[-90,-20],[-50,10],[-25,15]];
-  var v=cp.map(function(p){ return new THREE.Vector3(p[0],0,p[1]); });
+// A wobbly circle: radius = R * (1 + sum of lobes). Because the radius is a
+// single valued function of the angle the loop can never cross itself, however
+// twisty the lobes make it, which is what keeps a hand-drawn track honest.
+function shapePoints(sh){
+  var out=[], n=sh.points, i, j;
+  for(i=0;i<n;i++){
+    var a=(i/n)*Math.PI*2 + (sh.rot||0), r=1;
+    for(j=0;j<sh.lobes.length;j++) r += sh.lobes[j][1]*Math.sin(sh.lobes[j][0]*a + (sh.lobes[j][2]||0));
+    r*=sh.R;
+    out.push([r*Math.cos(a)*(sh.rx||1), r*Math.sin(a)*(sh.rz||1)]);
+  }
+  return out;
+}
+
+var MAPS=[
+  {
+    key:'meadow', name:'Meadow Splash', price:0,
+    blurb:'Where it all started. A mud patch, a splash zone and a ramp over the water.',
+    sky:0x8fd3ff, grass:0x6fcf5a, fog:[120,260],
+    road:0xc9a46a, kerb:0xf4f4f4, water:0x3aa0e0, mud:0x6b4a2a,
+    halfW:6, laps:3, gravity:22, barrier:'fence', coinGroups:24,
+    cp:[[0,0],[40,-10],[80,-40],[95,-90],[70,-130],[20,-140],[-20,-120],
+        [-50,-140],[-90,-120],[-110,-70],[-90,-20],[-50,10],[-25,15]],
+    zones:[{type:'mud', t0:0.18, t1:0.26},
+           {type:'water', t0:0.42, t1:0.52}],
+    ramps:[{t:0.702, h:1.2, run:6, gap:0.02}],
+    scenery:{kind:'broadleaf', trees:140, trunk:0x7a5230, leaf:0x4f9e3a, rocks:40, rock:0x9aa3a8}
+  },
+  {
+    key:'cove', name:'Sandy Cove', price:0,
+    blurb:'Wide, fast and flat, along a bay. Three shallow crossings and a little ramp.',
+    sky:0xa8e4ff, grass:0xf0e2b4, fog:[150,320],
+    road:0xc08f4e, kerb:0xfffaf0, water:0x2fbde0, mud:0x8a6f3a,
+    halfW:8, laps:2, gravity:22, barrier:'buoy', coinGroups:26,
+    shape:{R:110, rx:1.15, rz:0.85, points:16, rot:0.2, lobes:[[2,0.14]]},
+    zones:[{type:'water', t0:0.19, t1:0.25},
+           {type:'water', t0:0.54, t1:0.60},
+           {type:'water', t0:0.80, t1:0.85}],
+    ramps:[{t:0.40, h:1.0, run:7, gap:0.014}],
+    scenery:{kind:'palm', trees:70, trunk:0xa8804a, leaf:0x4fb04a, rocks:55, rock:0xd9c9a0}
+  },
+  {
+    key:'jungle', name:'Jungle Rumble', price:250,
+    blurb:'Narrow, twisty and green. Two long mud wallows and a stream you land in.',
+    sky:0x7fc9a8, grass:0x2f6b34, fog:[80,190],
+    road:0x8f7a4a, kerb:0xc7b982, water:0x2f9a86, mud:0x54381f,
+    halfW:5, laps:3, gravity:22, barrier:'vine', coinGroups:26,
+    shape:{R:96, points:20, rot:0.5, lobes:[[5,0.16],[3,0.08]]},
+    zones:[{type:'mud', t0:0.10, t1:0.19},
+           {type:'mud', t0:0.62, t1:0.70},
+           {type:'water', t0:0.36, t1:0.41}],
+    ramps:[{t:0.87, h:1.3, run:6, gap:0.018}],
+    scenery:{kind:'broadleaf', trees:190, trunk:0x5a4028, leaf:0x2f7a34, rocks:30, rock:0x6f7a5a}
+  },
+  {
+    key:'frost', name:'Frosty Peaks', price:400,
+    blurb:'Ice you actually slide on. Steer early or you will go straight on.',
+    sky:0xd6ecf7, grass:0xeef7fc, fog:[100,240],
+    road:0x7d8b99, kerb:0xffffff, water:0x4fb8dd, mud:0x6f7c88, ice:0xa9dcf2,
+    halfW:6.5, laps:2, gravity:22, barrier:'snow', coinGroups:26,
+    shape:{R:112, rx:0.95, points:20, rot:1.1, lobes:[[4,0.16],[7,0.05]]},
+    zones:[{type:'ice', t0:0.14, t1:0.24},
+           {type:'ice', t0:0.55, t1:0.66},
+           {type:'water', t0:0.36, t1:0.41}],
+    ramps:[{t:0.80, h:1.4, run:7, gap:0.016}],
+    scenery:{kind:'pine', trees:120, trunk:0x6b5240, leaf:0x2f6b4a, rocks:45, rock:0xe6eef4}
+  },
+  {
+    key:'moon', name:'Moon Dust', price:600,
+    blurb:'Hardly any gravity and two ramps. One jump lasts about a week.',
+    sky:0x0b1026, grass:0x5f5c58, fog:[160,340],
+    road:0xa9a29a, kerb:0xe6e0d6, water:0x3f7ad9, mud:0x6f6a64,
+    halfW:7, laps:2, gravity:8, barrier:'rail', coinGroups:28,
+    shape:{R:118, rx:1.1, rz:0.95, points:16, rot:0.8, lobes:[[3,0.16]]},
+    zones:[{type:'water', t0:0.30, t1:0.36}],
+    ramps:[{t:0.13, h:1.5, run:8, gap:0.02},
+           {t:0.66, h:1.5, run:8, gap:0.02}],
+    scenery:{kind:'crater', trees:0, trunk:0x8f8b86, leaf:0x8f8b86, rocks:80, rock:0xb0aaa2}
+  }
+];
+
+var MAP_BY_KEY={};
+MAPS.forEach(function(m){ MAP_BY_KEY[m.key]=m; });
+var FREE_MAPS=MAPS.filter(function(m){ return m.price===0; }).map(function(m){ return m.key; });
+
+function mapOf(key){ return MAP_BY_KEY[key] || MAPS[0]; }
+
+function buildTrackData(map){
+  var raw=map.cp || shapePoints(map.shape);
+  var v=raw.map(function(p){ return new THREE.Vector3(p[0],0,p[1]); });
   var curve=new THREE.CatmullRomCurve3(v, true, 'centripetal');
   curve.arcLengthDivisions=2000;
+
+  TRACK.key=map.key;
+  TRACK.map=map;
   TRACK.curve=curve;
   TRACK.len=curve.getLength();
+  TRACK.pts=[]; TRACK.tan=[]; TRACK.coins=[];
   for(var i=0;i<N;i++){
     TRACK.pts.push(curve.getPointAt(i/N));
     TRACK.tan.push(curve.getTangentAt(i/N).normalize());
   }
-  TRACK.step=TRACK.len/N;                 // world units between samples
-  TRACK.rampT1=0.702;                     // the lip, where a racer is launched
-  TRACK.rampT0=TRACK.rampT1 - RAMP_RUN/TRACK.len;
-  TRACK.zones=[
-    {type:'mud',   t0:0.18, t1:0.26},
-    {type:'water', t0:0.42, t1:0.52},
-    {type:'ramp',  t0:TRACK.rampT0, t1:TRACK.rampT1},
-    {type:'water', t0:0.705, t1:0.725}    // the gap after the ramp
-  ];
-})();
+  TRACK.step=TRACK.len/N;                     // world units between samples
+  TRACK.halfW=map.halfW;
+  TRACK.wallW=map.halfW+2.2;                  // where the barrier stands
+  TRACK.laps=map.laps;
+  TRACK.gravity=map.gravity||22;
+
+  // ramps resolve to a run in t, plus the water-filled gap just past the lip
+  TRACK.ramps=[]; TRACK.gaps=[];
+  var zones=map.zones.map(function(z){
+    return {type:z.type, t0:z.t0, t1:z.t1};
+  });
+  map.ramps.forEach(function(rp){
+    var t1=rp.t, t0=t1-rp.run/TRACK.len;
+    var ramp={t0:t0, t1:t1, h:rp.h};
+    TRACK.ramps.push(ramp);
+    zones.push({type:'ramp', t0:t0, t1:t1});
+    if(rp.gap){
+      var g0=t1+0.003, g1=t1+rp.gap;
+      TRACK.gaps.push({t0:g0, t1:g1});
+      zones.push({type:'water', t0:g0, t1:g1});
+    }
+  });
+  TRACK.zones=zones;
+}
 
 function zoneAt(t){
   for(var i=0;i<TRACK.zones.length;i++){
@@ -1164,18 +1925,35 @@ function zoneAt(t){
   return null;
 }
 
-// the ramp is the only part of the course that is not at y=0
+function inGap(t){
+  for(var i=0;i<TRACK.gaps.length;i++){
+    if(t>=TRACK.gaps[i].t0 && t<=TRACK.gaps[i].t1) return true;
+  }
+  return false;
+}
+
+// the ramps are the only parts of a course that are not at y=0
 function groundY(t){
-  if(t>=TRACK.rampT0 && t<=TRACK.rampT1){
-    return RAMP_H*(t-TRACK.rampT0)/(TRACK.rampT1-TRACK.rampT0);
+  for(var i=0;i<TRACK.ramps.length;i++){
+    var r=TRACK.ramps[i];
+    if(t>=r.t0 && t<=r.t1) return r.h*(t-r.t0)/(r.t1-r.t0);
   }
   return 0;
+}
+
+// the ramp whose lip was just crossed, if any
+function rampLipCrossed(prevT, t){
+  for(var i=0;i<TRACK.ramps.length;i++){
+    var r=TRACK.ramps[i];
+    if(prevT<r.t1 && t>=r.t1 && prevT>r.t0-0.03) return r;
+  }
+  return null;
 }
 
 function normalAt(i){ var tn=TRACK.tan[i]; return { x:tn.z, z:-tn.x }; }
 
 // A flat ribbon laid along the samples. Used for the road, its kerb, the mud
-// and water patches and the ramp, so all of them follow the curve exactly.
+// and water patches and the ramps, so all of them follow the curve exactly.
 function ribbonGeo(i0, count, halfW, yFn, skipFn){
   var pos=[], uv=[], idx=[], k, i;
   for(k=0;k<=count;k++){
@@ -1201,97 +1979,185 @@ function ribbonGeo(i0, count, halfW, yFn, skipFn){
   return g;
 }
 
+// A wall: the same ribbon idea stood on its edge at a fixed offset from the
+// centre line, so the barrier hugs the track and rides over the ramps.
+function wallGeo(offset, h){
+  var pos=[], uv=[], idx=[], k, i;
+  for(k=0;k<=N;k++){
+    i=k%N;
+    var p=TRACK.pts[i], nrm=normalAt(i), y=groundY(i/N);
+    pos.push(p.x+nrm.x*offset, y-0.1, p.z+nrm.z*offset);
+    pos.push(p.x+nrm.x*offset, y+h,  p.z+nrm.z*offset);
+    uv.push(k*0.25, 0, k*0.25, 1);
+  }
+  for(k=0;k<N;k++){
+    var a=k*2, b=k*2+1, c=(k+1)*2, d=(k+1)*2+1;
+    idx.push(a,b,c, b,d,c);
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv,2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// the flat top of a wall, so it reads as solid from the chase camera
+function wallCapGeo(offset, h, w){
+  var pos=[], uv=[], idx=[], k, i;
+  for(k=0;k<=N;k++){
+    i=k%N;
+    var p=TRACK.pts[i], nrm=normalAt(i), y=groundY(i/N)+h;
+    var o1=offset-(offset>0?w:-w), o2=offset;
+    pos.push(p.x+nrm.x*o1, y, p.z+nrm.z*o1);
+    pos.push(p.x+nrm.x*o2, y, p.z+nrm.z*o2);
+    uv.push(k*0.25, 0, k*0.25, 1);
+  }
+  for(k=0;k<N;k++){
+    var a=k*2, b=k*2+1, c=(k+1)*2, d=(k+1)*2+1;
+    idx.push(a,b,c, b,d,c);
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  var nn=new Float32Array(pos.length);
+  for(var j=1;j<nn.length;j+=3) nn[j]=1;
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nn,3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv,2));
+  g.setIndex(idx);
+  return g;
+}
+
+var BARRIERS={
+  fence:{ h:1.15, wall:0xf7f7f4, cap:0xd9dfe4, post:0x8a6540, postEvery:9,
+          postGeo:function(){ return cyl(0.13,0.15,1.5,7); }, postY:0.6 },
+  buoy:{  h:0.85, wall:0xffffff, cap:0xef476f, post:0xef476f, postEvery:7,
+          postGeo:function(){ return sph(0.32,9,7); }, postY:0.7 },
+  vine:{  h:1.45, wall:0x2f6b2a, cap:0x4f9e3a, post:0x4f9e3a, postEvery:5,
+          postGeo:function(){ return sph(0.5,8,7); }, postY:1.2 },
+  snow:{  h:1.25, wall:0xf6fbff, cap:0xdfeaf4, post:0xffffff, postEvery:6,
+          postGeo:function(){ return sph(0.6,9,7); }, postY:0.9 },
+  rail:{  h:1.05, wall:0x2a2f3a, cap:0x7be0ff, glow:true, post:0x3f4756, postEvery:8,
+          postGeo:function(){ return box(0.22,1.5,0.22); }, postY:0.6 }
+};
+
 function flatMat(color, opacity){
   var o={ color:color, side:THREE.DoubleSide };
   if(opacity!==undefined){ o.transparent=true; o.opacity=opacity; }
   return new THREE.MeshLambertMaterial(o);
 }
 
-var waterMat=null, coinGroup=null;
+// Track teardown. GEOC geometries are shared for the life of the page and are
+// never disposed; everything a track built for itself is listed here and freed.
+var trackGroup=null, trackOwned=[], trackTex=[];
+function own(geo){ trackOwned.push(geo); return geo; }
 
-function buildTrackMeshes(){
-  var g=new THREE.Group();
+var coinGroup=null;
 
-  var ground=new THREE.Mesh(new THREE.PlaneGeometry(700,700), flatMat(GRASS));
-  ground.rotation.x=-Math.PI/2;
-  ground.position.y=-0.02;
-  g.add(ground);
-
-  function inGap(t){ return t>=0.705 && t<=0.725; }
-
-  // kerb sits a hair lower and wider than the road
-  g.add(new THREE.Mesh(ribbonGeo(0, N, HALF_W+0.5, function(t){ return groundY(t)+0.005; }, inGap),
-                       flatMat(0xf4f4f4)));
-  g.add(new THREE.Mesh(ribbonGeo(0, N, HALF_W, function(t){ return groundY(t)+0.02; }, inGap),
-                       flatMat(0xc9a46a)));
-
-  // mud
-  var mudI0=Math.round(0.18*N), mudCount=Math.round(0.08*N);
-  g.add(new THREE.Mesh(ribbonGeo(mudI0, mudCount, HALF_W-0.15, function(){ return 0.035; }),
-                       flatMat(0x6b4a2a)));
-  for(var m=0;m<14;m++){
-    var mi=(mudI0+Math.floor(rand(0,mudCount)))%N;
-    var mp=TRACK.pts[mi], mn=normalAt(mi), off=rand(-HALF_W+0.8, HALF_W-0.8);
-    var blob=new THREE.Mesh(sph(rand(0.3,0.6),8,6), flatMat(0x5a3c20));
-    blob.position.set(mp.x+mn.x*off, 0.06, mp.z+mn.z*off);
-    blob.scale.y=0.35;
-    g.add(blob);
-  }
-
-  // water: the splash zone and the landing pool after the ramp
-  waterMat=flatMat(0x3aa0e0, 0.75);
-  var wI0=Math.round(0.42*N), wCount=Math.round(0.10*N);
-  g.add(new THREE.Mesh(ribbonGeo(wI0, wCount, HALF_W+3, function(){ return 0.05; }), waterMat));
-  var gI0=Math.round(0.705*N), gCount=Math.round(0.020*N)+1;
-  g.add(new THREE.Mesh(ribbonGeo(gI0, gCount, HALF_W+3, function(){ return 0.05; }), waterMat));
-
-  // ramp, following the same y the simulation uses
-  var rI0=Math.round(TRACK.rampT0*N), rCount=Math.max(2, Math.round((TRACK.rampT1-TRACK.rampT0)*N));
-  g.add(new THREE.Mesh(ribbonGeo(rI0, rCount, HALF_W, function(t){ return groundY(t)+0.03; }),
-                       flatMat(0xf2a71b)));
-  for(var s=1;s<rCount;s+=2){
-    var si=(rI0+s)%N, sp=TRACK.pts[si], sn=normalAt(si);
-    var st=new THREE.Mesh(box(2.4,0.05,0.5), flatMat(0xffffff));
-    st.position.set(sp.x, groundY(si/N)+0.06, sp.z);
-    st.rotation.y=Math.atan2(TRACK.tan[si].x, TRACK.tan[si].z);
-    g.add(st);
-  }
-  // a block under the lip so the ramp reads as solid from the side
-  var lipI=(rI0+rCount)%N, lp=TRACK.pts[lipI];
-  var support=new THREE.Mesh(box(HALF_W*2, RAMP_H, 1.2), flatMat(0xd18f12));
-  support.position.set(lp.x, RAMP_H/2, lp.z);
-  support.rotation.y=Math.atan2(TRACK.tan[lipI].x, TRACK.tan[lipI].z);
-  g.add(support);
-
-  // start gate
-  var gate=new THREE.Group();
-  var gp=TRACK.pts[0], gn=normalAt(0);
-  gate.position.set(gp.x, 0, gp.z);
-  gate.rotation.y=Math.atan2(TRACK.tan[0].x, TRACK.tan[0].z);
-  [1,-1].forEach(function(sd){
-    var pole=new THREE.Mesh(cyl(0.22,0.26,5.4,8), flatMat(0xf4f4f4));
-    pole.position.set(sd*(HALF_W+0.6), 2.7, 0);
-    gate.add(pole);
+function clearTrack(){
+  if(!trackGroup) return;
+  raceScene.remove(trackGroup);
+  trackGroup.traverse(function(o){
+    if(o.material){
+      var ms=Array.isArray(o.material)?o.material:[o.material];
+      ms.forEach(function(m){ if(m && m.dispose) m.dispose(); });
+    }
+    if(o.dispose) o.dispose();          // InstancedMesh cleanup on r128
   });
+  trackOwned.forEach(function(g){ if(g && g.dispose) g.dispose(); });
+  trackTex.forEach(function(t){ if(t && t.dispose) t.dispose(); });
+  trackOwned=[]; trackTex=[];
+  trackGroup=null; coinGroup=null;
+  TRACK.coins=[]; TRACK.waterMats=[];
+}
+
+function checkerTexture(){
   var chk=document.createElement('canvas'); chk.width=64; chk.height=16;
   var cx=chk.getContext('2d');
   for(var r=0;r<2;r++) for(var cc=0;cc<8;cc++){
     cx.fillStyle=((r+cc)%2)?'#ffffff':'#20272e';
     cx.fillRect(cc*8, r*8, 8, 8);
   }
-  var chkTex=new THREE.CanvasTexture(chk);
-  chkTex.magFilter=THREE.NearestFilter;
-  chkTex.wrapS=chkTex.wrapT=THREE.RepeatWrapping;
-  var banner=new THREE.Mesh(box((HALF_W+0.8)*2, 1.2, 0.12),
-    new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
-  banner.position.y=4.8;
-  gate.add(banner);
-  var line=new THREE.Mesh(ribbonGeo(N-4, 5, HALF_W, function(){ return 0.045; }),
-    new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
-  g.add(line);
-  g.add(gate);
+  var tex=new THREE.CanvasTexture(chk);
+  tex.magFilter=THREE.NearestFilter;
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  trackTex.push(tex);
+  return tex;
+}
 
-  // scenery, kept clear of the road
+// Coins: lots of them, each worth one, laid out in shapes a child can read and
+// aim at rather than one lonely coin every few seconds.
+function buildCoins(map, g){
+  coinGroup=new THREE.Group();
+  var coinGeo=own(new THREE.TorusGeometry(0.3,0.1,8,14));
+  // no environment map in this scene, so metalness would only render as black
+  var coinMat=new THREE.MeshStandardMaterial({color:0xffb703, roughness:0.45, metalness:0,
+    emissive:0x6b4400, emissiveIntensity:0.35, flatShading:true});
+  var rng=makeRng(1337);
+  var groups=map.coinGroups, half=TRACK.halfW;
+
+  function drop(t, off){
+    if(t<0) t+=1; if(t>=1) t-=1;
+    if(inGap(t)) return;
+    var idx=Math.floor(t*N)%N;
+    var p=TRACK.pts[idx], nrm=normalAt(idx);
+    var coin=new THREE.Mesh(coinGeo, coinMat);
+    coin.position.set(p.x+nrm.x*off, groundY(t)+1.0, p.z+nrm.z*off);
+    coin.userData.taken=false;
+    coinGroup.add(coin);
+    TRACK.coins.push(coin);
+  }
+
+  for(var i=0;i<groups;i++){
+    var t=(i+0.5)/groups, pattern=i%3, k;
+    if(pattern===0){                                   // a row of three across
+      var lane=(half-1.4)*0.72;
+      for(k=-1;k<=1;k++) drop(t, k*lane);
+    } else if(pattern===1){                            // single file down a straight
+      var base=rand(-half*0.5, half*0.5);
+      for(k=0;k<4;k++) drop(t+k*0.006, base);
+    } else {                                           // an arc sweeping across
+      var n=5, span=half-1.2;
+      for(k=0;k<n;k++) drop(t+k*0.004, -span+(k/(n-1))*span*2);
+    }
+    if(rng()>0.75) drop(t-0.012, 0);                   // the odd stray
+  }
+  g.add(coinGroup);
+}
+
+function buildBarrier(map, g){
+  var b=BARRIERS[map.barrier]||BARRIERS.fence;
+  TRACK.wallH=b.h;
+  [1,-1].forEach(function(side){
+    var off=side*TRACK.wallW;
+    g.add(new THREE.Mesh(own(wallGeo(off, b.h)), flatMat(b.wall)));
+    var capMat=b.glow ? new THREE.MeshBasicMaterial({color:b.cap, side:THREE.DoubleSide})
+                      : flatMat(b.cap);
+    g.add(new THREE.Mesh(own(wallCapGeo(off, b.h, 0.34)), capMat));
+  });
+
+  // posts, one instanced mesh for both sides
+  var every=b.postEvery, count=Math.floor(N/every)*2;
+  var posts=new THREE.InstancedMesh(b.postGeo(), flatMat(b.post), count);
+  var mtx=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(1,1,1),
+      pv=new THREE.Vector3(), axis=new THREE.Vector3(0,1,0);
+  var n=0;
+  for(var i=0;i<N;i+=every){
+    var p=TRACK.pts[i], nrm=normalAt(i), y=groundY(i/N);
+    q.setFromAxisAngle(axis, Math.atan2(TRACK.tan[i].x, TRACK.tan[i].z));
+    [1,-1].forEach(function(side){
+      if(n>=count) return;
+      pv.set(p.x+nrm.x*side*TRACK.wallW, y+b.postY, p.z+nrm.z*side*TRACK.wallW);
+      mtx.compose(pv,q,sc);
+      posts.setMatrixAt(n++, mtx);
+    });
+  }
+  posts.count=n;
+  posts.instanceMatrix.needsUpdate=true;
+  g.add(posts);
+}
+
+function buildScenery(map, g){
+  var sc0=map.scenery;
   var bb={minx:1e9,maxx:-1e9,minz:1e9,maxz:-1e9};
   TRACK.pts.forEach(function(p){
     bb.minx=Math.min(bb.minx,p.x); bb.maxx=Math.max(bb.maxx,p.x);
@@ -1313,59 +2179,200 @@ function buildTrackMeshes(){
       place(x,z,made); made++;
     }
   }
-  var TREES=140;
-  var trunkM=new THREE.InstancedMesh(cyl(0.26,0.34,1.6,6), flatMat(0x7a5230), TREES);
-  var leafM=new THREE.InstancedMesh(con(1.5,3.4,8), flatMat(0x4f9e3a), TREES);
   var mtx=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(), pv=new THREE.Vector3();
-  var treeN=0;
-  scatter(TREES, HALF_W+4, function(x,z,i){
-    var s=rand(0.8,1.6);
-    sc.set(s,s,s);
-    q.setFromAxisAngle(new THREE.Vector3(0,1,0), rand(0,6.283));
-    pv.set(x, 0.8*s, z); mtx.compose(pv,q,sc); trunkM.setMatrixAt(i, mtx);
-    pv.set(x, (1.6+1.7)*s, z); mtx.compose(pv,q,sc); leafM.setMatrixAt(i, mtx);
-    treeN=i+1;
-  });
-  trunkM.count=treeN; leafM.count=treeN;
-  trunkM.instanceMatrix.needsUpdate=true; leafM.instanceMatrix.needsUpdate=true;
-  g.add(trunkM); g.add(leafM);
+  var axis=new THREE.Vector3(0,1,0);
 
-  var ROCKS=40, rockN=0;
+  if(sc0.trees>0){
+    // three tree shapes, all the same two instanced meshes with different sizes
+    var kind=sc0.kind;
+    var trunkGeo = kind==='palm' ? cyl(0.2,0.28,3.4,6) : cyl(0.26,0.34,1.6,6);
+    var leafGeo  = kind==='pine' ? con(1.1,4.6,7) : (kind==='palm' ? sph(1.5,9,6) : con(1.5,3.4,8));
+    var trunkM=new THREE.InstancedMesh(trunkGeo, flatMat(sc0.trunk), sc0.trees);
+    var leafM=new THREE.InstancedMesh(leafGeo, flatMat(sc0.leaf), sc0.trees);
+    var treeN=0;
+    scatter(sc0.trees, TRACK.wallW+3, function(x,z,i){
+      var s=rand(0.8,1.6);
+      sc.set(s,s,s);
+      q.setFromAxisAngle(axis, rand(0,6.283));
+      var trunkH = kind==='palm' ? 3.4 : 1.6;
+      pv.set(x, trunkH*0.5*s, z); mtx.compose(pv,q,sc); trunkM.setMatrixAt(i, mtx);
+      if(kind==='palm') sc.set(s*1.1, s*0.4, s*1.1);
+      var leafY = kind==='pine' ? (1.6+2.3)*s : (kind==='palm' ? 3.5*s : (1.6+1.7)*s);
+      pv.set(x, leafY, z); mtx.compose(pv,q,sc); leafM.setMatrixAt(i, mtx);
+      sc.set(s,s,s);
+      treeN=i+1;
+    });
+    trunkM.count=treeN; leafM.count=treeN;
+    trunkM.instanceMatrix.needsUpdate=true; leafM.instanceMatrix.needsUpdate=true;
+    g.add(trunkM); g.add(leafM);
+  }
+
+  var rockN=0;
   var rockM=new THREE.InstancedMesh(G('rock', function(){ return new THREE.IcosahedronGeometry(1,0); }),
-                                    flatMat(0x9aa3a8), ROCKS);
-  scatter(ROCKS, HALF_W+3, function(x,z,i){
+                                    flatMat(sc0.rock), sc0.rocks);
+  scatter(sc0.rocks, TRACK.wallW+2, function(x,z,i){
     var s=rand(0.5,1.3);
     sc.set(s, s*0.75, s);
-    q.setFromAxisAngle(new THREE.Vector3(0,1,0), rand(0,6.283));
+    q.setFromAxisAngle(axis, rand(0,6.283));
     pv.set(x, s*0.4, z); mtx.compose(pv,q,sc); rockM.setMatrixAt(i, mtx);
     rockN=i+1;
   });
   rockM.count=rockN; rockM.instanceMatrix.needsUpdate=true;
   g.add(rockM);
 
-  // coins
-  coinGroup=new THREE.Group();
-  var coinGeo=new THREE.TorusGeometry(0.35,0.12,8,16);
-  // no environment map in this scene, so metalness would only render as black
-  var coinMat=new THREE.MeshStandardMaterial({color:0xffb703, roughness:0.45, metalness:0,
-    emissive:0x6b4400, emissiveIntensity:0.35, flatShading:true});
-  for(var ci=0;ci<24;ci++){
-    var ct=(ci+0.5)/24;
-    if(ct>0.695 && ct<0.735) ct=0.745;         // never over the gap
-    var cidx=Math.floor(ct*N)%N;
-    var cp2=TRACK.pts[cidx], cn=normalAt(cidx), coff=rand(-HALF_W+1, HALF_W-1);
-    var coin=new THREE.Mesh(coinGeo, coinMat);
-    coin.position.set(cp2.x+cn.x*coff, groundY(ct)+1.0, cp2.z+cn.z*coff);
-    coin.userData.taken=false;
-    coinGroup.add(coin);
-    TRACK.coins.push(coin);
+  if(sc0.kind==='crater'){
+    var craterGeo=own(new THREE.TorusGeometry(3.2,1.1,5,12));
+    var craters=new THREE.InstancedMesh(craterGeo, flatMat(0x7d7873), 30), cn=0;
+    scatter(30, TRACK.wallW+8, function(x,z,i){
+      var s=rand(0.7,2.2);
+      sc.set(s, s, s*0.25);
+      q.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI/2);
+      pv.set(x, 0.1, z); mtx.compose(pv,q,sc); craters.setMatrixAt(i, mtx);
+      cn=i+1;
+    });
+    craters.count=cn; craters.instanceMatrix.needsUpdate=true;
+    g.add(craters);
+    // a few stars, so the black sky is not empty
+    var starGeo=own(new THREE.SphereGeometry(1.4,6,5));
+    var stars=new THREE.InstancedMesh(starGeo, new THREE.MeshBasicMaterial({color:0xffffff}), 90);
+    for(var si=0;si<90;si++){
+      var a=rand(0,6.283), rr=rand(180,300), hh=rand(30,150);
+      sc.set(rand(0.4,1),rand(0.4,1),rand(0.4,1));
+      q.identity();
+      pv.set(Math.cos(a)*rr, hh, Math.sin(a)*rr);
+      mtx.compose(pv,q,sc); stars.setMatrixAt(si, mtx);
+    }
+    stars.instanceMatrix.needsUpdate=true;
+    g.add(stars);
   }
-  g.add(coinGroup);
+}
+
+function buildTrackMeshes(map){
+  var g=new THREE.Group();
+  var halfW=TRACK.halfW;
+  TRACK.waterMats=[];
+
+  var ground=new THREE.Mesh(own(new THREE.PlaneGeometry(900,900)), flatMat(map.grass));
+  ground.rotation.x=-Math.PI/2;
+  ground.position.y=-0.02;
+  g.add(ground);
+
+  // kerb sits a hair lower and wider than the road
+  g.add(new THREE.Mesh(own(ribbonGeo(0, N, halfW+0.5, function(t){ return groundY(t)+0.005; }, inGap)),
+                       flatMat(map.kerb)));
+  g.add(new THREE.Mesh(own(ribbonGeo(0, N, halfW, function(t){ return groundY(t)+0.02; }, inGap)),
+                       flatMat(map.road)));
+
+  // the zones the map asked for, each drawn in its own style
+  map.zones.forEach(function(z){
+    var i0=Math.round(z.t0*N), count=Math.max(2, Math.round((z.t1-z.t0)*N));
+    if(z.type==='mud'){
+      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW-0.15, function(){ return 0.035; })),
+                           flatMat(map.mud)));
+      for(var m=0;m<14;m++){
+        var mi=(i0+Math.floor(rand(0,count)))%N;
+        var mp=TRACK.pts[mi], mn=normalAt(mi), off=rand(-halfW+0.8, halfW-0.8);
+        // quantised, or every rebuild would add fourteen more sizes to a cache
+        // that is never emptied
+        var blob=new THREE.Mesh(sph(Math.round(rand(0.3,0.6)*20)/20,8,6), flatMat(map.mud));
+        blob.position.set(mp.x+mn.x*off, 0.06, mp.z+mn.z*off);
+        blob.scale.y=0.35;
+        g.add(blob);
+      }
+    } else if(z.type==='water'){
+      var wm=flatMat(map.water, 0.75);
+      TRACK.waterMats.push(wm);
+      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW+3, function(){ return 0.05; })), wm));
+    } else if(z.type==='ice'){
+      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW-0.1, function(){ return 0.04; })),
+                           flatMat(map.ice||0xdff2fb)));
+      for(var s=0;s<10;s++){
+        var si=(i0+Math.floor(rand(0,count)))%N;
+        var sp=TRACK.pts[si], sn=normalAt(si);
+        var shine=new THREE.Mesh(box(0.9,0.02,0.25), new THREE.MeshBasicMaterial({color:0xffffff}));
+        shine.position.set(sp.x+sn.x*rand(-halfW+1,halfW-1), 0.055, sp.z+sn.z*rand(-halfW+1,halfW-1));
+        shine.rotation.y=rand(0,3.14);
+        g.add(shine);
+      }
+    }
+  });
+
+  // the water in a ramp gap goes in after the road, so it is not covered by it
+  TRACK.gaps.forEach(function(gp){
+    var i0=Math.round(gp.t0*N), count=Math.max(2, Math.round((gp.t1-gp.t0)*N))+1;
+    var wm=flatMat(map.water, 0.75);
+    TRACK.waterMats.push(wm);
+    g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW+3, function(){ return 0.05; })), wm));
+  });
+
+  // ramps, following the same y the simulation uses
+  TRACK.ramps.forEach(function(rp){
+    var i0=Math.round(rp.t0*N), count=Math.max(2, Math.round((rp.t1-rp.t0)*N));
+    g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW, function(t){ return groundY(t)+0.03; })),
+                         flatMat(0xf2a71b)));
+    for(var s=1;s<count;s+=2){
+      var si=(i0+s)%N, sp=TRACK.pts[si];
+      var st=new THREE.Mesh(box(2.4,0.05,0.5), flatMat(0xffffff));
+      st.position.set(sp.x, groundY(si/N)+0.06, sp.z);
+      st.rotation.y=Math.atan2(TRACK.tan[si].x, TRACK.tan[si].z);
+      g.add(st);
+    }
+    // a block under the lip so the ramp reads as solid from the side
+    var lipI=(i0+count)%N, lp=TRACK.pts[lipI];
+    var support=new THREE.Mesh(box(halfW*2, rp.h, 1.2), flatMat(0xd18f12));
+    support.position.set(lp.x, rp.h/2, lp.z);
+    support.rotation.y=Math.atan2(TRACK.tan[lipI].x, TRACK.tan[lipI].z);
+    g.add(support);
+  });
+
+  buildBarrier(map, g);
+
+  // start gate
+  var chkTex=checkerTexture();
+  var gate=new THREE.Group();
+  var gp=TRACK.pts[0];
+  gate.position.set(gp.x, 0, gp.z);
+  gate.rotation.y=Math.atan2(TRACK.tan[0].x, TRACK.tan[0].z);
+  [1,-1].forEach(function(sd){
+    var pole=new THREE.Mesh(cyl(0.22,0.26,5.4,8), flatMat(0xf4f4f4));
+    pole.position.set(sd*(halfW+0.6), 2.7, 0);
+    gate.add(pole);
+  });
+  var banner=new THREE.Mesh(box((halfW+0.8)*2, 1.2, 0.12),
+    new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
+  banner.position.y=4.8;
+  gate.add(banner);
+  var line=new THREE.Mesh(own(ribbonGeo(N-4, 5, halfW, function(){ return 0.045; })),
+    new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
+  g.add(line);
+  g.add(gate);
+
+  buildScenery(map, g);
+  buildCoins(map, g);
 
   return g;
 }
 
-raceScene.add(buildTrackMeshes());
+// Build a track only if it is not the one already standing, and dress the scene
+// in that track's own sky, fog and light.
+function ensureTrack(key){
+  var map=mapOf(key);
+  if(TRACK.key===map.key && trackGroup) return;
+  clearTrack();
+  buildTrackData(map);
+  trackGroup=buildTrackMeshes(map);
+  raceScene.add(trackGroup);
+  raceScene.background=new THREE.Color(map.sky);
+  raceScene.fog.color.setHex(map.sky);
+  raceScene.fog.near=map.fog[0];
+  raceScene.fog.far=map.fog[1];
+  if(raceScene.userData.hemi){
+    raceScene.userData.hemi.color.setHex(map.sky);
+    raceScene.userData.hemi.groundColor.setHex(map.grass);
+    raceScene.userData.hemi.intensity = map.key==='moon' ? 0.55 : 0.85;
+  }
+  if(raceScene.userData.sun) raceScene.userData.sun.intensity = map.key==='moon' ? 0.9 : 0.72;
+}
 
 // the garage pedestal the preview stands on
 (function buildGarageSet(){
@@ -1390,7 +2397,7 @@ raceScene.add(buildTrackMeshes());
 var state={
   mode:'title', build:null, racers:[],
   raceTime:0, countdown:0, laps:3, finishedOrder:[], finishDelay:0,
-  zoneTipTime:0, lastZone:null
+  zoneTipTime:0, lastZone:null, lastBump:-1, coinsThisRace:0
 };
 var time=0;
 
@@ -1422,15 +2429,17 @@ function updateRacer(r, dt){
   var p=TRACK.pts[r.nearestIdx], nrm=normalAt(r.nearestIdx);
   var side=(r.pos.x-p.x)*nrm.x + (r.pos.z-p.z)*nrm.z;
   var d=Math.abs(side);
-  var onRoad=d<=HALF_W;
+  var onRoad=d<=TRACK.halfW;
   var zone=zoneAt(r.t);
   r.zone=onRoad?zone:null;
 
   // 2. surface
   var mult=1;
+  var gripMul=1;
   if(!onRoad) mult=s.offroadMult;
   else if(zone==='water') mult=s.waterMult;
   else if(zone==='mud') mult=s.mudMult;
+  else if(zone==='ice'){ mult=1.05; gripMul=0.45; }   // fast in a line, hopeless in a corner
   if(mult<0.3) mult=0.3;                       // even a shark on land keeps crawling
   if(r.boosting && r.boost>0){ mult*=1.35; r.boost=Math.max(0, r.boost-40*dt); }
   else r.boost=Math.min(100, r.boost+8*dt);
@@ -1451,24 +2460,25 @@ function updateRacer(r, dt){
 
   // 4. steering, plus the wobble a mismatched build cannot help
   var sf=clamp(Math.abs(r.speed)/8, 0, 1);
-  r.heading += r.steer * s.turnRate * (r.airborne?0.5:1) * dt * sf;
+  r.heading += r.steer * s.turnRate * gripMul * (r.airborne?0.5:1) * dt * sf;
   r.wobblePhase += dt*(3+Math.abs(r.speed)*0.15);
-  r.heading += Math.sin(r.wobblePhase*1.7)*s.wobble*0.9*dt*sf;
+  var wob=s.wobble + (gripMul<1 ? 0.18 : 0);
+  r.heading += Math.sin(r.wobblePhase*1.7)*wob*0.9*dt*sf;
 
   // 5. the ramp and the air
   var gy=onRoad ? groundY(r.t) : 0;
   if(r.airborne){
-    r.vy -= 22*dt*(1-s.glide*0.7);
+    r.vy -= TRACK.gravity*dt*(1-s.glide*0.7);
     r.pos.y += r.vy*dt;
     if(r.pos.y<=gy){
       r.pos.y=gy; r.airborne=false; r.vy=0; r.speed*=0.9;
       sfx.land(nearPlayer(r));
     }
   } else {
-    var crossedLip = prevT<TRACK.rampT1 && r.t>=TRACK.rampT1 && prevT>TRACK.rampT0-0.03;
-    if(crossedLip && onRoad && r.speed>1){
+    var lip = rampLipCrossed(prevT, r.t);
+    if(lip && onRoad && r.speed>1){
       r.airborne=true;
-      r.pos.y=RAMP_H;
+      r.pos.y=lip.h;
       r.vy=s.jumpVel*clamp(Math.abs(r.speed)/Math.max(1,s.topSpeed), 0.4, 1);
       sfx.jump(nearPlayer(r));
     } else {
@@ -1480,12 +2490,24 @@ function updateRacer(r, dt){
   r.pos.x += Math.sin(r.heading)*r.speed*dt;
   r.pos.z += Math.cos(r.heading)*r.speed*dt;
 
-  // 7. soft boundary instead of walls
-  if(d>HALF_W+3){
-    var sgn=side>0?1:-1;
-    r.pos.x -= nrm.x*sgn*6*dt;
-    r.pos.z -= nrm.z*sgn*6*dt;
-    if(r.speed>top*0.4) r.speed=top*0.4;
+  // 7. the barrier. There is a fence, a hedge or a line of buoys drawn exactly
+  // here, so a racer that runs out of road scrapes along something it can see.
+  var side2=(r.pos.x-p.x)*nrm.x + (r.pos.z-p.z)*nrm.z;
+  var limit=TRACK.wallW-0.6;
+  if(Math.abs(side2)>limit){
+    var sgn=side2>0?1:-1;
+    var over=Math.abs(side2)-limit;
+    r.pos.x -= nrm.x*sgn*over;
+    r.pos.z -= nrm.z*sgn*over;
+    // turn back down the track, so leaning on one steer button scrapes instead of sticking
+    var along=Math.atan2(TRACK.tan[r.nearestIdx].x, TRACK.tan[r.nearestIdx].z);
+    r.heading += angleDiff(r.heading, along)*Math.min(1, 4*dt);
+    var cap=top*0.55;
+    if(r.speed>cap) r.speed=Math.max(cap, r.speed*0.88);
+    if(r.isPlayer && time-state.lastBump>0.25){
+      state.lastBump=time;
+      sfx.bump();
+    }
   }
 
   // 8. checkpoints and laps
@@ -1519,8 +2541,8 @@ function updateRacer(r, dt){
       var cdx=coin.position.x-r.pos.x, cdz=coin.position.z-r.pos.z;
       if(cdx*cdx+cdz*cdz < 1.96){
         coin.userData.taken=true; coin.visible=false;
-        state.coinsThisRace+=5;
-        r.boost=Math.min(100, r.boost+25);
+        state.coinsThisRace+=1;
+        r.boost=Math.min(100, r.boost+6);
         sfx.coin();
       }
     }
@@ -1531,6 +2553,7 @@ function updateRacer(r, dt){
     if(r.zone!==state.lastZone){
       if(r.zone==='water'){ sfx.splash(1); showZoneTip('SPLASH! Good swimmers go faster'); }
       else if(r.zone==='mud'){ showZoneTip('MUD! Heavy racers push through'); }
+      else if(r.zone==='ice'){ showZoneTip('ICE! Steer early, you will slide'); }
       else if(r.zone==='ramp'){ showZoneTip('RAMP! Big jumpers clear the gap'); }
       state.lastZone=r.zone;
     }
@@ -1607,7 +2630,8 @@ function curveAhead(idx){
 
 function driveAI(r, dt){
   var s=r.stats;
-  r.laneOffset=clamp(r.laneOffset + (Math.random()-0.5)*dt*2, -3.5, 3.5);
+  var lane=Math.max(1.5, TRACK.halfW-2.5);
+  r.laneOffset=clamp(r.laneOffset + (Math.random()-0.5)*dt*2, -lane, lane);
 
   var aheadSamples=Math.max(4, Math.round((6+Math.abs(r.speed)*0.45)/TRACK.step));
   var ti=(r.nearestIdx+aheadSamples)%N;
@@ -1753,7 +2777,7 @@ function updateCamera(dt){
 var AC=null, master=null;
 var sfx={ step:function(){}, boost:function(){}, coin:function(){}, splash:function(){},
           jump:function(){}, land:function(){}, boing:function(){}, count:function(){},
-          go:function(){}, finish:function(){}, click:function(){} };
+          go:function(){}, finish:function(){}, click:function(){}, bump:function(){} };
 
 function initAudio(){
   if(AC) return;
@@ -1813,6 +2837,7 @@ function initAudio(){
     noise(1.2, 3000, 0.5, 0.15, 'highpass');
   };
   sfx.click=function(){ ping(1200, 0.04, 0.12); };
+  sfx.bump=function(){ noise(0.1, 180, 1, 0.22); tone('sine', 150, 90, 0.12, 0.12); };
 }
 
 function wakeAudio(){
@@ -1841,7 +2866,8 @@ document.addEventListener('keydown', function(e){
        e.code==='ArrowRight'||e.code==='Space') e.preventDefault();
   }
   if(e.code==='Enter'){
-    var primary={ title:'playBtn', garage:'raceBtn', shop:'shopBack', finished:'againBtn' }[state.mode];
+    var primary={ title:'playBtn', garage:'raceBtn', shop:'shopBack', maps:'mapsBack',
+                  house:'houseBack', finished:'againBtn' }[state.mode];
     if(state.mode==='finished' && $('results').classList.contains('hidden')) primary=null;
     if(primary){ e.preventDefault(); $(primary).click(); }
   }
@@ -1971,7 +2997,7 @@ function refreshShop(){
   $('shopCoins').textContent=save.coins;
   var list=$('shopList');
   list.innerHTML='';
-  ANIMAL_KEYS.forEach(function(key){
+  SHOP_ORDER.forEach(function(key){
     var a=ANIMALS[key], owned=save.owned.indexOf(key)>=0;
     var row=document.createElement('div');
     row.className='shopitem';
@@ -2018,7 +3044,7 @@ function showZoneTip(text){
   state.zoneTipTime=2;
 }
 
-var SCREENS=['title','garage','shop','results'];
+var SCREENS=['title','garage','shop','maps','house','results'];
 function setMode(mode){
   state.mode=mode;
   SCREENS.forEach(function(id){ $(id).classList.add('hidden'); });
@@ -2035,6 +3061,15 @@ function setMode(mode){
   else if(mode==='shop'){
     $('shop').classList.remove('hidden');
     refreshShop();
+  }
+  else if(mode==='maps'){
+    $('maps').classList.remove('hidden');
+    refreshMaps();
+  }
+  else if(mode==='house'){
+    $('house').classList.remove('hidden');
+    if(!decorGroup) rebuildDecor();
+    refreshHouse();
   }
   else if(mode==='countdown'||mode==='racing'||mode==='finished'){
     $('hud').classList.remove('hidden');
@@ -2063,6 +3098,9 @@ function makeRacer(build, isPlayer, name){
 }
 
 function startRace(){
+  ensureTrack(save.map);
+  state.laps=TRACK.laps;
+  state.lastBump=-1;
   state.racers.forEach(function(r){
     disposeRacer(r.view);
     if(r.label){
@@ -2100,7 +3138,7 @@ function startRace(){
   for(var k=0;k<line.length;k++){
     var idx=(N-2-k*4+N)%N;
     var p=TRACK.pts[idx], nrm=normalAt(idx);
-    var off=((k%3)-1)*3.5;
+    var off=((k%3)-1)*Math.min(3.5, TRACK.halfW*0.5);
     var r=line[k];
     r.pos.set(p.x+nrm.x*off, 0, p.z+nrm.z*off);
     r.heading=Math.atan2(TRACK.tan[idx].x, TRACK.tan[idx].z);
@@ -2135,7 +3173,9 @@ function showResults(){
   var pl=state.racers[0];
   var order=ranked();
   var place=order.indexOf(pl)+1;
-  var reward=[100,60,40,20][Math.min(3, place-1)];
+  // there is a lot more to buy now — animals, tracks and a houseful of furniture —
+  // so a race pays a little better than it used to
+  var reward=[150,110,80,50][Math.min(3, place-1)];
   var total=reward+state.coinsThisRace;
 
   save.coins+=total;
@@ -2212,7 +3252,10 @@ function updateRace(dt){
   for(var c=0;c<TRACK.coins.length;c++){
     if(TRACK.coins[c].visible) TRACK.coins[c].rotation.y+=dt*3;
   }
-  if(waterMat) waterMat.opacity=0.68+Math.sin(time*2.2)*0.07;
+  if(TRACK.waterMats){
+    var op=0.68+Math.sin(time*2.2)*0.07;
+    for(var w=0;w<TRACK.waterMats.length;w++) TRACK.waterMats[w].opacity=op;
+  }
 
   if(pl.finished && state.mode==='racing'){
     state.mode='finished';
@@ -2231,6 +3274,10 @@ function onClick(id, fn){
 onClick('playBtn', function(){ setMode('garage'); });
 onClick('shopBtn', function(){ setMode('shop'); });
 onClick('shopBack', function(){ setMode('garage'); });
+onClick('mapsBtn', function(){ setMode('maps'); });
+onClick('mapsBack', function(){ setMode('garage'); });
+onClick('houseBtn', function(){ setMode('house'); });
+onClick('houseBack', function(){ setMode('garage'); });
 onClick('randomBtn', function(){
   var own=ownedList();
   SLOTS.forEach(function(s){ save.build[s]=own[Math.floor(Math.random()*own.length)]; });
@@ -2267,7 +3314,712 @@ $('slotList').addEventListener('click', function(e){
 });
 
 /* ============================================================
-   14. MAIN LOOP
+   14. THE ANIMAL HOUSE
+
+   A doll-house room with the front wall left off. Every animal you own stands
+   in it with its name over its head, and coins buy furniture that stays put
+   between visits. Nothing in here is simulated; it is all idle animation.
+
+   Every piece of furniture is built around its own origin, standing on y=0 and
+   facing +Z as though it were against the back wall. Its slot in DECOR says
+   where to put it and which way to turn it, so a wall unit becomes a left-wall
+   unit with one quarter turn and the layout stays easy to reason about.
+   ============================================================ */
+
+var houseScene=litScene();
+houseScene.fog=null;
+var houseCam=new THREE.PerspectiveCamera(45, 1, 0.1, 400);
+
+// the floor is x -10.2..10.2 by z -6.7..6.7. animals stand in the middle,
+// furniture lives around the edge, and the two never share a patch.
+var ROOM={ w:21, d:14, wall:4.8 };
+
+var houseAnimals=[];       // one built racer per owned animal
+var houseAnimalsFor='';    // the owned list these were built for
+var decorGroup=null, decorMats=[], houseAnims=[];
+
+function hMat(color, opacity){
+  var o={ color:color, flatShading:true, roughness:0.8, metalness:0 };
+  if(opacity!==undefined){ o.transparent=true; o.opacity=opacity; }
+  var m=new THREE.MeshStandardMaterial(o);
+  decorMats.push(m);
+  return m;
+}
+function hBasic(color){
+  var m=new THREE.MeshBasicMaterial({color:color});
+  decorMats.push(m);
+  return m;
+}
+
+(function buildRoom(){
+  var lawn=new THREE.Mesh(new THREE.PlaneGeometry(400,400),
+    new THREE.MeshLambertMaterial({color:0x6fcf5a, side:THREE.DoubleSide}));
+  lawn.rotation.x=-Math.PI/2; lawn.position.y=-0.32;
+  houseScene.add(lawn);
+
+  var g=new THREE.Group();
+  var floorM=new THREE.MeshStandardMaterial({color:0xc99a5c, flatShading:true, roughness:0.85});
+  var wallM=new THREE.MeshStandardMaterial({color:0xfaf1e0, flatShading:true, roughness:0.9,
+                                            side:THREE.DoubleSide});
+  var trimM=new THREE.MeshStandardMaterial({color:0xef476f, flatShading:true, roughness:0.8});
+  var beamM=new THREE.MeshStandardMaterial({color:0x8a6540, flatShading:true, roughness:0.85});
+
+  // floorboards
+  var planks=9;
+  for(var i=0;i<planks;i++){
+    var plank=new THREE.Mesh(box(ROOM.w, 0.3, ROOM.d/planks-0.06), floorM);
+    plank.position.set(0, -0.16, -ROOM.d/2 + (i+0.5)*(ROOM.d/planks));
+    g.add(plank);
+  }
+  // three walls, the front one left off so the room can be seen into
+  var back=new THREE.Mesh(box(ROOM.w, ROOM.wall, 0.3), wallM);
+  back.position.set(0, ROOM.wall/2, -ROOM.d/2);
+  g.add(back);
+  [1,-1].forEach(function(sd){
+    var w=new THREE.Mesh(box(0.3, ROOM.wall, ROOM.d), wallM);
+    w.position.set(sd*ROOM.w/2, ROOM.wall/2, 0);
+    g.add(w);
+  });
+  // stripey wallpaper on the back wall
+  for(var st=-4;st<=4;st++){
+    var strip=new THREE.Mesh(box(0.55, ROOM.wall-0.4, 0.06), trimM);
+    strip.position.set(st*2.2, ROOM.wall/2, -ROOM.d/2+0.19);
+    g.add(strip);
+  }
+  // a doorway and two windows
+  var door=new THREE.Mesh(box(1.8, 3.0, 0.14), beamM);
+  door.position.set(0, 1.5, -ROOM.d/2+0.2);
+  g.add(door);
+  var knob=new THREE.Mesh(sph(0.11,8,7), hMat(0xffd166));
+  knob.position.set(0.65, 1.6, -ROOM.d/2+0.29);
+  g.add(knob);
+  [-6.4, 6.4].forEach(function(x){
+    var frame=new THREE.Mesh(box(2.4, 1.8, 0.12), beamM);
+    frame.position.set(x, 3.0, -ROOM.d/2+0.2);
+    g.add(frame);
+    var pane=new THREE.Mesh(box(2.0, 1.4, 0.1), hBasic(0xbfe9ff));
+    pane.position.set(x, 3.0, -ROOM.d/2+0.28);
+    g.add(pane);
+    var sill=new THREE.Mesh(box(2.7, 0.16, 0.4), beamM);
+    sill.position.set(x, 2.04, -ROOM.d/2+0.32);
+    g.add(sill);
+  });
+  // a see-through roof: a ridge, gable beams and rafters, so nothing is hidden
+  var rise=2.1;
+  var ridge=new THREE.Mesh(box(ROOM.w+1.2, 0.26, 0.26), beamM);
+  ridge.position.set(0, ROOM.wall+rise, 0);
+  g.add(ridge);
+  for(var rf=-3;rf<=3;rf++){
+    var x0=rf*3.4, thick=(Math.abs(rf)===3)?0.24:0.16;
+    [1,-1].forEach(function(sd){
+      var raf=new THREE.Mesh(box(thick, thick, ROOM.d*0.56), beamM);
+      raf.position.set(x0, ROOM.wall+rise*0.5, sd*ROOM.d*0.26);
+      raf.rotation.x=sd*Math.atan2(rise, ROOM.d/2);
+      g.add(raf);
+    });
+  }
+  // the front sill, so the open side still reads as a wall you could step over
+  var front=new THREE.Mesh(box(ROOM.w, 0.5, 0.3), trimM);
+  front.position.set(0, 0.25, ROOM.d/2);
+  g.add(front);
+
+  houseScene.add(g);
+})();
+
+/* ---------- furniture ---------- */
+
+// Items that move push a function onto houseAnims, which the idle loop calls
+// with the clock. Everything is drawn facing +Z, centred on its own footprint.
+var DECOR=[
+  { key:'rug', name:'Stripey rug', price:40,
+    blurb:'A big soft rug for the middle of the floor.',
+    color:0xef476f, at:[0,-1.2], build:function(){
+      var g=new THREE.Group();
+      var base=new THREE.Mesh(box(13.0,0.06,7.6), hMat(0xf4e3c8));
+      base.position.y=0.03; g.add(base);
+      for(var i=-3;i<=3;i++){
+        var s=new THREE.Mesh(box(12.6,0.07,0.8), hMat((i%2)?0xef476f:0x3f9ad6));
+        s.position.set(0,0.05,i*1.05); g.add(s);
+      }
+      return g;
+    }},
+  { key:'banner', name:'Name banner', price:60,
+    blurb:'DOTTIE’S HOUSE, in big letters over the door.',
+    color:0xffd166, at:[0,-6.6], y:3.7, build:function(){
+      var g=new THREE.Group();
+      var cloth=new THREE.Mesh(box(7.0,1.1,0.1), hMat(0xffd166));
+      g.add(cloth);
+      // block letters, spelled out in little cubes
+      var word=[[0,1,1,1,0],[1,0,0,0,1],[1,1,1,1,1]];
+      for(var r=0;r<word.length;r++) for(var c=0;c<word[r].length;c++){
+        if(!word[r][c]) continue;
+        var b=new THREE.Mesh(box(0.44,0.22,0.08), hMat(0xef476f));
+        b.position.set(-2.6+c*1.3, 0.3-r*0.29, 0.09);
+        g.add(b);
+      }
+      [3.6,-3.6].forEach(function(x){
+        var tie=new THREE.Mesh(cyl(0.05,0.05,0.9,6), hMat(0x8a6540));
+        tie.position.set(x, 0.7, 0); g.add(tie);
+      });
+      return g;
+    }},
+  { key:'beanbag', name:'Bean bag', price:80,
+    blurb:'A squishy purple blob. Everyone fights over it.',
+    color:0x9b6fd6, at:[-9.3,2.6], rot:Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      var b=new THREE.Mesh(sph(1.0,12,9), hMat(0x9b6fd6));
+      b.scale.set(1,0.62,1); b.position.y=0.6; g.add(b);
+      var top=new THREE.Mesh(sph(0.7,10,8), hMat(0xb08ee0));
+      top.scale.set(1,0.5,1); top.position.set(0,1.0,0.1); g.add(top);
+      return g;
+    }},
+  { key:'palm', name:'Potted palm', price:100,
+    blurb:'A pot plant nobody has managed to kill yet.',
+    color:0x4fb04a, at:[8.9,-5.7], build:function(){
+      var g=new THREE.Group();
+      var pot=new THREE.Mesh(cyl(0.6,0.45,0.9,10), hMat(0xd0714a));
+      pot.position.y=0.45; g.add(pot);
+      var stem=new THREE.Mesh(cyl(0.12,0.16,2.4,7), hMat(0x7a5230));
+      stem.position.y=2.0; g.add(stem);
+      for(var i=0;i<6;i++){
+        var a=i/6*Math.PI*2;
+        var frond=new THREE.Mesh(box(1.8,0.1,0.55), hMat(0x4fb04a));
+        frond.position.set(Math.cos(a)*0.85, 3.1, Math.sin(a)*0.85);
+        frond.rotation.y=-a; frond.rotation.z=-0.35;
+        g.add(frond);
+      }
+      return g;
+    }},
+  { key:'lights', name:'Fairy lights', price:110,
+    blurb:'A string of little bulbs that twinkle all round the walls.',
+    color:0xffe08a, at:[0,0], build:function(){
+      var g=new THREE.Group();
+      var mats=[], pts=[], i;
+      for(i=0;i<=18;i++) pts.push([-ROOM.w/2+0.5 + i*(ROOM.w-1.0)/18, -ROOM.d/2+0.5]);
+      for(i=1;i<=9;i++) pts.push([ROOM.w/2-0.5, -ROOM.d/2+0.5 + i*(ROOM.d-1.0)/9]);
+      for(i=1;i<=9;i++) pts.push([-ROOM.w/2+0.5, -ROOM.d/2+0.5 + i*(ROOM.d-1.0)/9]);
+      pts.forEach(function(p, k){
+        var m=hBasic(0xffe08a);
+        var b=new THREE.Mesh(sph(0.14,7,6), m);
+        b.position.set(p[0], ROOM.wall-0.3-Math.abs(Math.sin(k*0.9))*0.3, p[1]);
+        g.add(b); mats.push(m);
+      });
+      houseAnims.push(function(t){
+        for(var k=0;k<mats.length;k++){
+          var v=0.55+0.45*Math.sin(t*3+k*0.8);
+          mats[k].color.setRGB(1, 0.78*v+0.2, 0.35*v+0.1);
+        }
+      });
+      return g;
+    }},
+  { key:'bookshelf', name:'Bookshelf', price:120,
+    blurb:'Books about racing, mostly. A few about mud.',
+    color:0x8a6540, at:[-9.7,-4.9], rot:Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      var frame=new THREE.Mesh(box(2.6,2.9,0.55), hMat(0x8a6540));
+      frame.position.y=1.45; g.add(frame);
+      var cols=[0xef476f,0x3f9ad6,0xffd166,0x7bc043,0x9b6fd6];
+      for(var sh=0;sh<3;sh++){
+        var shelf=new THREE.Mesh(box(2.6,0.1,0.62), hMat(0x6f4d2a));
+        shelf.position.y=0.55+sh*0.92; g.add(shelf);
+        for(var bk=0;bk<7;bk++){
+          var b=new THREE.Mesh(box(0.26,0.62,0.36), hMat(cols[(sh*7+bk)%cols.length]));
+          b.position.set(-1.1+bk*0.36, 0.94+sh*0.92, 0.06);
+          b.rotation.z=(bk%3===0)?0.14:0;
+          g.add(b);
+        }
+      }
+      return g;
+    }},
+  { key:'snacks', name:'Snack table', price:140,
+    blurb:'Carrots, fish, bananas and leaves. Something for everybody.',
+    color:0xf2a71b, at:[9.2,2.6], rot:-Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      var leg=new THREE.Mesh(cyl(0.18,0.26,1.0,9), hMat(0x8a6540));
+      leg.position.y=0.5; g.add(leg);
+      var top=new THREE.Mesh(cyl(1.15,1.15,0.14,14), hMat(0xf4e3c8));
+      top.position.y=1.05; g.add(top);
+      var bowl=new THREE.Mesh(sph(0.42,10,8), hMat(0x3f9ad6));
+      bowl.scale.set(1,0.5,1); bowl.position.set(-0.45,1.25,0.1); g.add(bowl);
+      for(var i=0;i<4;i++){
+        var c=new THREE.Mesh(con(0.09,0.42,6), hMat(0xf2801b));
+        c.position.set(-0.52+i*0.09,1.4,0.02+i*0.07); c.rotation.x=1.2+i*0.2;
+        g.add(c);
+      }
+      var fish=new THREE.Mesh(sph(0.27,9,7), hMat(0xb8c6d0));
+      fish.scale.set(0.5,0.8,1.4); fish.position.set(0.5,1.22,0.35); g.add(fish);
+      for(i=0;i<4;i++){
+        var ban=new THREE.Mesh(cyl(0.06,0.05,0.5,6), hMat(0xffd166));
+        ban.position.set(0.35,1.26,-0.4); ban.rotation.z=0.5+i*0.15; ban.rotation.x=0.4;
+        g.add(ban);
+      }
+      var leaf=new THREE.Mesh(box(0.5,0.05,0.3), hMat(0x4fb04a));
+      leaf.position.set(-0.1,1.15,-0.6); g.add(leaf);
+      return g;
+    }},
+  { key:'sofa', name:'Sofa', price:160,
+    blurb:'Three cushions, room for five animals if they squash up.',
+    color:0x3f9ad6, at:[-9.4,-1.0], rot:Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      var base=new THREE.Mesh(box(4.4,0.7,1.5), hMat(0x3f9ad6));
+      base.position.y=0.5; g.add(base);
+      var back=new THREE.Mesh(box(4.4,1.5,0.45), hMat(0x2f7fb5));
+      back.position.set(0,1.1,-0.6); g.add(back);
+      [1,-1].forEach(function(sd){
+        var arm=new THREE.Mesh(box(0.45,1.0,1.5), hMat(0x2f7fb5));
+        arm.position.set(sd*2.2,0.95,0); g.add(arm);
+      });
+      for(var i=-1;i<=1;i++){
+        var cu=new THREE.Mesh(box(1.2,0.24,1.2), hMat(0x8fd3ff));
+        cu.position.set(i*1.35,0.9,0.05); g.add(cu);
+      }
+      return g;
+    }},
+  { key:'fishtank', name:'Fish tank', price:180,
+    blurb:'Three fish going round and round. The shark watches for hours.',
+    color:0x2ba6d9, at:[9.7,-1.0], rot:-Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      var stand=new THREE.Mesh(box(2.8,1.1,1.2), hMat(0x8a6540));
+      stand.position.y=0.55; g.add(stand);
+      var water=new THREE.Mesh(box(2.6,1.5,1.1), hMat(0x2ba6d9, 0.55));
+      water.position.y=1.85; g.add(water);
+      var sand=new THREE.Mesh(box(2.5,0.16,1.05), hMat(0xf4e3c8));
+      sand.position.y=1.18; g.add(sand);
+      var rim=new THREE.Mesh(box(2.8,0.12,1.3), hMat(0xd9dfe4));
+      rim.position.y=2.66; g.add(rim);
+      var fish=[0xef476f,0xffd166,0x7bc043].map(function(c){
+        var f=new THREE.Mesh(sph(0.17,8,7), hMat(c));
+        f.scale.set(1.3,0.8,0.5);
+        g.add(f);
+        return f;
+      });
+      houseAnims.push(function(t){
+        for(var i=0;i<fish.length;i++){
+          var a=t*(0.9+i*0.25)+i*2.1;
+          fish[i].position.set(Math.sin(a)*0.95, 1.75+Math.sin(a*1.7)*0.32, Math.cos(a)*0.25);
+          fish[i].rotation.y=-a;
+        }
+      });
+      return g;
+    }},
+  { key:'bunks', name:'Bunk beds', price:200,
+    blurb:'Two bunks and a ladder. The rabbit always wants the top one.',
+    color:0xf4e3c8, at:[9.6,-4.9], rot:-Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      [1,-1].forEach(function(sx){
+        [0.5,-0.5].forEach(function(sz){
+          var post=new THREE.Mesh(box(0.16,3.1,0.16), hMat(0x8a6540));
+          post.position.set(sx*1.2,1.55,sz*1.1); g.add(post);
+        });
+      });
+      [0.8, 2.2].forEach(function(y){
+        var frame=new THREE.Mesh(box(2.5,0.16,1.2), hMat(0x8a6540));
+        frame.position.y=y; g.add(frame);
+        var mat=new THREE.Mesh(box(2.3,0.24,1.1), hMat(0xfaf1e0));
+        mat.position.y=y+0.2; g.add(mat);
+        var quilt=new THREE.Mesh(box(1.5,0.14,1.14), hMat(0xef476f));
+        quilt.position.set(0.4,y+0.34,0); g.add(quilt);
+        var pillow=new THREE.Mesh(box(0.5,0.18,1.0), hMat(0x8fd3ff));
+        pillow.position.set(-0.9,y+0.36,0); g.add(pillow);
+      });
+      for(var i=0;i<4;i++){
+        var rung=new THREE.Mesh(box(0.1,0.1,1.0), hMat(0x6f4d2a));
+        rung.position.set(1.35,0.9+i*0.45,0); g.add(rung);
+      }
+      return g;
+    }},
+  { key:'trophy', name:'Trophy shelf', price:220,
+    blurb:'Somewhere to put the cups you win. Three of them, gold.',
+    color:0xffb703, at:[-5.6,-6.4], y:2.4, build:function(){
+      var g=new THREE.Group();
+      var shelf=new THREE.Mesh(box(3.4,0.16,0.7), hMat(0x8a6540));
+      g.add(shelf);
+      [-1.2,0,1.2].forEach(function(x){
+        var cup=new THREE.Mesh(cyl(0.26,0.14,0.42,10), hMat(0xffb703));
+        cup.position.set(x,0.3,0); g.add(cup);
+        var stem=new THREE.Mesh(cyl(0.07,0.07,0.16,7), hMat(0xffb703));
+        stem.position.set(x,0.16,0); g.add(stem);
+        var foot=new THREE.Mesh(cyl(0.2,0.22,0.1,10), hMat(0xd99200));
+        foot.position.set(x,0.13,0); g.add(foot);
+        [0.28,-0.28].forEach(function(hx){
+          var handle=new THREE.Mesh(box(0.08,0.24,0.08), hMat(0xffb703));
+          handle.position.set(x+hx,0.32,0); g.add(handle);
+        });
+      });
+      return g;
+    }},
+  { key:'slide', name:'Slide', price:240,
+    blurb:'A red slide with a ladder. Louder than it looks.',
+    color:0xef476f, at:[-8.0,5.6], rot:Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      var slide=new THREE.Mesh(box(1.3,0.12,3.8), hMat(0xef476f));
+      slide.position.set(0,1.5,0.7); slide.rotation.x=0.5; g.add(slide);
+      [1,-1].forEach(function(sd){
+        var rail=new THREE.Mesh(box(0.1,0.44,3.8), hMat(0xd0304f));
+        rail.position.set(sd*0.66,1.68,0.7); rail.rotation.x=0.5; g.add(rail);
+      });
+      var top=new THREE.Mesh(box(1.5,0.14,1.1), hMat(0xffd166));
+      top.position.set(0,2.45,-0.7); g.add(top);
+      [1,-1].forEach(function(sd){
+        var post=new THREE.Mesh(box(0.14,2.5,0.14), hMat(0x8a6540));
+        post.position.set(sd*0.62,1.25,-1.2); g.add(post);
+      });
+      for(var i=0;i<4;i++){
+        var rung=new THREE.Mesh(box(1.2,0.1,0.1), hMat(0x8a6540));
+        rung.position.set(0,0.6+i*0.6,-1.2); g.add(rung);
+      }
+      return g;
+    }},
+  { key:'pool', name:'Splash pool', price:260,
+    blurb:'A paddling pool. The duck moved in the day it arrived.',
+    color:0x2ba6d9, at:[0.2,5.7], build:function(){
+      var g=new THREE.Group();
+      var wall=new THREE.Mesh(cyl(1.6,1.6,0.6,20), hMat(0x8fd3ff));
+      wall.position.y=0.3; g.add(wall);
+      var water=new THREE.Mesh(cyl(1.45,1.45,0.5,20), hMat(0x2ba6d9, 0.75));
+      water.position.y=0.32; g.add(water);
+      var ring=new THREE.Mesh(G('poolRing', function(){ return new THREE.TorusGeometry(0.5,0.15,7,14); }),
+                              hMat(0xffd166));
+      ring.rotation.x=Math.PI/2; ring.position.set(0.7,0.62,0); g.add(ring);
+      houseAnims.push(function(t){
+        water.position.y=0.32+Math.sin(t*1.6)*0.04;
+        ring.position.y=0.62+Math.sin(t*1.2+1)*0.06;
+        ring.rotation.z=Math.sin(t*0.5)*0.4;
+      });
+      return g;
+    }},
+  { key:'fountain', name:'Fountain', price:280,
+    blurb:'A little stone fountain that actually bubbles.',
+    color:0xb8c6d0, at:[-4.4,5.7], build:function(){
+      var g=new THREE.Group();
+      var basin=new THREE.Mesh(cyl(1.35,1.45,0.5,16), hMat(0xb8c6d0));
+      basin.position.y=0.25; g.add(basin);
+      var water=new THREE.Mesh(cyl(1.2,1.2,0.42,16), hMat(0x2ba6d9, 0.7));
+      water.position.y=0.3; g.add(water);
+      var post=new THREE.Mesh(cyl(0.18,0.24,1.1,10), hMat(0xd9dfe4));
+      post.position.y=0.9; g.add(post);
+      var top=new THREE.Mesh(cyl(0.6,0.5,0.16,14), hMat(0xd9dfe4));
+      top.position.y=1.45; g.add(top);
+      var drops=[];
+      for(var i=0;i<8;i++){
+        var d=new THREE.Mesh(sph(0.1,7,6), hMat(0x8fd3ff, 0.85));
+        g.add(d); drops.push(d);
+      }
+      houseAnims.push(function(t){
+        for(var i=0;i<drops.length;i++){
+          var ph=(t*1.3+i/drops.length)%1;
+          var a=(i/drops.length)*Math.PI*2;
+          drops[i].position.set(Math.cos(a)*ph*1.05, 1.6+Math.sin(ph*Math.PI)*0.7,
+                                 Math.sin(a)*ph*1.05);
+        }
+      });
+      return g;
+    }},
+  { key:'disco', name:'Disco ball', price:300,
+    blurb:'Hangs from the roof and spins. The whole room goes silly.',
+    color:0xd9dfe4, at:[0,-0.6], build:function(){
+      var g=new THREE.Group();
+      var wire=new THREE.Mesh(cyl(0.03,0.03,1.6,6), hMat(0x6f6f6f));
+      wire.position.y=5.5; g.add(wire);
+      var ball=new THREE.Mesh(sph(0.62,12,9), hMat(0xd9dfe4));
+      ball.position.y=4.4; g.add(ball);
+      var tiles=[];
+      for(var i=0;i<26;i++){
+        // laid out in the ball's own frame, which is why they turn with it
+        var a=i/26*Math.PI*2, yy=Math.sin(i*1.7)*0.42;
+        var rr=Math.sqrt(Math.max(0.02, 0.4-yy*yy));
+        var m=hBasic(0xffffff);
+        var tl=new THREE.Mesh(box(0.2,0.2,0.05), m);
+        tl.position.set(Math.cos(a)*rr, yy, Math.sin(a)*rr);
+        tl.lookAt(0,0,0);
+        ball.add(tl); tiles.push(m);
+      }
+      houseAnims.push(function(t){
+        ball.rotation.y=t*1.4;
+        for(var i=0;i<tiles.length;i++){
+          var v=(Math.sin(t*4+i)*0.5+0.5);
+          tiles[i].color.setHSL((i/tiles.length+t*0.08)%1, 0.8, 0.45+v*0.35);
+        }
+      });
+      return g;
+    }},
+  { key:'castle', name:'Bouncy castle', price:340,
+    blurb:'Yes, indoors. It squashes and springs all by itself.',
+    color:0x7bc043, at:[4.8,5.6], build:function(){
+      var g=new THREE.Group();
+      var inner=new THREE.Group();
+      var base=new THREE.Mesh(box(3.2,0.8,2.8), hMat(0x7bc043));
+      base.position.y=0.4; inner.add(base);
+      var mat=new THREE.Mesh(box(2.8,0.2,2.4), hMat(0xffd166));
+      mat.position.y=0.85; inner.add(mat);
+      [[-1.45,1.25],[1.45,1.25],[-1.45,-1.25],[1.45,-1.25]].forEach(function(p){
+        var tower=new THREE.Mesh(box(0.6,1.9,0.6), hMat(0x5ea832));
+        tower.position.set(p[0],1.35,p[1]); inner.add(tower);
+        var cap=new THREE.Mesh(con(0.45,0.7,7), hMat(0xef476f));
+        cap.position.set(p[0],2.6,p[1]); inner.add(cap);
+      });
+      var arch=new THREE.Mesh(box(1.1,1.2,0.3), hMat(0x3f9ad6));
+      arch.position.set(0,0.95,1.45); inner.add(arch);
+      g.add(inner);
+      houseAnims.push(function(t){
+        var k=1+Math.sin(t*2.4)*0.05;
+        inner.scale.set(1/Math.sqrt(k), k, 1/Math.sqrt(k));
+      });
+      return g;
+    }},
+  { key:'telescope', name:'Telescope', price:380,
+    blurb:'For looking at the moon, which is also a racetrack.',
+    color:0x3f4756, at:[8.4,5.6], rot:-Math.PI/2, build:function(){
+      var g=new THREE.Group();
+      var tri=new THREE.Group();
+      [0, 2.09, 4.19].forEach(function(a){
+        var leg=new THREE.Mesh(cyl(0.07,0.06,2.0,6), hMat(0x8a6540));
+        leg.position.set(Math.cos(a)*0.35, 0.95, Math.sin(a)*0.35);
+        leg.rotation.z=-Math.cos(a)*0.32; leg.rotation.x=Math.sin(a)*0.32;
+        tri.add(leg);
+      });
+      var tube=new THREE.Mesh(cyl(0.22,0.28,2.0,10), hMat(0x3f4756));
+      tube.position.y=2.3; tube.rotation.x=-0.9;
+      tri.add(tube);
+      var lens=new THREE.Mesh(cyl(0.3,0.3,0.12,10), hMat(0x8fd3ff));
+      lens.position.set(0,3.05,0.85); lens.rotation.x=-0.9;
+      tri.add(lens);
+      var eye=new THREE.Mesh(cyl(0.1,0.12,0.35,8), hMat(0xd9dfe4));
+      eye.position.set(0,1.62,-0.78); eye.rotation.x=-0.9;
+      tri.add(eye);
+      g.add(tri);
+      houseAnims.push(function(t){ tri.rotation.y=Math.sin(t*0.35)*0.5; });
+      return g;
+    }}
+];
+
+var DECOR_BY_KEY={};
+DECOR.forEach(function(d){ DECOR_BY_KEY[d.key]=d; });
+
+function rebuildDecor(){
+  // every geometry in here comes from the shared cache, so only the materials
+  // this function made need freeing
+  if(decorGroup) houseScene.remove(decorGroup);
+  decorMats.forEach(function(m){ if(m && m.dispose) m.dispose(); });
+  decorMats=[]; houseAnims=[];
+  decorGroup=new THREE.Group();
+  DECOR.forEach(function(d){
+    if(save.decor.indexOf(d.key)<0) return;
+    var g=d.build();
+    g.position.set(d.at[0], d.y||0, d.at[1]);
+    g.rotation.y=d.rot||0;
+    decorGroup.add(g);
+  });
+  houseScene.add(decorGroup);
+}
+
+/* ---------- the animals on show ---------- */
+
+var HOUSE_ROWS=[-4.3,-1.5,1.3], HOUSE_PER_ROW=6, HOUSE_SCALE=0.8;
+
+function rebuildHouseAnimals(){
+  var key=save.owned.join(',');
+  if(key===houseAnimalsFor) return;
+  houseAnimalsFor=key;
+  houseAnimals.forEach(function(h){
+    disposeRacer(h.view);
+    if(h.label){
+      if(h.label.material.map) h.label.material.map.dispose();
+      h.label.material.dispose();
+    }
+  });
+  houseAnimals=[];
+
+  // a grid down the middle of the room, all of them facing the open side
+  var list=SHOP_ORDER.filter(function(k){ return save.owned.indexOf(k)>=0; });
+  list.forEach(function(k, i){
+    var row=Math.min(HOUSE_ROWS.length-1, Math.floor(i/HOUSE_PER_ROW)), col=i%HOUSE_PER_ROW;
+    var n=Math.min(HOUSE_PER_ROW, list.length-row*HOUSE_PER_ROW);
+    var view=buildRacer({head:k, body:k, front:k, back:k, tail:k});
+    view.group.scale.setScalar(HOUSE_SCALE);
+    view.group.position.set((col-(n-1)/2)*2.9, 0, HOUSE_ROWS[row]);
+    view.group.rotation.y=Math.PI + (col-(n-1)/2)*0.08;
+    houseScene.add(view.group);
+    var label=nameSprite(ANIMALS[k].name);
+    label.position.y=view.rideHeight + view.bodyHeight*0.6 + 0.8 + (col%3)*0.72;
+    label.scale.set(2.2/HOUSE_SCALE, 0.55/HOUSE_SCALE, 1);
+    view.group.add(label);
+    houseAnimals.push({ view:view, label:label, phase:i*1.37, key:k });
+  });
+}
+
+function updateHouse(dt){
+  rebuildHouseAnimals();
+  var i;
+  for(i=0;i<houseAnimals.length;i++){
+    var h=houseAnimals[i], v=h.view, pr=v.parts, ph=time*1.1+h.phase;
+    pr.body.position.y=v.rideHeight+Math.sin(ph)*0.035;
+    pr.body.rotation.x=v.baseTilt;
+    pr.body.rotation.z=Math.sin(ph*0.7)*0.03;
+    pr.head.rotation.y=Math.sin(ph*0.5)*0.45;
+    pr.head.rotation.x=Math.sin(ph*0.9)*0.06;
+    pr.tail.rotation.y=Math.sin(ph*1.4)*0.4;
+    pr.legs[0].rotation.x=Math.sin(ph*0.6)*0.05;
+    pr.legs[3].rotation.x=-Math.sin(ph*0.6)*0.05;
+    if(pr.wings){
+      var f=Math.sin(ph*1.6)*0.12;
+      pr.wings[0].rotation.z=-f; pr.wings[1].rotation.z=f;
+    }
+  }
+  for(i=0;i<houseAnims.length;i++) houseAnims[i](time);
+  updateHouseCam();
+}
+
+// Framed the same way the garage is: the card covers the right of a wide screen
+// or the bottom of a narrow one, so the room is aimed at whatever is left over.
+function updateHouseCam(){
+  var W=window.innerWidth, narrow=W<760;
+  var tanH=Math.tan((houseCam.fov*Math.PI/180)/2);
+  var freeY=narrow ? 0.44 : 1;
+  var cardW=narrow ? 0 : Math.min(440, W*0.40);
+  var freeX=1-cardW/W;
+  var tanX=tanH*Math.max(0.6, houseCam.aspect);
+  var tall=ROOM.wall+2.4;
+  // The open front of the room is what gets framed, because it is the nearest
+  // and so the widest part of it. A narrow screen frames the middle of the room
+  // and lets the slow sway show the sides.
+  var span=narrow ? ROOM.w*0.78 : ROOM.w+1.5;
+  var needX=span/(1.75*freeX*tanX);
+  var needY=tall/(1.6*freeY*tanH);
+  var near=Math.max(12, needX, needY);
+  var dist=near+ROOM.d/2;
+  var sway=Math.sin(time*0.13)*(narrow?0.2:0.3);
+  houseCam.position.set(Math.sin(sway)*dist*0.4, 7.2, Math.cos(sway)*dist*0.93);
+  // aim a little above the animals, then shove the aim off-centre by however
+  // much of the screen the card is covering
+  var cx=0, cy=2.6;
+  if(narrow) cy -= (1-freeY)*near*tanH;
+  else cx += (cardW/W)*near*tanX;
+  houseCam.lookAt(cx, cy, -0.5);
+}
+
+function refreshHouse(){
+  $('houseCoins').textContent=save.coins;
+  $('houseCount').textContent='Animals '+save.owned.length+' / '+ANIMAL_KEYS.length+
+    '  ·  Furniture '+save.decor.length+' / '+DECOR.length;
+  var pills=$('housePills');
+  pills.innerHTML='';
+  SHOP_ORDER.forEach(function(k){
+    if(save.owned.indexOf(k)<0) return;
+    var pill=document.createElement('span');
+    pill.className='pill';
+    var dot=document.createElement('i');
+    dot.style.background='#'+('000000'+ANIMALS[k].palette.main.toString(16)).slice(-6);
+    pill.appendChild(dot);
+    pill.appendChild(document.createTextNode(ANIMALS[k].name));
+    pills.appendChild(pill);
+  });
+
+  var list=$('decorList');
+  list.innerHTML='';
+  DECOR.forEach(function(d){
+    var have=save.decor.indexOf(d.key)>=0;
+    var row=document.createElement('div');
+    row.className='shopitem';
+    var chip=document.createElement('div');
+    chip.className='chip';
+    chip.style.background='#'+('000000'+d.color.toString(16)).slice(-6);
+    var txt=document.createElement('div');
+    txt.className='txt';
+    var b=document.createElement('b'); b.textContent=d.name;
+    var sp=document.createElement('span'); sp.textContent=d.blurb;
+    txt.appendChild(b); txt.appendChild(sp);
+    row.appendChild(chip); row.appendChild(txt);
+    if(have){
+      var o=document.createElement('div');
+      o.className='owned'; o.textContent='IN HOUSE';
+      row.appendChild(o);
+    } else {
+      var btn=document.createElement('button');
+      btn.className='buy';
+      btn.textContent='BUY '+d.price;
+      btn.setAttribute('data-decor', d.key);
+      if(save.coins<d.price) btn.disabled=true;
+      btn.addEventListener('click', function(){
+        sfx.click();
+        var k=this.getAttribute('data-decor');
+        var item=DECOR_BY_KEY[k];
+        if(!item || save.decor.indexOf(k)>=0 || save.coins<item.price) return;
+        save.coins-=item.price;
+        save.decor.push(k);
+        saveGame();
+        sfx.coin();
+        rebuildDecor();
+        refreshHouse();
+      });
+      row.appendChild(btn);
+    }
+    list.appendChild(row);
+  });
+}
+
+/* ---------- the track picker ---------- */
+
+function refreshMaps(){
+  $('mapCoins').textContent=save.coins;
+  var list=$('mapList');
+  list.innerHTML='';
+  MAPS.forEach(function(m){
+    var have=save.maps.indexOf(m.key)>=0, here=(save.map===m.key);
+    var row=document.createElement('div');
+    row.className='shopitem';
+    var chip=document.createElement('div');
+    chip.className='chip';
+    chip.style.background='#'+('000000'+m.sky.toString(16)).slice(-6);
+    chip.style.boxShadow='inset 0 -9px 0 #'+('000000'+m.grass.toString(16)).slice(-6);
+    var txt=document.createElement('div');
+    txt.className='txt';
+    var b=document.createElement('b'); b.textContent=m.name;
+    var sp=document.createElement('span');
+    sp.textContent=m.blurb+' '+m.laps+' laps.';
+    txt.appendChild(b); txt.appendChild(sp);
+    row.appendChild(chip); row.appendChild(txt);
+    if(here){
+      var o=document.createElement('div');
+      o.className='owned'; o.textContent='RACING HERE';
+      row.appendChild(o);
+    } else if(have){
+      var pick=document.createElement('button');
+      pick.className='buy pick';
+      pick.textContent='PICK';
+      pick.setAttribute('data-map', m.key);
+      pick.addEventListener('click', function(){
+        sfx.click();
+        save.map=this.getAttribute('data-map');
+        saveGame();
+        refreshMaps();
+      });
+      row.appendChild(pick);
+    } else {
+      var btn=document.createElement('button');
+      btn.className='buy';
+      btn.textContent='BUY '+m.price;
+      btn.setAttribute('data-map', m.key);
+      if(save.coins<m.price) btn.disabled=true;
+      btn.addEventListener('click', function(){
+        sfx.click();
+        var k=this.getAttribute('data-map'), mp=MAP_BY_KEY[k];
+        if(!mp || save.maps.indexOf(k)>=0 || save.coins<mp.price) return;
+        save.coins-=mp.price;
+        save.maps.push(k);
+        save.map=k;
+        saveGame();
+        sfx.coin();
+        refreshMaps();
+      });
+      row.appendChild(btn);
+    }
+    list.appendChild(row);
+  });
+}
+
+/* ============================================================
+   15. MAIN LOOP
    ============================================================ */
 
 var clock=new THREE.Clock();
@@ -2276,9 +4028,14 @@ function animate(){
   requestAnimationFrame(animate);
   var dt=Math.min(clock.getDelta(), 0.05);
   time+=dt;
-  if(state.mode==='garage'||state.mode==='shop'){
+  if(state.mode==='garage'||state.mode==='shop'||state.mode==='maps'){
     updateGarage(dt);
     renderer.render(garageScene, garageCam);
+    return;
+  }
+  if(state.mode==='house'){
+    updateHouse(dt);
+    renderer.render(houseScene, houseCam);
     return;
   }
   if(state.mode==='countdown'||state.mode==='racing'||state.mode==='finished'){
