@@ -2,7 +2,7 @@
    Precaches everything the game needs so it runs with no connection once it
    has been opened once. Cached files are served immediately and refreshed in
    the background, so an update shows up the next time the game is opened. */
-var CACHE = 'henrys-nightfall-v1';
+var CACHE = 'henrys-nightfall-v2';
 var BASE = '/experiments/nightfall-zombie-fps/';
 var ASSETS = [
   BASE,
