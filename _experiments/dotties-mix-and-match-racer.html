@@ -1,6 +1,6 @@
 ---
 title: Dottie’s Mix and Match Racer
-description: Build a racer out of mixed-up animal parts, then race it in 3D across five tracks. Seventeen animals to collect, coins to pick up everywhere, and a house to decorate for the animals you own. Works on a phone.
+description: Build a racer out of mixed-up animal parts, then race it in 3D over five hilly tracks. Seventeen animals to collect, coins to pick up everywhere, and a house you can walk around inside. Works on a phone.
 date: 2026-09-08 12:00:00 +0000
 layout: null
 ---
@@ -196,13 +196,44 @@ layout: null
     font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.1em;color:var(--ink);
     -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);touch-action:none;}
   .tbtn.on{background:rgba(255,255,255,.72);}
-  #tLeft,#tRight{width:76px;height:76px;font-size:24px;bottom:calc(env(safe-area-inset-bottom) + 22px);}
-  #tLeft{left:calc(env(safe-area-inset-left) + 18px);}
-  #tRight{left:calc(env(safe-area-inset-left) + 104px);}
   #tBoost{width:96px;height:96px;right:calc(env(safe-area-inset-right) + 20px);
     bottom:calc(env(safe-area-inset-bottom) + 20px);}
   #tBrake{width:64px;height:64px;right:calc(env(safe-area-inset-right) + 36px);
     bottom:calc(env(safe-area-inset-bottom) + 126px);font-size:10.5px;}
+
+  /* ---------- the steering pad ----------
+     There is no button to aim at. The whole lower left of the screen is live,
+     and the stick draws itself under whichever thumb lands there. */
+  #stickZone{position:fixed;z-index:13;left:0;bottom:0;width:54%;height:66%;touch-action:none;}
+  #stick{position:fixed;z-index:14;left:0;top:0;width:152px;height:152px;
+    margin:-76px 0 0 -76px;border-radius:50%;pointer-events:none;
+    opacity:0;transition:opacity .16s ease-out;
+    background:rgba(255,255,255,.2);
+    box-shadow:0 3px 14px rgba(10,30,55,.2), inset 0 0 0 3px rgba(255,255,255,.34);
+    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+  #stick.on{opacity:1;}
+  #stick b{position:absolute;top:50%;width:16px;height:2px;margin-top:-1px;
+    background:rgba(255,255,255,.5);border-radius:2px;}
+  #stick b:first-of-type{left:10px;}
+  #stick b:last-of-type{right:10px;}
+  #stickKnob{position:absolute;left:50%;top:50%;width:66px;height:66px;
+    margin:-33px 0 0 -33px;border-radius:50%;background:rgba(255,255,255,.78);
+    box-shadow:0 3px 9px rgba(10,30,55,.3);}
+  #stickHint{position:fixed;z-index:13;pointer-events:none;
+    left:calc(env(safe-area-inset-left) + 20px);
+    bottom:calc(env(safe-area-inset-bottom) + 30px);
+    max-width:60vw;font-size:11.5px;font-weight:800;letter-spacing:.13em;line-height:1.6;
+    color:#fff;text-shadow:0 2px 6px rgba(10,25,45,.6);}
+
+  /* the bar across the top while walking round the house */
+  #walkBar{position:fixed;z-index:15;display:flex;align-items:center;gap:12px;
+    top:calc(env(safe-area-inset-top) + 12px);
+    left:calc(env(safe-area-inset-left) + 14px);
+    right:calc(env(safe-area-inset-right) + 14px);}
+  #walkBar button{flex:0 0 auto;width:104px;background:rgba(255,255,255,.82);
+    box-shadow:0 2px 8px rgba(15,30,50,.22);}
+  #walkTip{flex:1;min-width:0;font-size:12px;font-weight:800;letter-spacing:.05em;
+    line-height:1.5;color:#fff;text-shadow:0 2px 6px rgba(10,25,45,.65);}
 
   /* ---------- results ---------- */
   #results h1{font-size:9vw;font-weight:800;color:#fff;line-height:1;
@@ -245,10 +276,12 @@ layout: null
     <p>Build a racer out of parts from different animals, then race it.
        Every part changes how your animal runs, jumps, corners and swims.
        Some combinations are brilliant. Some are a disaster.<br>
-       Seventeen animals, five tracks, and coins scattered all over every one of them.</p>
-    <p>Your racer accelerates on its own. You just steer, and save the boost
-       for the straights. Spend your coins on new animals, new tracks, or
-       furniture for the Animal House.</p>
+       Seventeen animals, five hilly tracks, and coins scattered all over every one of them.</p>
+    <p>Your racer accelerates on its own, so all you do is steer. Put your thumb
+       down anywhere on the left of the screen and slide it &mdash; the further you
+       slide, the harder you turn. Save the boost for the straights.</p>
+    <p>Spend your coins on new animals, new tracks, or furniture for the Animal
+       House, which you can walk around inside.</p>
     <button class="go" id="playBtn">BUILD YOUR RACER</button>
   </div>
 </div>
@@ -358,7 +391,8 @@ layout: null
       <div id="decorList"></div>
     </div>
     <div class="row">
-      <button class="primary" id="houseBack">BACK TO GARAGE</button>
+      <button class="mini" id="walkBtn">WALK AROUND</button>
+      <button class="primary" id="houseBack">GARAGE</button>
     </div>
   </div>
 </div>
@@ -378,8 +412,15 @@ layout: null
 </div>
 <div id="countdown" class="hidden"></div>
 
-<button class="tbtn hidden" id="tLeft">◀</button>
-<button class="tbtn hidden" id="tRight">▶</button>
+<div id="walkBar" class="hidden">
+  <button class="mini" id="walkBack">BACK</button>
+  <div id="walkTip">Slide your thumb up to walk, left and right to turn</div>
+</div>
+
+<div id="stickZone" class="hidden"></div>
+<div id="stick"><b></b><b></b><div id="stickKnob"></div></div>
+<div id="stickHint" class="hidden">PUT YOUR THUMB DOWN ANYWHERE<br>ON THE LEFT AND SLIDE IT TO STEER</div>
+
 <button class="tbtn hidden" id="tBoost">BOOST</button>
 <button class="tbtn hidden" id="tBrake">SLOW</button>
 
@@ -1788,7 +1829,37 @@ window.addEventListener('resize', resize);
    ============================================================ */
 
 var N=800, CHECKPOINTS=8;
-var TRACK={ pts:[], tan:[], len:0, zones:[], ramps:[], coins:[], halfW:6, laps:3, gravity:22 };
+var TRACK={ pts:[], tan:[], len:0, zones:[], ramps:[], coins:[], halfW:6, laps:3, gravity:22,
+            elev:[], hills:null };
+
+/* ---------- the hills ----------
+
+   Height is a function of world position rather than of how far round the lap
+   you are, so the two places where a loop passes close to itself always agree
+   about how high the ground is between them. The road is laid flat across its
+   width at whatever height its centre line sits at, and a graded skirt either
+   side blends that back into the open ground, the way a real road is cut into
+   a hillside. */
+
+// Three long rolling terms for the shape of the land, and one short one for the
+// whoops: it is the short term that bends sharply enough to throw a fast racer
+// off the top of a rise, which is the difference between a hill and a slope.
+var HILLS={ a1:5.0, f1:0.0160, a2:2.1, f2:0.0345, a3:1.0, f3:0.0620,
+            a4:0.8, f4:0.1550 };
+// how far out the graded shoulder reaches, and how much of the way back to the
+// open hills each band of it has come
+var SKIRT=[[6.5,0.42],[13,0.76],[24,1]];
+var SKIRT_IN=3.2;                            // the flat shoulder, beyond the kerb
+
+function terrainY(x, z){
+  var h=TRACK.hills;
+  if(!h) return 0;
+  var f=h.freq;
+  return h.amp*( HILLS.a1*Math.sin(x*HILLS.f1*f + 0.7)*Math.cos(z*HILLS.f1*0.85*f - 0.3)
+               + HILLS.a2*Math.sin((x + z*0.8)*HILLS.f2*f + 1.9)
+               + HILLS.a3*Math.cos((x - z*0.6)*HILLS.f3*f)
+               + HILLS.a4*Math.sin((x*0.7 - z)*HILLS.f4*f + 0.4) );
+}
 
 // A wobbly circle: radius = R * (1 + sum of lobes). Because the radius is a
 // single valued function of the angle the loop can never cross itself, however
@@ -1807,10 +1878,11 @@ function shapePoints(sh){
 var MAPS=[
   {
     key:'meadow', name:'Meadow Splash', price:0,
-    blurb:'Where it all started. A mud patch, a splash zone and a ramp over the water.',
+    blurb:'Where it all started. Rolling green hills, a mud patch, a splash zone and a ramp over the water.',
     sky:0x8fd3ff, grass:0x6fcf5a, fog:[120,260],
     road:0xc9a46a, kerb:0xf4f4f4, water:0x3aa0e0, mud:0x6b4a2a,
     halfW:6, laps:3, gravity:22, barrier:'fence', coinGroups:24,
+    hills:{amp:1.0, freq:1.0},
     cp:[[0,0],[40,-10],[80,-40],[95,-90],[70,-130],[20,-140],[-20,-120],
         [-50,-140],[-90,-120],[-110,-70],[-90,-20],[-50,10],[-25,15]],
     zones:[{type:'mud', t0:0.18, t1:0.26},
@@ -1820,10 +1892,11 @@ var MAPS=[
   },
   {
     key:'cove', name:'Sandy Cove', price:0,
-    blurb:'Wide, fast and flat, along a bay. Three shallow crossings and a little ramp.',
+    blurb:'Wide and fast along a bay, over long gentle dunes. Three shallow crossings and a little ramp.',
     sky:0xa8e4ff, grass:0xf0e2b4, fog:[150,320],
     road:0xc08f4e, kerb:0xfffaf0, water:0x2fbde0, mud:0x8a6f3a,
     halfW:8, laps:2, gravity:22, barrier:'buoy', coinGroups:26,
+    hills:{amp:0.55, freq:0.8},
     shape:{R:110, rx:1.15, rz:0.85, points:16, rot:0.2, lobes:[[2,0.14]]},
     zones:[{type:'water', t0:0.19, t1:0.25},
            {type:'water', t0:0.54, t1:0.60},
@@ -1833,10 +1906,11 @@ var MAPS=[
   },
   {
     key:'jungle', name:'Jungle Rumble', price:250,
-    blurb:'Narrow, twisty and green. Two long mud wallows and a stream you land in.',
+    blurb:'Narrow, twisty, green and steep. Two long mud wallows and a stream you land in.',
     sky:0x7fc9a8, grass:0x2f6b34, fog:[80,190],
     road:0x8f7a4a, kerb:0xc7b982, water:0x2f9a86, mud:0x54381f,
     halfW:5, laps:3, gravity:22, barrier:'vine', coinGroups:26,
+    hills:{amp:1.0, freq:1.2},
     shape:{R:96, points:20, rot:0.5, lobes:[[5,0.16],[3,0.08]]},
     zones:[{type:'mud', t0:0.10, t1:0.19},
            {type:'mud', t0:0.62, t1:0.70},
@@ -1846,10 +1920,11 @@ var MAPS=[
   },
   {
     key:'frost', name:'Frosty Peaks', price:400,
-    blurb:'Ice you actually slide on. Steer early or you will go straight on.',
+    blurb:'Steep icy hills you actually slide down. Steer early or you will go straight on.',
     sky:0xd6ecf7, grass:0xeef7fc, fog:[100,240],
     road:0x7d8b99, kerb:0xffffff, water:0x4fb8dd, mud:0x6f7c88, ice:0xa9dcf2,
     halfW:6.5, laps:2, gravity:22, barrier:'snow', coinGroups:26,
+    hills:{amp:1.3, freq:0.9},
     shape:{R:112, rx:0.95, points:20, rot:1.1, lobes:[[4,0.16],[7,0.05]]},
     zones:[{type:'ice', t0:0.14, t1:0.24},
            {type:'ice', t0:0.55, t1:0.66},
@@ -1859,10 +1934,11 @@ var MAPS=[
   },
   {
     key:'moon', name:'Moon Dust', price:600,
-    blurb:'Hardly any gravity and two ramps. One jump lasts about a week.',
+    blurb:'Hardly any gravity, long dusty rises and two ramps. One jump lasts about a week.',
     sky:0x0b1026, grass:0x5f5c58, fog:[160,340],
     road:0xa9a29a, kerb:0xe6e0d6, water:0x3f7ad9, mud:0x6f6a64,
     halfW:7, laps:2, gravity:8, barrier:'rail', coinGroups:28,
+    hills:{amp:1.2, freq:0.7},
     shape:{R:118, rx:1.1, rz:0.95, points:16, rot:0.8, lobes:[[3,0.16]]},
     zones:[{type:'water', t0:0.30, t1:0.36}],
     ramps:[{t:0.13, h:1.5, run:8, gap:0.02},
@@ -1892,6 +1968,9 @@ function buildTrackData(map){
     TRACK.pts.push(curve.getPointAt(i/N));
     TRACK.tan.push(curve.getTangentAt(i/N).normalize());
   }
+  TRACK.hills=map.hills||null;
+  TRACK.elev=[];
+  for(i=0;i<N;i++) TRACK.elev.push(terrainY(TRACK.pts[i].x, TRACK.pts[i].z));
   TRACK.step=TRACK.len/N;                     // world units between samples
   TRACK.halfW=map.halfW;
   TRACK.wallW=map.halfW+2.2;                  // where the barrier stands
@@ -1932,13 +2011,57 @@ function inGap(t){
   return false;
 }
 
-// the ramps are the only parts of a course that are not at y=0
+// How high the centre line is at t, read off the samples taken when the course
+// was built so that the road, the barriers, the coins and the simulation all
+// agree to the centimetre.
+function baseY(t){
+  var e=TRACK.elev;
+  if(!e.length) return 0;
+  var f=(t*N)%N;
+  if(f<0) f+=N;
+  var i=Math.floor(f);
+  return lerp(e[i], e[(i+1)%N], f-i);
+}
+
+// the road surface: the hill underneath, plus any ramp standing on top of it
 function groundY(t){
+  var y=baseY(t);
   for(var i=0;i<TRACK.ramps.length;i++){
     var r=TRACK.ramps[i];
-    if(t>=r.t0 && t<=r.t1) return r.h*(t-r.t0)/(r.t1-r.t0);
+    if(t>=r.t0 && t<=r.t1) y += r.h*(t-r.t0)/(r.t1-r.t0);
   }
-  return 0;
+  return y;
+}
+
+// rise per unit travelled along the course, so a climb can cost speed
+function slopeAt(t){
+  var d=1.5/N;
+  return (groundY(t+d)-groundY(t-d))/(2*d*TRACK.len);
+}
+
+// How much of the way back to the open hills the shoulder has come, d units out
+// from the centre line. Shared by the skirt mesh and by anything standing on it.
+function skirtWeight(d){
+  var inner=TRACK.halfW+SKIRT_IN, w0=0, d0=0, i;
+  if(d<=inner) return 0;
+  for(i=0;i<SKIRT.length;i++){
+    if(d<=inner+SKIRT[i][0]) return lerp(w0, SKIRT[i][1], (d-inner-d0)/(SKIRT[i][0]-d0));
+    w0=SKIRT[i][1]; d0=SKIRT[i][0];
+  }
+  return 1;
+}
+
+// Where a tree or a rock actually stands: on the hills, unless it is near
+// enough to the course to be standing on the graded shoulder instead.
+function groundHere(x, z){
+  var bd=1e18, bi=-1, i, p, dx, dz, dd;
+  for(i=0;i<N;i+=2){
+    p=TRACK.pts[i]; dx=p.x-x; dz=p.z-z; dd=dx*dx+dz*dz;
+    if(dd<bd){ bd=dd; bi=i; }
+  }
+  var w=skirtWeight(Math.sqrt(bd));
+  if(w>=1 || bi<0) return terrainY(x,z);
+  return lerp(groundY(bi/N), terrainY(x,z), w);
 }
 
 // the ramp whose lip was just crossed, if any
@@ -1976,6 +2099,41 @@ function ribbonGeo(i0, count, halfW, yFn, skipFn){
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nn,3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv,2));
   g.setIndex(idx);
+  return g;
+}
+
+// The graded shoulder, in bands. Each band's inner edge is exactly the outer
+// edge of the one before it, so the whole skirt is watertight, and the outermost
+// edge sits on the open hills so it meets the displaced ground plane there too.
+function skirtGeo(){
+  var pos=[], uv=[], idx=[], inner=TRACK.halfW+SKIRT_IN;
+  function edge(i, off, w){
+    var p=TRACK.pts[i], nrm=normalAt(i);
+    var x=p.x+nrm.x*off, z=p.z+nrm.z*off, road=groundY(i/N)-0.04;
+    pos.push(x, w<=0 ? road : lerp(road, terrainY(x,z)-0.04, w), z);
+  }
+  [1,-1].forEach(function(side){
+    var offA=inner*side, wA=0;
+    SKIRT.forEach(function(st){
+      var offB=(inner+st[0])*side, wB=st[1], base=pos.length/3, k, i;
+      for(k=0;k<=N;k++){
+        i=k%N;
+        edge(i, offA, wA);
+        edge(i, offB, wB);
+        uv.push(k*0.1, 0, k*0.1, 1);
+      }
+      for(k=0;k<N;k++){
+        var a=base+k*2;
+        idx.push(a, a+1, a+2, a+1, a+3, a+2);
+      }
+      offA=offB; wA=wB;
+    });
+  });
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv,2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
   return g;
 }
 
@@ -2194,11 +2352,11 @@ function buildScenery(map, g){
       var s=rand(0.8,1.6);
       sc.set(s,s,s);
       q.setFromAxisAngle(axis, rand(0,6.283));
-      var trunkH = kind==='palm' ? 3.4 : 1.6;
-      pv.set(x, trunkH*0.5*s, z); mtx.compose(pv,q,sc); trunkM.setMatrixAt(i, mtx);
+      var trunkH = kind==='palm' ? 3.4 : 1.6, gh=groundHere(x,z);
+      pv.set(x, gh+trunkH*0.5*s, z); mtx.compose(pv,q,sc); trunkM.setMatrixAt(i, mtx);
       if(kind==='palm') sc.set(s*1.1, s*0.4, s*1.1);
       var leafY = kind==='pine' ? (1.6+2.3)*s : (kind==='palm' ? 3.5*s : (1.6+1.7)*s);
-      pv.set(x, leafY, z); mtx.compose(pv,q,sc); leafM.setMatrixAt(i, mtx);
+      pv.set(x, gh+leafY, z); mtx.compose(pv,q,sc); leafM.setMatrixAt(i, mtx);
       sc.set(s,s,s);
       treeN=i+1;
     });
@@ -2214,7 +2372,7 @@ function buildScenery(map, g){
     var s=rand(0.5,1.3);
     sc.set(s, s*0.75, s);
     q.setFromAxisAngle(axis, rand(0,6.283));
-    pv.set(x, s*0.4, z); mtx.compose(pv,q,sc); rockM.setMatrixAt(i, mtx);
+    pv.set(x, groundHere(x,z)+s*0.4, z); mtx.compose(pv,q,sc); rockM.setMatrixAt(i, mtx);
     rockN=i+1;
   });
   rockM.count=rockN; rockM.instanceMatrix.needsUpdate=true;
@@ -2227,7 +2385,7 @@ function buildScenery(map, g){
       var s=rand(0.7,2.2);
       sc.set(s, s, s*0.25);
       q.setFromAxisAngle(new THREE.Vector3(1,0,0), Math.PI/2);
-      pv.set(x, 0.1, z); mtx.compose(pv,q,sc); craters.setMatrixAt(i, mtx);
+      pv.set(x, groundHere(x,z)+0.1, z); mtx.compose(pv,q,sc); craters.setMatrixAt(i, mtx);
       cn=i+1;
     });
     craters.count=cn; craters.instanceMatrix.needsUpdate=true;
@@ -2252,10 +2410,28 @@ function buildTrackMeshes(map){
   var halfW=TRACK.halfW;
   TRACK.waterMats=[];
 
-  var ground=new THREE.Mesh(own(new THREE.PlaneGeometry(900,900)), flatMat(map.grass));
+  // The open ground, pushed up into the same hills the road follows. A map with
+  // no hills keeps the single cheap quad it always had.
+  var groundGeo;
+  if(map.hills){
+    groundGeo=own(new THREE.PlaneGeometry(900,900,170,170));
+    // the plane is built in its own xy and laid down by the rotation below, so
+    // local z is world height and local -y is world z
+    var ga=groundGeo.attributes.position;
+    for(var gi=0;gi<ga.count;gi++) ga.setZ(gi, terrainY(ga.getX(gi), -ga.getY(gi)));
+    groundGeo.computeVertexNormals();
+  } else {
+    groundGeo=own(new THREE.PlaneGeometry(900,900));
+  }
+  var ground=new THREE.Mesh(groundGeo, flatMat(map.grass));
   ground.rotation.x=-Math.PI/2;
   ground.position.y=-0.02;
   g.add(ground);
+
+  // the flat shoulder the barriers stand on, then the skirt back down to the hills
+  g.add(new THREE.Mesh(own(ribbonGeo(0, N, halfW+SKIRT_IN, function(t){ return groundY(t)-0.04; })),
+                       flatMat(map.grass)));
+  if(map.hills) g.add(new THREE.Mesh(own(skirtGeo()), flatMat(map.grass)));
 
   // kerb sits a hair lower and wider than the road
   g.add(new THREE.Mesh(own(ribbonGeo(0, N, halfW+0.5, function(t){ return groundY(t)+0.005; }, inGap)),
@@ -2267,7 +2443,7 @@ function buildTrackMeshes(map){
   map.zones.forEach(function(z){
     var i0=Math.round(z.t0*N), count=Math.max(2, Math.round((z.t1-z.t0)*N));
     if(z.type==='mud'){
-      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW-0.15, function(){ return 0.035; })),
+      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW-0.15, function(t){ return groundY(t)+0.035; })),
                            flatMat(map.mud)));
       for(var m=0;m<14;m++){
         var mi=(i0+Math.floor(rand(0,count)))%N;
@@ -2275,22 +2451,23 @@ function buildTrackMeshes(map){
         // quantised, or every rebuild would add fourteen more sizes to a cache
         // that is never emptied
         var blob=new THREE.Mesh(sph(Math.round(rand(0.3,0.6)*20)/20,8,6), flatMat(map.mud));
-        blob.position.set(mp.x+mn.x*off, 0.06, mp.z+mn.z*off);
+        blob.position.set(mp.x+mn.x*off, groundY(mi/N)+0.06, mp.z+mn.z*off);
         blob.scale.y=0.35;
         g.add(blob);
       }
     } else if(z.type==='water'){
       var wm=flatMat(map.water, 0.75);
       TRACK.waterMats.push(wm);
-      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW+3, function(){ return 0.05; })), wm));
+      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW+3, function(t){ return groundY(t)+0.05; })), wm));
     } else if(z.type==='ice'){
-      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW-0.1, function(){ return 0.04; })),
+      g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW-0.1, function(t){ return groundY(t)+0.04; })),
                            flatMat(map.ice||0xdff2fb)));
       for(var s=0;s<10;s++){
         var si=(i0+Math.floor(rand(0,count)))%N;
         var sp=TRACK.pts[si], sn=normalAt(si);
         var shine=new THREE.Mesh(box(0.9,0.02,0.25), new THREE.MeshBasicMaterial({color:0xffffff}));
-        shine.position.set(sp.x+sn.x*rand(-halfW+1,halfW-1), 0.055, sp.z+sn.z*rand(-halfW+1,halfW-1));
+        shine.position.set(sp.x+sn.x*rand(-halfW+1,halfW-1), groundY(si/N)+0.055,
+                           sp.z+sn.z*rand(-halfW+1,halfW-1));
         shine.rotation.y=rand(0,3.14);
         g.add(shine);
       }
@@ -2302,7 +2479,7 @@ function buildTrackMeshes(map){
     var i0=Math.round(gp.t0*N), count=Math.max(2, Math.round((gp.t1-gp.t0)*N))+1;
     var wm=flatMat(map.water, 0.75);
     TRACK.waterMats.push(wm);
-    g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW+3, function(){ return 0.05; })), wm));
+    g.add(new THREE.Mesh(own(ribbonGeo(i0, count, halfW+3, function(t){ return groundY(t)+0.05; })), wm));
   });
 
   // ramps, following the same y the simulation uses
@@ -2319,8 +2496,10 @@ function buildTrackMeshes(map){
     }
     // a block under the lip so the ramp reads as solid from the side
     var lipI=(i0+count)%N, lp=TRACK.pts[lipI];
-    var support=new THREE.Mesh(box(halfW*2, rp.h, 1.2), flatMat(0xd18f12));
-    support.position.set(lp.x, rp.h/2, lp.z);
+    // tall enough to reach down into whatever hill the ramp was built on
+    var sh=Math.round((rp.h+3)*10)/10, topY=baseY(rp.t1)+rp.h;
+    var support=new THREE.Mesh(box(halfW*2, sh, 1.2), flatMat(0xd18f12));
+    support.position.set(lp.x, topY-sh/2, lp.z);
     support.rotation.y=Math.atan2(TRACK.tan[lipI].x, TRACK.tan[lipI].z);
     g.add(support);
   });
@@ -2331,7 +2510,7 @@ function buildTrackMeshes(map){
   var chkTex=checkerTexture();
   var gate=new THREE.Group();
   var gp=TRACK.pts[0];
-  gate.position.set(gp.x, 0, gp.z);
+  gate.position.set(gp.x, groundY(0), gp.z);
   gate.rotation.y=Math.atan2(TRACK.tan[0].x, TRACK.tan[0].z);
   [1,-1].forEach(function(sd){
     var pole=new THREE.Mesh(cyl(0.22,0.26,5.4,8), flatMat(0xf4f4f4));
@@ -2342,7 +2521,7 @@ function buildTrackMeshes(map){
     new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
   banner.position.y=4.8;
   gate.add(banner);
-  var line=new THREE.Mesh(own(ribbonGeo(N-4, 5, halfW, function(){ return 0.045; })),
+  var line=new THREE.Mesh(own(ribbonGeo(N-4, 5, halfW, function(t){ return groundY(t)+0.045; })),
     new THREE.MeshBasicMaterial({map:chkTex, side:THREE.DoubleSide}));
   g.add(line);
   g.add(gate);
@@ -2444,9 +2623,11 @@ function updateRacer(r, dt){
   if(r.boosting && r.boost>0){ mult*=1.35; r.boost=Math.max(0, r.boost-40*dt); }
   else r.boost=Math.min(100, r.boost+8*dt);
 
-  // 3. speed
+  // 3. speed. A climb holds a racer back and a drop hurries it along, which is
+  // most of what makes a hill feel like a hill.
   var top=r.isPlayer ? s.topSpeed : s.topSpeedEff;
-  var target=r.airborne ? top : top*mult;
+  var slope=r.airborne ? 0 : slopeAt(r.t);
+  var target=r.airborne ? top : top*mult*clamp(1-slope*1.2, 0.5, 1.3);
   if(r.gas>0){
     if(r.speed<target) r.speed=Math.min(target, r.speed + s.accel*(r.boosting?1.5:1)*dt*r.gas);
     else r.speed=Math.max(target, r.speed - s.brake*0.5*dt);
@@ -2457,6 +2638,8 @@ function updateRacer(r, dt){
     else if(r.speed>0) r.speed=Math.max(0, r.speed - 4*dt);
     else r.speed=Math.min(0, r.speed + 4*dt);
   }
+  // gravity along the slope, on top of whatever the throttle was doing
+  if(slope) r.speed=clamp(r.speed - slope*TRACK.gravity*0.30*dt, 0, top*1.9);
 
   // 4. steering, plus the wobble a mismatched build cannot help
   var sf=clamp(Math.abs(r.speed)/8, 0, 1);
@@ -2465,22 +2648,41 @@ function updateRacer(r, dt){
   var wob=s.wobble + (gripMul<1 ? 0.18 : 0);
   r.heading += Math.sin(r.wobblePhase*1.7)*wob*0.9*dt*sf;
 
-  // 5. the ramp and the air
-  var gy=onRoad ? groundY(r.t) : 0;
+  // 5. the hill, the ramp and the air. Nothing can leave the graded shoulder the
+  // barriers stand on, so one height covers both on the road and just off it.
+  var gy=groundY(r.t);
   if(r.airborne){
+    r.airTime+=dt;
     r.vy -= TRACK.gravity*dt*(1-s.glide*0.7);
     r.pos.y += r.vy*dt;
     if(r.pos.y<=gy){
-      r.pos.y=gy; r.airborne=false; r.vy=0; r.speed*=0.9;
-      sfx.land(nearPlayer(r));
+      r.pos.y=gy; r.airborne=false; r.vy=0;
+      r.lastVyG=undefined;
+      // Cresting a rise flat out lifts the wheels for a moment. That is worth a
+      // little air, but it is not a landing: only a real jump costs speed and
+      // makes a noise, or a hilly lap would be one long thumping.
+      if(r.airTime>0.16){ r.speed*=0.9; sfx.land(nearPlayer(r)); }
     }
   } else {
+    // Over a crest: holding the ground would need more downward pull than
+    // gravity has, so the racer stops holding it.
+    var vyG=slope*r.speed, crest=false;
+    if(r.lastVyG!==undefined && dt>0){
+      crest=(vyG-r.lastVyG)/dt < -TRACK.gravity*1.1 && r.speed>7;
+    }
+    r.lastVyG=vyG;
     var lip = rampLipCrossed(prevT, r.t);
     if(lip && onRoad && r.speed>1){
-      r.airborne=true;
-      r.pos.y=lip.h;
+      r.airborne=true; r.airTime=0;
+      r.pos.y=baseY(r.t)+lip.h;
       r.vy=s.jumpVel*clamp(Math.abs(r.speed)/Math.max(1,s.topSpeed), 0.4, 1);
+      r.lastVyG=undefined;
       sfx.jump(nearPlayer(r));
+    } else if(crest){
+      r.airborne=true; r.airTime=0;
+      r.pos.y=gy;
+      r.vy=vyG;
+      r.lastVyG=undefined;
     } else {
       r.pos.y=gy;
     }
@@ -2675,7 +2877,9 @@ function updateAnimation(r, dt){
   var ph=r.gaitPhase;
   var swing=Math.sin(ph)*amp*(inWater?0.5:1);
 
-  if(r.airborne){
+  // Cresting a rise lifts the feet for a frame or two. That is not a jump, and
+  // tucking the legs up for it would only make them twitch.
+  if(r.airborne && r.airTime>0.1){
     pr.legs[0].rotation.x=lerp(pr.legs[0].rotation.x,  0.6, 0.16);
     pr.legs[1].rotation.x=lerp(pr.legs[1].rotation.x,  0.6, 0.16);
     pr.legs[2].rotation.x=lerp(pr.legs[2].rotation.x, -0.6, 0.16);
@@ -2696,7 +2900,7 @@ function updateAnimation(r, dt){
   // wings: a real glider beats slowly, a hopeless one flaps twice as fast
   if(pr.wings){
     var wf, wa;
-    if(r.airborne){
+    if(r.airborne && r.airTime>0.1){
       if(s.glide>=0.35){ wf=9; wa=0.6; } else { wf=18; wa=0.4; }
     } else { wf=2.4; wa=0.09*amp; }
     var flap=Math.sin(time*wf)*wa;
@@ -2735,9 +2939,11 @@ function updateAnimation(r, dt){
   v.group.position.copy(r.pos);
   v.group.rotation.y=r.heading;
 
-  // the blob shadow shrinks and fades with height
-  var k=1/(1+r.pos.y*0.15);
-  pr.shadow.position.y=0.02-r.pos.y;      // the group has risen, the shadow has not
+  // The blob shadow shrinks and fades with height above the ground, not above
+  // sea level, and it stays on the hill while the racer leaves it.
+  var air2=Math.max(0, r.pos.y-groundY(r.t));
+  var k=1/(1+air2*0.15);
+  pr.shadow.position.y=0.02-air2;         // the group has risen, the shadow has not
   pr.shadow.scale.x=v.bodyWidthScale*k;
   pr.shadow.scale.z=v.bodyLenScale*k;
   pr.shadow.material.opacity=0.28*k;
@@ -2748,7 +2954,10 @@ function updateCamera(dt){
   if(!r) return;
   var fx=Math.sin(r.heading), fz=Math.cos(r.heading);
   var back=7+r.view.bodyLen*1.2;
-  var up=3.2+r.view.bodyLen*0.4+r.pos.y*0.5;
+  // the extra lift is for height above the ground, not height above sea level,
+  // or the camera would sink into every valley
+  var air=Math.max(0, r.pos.y-groundY(r.t));
+  var up=3.2+r.view.bodyLen*0.4+air*0.5;
   var dx=r.pos.x-fx*back, dy=r.pos.y+up, dz=r.pos.z-fz*back;
 
   if(state.mode==='countdown'){
@@ -2762,7 +2971,8 @@ function updateCamera(dt){
   camera.position.x=lerp(camera.position.x, dx, blend);
   camera.position.y=lerp(camera.position.y, dy, blend);
   camera.position.z=lerp(camera.position.z, dz, blend);
-  if(camera.position.y<0.6) camera.position.y=0.6;
+  var floor=Math.max(terrainY(camera.position.x, camera.position.z), groundY(r.t))+0.9;
+  if(camera.position.y<floor) camera.position.y=floor;
   camera.lookAt(r.pos.x+fx*4, r.pos.y+1.2, r.pos.z+fz*4);
 
   var wantFov=62+12*clamp(Math.abs(r.speed)/Math.max(1,r.stats.topSpeed),0,1)+(r.boosting?6:0);
@@ -2856,7 +3066,7 @@ document.addEventListener('visibilitychange', function(){
    ============================================================ */
 
 var keys={};
-var touchIn={ left:false, right:false, boost:false, brake:false };
+var touchIn={ boost:false, brake:false };
 var hasTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
 
 document.addEventListener('keydown', function(e){
@@ -2867,7 +3077,7 @@ document.addEventListener('keydown', function(e){
   }
   if(e.code==='Enter'){
     var primary={ title:'playBtn', garage:'raceBtn', shop:'shopBack', maps:'mapsBack',
-                  house:'houseBack', finished:'againBtn' }[state.mode];
+                  house:'houseBack', walk:'walkBack', finished:'againBtn' }[state.mode];
     if(state.mode==='finished' && $('results').classList.contains('hidden')) primary=null;
     if(primary){ e.preventDefault(); $(primary).click(); }
   }
@@ -2889,19 +3099,97 @@ function bindTouchBtn(id, key){
   el.addEventListener('pointercancel', off);
   el.addEventListener('pointerleave', off);
 }
-bindTouchBtn('tLeft','left');
-bindTouchBtn('tRight','right');
 bindTouchBtn('tBoost','boost');
 bindTouchBtn('tBrake','brake');
 
+/* ---------- the steering pad ----------
+
+   A thumb stick with no fixed home. The stick appears wherever the thumb lands
+   and reports how far it has slid, so a nudge is a nudge and a shove is a
+   shove; two buttons could only ever say all or nothing. If the thumb slides
+   past the edge, the whole stick comes with it, which is what stops a long
+   drag from pinning the steering at full lock. Horizontal travel steers; the
+   vertical reading is only used when walking round the Animal House. */
+
+var STICK_R=64, STICK_DEAD=6;
+var stick={ active:false, x:0, y:0, id:-1, ox:0, oy:0, twoAxis:false, used:false };
+
+function stickAxis(d){
+  var a=Math.abs(d);
+  if(a<STICK_DEAD) return 0;
+  return clamp((a-STICK_DEAD)/(STICK_R-STICK_DEAD), 0, 1)*(d<0?-1:1);
+}
+
+function stickShow(){
+  var el=$('stick');
+  el.style.left=stick.ox+'px';
+  el.style.top=stick.oy+'px';
+}
+
+function stickTo(cx, cy){
+  var dx=cx-stick.ox, dy=cy-stick.oy;
+  if(dx>STICK_R){ stick.ox+=dx-STICK_R; dx=STICK_R; }
+  else if(dx<-STICK_R){ stick.ox+=dx+STICK_R; dx=-STICK_R; }
+  if(dy>STICK_R){ stick.oy+=dy-STICK_R; dy=STICK_R; }
+  else if(dy<-STICK_R){ stick.oy+=dy+STICK_R; dy=-STICK_R; }
+  stickShow();
+  stick.x=stickAxis(dx);
+  stick.y=-stickAxis(dy);
+  $('stickKnob').style.transform='translate('+dx.toFixed(1)+'px,'+
+    (stick.twoAxis?dy.toFixed(1):'0')+'px)';
+}
+
+function stickDown(e){
+  e.preventDefault();
+  if(stick.active) return;
+  stick.active=true;
+  stick.id=(e.pointerId===undefined?-1:e.pointerId);
+  stick.ox=e.clientX; stick.oy=e.clientY;
+  stick.x=0; stick.y=0; stick.used=true;
+  stickShow();
+  $('stick').classList.add('on');
+  $('stickKnob').style.transform='translate(0,0)';
+  $('stickHint').classList.add('hidden');
+  var z=$('stickZone');
+  if(z.setPointerCapture && e.pointerId!==undefined){
+    try{ z.setPointerCapture(e.pointerId); }catch(err){}
+  }
+}
+
+function stickDrag(e){
+  if(!stick.active) return;
+  if(stick.id>=0 && e.pointerId!==stick.id) return;
+  e.preventDefault();
+  stickTo(e.clientX, e.clientY);
+}
+
+function stickOff(e){
+  if(!stick.active) return;
+  if(stick.id>=0 && e && e.pointerId!==undefined && e.pointerId!==stick.id) return;
+  stick.active=false; stick.id=-1; stick.x=0; stick.y=0;
+  $('stick').classList.remove('on');
+}
+
+(function bindStick(){
+  var z=$('stickZone');
+  z.addEventListener('pointerdown', stickDown);
+  z.addEventListener('pointermove', stickDrag);
+  z.addEventListener('pointerup', stickOff);
+  z.addEventListener('pointercancel', stickOff);
+  window.addEventListener('blur', stickOff);
+})();
+
 function readPlayerInput(r, dt){
   // A racer faces +Z and heading grows towards +X, which is the racer's own
-  // left and so the camera's left as well. Positive steer therefore turns left
-  // and the right-hand control is the negative one.
+  // left and so the camera's left as well. Positive steer therefore turns left,
+  // and sliding the stick to the right is the negative one.
   var steerIn=0;
-  if(keys.ArrowLeft||keys.KeyA||touchIn.left) steerIn+=1;
-  if(keys.ArrowRight||keys.KeyD||touchIn.right) steerIn-=1;
-  r.steer=lerp(r.steer, steerIn, 1-Math.pow(0.002, dt));
+  if(keys.ArrowLeft||keys.KeyA) steerIn+=1;
+  if(keys.ArrowRight||keys.KeyD) steerIn-=1;
+  // The stick is analog, so the thumb already does the smoothing a button needs
+  // done for it, and the steering can follow it much more closely.
+  if(stick.active) steerIn=clamp(steerIn-stick.x, -1, 1);
+  r.steer=lerp(r.steer, steerIn, 1-Math.pow(stick.active?1e-7:0.002, dt));
   // The racer accelerates on its own, so one thumb per hand is enough: the left
   // steers and the right boosts. Slowing down still overrides the throttle.
   r.braking=!!(keys.ArrowDown||keys.KeyS||touchIn.brake);
@@ -3045,12 +3333,16 @@ function showZoneTip(text){
 }
 
 var SCREENS=['title','garage','shop','maps','house','results'];
+var TOUCH_CTLS=['stickZone','stickHint','tBoost','tBrake'];
 function setMode(mode){
   state.mode=mode;
   SCREENS.forEach(function(id){ $(id).classList.add('hidden'); });
   $('hud').classList.add('hidden');
   $('countdown').classList.add('hidden');
-  ['tLeft','tRight','tBoost','tBrake'].forEach(function(id){ $(id).classList.add('hidden'); });
+  TOUCH_CTLS.forEach(function(id){ $(id).classList.add('hidden'); });
+  $('walkBar').classList.add('hidden');
+  stickOff();
+  stick.twoAxis=false;
 
   if(mode==='title'){ $('title').classList.remove('hidden'); }
   else if(mode==='garage'){
@@ -3071,10 +3363,22 @@ function setMode(mode){
     if(!decorGroup) rebuildDecor();
     refreshHouse();
   }
+  else if(mode==='walk'){
+    $('walkBar').classList.remove('hidden');
+    $('stickZone').classList.remove('hidden');
+    stick.twoAxis=true;
+    $('walkTip').textContent = hasTouch
+      ? 'Slide your thumb up to walk, left and right to turn'
+      : 'Arrow keys or W A S D to walk about';
+  }
   else if(mode==='countdown'||mode==='racing'||mode==='finished'){
     $('hud').classList.remove('hidden');
+    // the pad works with a mouse too, so it is not gated on a touch screen
+    $('stickZone').classList.remove('hidden');
     if(hasTouch){
-      ['tLeft','tRight','tBoost','tBrake'].forEach(function(id){ $(id).classList.remove('hidden'); });
+      $('tBoost').classList.remove('hidden');
+      $('tBrake').classList.remove('hidden');
+      if(!stick.used) $('stickHint').classList.remove('hidden');
     }
   }
 }
@@ -3086,7 +3390,7 @@ function makeRacer(build, isPlayer, name){
   view.bodyLenScale=view.parts.shadow.scale.z;
   var r={
     isPlayer:isPlayer, name:name||'You', build:build, stats:stats, view:view,
-    pos:new THREE.Vector3(), heading:0, speed:0, vy:0, airborne:false,
+    pos:new THREE.Vector3(), heading:0, speed:0, vy:0, airborne:false, airTime:0,
     steer:0, gas:0, braking:false, boosting:false, boost:100,
     nearestIdx:-1, t:0, lap:0, cpNext:0, crossedStart:false, progress:-1,
     finished:false, finishTime:0, finishOrder:0, lapStart:0, bestLap:null,
@@ -3140,7 +3444,7 @@ function startRace(){
     var p=TRACK.pts[idx], nrm=normalAt(idx);
     var off=((k%3)-1)*Math.min(3.5, TRACK.halfW*0.5);
     var r=line[k];
-    r.pos.set(p.x+nrm.x*off, 0, p.z+nrm.z*off);
+    r.pos.set(p.x+nrm.x*off, groundY(idx/N), p.z+nrm.z*off);
     r.heading=Math.atan2(TRACK.tan[idx].x, TRACK.tan[idx].z);
     r.nearestIdx=idx;
     r.t=idx/N;
@@ -3150,7 +3454,7 @@ function startRace(){
   state.racers=line;
 
   var pl=line[0];
-  camera.position.set(pl.pos.x-Math.sin(pl.heading)*16, 13, pl.pos.z-Math.cos(pl.heading)*16);
+  camera.position.set(pl.pos.x-Math.sin(pl.heading)*16, pl.pos.y+13, pl.pos.z-Math.cos(pl.heading)*16);
   state.countdown=3;
   setMode('countdown');
   $('countdown').textContent='3';
@@ -3278,6 +3582,8 @@ onClick('mapsBtn', function(){ setMode('maps'); });
 onClick('mapsBack', function(){ setMode('garage'); });
 onClick('houseBtn', function(){ setMode('house'); });
 onClick('houseBack', function(){ setMode('garage'); });
+onClick('walkBtn', function(){ enterWalk(); });
+onClick('walkBack', function(){ leaveWalk(); });
 onClick('randomBtn', function(){
   var own=ownedList();
   SLOTS.forEach(function(s){ save.build[s]=own[Math.floor(Math.random()*own.length)]; });
@@ -3316,9 +3622,11 @@ $('slotList').addEventListener('click', function(e){
 /* ============================================================
    14. THE ANIMAL HOUSE
 
-   A doll-house room with the front wall left off. Every animal you own stands
-   in it with its name over its head, and coins buy furniture that stays put
-   between visits. Nothing in here is simulated; it is all idle animation.
+   A room with the front wall left off. Every animal you own stands in it with
+   its name over its head, and coins buy furniture that stays put between
+   visits. WALK AROUND puts your own racer in the room and hands it the same
+   thumb stick the race uses, so the animals can be looked at from a step away
+   instead of from the far side of the lawn.
 
    Every piece of furniture is built around its own origin, standing on y=0 and
    facing +Z as though it were against the back wall. Its slot in DECOR says
@@ -3330,9 +3638,12 @@ var houseScene=litScene();
 houseScene.fog=null;
 var houseCam=new THREE.PerspectiveCamera(45, 1, 0.1, 400);
 
-// the floor is x -10.2..10.2 by z -6.7..6.7. animals stand in the middle,
-// furniture lives around the edge, and the two never share a patch.
-var ROOM={ w:21, d:14, wall:4.8 };
+// Big enough to walk about in: the floor runs x -13.5..13.5 by z -9.5..9.5.
+// Animals stand in rows down the middle, furniture lives around the edge, and
+// the aisles between them are what you walk along.
+var ROOM={ w:27, d:19, wall:5.2 };
+// the furniture layout was drawn for the 21 by 14 room it started in
+var ROOM_HX=ROOM.w/21, ROOM_HZ=ROOM.d/14;
 
 var houseAnimals=[];       // one built racer per owned animal
 var houseAnimalsFor='';    // the owned list these were built for
@@ -3365,7 +3676,7 @@ function hBasic(color){
   var beamM=new THREE.MeshStandardMaterial({color:0x8a6540, flatShading:true, roughness:0.85});
 
   // floorboards
-  var planks=9;
+  var planks=12;
   for(var i=0;i<planks;i++){
     var plank=new THREE.Mesh(box(ROOM.w, 0.3, ROOM.d/planks-0.06), floorM);
     plank.position.set(0, -0.16, -ROOM.d/2 + (i+0.5)*(ROOM.d/planks));
@@ -3381,9 +3692,10 @@ function hBasic(color){
     g.add(w);
   });
   // stripey wallpaper on the back wall
-  for(var st=-4;st<=4;st++){
+  var stN=Math.floor((ROOM.w-1.6)/2/2.4);
+  for(var st=-stN;st<=stN;st++){
     var strip=new THREE.Mesh(box(0.55, ROOM.wall-0.4, 0.06), trimM);
-    strip.position.set(st*2.2, ROOM.wall/2, -ROOM.d/2+0.19);
+    strip.position.set(st*2.4, ROOM.wall/2, -ROOM.d/2+0.19);
     g.add(strip);
   }
   // a doorway and two windows
@@ -3393,7 +3705,7 @@ function hBasic(color){
   var knob=new THREE.Mesh(sph(0.11,8,7), hMat(0xffd166));
   knob.position.set(0.65, 1.6, -ROOM.d/2+0.29);
   g.add(knob);
-  [-6.4, 6.4].forEach(function(x){
+  [-ROOM.w*0.3, ROOM.w*0.3].forEach(function(x){
     var frame=new THREE.Mesh(box(2.4, 1.8, 0.12), beamM);
     frame.position.set(x, 3.0, -ROOM.d/2+0.2);
     g.add(frame);
@@ -3405,12 +3717,14 @@ function hBasic(color){
     g.add(sill);
   });
   // a see-through roof: a ridge, gable beams and rafters, so nothing is hidden
-  var rise=2.1;
+  var rise=2.6;
   var ridge=new THREE.Mesh(box(ROOM.w+1.2, 0.26, 0.26), beamM);
   ridge.position.set(0, ROOM.wall+rise, 0);
   g.add(ridge);
-  for(var rf=-3;rf<=3;rf++){
-    var x0=rf*3.4, thick=(Math.abs(rf)===3)?0.24:0.16;
+  var rafters=Math.max(7, Math.round(ROOM.w/3.2)|1);
+  for(var rf=0;rf<rafters;rf++){
+    var x0=-ROOM.w/2+0.6 + rf*(ROOM.w-1.2)/(rafters-1);
+    var thick=(rf===0||rf===rafters-1)?0.24:0.16;
     [1,-1].forEach(function(sd){
       var raf=new THREE.Mesh(box(thick, thick, ROOM.d*0.56), beamM);
       raf.position.set(x0, ROOM.wall+rise*0.5, sd*ROOM.d*0.26);
@@ -3431,7 +3745,7 @@ function hBasic(color){
 // Items that move push a function onto houseAnims, which the idle loop calls
 // with the clock. Everything is drawn facing +Z, centred on its own footprint.
 var DECOR=[
-  { key:'rug', name:'Stripey rug', price:40,
+  { key:'rug', r:0, name:'Stripey rug', price:40,
     blurb:'A big soft rug for the middle of the floor.',
     color:0xef476f, at:[0,-1.2], build:function(){
       var g=new THREE.Group();
@@ -3443,7 +3757,7 @@ var DECOR=[
       }
       return g;
     }},
-  { key:'banner', name:'Name banner', price:60,
+  { key:'banner', r:0, name:'Name banner', price:60,
     blurb:'DOTTIE’S HOUSE, in big letters over the door.',
     color:0xffd166, at:[0,-6.6], y:3.7, build:function(){
       var g=new THREE.Group();
@@ -3463,7 +3777,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'beanbag', name:'Bean bag', price:80,
+  { key:'beanbag', r:1.2, name:'Bean bag', price:80,
     blurb:'A squishy purple blob. Everyone fights over it.',
     color:0x9b6fd6, at:[-9.3,2.6], rot:Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3473,7 +3787,7 @@ var DECOR=[
       top.scale.set(1,0.5,1); top.position.set(0,1.0,0.1); g.add(top);
       return g;
     }},
-  { key:'palm', name:'Potted palm', price:100,
+  { key:'palm', r:0.8, name:'Potted palm', price:100,
     blurb:'A pot plant nobody has managed to kill yet.',
     color:0x4fb04a, at:[8.9,-5.7], build:function(){
       var g=new THREE.Group();
@@ -3490,7 +3804,7 @@ var DECOR=[
       }
       return g;
     }},
-  { key:'lights', name:'Fairy lights', price:110,
+  { key:'lights', r:0, name:'Fairy lights', price:110,
     blurb:'A string of little bulbs that twinkle all round the walls.',
     color:0xffe08a, at:[0,0], build:function(){
       var g=new THREE.Group();
@@ -3512,7 +3826,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'bookshelf', name:'Bookshelf', price:120,
+  { key:'bookshelf', r:1.5, name:'Bookshelf', price:120,
     blurb:'Books about racing, mostly. A few about mud.',
     color:0x8a6540, at:[-9.7,-4.9], rot:Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3531,7 +3845,7 @@ var DECOR=[
       }
       return g;
     }},
-  { key:'snacks', name:'Snack table', price:140,
+  { key:'snacks', r:1.3, name:'Snack table', price:140,
     blurb:'Carrots, fish, bananas and leaves. Something for everybody.',
     color:0xf2a71b, at:[9.2,2.6], rot:-Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3557,7 +3871,7 @@ var DECOR=[
       leaf.position.set(-0.1,1.15,-0.6); g.add(leaf);
       return g;
     }},
-  { key:'sofa', name:'Sofa', price:160,
+  { key:'sofa', r:2.1, name:'Sofa', price:160,
     blurb:'Three cushions, room for five animals if they squash up.',
     color:0x3f9ad6, at:[-9.4,-1.0], rot:Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3575,7 +3889,7 @@ var DECOR=[
       }
       return g;
     }},
-  { key:'fishtank', name:'Fish tank', price:180,
+  { key:'fishtank', r:1.6, name:'Fish tank', price:180,
     blurb:'Three fish going round and round. The shark watches for hours.',
     color:0x2ba6d9, at:[9.7,-1.0], rot:-Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3602,7 +3916,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'bunks', name:'Bunk beds', price:200,
+  { key:'bunks', r:1.6, name:'Bunk beds', price:200,
     blurb:'Two bunks and a ladder. The rabbit always wants the top one.',
     color:0xf4e3c8, at:[9.6,-4.9], rot:-Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3628,7 +3942,7 @@ var DECOR=[
       }
       return g;
     }},
-  { key:'trophy', name:'Trophy shelf', price:220,
+  { key:'trophy', r:0, name:'Trophy shelf', price:220,
     blurb:'Somewhere to put the cups you win. Three of them, gold.',
     color:0xffb703, at:[-5.6,-6.4], y:2.4, build:function(){
       var g=new THREE.Group();
@@ -3648,7 +3962,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'slide', name:'Slide', price:240,
+  { key:'slide', r:2.0, name:'Slide', price:240,
     blurb:'A red slide with a ladder. Louder than it looks.',
     color:0xef476f, at:[-8.0,5.6], rot:Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3670,7 +3984,7 @@ var DECOR=[
       }
       return g;
     }},
-  { key:'pool', name:'Splash pool', price:260,
+  { key:'pool', r:1.7, name:'Splash pool', price:260,
     blurb:'A paddling pool. The duck moved in the day it arrived.',
     color:0x2ba6d9, at:[0.2,5.7], build:function(){
       var g=new THREE.Group();
@@ -3688,7 +4002,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'fountain', name:'Fountain', price:280,
+  { key:'fountain', r:1.5, name:'Fountain', price:280,
     blurb:'A little stone fountain that actually bubbles.',
     color:0xb8c6d0, at:[-4.4,5.7], build:function(){
       var g=new THREE.Group();
@@ -3715,7 +4029,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'disco', name:'Disco ball', price:300,
+  { key:'disco', r:0, name:'Disco ball', price:300,
     blurb:'Hangs from the roof and spins. The whole room goes silly.',
     color:0xd9dfe4, at:[0,-0.6], build:function(){
       var g=new THREE.Group();
@@ -3743,7 +4057,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'castle', name:'Bouncy castle', price:340,
+  { key:'castle', r:2.0, name:'Bouncy castle', price:340,
     blurb:'Yes, indoors. It squashes and springs all by itself.',
     color:0x7bc043, at:[4.8,5.6], build:function(){
       var g=new THREE.Group();
@@ -3767,7 +4081,7 @@ var DECOR=[
       });
       return g;
     }},
-  { key:'telescope', name:'Telescope', price:380,
+  { key:'telescope', r:0.9, name:'Telescope', price:380,
     blurb:'For looking at the moon, which is also a racetrack.',
     color:0x3f4756, at:[8.4,5.6], rot:-Math.PI/2, build:function(){
       var g=new THREE.Group();
@@ -3806,16 +4120,31 @@ function rebuildDecor(){
   DECOR.forEach(function(d){
     if(save.decor.indexOf(d.key)<0) return;
     var g=d.build();
-    g.position.set(d.at[0], d.y||0, d.at[1]);
+    g.position.set(d.at[0]*ROOM_HX, d.y||0, d.at[1]*ROOM_HZ);
     g.rotation.y=d.rot||0;
     decorGroup.add(g);
   });
   houseScene.add(decorGroup);
 }
 
+// Everything a walker cannot walk through: the furniture that is really in the
+// room, plus each animal standing in it. Circles, because a room this friendly
+// does not need corners.
+function houseBlocks(){
+  var out=[];
+  DECOR.forEach(function(d){
+    if(!d.r || save.decor.indexOf(d.key)<0) return;
+    out.push({ x:d.at[0]*ROOM_HX, z:d.at[1]*ROOM_HZ, r:d.r });
+  });
+  houseAnimals.forEach(function(h){
+    out.push({ x:h.view.group.position.x, z:h.view.group.position.z, r:1.0 });
+  });
+  return out;
+}
+
 /* ---------- the animals on show ---------- */
 
-var HOUSE_ROWS=[-4.3,-1.5,1.3], HOUSE_PER_ROW=6, HOUSE_SCALE=0.8;
+var HOUSE_ROWS=[-6.0,-2.4,1.2], HOUSE_PER_ROW=6, HOUSE_SCALE=0.9, HOUSE_GAP=3.8;
 
 function rebuildHouseAnimals(){
   var key=save.owned.join(',');
@@ -3837,19 +4166,20 @@ function rebuildHouseAnimals(){
     var n=Math.min(HOUSE_PER_ROW, list.length-row*HOUSE_PER_ROW);
     var view=buildRacer({head:k, body:k, front:k, back:k, tail:k});
     view.group.scale.setScalar(HOUSE_SCALE);
-    view.group.position.set((col-(n-1)/2)*2.9, 0, HOUSE_ROWS[row]);
+    view.group.position.set((col-(n-1)/2)*HOUSE_GAP, 0, HOUSE_ROWS[row]);
     view.group.rotation.y=Math.PI + (col-(n-1)/2)*0.08;
     houseScene.add(view.group);
     var label=nameSprite(ANIMALS[k].name);
     label.position.y=view.rideHeight + view.bodyHeight*0.6 + 0.8 + (col%3)*0.72;
-    label.scale.set(2.2/HOUSE_SCALE, 0.55/HOUSE_SCALE, 1);
+    label.scale.set(1.85/HOUSE_SCALE, 0.46/HOUSE_SCALE, 1);
     view.group.add(label);
     houseAnimals.push({ view:view, label:label, phase:i*1.37, key:k });
   });
 }
 
-function updateHouse(dt){
-  rebuildHouseAnimals();
+// The animals and the furniture doing their own thing. Shared by the overview
+// and by walking about, because they carry on either way.
+function animateHouseIdle(){
   var i;
   for(i=0;i<houseAnimals.length;i++){
     var h=houseAnimals[i], v=h.view, pr=v.parts, ph=time*1.1+h.phase;
@@ -3867,12 +4197,171 @@ function updateHouse(dt){
     }
   }
   for(i=0;i<houseAnims.length;i++) houseAnims[i](time);
+}
+
+function updateHouse(dt){
+  rebuildHouseAnimals();
+  animateHouseIdle();
   updateHouseCam();
+}
+
+/* ---------- walking round it ----------
+
+   Your own racer, dropped in the doorway with the camera over its shoulder. The
+   stick that steers in a race turns here and its up-and-down reading walks, so
+   there is only ever one control to learn. Walls, furniture and the animals are
+   all circles you cannot walk into, which is enough to keep a small driver from
+   ending up inside the sofa. */
+
+var WALK={ pos:new THREE.Vector3(0,0,0), heading:Math.PI, speed:0, turn:0,
+           gait:0, lastHalf:0, avatar:null, builtFor:'', blocks:[] };
+var WALK_SPEED=5.4, WALK_TURN=2.4;
+
+function walkAvatar(){
+  var key=SLOTS.map(function(sl){ return save.build[sl]; }).join(',');
+  if(WALK.avatar && WALK.builtFor===key) return;
+  if(WALK.avatar) disposeRacer(WALK.avatar);
+  WALK.avatar=buildRacer(save.build);
+  WALK.avatar.group.scale.setScalar(HOUSE_SCALE);
+  WALK.builtFor=key;
+  houseScene.add(WALK.avatar.group);
+}
+
+function enterWalk(){
+  rebuildHouseAnimals();
+  if(!decorGroup) rebuildDecor();
+  walkAvatar();
+  WALK.blocks=houseBlocks();
+  WALK.pos.set(0, 0, ROOM.d/2-1.5);
+  // a couple of passes, so a pool parked in the doorway is stepped around
+  // rather than slid out of once the first frame runs
+  var mx=ROOM.w/2-1.1, zBack=-(ROOM.d/2-1.1), zFront=ROOM.d/2-0.9, out;
+  for(var i=0;i<4;i++){
+    out=walkClear(WALK.pos.x, WALK.pos.z, mx, zBack, zFront);
+    WALK.pos.x=out[0]; WALK.pos.z=out[1];
+  }
+  WALK.heading=Math.PI;
+  WALK.speed=0; WALK.turn=0; WALK.gait=0;
+  houseCam.position.set(WALK.pos.x, 2.6, WALK.pos.z+5.5);
+  setMode('walk');
+}
+
+function leaveWalk(){
+  if(WALK.avatar){ disposeRacer(WALK.avatar); WALK.avatar=null; WALK.builtFor=''; }
+  setMode('house');
+}
+
+function readWalkInput(dt){
+  var turn=0, go=0;
+  if(keys.ArrowLeft||keys.KeyA) turn+=1;
+  if(keys.ArrowRight||keys.KeyD) turn-=1;
+  if(keys.ArrowUp||keys.KeyW) go+=1;
+  if(keys.ArrowDown||keys.KeyS) go-=1;
+  if(stick.active){
+    turn=clamp(turn-stick.x, -1, 1);
+    go=clamp(go+stick.y, -1, 1);
+  }
+  WALK.turn=lerp(WALK.turn, turn, 1-Math.pow(1e-6, dt));
+  WALK.speed=lerp(WALK.speed, go*WALK_SPEED*(go<0?0.45:1), 1-Math.pow(0.0005, dt));
+}
+
+function walkStep(dt){
+  readWalkInput(dt);
+  WALK.heading += WALK.turn*WALK_TURN*dt;
+  var mx=ROOM.w/2-1.1, zBack=-(ROOM.d/2-1.1), zFront=ROOM.d/2-0.9;
+  var nx=clamp(WALK.pos.x + Math.sin(WALK.heading)*WALK.speed*dt, -mx, mx);
+  var nz=clamp(WALK.pos.z + Math.cos(WALK.heading)*WALK.speed*dt, zBack, zFront);
+  var out=walkClear(nx, nz, mx, zBack, zFront);
+  WALK.pos.x=out[0]; WALK.pos.z=out[1];
+}
+
+// Pushes a position out of anything it is standing inside, then back inside the
+// walls. Squeezing past the sofa can put it back inside the fish tank, so the
+// whole thing runs a few times and settles.
+function walkClear(nx, nz, mx, zBack, zFront){
+  for(var pass=0;pass<3;pass++){
+    for(var i=0;i<WALK.blocks.length;i++){
+      var bl=WALK.blocks[i], dx=nx-bl.x, dz=nz-bl.z, rr=bl.r+0.85;
+      var d2=dx*dx+dz*dz;
+      if(d2<rr*rr){
+        var d=Math.sqrt(d2);
+        if(d<1e-4){ dx=0; dz=1; d=1; }      // dead centre: step out the front
+        nx=clamp(bl.x+dx/d*rr, -mx, mx);
+        nz=clamp(bl.z+dz/d*rr, zBack, zFront);
+      }
+    }
+  }
+  return [nx, nz];
+}
+
+function updateWalk(dt){
+  rebuildHouseAnimals();
+  walkAvatar();
+  walkStep(dt);
+
+  var v=WALK.avatar, pr=v.parts, spd=Math.abs(WALK.speed);
+  var amp=clamp(spd/WALK_SPEED, 0, 1)*0.55;
+  WALK.gait += dt*(spd/Math.max(0.35, v.strideLen))*2.2;
+  var sw=Math.sin(WALK.gait)*amp;
+  pr.legs[0].rotation.x= sw; pr.legs[1].rotation.x=-sw;
+  pr.legs[2].rotation.x=-sw; pr.legs[3].rotation.x= sw;
+  pr.body.position.y=v.rideHeight+Math.abs(Math.sin(WALK.gait*2))*0.06*amp;
+  pr.body.rotation.x=v.baseTilt;
+  pr.body.rotation.z=-WALK.turn*0.09;
+  pr.head.rotation.x=Math.sin(WALK.gait*2)*0.07*amp;
+  pr.head.rotation.y=Math.sin(time*0.6)*0.25;
+  pr.tail.rotation.y=Math.sin(WALK.gait*1.3+1)*0.35;
+  if(pr.wings){
+    var f=Math.sin(time*2)*0.1;
+    pr.wings[0].rotation.z=-f; pr.wings[1].rotation.z=f;
+  }
+  v.group.position.copy(WALK.pos);
+  v.group.rotation.y=WALK.heading;
+
+  var half=Math.floor(WALK.gait/Math.PI);
+  if(half!==WALK.lastHalf){
+    WALK.lastHalf=half;
+    if(amp>0.14) sfx.step(0.5);
+  }
+
+  animateHouseIdle();
+  updateWalkCam(dt);
+}
+
+// Over the shoulder and close. The three walls hold the camera in; the open
+// front does not, so backing up to the doorway shows the whole room at once.
+function updateWalkCam(dt){
+  setHouseFov(houseFov(46, 70));
+  var v=WALK.avatar;
+  var back=4.6+v.bodyLen*0.8*HOUSE_SCALE;
+  var eye=2.2+(v.rideHeight+v.bodyHeight*0.5)*HOUSE_SCALE*0.7;
+  var fx=Math.sin(WALK.heading), fz=Math.cos(WALK.heading);
+  var mx=ROOM.w/2-0.5;
+  var cx=clamp(WALK.pos.x-fx*back, -mx, mx);
+  var cz=clamp(WALK.pos.z-fz*back, -(ROOM.d/2-0.5), ROOM.d/2+7);
+  var blend=1-Math.pow(0.0012, dt);
+  houseCam.position.x=lerp(houseCam.position.x, cx, blend);
+  houseCam.position.y=lerp(houseCam.position.y, eye, blend);
+  houseCam.position.z=lerp(houseCam.position.z, cz, blend);
+  houseCam.lookAt(WALK.pos.x+fx*3.4, 1.35, WALK.pos.z+fz*3.4);
+}
+
+// A phone held upright sees a very narrow slice of the world through a fixed
+// field of view, which is most of why the room used to look so far away. Both
+// house cameras pick their field of view from the shape of the screen instead,
+// so about the same width of room is in shot whichever way the phone is held.
+function houseFov(lo, hi){
+  var f=2*Math.atan(Math.tan(29*Math.PI/180)/Math.max(0.45, houseCam.aspect))*180/Math.PI;
+  return clamp(f, lo, hi);
+}
+function setHouseFov(f){
+  if(Math.abs(houseCam.fov-f)>0.4){ houseCam.fov=f; houseCam.updateProjectionMatrix(); }
 }
 
 // Framed the same way the garage is: the card covers the right of a wide screen
 // or the bottom of a narrow one, so the room is aimed at whatever is left over.
 function updateHouseCam(){
+  setHouseFov(houseFov(40, 64));
   var W=window.innerWidth, narrow=W<760;
   var tanH=Math.tan((houseCam.fov*Math.PI/180)/2);
   var freeY=narrow ? 0.44 : 1;
@@ -3883,19 +4372,22 @@ function updateHouseCam(){
   // The open front of the room is what gets framed, because it is the nearest
   // and so the widest part of it. A narrow screen frames the middle of the room
   // and lets the slow sway show the sides.
-  var span=narrow ? ROOM.w*0.78 : ROOM.w+1.5;
-  var needX=span/(1.75*freeX*tanX);
-  var needY=tall/(1.6*freeY*tanH);
-  var near=Math.max(12, needX, needY);
+  // Only a slice of the room is framed rather than all of it: the doorway view
+  // used to sit so far back that the animals were specks, and WALK AROUND is
+  // there for anyone who wants to see the far corners.
+  var span=narrow ? ROOM.w*0.42 : ROOM.w*0.66;
+  var needX=span/(1.5*freeX*tanX);
+  var needY=tall/(1.7*freeY*tanH);
+  var near=Math.max(8, needX, needY);
   var dist=near+ROOM.d/2;
   var sway=Math.sin(time*0.13)*(narrow?0.2:0.3);
-  houseCam.position.set(Math.sin(sway)*dist*0.4, 7.2, Math.cos(sway)*dist*0.93);
+  houseCam.position.set(Math.sin(sway)*dist*0.4, 5.6, Math.cos(sway)*dist*0.93);
   // aim a little above the animals, then shove the aim off-centre by however
   // much of the screen the card is covering
-  var cx=0, cy=2.6;
+  var cx=0, cy=3.4;
   if(narrow) cy -= (1-freeY)*near*tanH;
   else cx += (cardW/W)*near*tanX;
-  houseCam.lookAt(cx, cy, -0.5);
+  houseCam.lookAt(cx, cy, -1.5);
 }
 
 function refreshHouse(){
@@ -4035,6 +4527,11 @@ function animate(){
   }
   if(state.mode==='house'){
     updateHouse(dt);
+    renderer.render(houseScene, houseCam);
+    return;
+  }
+  if(state.mode==='walk'){
+    updateWalk(dt);
     renderer.render(houseScene, houseCam);
     return;
   }

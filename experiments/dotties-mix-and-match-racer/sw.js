@@ -2,7 +2,7 @@
    Precaches everything the game needs so it runs with no connection once it
    has been opened once. Cached files are served immediately and refreshed in
    the background, so an update shows up the next time the game is opened. */
-var CACHE = 'dotties-racer-v2';
+var CACHE = 'dotties-racer-v3';
 var BASE = '/experiments/dotties-mix-and-match-racer/';
 var ASSETS = [
   BASE,
