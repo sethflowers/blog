@@ -1,0 +1,3434 @@
+---
+title: Dragon Isle
+description: A third-person dragon adventure on a big, hilly island. Walk, run, swim, fly and breathe fire, hunt the Vikings hunting you, and spend their coins on armour and claws back at your cave.
+date: 2026-09-10
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#07101a">
+<meta name="apple-mobile-web-app-title" content="Dragon Isle">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/experiments/dragon-isle/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/dragon-isle/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/dragon-isle/icon-192.png">
+<title>Dragon Isle</title>
+<style>
+  :root{
+    --ink:#07101a;
+    --parch:#efe6d2;
+    --parch-dim:rgba(239,230,210,.58);
+    --ember:#e87a2a;
+    --ember-hot:#ffc46b;
+    --gold:#f0c04a;
+    --blood:#b3352f;
+    --sea:#3d86a8;
+    --ally:#66d19e;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{
+    width:100%;height:100%;overflow:hidden;background:var(--ink);
+    touch-action:none;overscroll-behavior:none;
+    font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;
+    color:var(--parch);
+    -webkit-user-select:none;user-select:none;
+  }
+  canvas#c{display:block;position:fixed;inset:0;width:100%;height:100%;}
+
+  /* ---------- overlays ---------- */
+  #vignette{
+    position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:radial-gradient(ellipse at center,rgba(0,0,0,0) 46%,rgba(0,0,0,.72) 100%);
+  }
+  #hurt{
+    position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;
+    background:radial-gradient(ellipse at center,rgba(140,10,10,0) 32%,rgba(160,18,14,.92) 100%);
+    transition:opacity .4s ease-out;
+  }
+  #wet{
+    position:fixed;inset:0;pointer-events:none;z-index:6;opacity:0;
+    background:radial-gradient(ellipse at center,rgba(20,70,110,0) 20%,rgba(16,64,104,.75) 100%);
+    transition:opacity .5s ease-out;
+  }
+  #fade{
+    position:fixed;inset:0;pointer-events:none;z-index:26;opacity:0;background:#04080d;
+    transition:opacity .6s ease;
+  }
+
+  /* ---------- hud ---------- */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;}
+  .stat{position:absolute;}
+
+  #bars{left:calc(env(safe-area-inset-left) + 18px);top:calc(env(safe-area-inset-top) + 16px);width:170px;}
+  .barLabel{font-size:9px;letter-spacing:.28em;color:var(--parch-dim);margin-bottom:4px;}
+  .track{width:100%;height:7px;background:rgba(239,230,210,.14);border-radius:1px;overflow:hidden;margin-bottom:11px;}
+  .track i{display:block;height:100%;width:100%;transition:width .15s linear;}
+  #hpFill{background:linear-gradient(90deg,#c9403a,#e8635a);}
+  #fireFill{background:linear-gradient(90deg,#c4531a,#ffc46b);}
+  #stamFill{background:linear-gradient(90deg,#2f6d8c,#7cc7e0);}
+  #armourTag{font-size:9px;letter-spacing:.22em;color:var(--parch-dim);margin-top:-4px;}
+  #armourTag b{color:var(--parch);font-weight:400;}
+
+  /* The purse lives on the left: the right side belongs to the radar and the
+     thumb buttons, and on a short landscape screen they would collide. */
+  #purse{left:calc(env(safe-area-inset-left) + 18px);top:calc(env(safe-area-inset-top) + 156px);
+    text-align:left;font-variant-numeric:tabular-nums;}
+  #coinNum{font-size:26px;font-weight:200;letter-spacing:.02em;color:var(--gold);line-height:1;}
+  #coinLabel{font-size:9px;letter-spacing:.3em;color:var(--parch-dim);margin-top:4px;}
+  #raid{font-size:10px;letter-spacing:.2em;color:var(--blood);margin-top:9px;}
+
+  #radarWrap{right:calc(env(safe-area-inset-right) + 18px);top:calc(env(safe-area-inset-top) + 16px);
+    width:136px;height:136px;}
+  #radar{width:136px;height:136px;border-radius:50%;display:block;
+    border:1px solid rgba(239,230,210,.26);background:rgba(5,12,20,.62);
+    box-shadow:0 0 18px rgba(0,0,0,.55) inset;}
+
+  #modePill{left:50%;bottom:calc(env(safe-area-inset-bottom) + 84px);transform:translateX(-50%);
+    font-size:10px;letter-spacing:.34em;color:var(--parch-dim);text-shadow:0 0 6px #000;}
+  #toast{left:50%;top:calc(env(safe-area-inset-top) + 88px);transform:translateX(-50%);
+    font-size:12px;letter-spacing:.24em;color:var(--parch);opacity:0;transition:opacity .3s;
+    white-space:nowrap;text-shadow:0 0 8px #000;text-align:center;}
+  #prompt{left:50%;bottom:calc(env(safe-area-inset-bottom) + 112px);transform:translateX(-50%);
+    font-size:11px;letter-spacing:.24em;color:var(--gold);opacity:0;transition:opacity .25s;
+    white-space:nowrap;text-shadow:0 0 8px #000;}
+  #kills{left:calc(env(safe-area-inset-left) + 18px);top:calc(env(safe-area-inset-top) + 132px);
+    font-size:10px;letter-spacing:.2em;color:var(--parch-dim);font-variant-numeric:tabular-nums;}
+
+  #reticle{position:fixed;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;z-index:11;
+    pointer-events:none;opacity:0;transition:opacity .2s;}
+  #reticle div{position:absolute;background:rgba(255,196,107,.8);box-shadow:0 0 3px rgba(0,0,0,.9);}
+  #reticle .v{width:1.5px;height:6px;left:10.25px;}
+  #reticle .h{height:1.5px;width:6px;top:10.25px;}
+  #reticle .t{top:0}#reticle .b{bottom:0}#reticle .l{left:0}#reticle .r{right:0}
+
+  /* ---------- touch controls ---------- */
+  .touchzone{position:fixed;z-index:12;}
+  #stickZone{left:0;bottom:0;width:46%;height:66%;}
+  #lookZone{right:0;top:0;width:54%;height:100%;}
+  #stick{position:fixed;z-index:13;width:120px;height:120px;margin:-60px 0 0 -60px;
+    border:1px solid rgba(239,230,210,.22);border-radius:50%;opacity:0;transition:opacity .18s;
+    pointer-events:none;background:radial-gradient(circle,rgba(239,230,210,.05),rgba(0,0,0,0) 70%);}
+  #knob{position:absolute;width:48px;height:48px;left:35px;top:35px;border-radius:50%;
+    background:rgba(239,230,210,.28);border:1px solid rgba(239,230,210,.5);}
+
+  .btn{position:fixed;z-index:14;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    border:1px solid rgba(239,230,210,.3);background:rgba(9,16,25,.44);
+    backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+    font-size:10px;letter-spacing:.14em;color:var(--parch-dim);text-align:center;line-height:1.15;}
+  .btn:active,.btn.on{background:rgba(239,230,210,.2);color:var(--parch);}
+  #bFire{width:94px;height:94px;right:calc(env(safe-area-inset-right) + 20px);bottom:calc(env(safe-area-inset-bottom) + 22px);
+    border-color:rgba(232,122,42,.6);color:var(--ember-hot);font-size:11px;letter-spacing:.2em;}
+  #bFire:active,#bFire.on{background:rgba(232,122,42,.3);}
+  #bBite{width:62px;height:62px;right:calc(env(safe-area-inset-right) + 126px);bottom:calc(env(safe-area-inset-bottom) + 30px);}
+  #bUp{width:70px;height:70px;right:calc(env(safe-area-inset-right) + 32px);bottom:calc(env(safe-area-inset-bottom) + 128px);}
+  #bDown{width:56px;height:56px;right:calc(env(safe-area-inset-right) + 128px);bottom:calc(env(safe-area-inset-bottom) + 106px);}
+  #bRoar{width:52px;height:52px;right:calc(env(safe-area-inset-right) + 114px);bottom:calc(env(safe-area-inset-bottom) + 176px);}
+  #menuBtn{width:44px;height:44px;left:calc(env(safe-area-inset-left) + 18px);bottom:calc(env(safe-area-inset-bottom) + 22px);font-size:18px;}
+  #shopBtn{width:64px;height:64px;left:calc(env(safe-area-inset-left) + 76px);bottom:calc(env(safe-area-inset-bottom) + 22px);
+    border-color:rgba(240,192,74,.6);color:var(--gold);}
+
+  /* ---------- screens ---------- */
+  .screen{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;justify-content:safe center;
+    text-align:center;padding:30px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:radial-gradient(ellipse at 50% 58%,#12202e 0%,#050a10 72%);}
+  .screen h1{font-size:12.5vw;font-weight:200;letter-spacing:.16em;line-height:1;}
+  @media(min-width:560px){.screen h1{font-size:70px;}}
+  .screen h1 span{display:block;font-size:.2em;letter-spacing:.5em;color:var(--ember);margin-top:16px;font-weight:400;}
+  .screen p{margin-top:24px;font-size:13px;line-height:1.9;color:var(--parch-dim);max-width:28em;}
+  .go{margin-top:30px;padding:15px 40px;border:1px solid rgba(239,230,210,.45);
+    font-size:12px;letter-spacing:.26em;color:var(--parch);background:transparent;cursor:pointer;}
+  .go:active{background:rgba(239,230,210,.14);}
+  .go.warm{border-color:rgba(232,122,42,.7);color:var(--ember-hot);}
+  .go.quit{border-color:rgba(179,53,47,.65);color:#ffb0aa;}
+  /* A phone held in landscape has very little height to spare. */
+  @media (max-height:460px){
+    .screen{padding:16px;}
+    .screen h1{font-size:8.5vw;letter-spacing:.12em;}
+    .screen h1 span{margin-top:8px;}
+    .screen p{margin-top:12px;font-size:11.5px;line-height:1.65;}
+    .go{margin-top:16px;padding:11px 28px;}
+    #menu h2{margin-bottom:8px;}
+  }
+  .keyshelp{display:none;}
+  @media(pointer:fine){.keyshelp{display:block;font-size:11px;opacity:.75;margin-top:18px;}}
+  .hidden{display:none !important;}
+
+  #menu{z-index:34;background:rgba(5,10,16,.94);}
+  #menu h2{font-size:13px;letter-spacing:.5em;font-weight:300;color:var(--parch-dim);margin-bottom:8px;}
+  #menuStats{font-size:11px;letter-spacing:.14em;color:var(--parch-dim);line-height:2;margin-bottom:8px;}
+  .menuRow{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+
+  /* ---------- shop ---------- */
+  #shop{z-index:35;justify-content:flex-start;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding-top:calc(env(safe-area-inset-top) + 26px);padding-bottom:40px;
+    background:linear-gradient(180deg,rgba(6,11,17,.97),rgba(14,10,7,.97));}
+  #shopHead{display:flex;align-items:baseline;gap:16px;margin-bottom:4px;}
+  #shopHead h2{font-size:15px;letter-spacing:.42em;font-weight:300;}
+  #shopCoins{font-size:15px;color:var(--gold);letter-spacing:.06em;font-variant-numeric:tabular-nums;}
+  #shopSub{font-size:11px;letter-spacing:.16em;color:var(--parch-dim);margin-bottom:20px;}
+  #tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;justify-content:center;}
+  .tab{border:1px solid rgba(239,230,210,.24);padding:9px 20px;font-size:10px;letter-spacing:.24em;
+    color:var(--parch-dim);background:transparent;cursor:pointer;}
+  .tab.on{border-color:var(--gold);color:var(--gold);}
+  #items{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:9px;width:100%;max-width:760px;}
+  .item{border:1px solid rgba(239,230,210,.2);padding:13px 14px;text-align:left;background:rgba(255,255,255,.015);
+    cursor:pointer;display:flex;flex-direction:column;gap:5px;}
+  .item b{font-weight:400;font-size:12px;letter-spacing:.14em;color:var(--parch);}
+  .item small{font-size:10.5px;letter-spacing:.03em;line-height:1.55;color:var(--parch-dim);}
+  .item .price{font-size:11px;letter-spacing:.12em;color:var(--gold);font-variant-numeric:tabular-nums;}
+  .item.owned{border-color:rgba(102,209,158,.45);}
+  .item.owned .price{color:var(--ally);}
+  .item.equipped{border-color:var(--gold);background:rgba(240,192,74,.09);}
+  .item.broke{opacity:.45;}
+  .item.broke .price{color:var(--blood);}
+  #shopFoot{margin-top:22px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  #shopFoot .go{margin-top:0;}
+
+  #loading{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
+    background:#050a10;font-size:11px;letter-spacing:.34em;color:var(--parch-dim);}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+<div id="hurt"></div>
+<div id="wet"></div>
+<div id="fade"></div>
+
+<div id="reticle"><div class="v t"></div><div class="v b"></div><div class="h l"></div><div class="h r"></div></div>
+
+<div id="hud" class="hidden">
+  <div class="stat" id="bars">
+    <div class="barLabel">HEALTH</div>
+    <div class="track"><i id="hpFill"></i></div>
+    <div class="barLabel">FIRE</div>
+    <div class="track"><i id="fireFill"></i></div>
+    <div class="barLabel">STAMINA</div>
+    <div class="track"><i id="stamFill"></i></div>
+    <div id="armourTag">HIDE &middot; <b>FANGS</b></div>
+  </div>
+  <div class="stat" id="kills">VIKINGS FELLED 0</div>
+  <div class="stat" id="radarWrap"><canvas id="radar" width="272" height="272"></canvas></div>
+  <div class="stat" id="purse">
+    <div id="coinNum">0</div>
+    <div id="coinLabel">COINS</div>
+    <div id="raid" class="hidden">RAID 1</div>
+  </div>
+  <div class="stat" id="modePill">ON FOOT</div>
+  <div class="stat" id="toast"></div>
+  <div class="stat" id="prompt">THE HOARD &mdash; OPEN THE SHOP</div>
+</div>
+
+<div class="touchzone hidden" id="lookZone"></div>
+<div class="touchzone hidden" id="stickZone"></div>
+<div id="stick"><div id="knob"></div></div>
+<div class="btn hidden" id="bFire">FIRE</div>
+<div class="btn hidden" id="bBite">BITE</div>
+<div class="btn hidden" id="bUp">FLY<br>UP</div>
+<div class="btn hidden" id="bDown">DIVE</div>
+<div class="btn hidden" id="bRoar">ROAR</div>
+<div class="btn hidden" id="menuBtn">&#8801;</div>
+<div class="btn hidden" id="shopBtn">SHOP</div>
+
+<div class="screen" id="start">
+  <h1>DRAGON ISLE<span>THE VIKINGS ARE COMING</span></h1>
+  <p>You are the last great wyrm of the north. Walk the hills, swim the shallows, take to the
+  sky and burn the raiders off your island. Coin from the fallen buys scales and claws at your
+  cave.</p>
+  <p class="keyshelp">WASD move &middot; mouse look &middot; SHIFT run or boost &middot; SPACE fly up &middot; SHIFT+SPACE from the ground to take off<br>
+  F or left click breathe fire &middot; E or right click bite &middot; CTRL dive &middot; R roar &middot; B shop at the cave &middot; M mute &middot; ESC pause</p>
+  <button class="go warm" id="startBtn">WAKE THE DRAGON</button>
+</div>
+
+<div class="screen hidden" id="menu">
+  <h2>PAUSED</h2>
+  <div id="menuStats"></div>
+  <div class="menuRow">
+    <button class="go" id="resumeBtn">RESUME</button>
+    <button class="go" id="muteBtn">SOUND ON</button>
+    <button class="go quit" id="wipeBtn">START OVER</button>
+  </div>
+  <p class="keyshelp">WASD move &middot; SPACE fly up &middot; CTRL dive &middot; F fire &middot; E bite &middot; R roar &middot; B shop</p>
+</div>
+
+<div class="screen hidden" id="shop">
+  <div id="shopHead"><h2>THE HOARD</h2><div id="shopCoins">0</div></div>
+  <div id="shopSub">SPEND WHAT THE RAIDERS BROUGHT YOU</div>
+  <div id="tabs">
+    <button class="tab on" data-tab="armour">ARMOUR</button>
+    <button class="tab" data-tab="weapon">CLAWS</button>
+    <button class="tab" data-tab="upgrade">POWERS</button>
+  </div>
+  <div id="items"></div>
+  <div id="shopFoot"><button class="go" id="closeShop">BACK TO THE ISLE</button></div>
+</div>
+
+<div id="loading">RAISING THE ISLAND</div>
+
+<script src="/experiments/dragon-isle/three.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   SMALL HELPERS
+   ============================================================ */
+var PI=Math.PI, TAU=PI*2;
+function rand(a,b){ return a+Math.random()*(b-a); }
+function irand(a,b){ return Math.floor(rand(a,b+1)); }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function smooth(t){ return t*t*(3-2*t); }
+function damp(a,b,rate,dt){ return lerp(a,b,1-Math.pow(rate,dt)); }
+function angWrap(a){ while(a>PI)a-=TAU; while(a<-PI)a+=TAU; return a; }
+function angLerp(a,b,t){ return a+angWrap(b-a)*t; }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/* A tiny deterministic generator so the island, its trees and its villages
+   are laid out the same way every time the game is opened. */
+var seedState=20260910;
+function srand(){ seedState=(seedState*1664525+1013904223)&0x7fffffff; return seedState/0x7fffffff; }
+function srange(a,b){ return a+srand()*(b-a); }
+
+function solidMat(hex, rough, metal){
+  var m=new THREE.MeshStandardMaterial({color:hex, roughness:rough===undefined?0.85:rough,
+                                        metalness:metal===undefined?0.05:metal});
+  m.color.convertSRGBToLinear();          // the renderer is in sRGB; untextured colours need this
+  return m;
+}
+function basicMat(hex, opts){
+  var o=opts||{}; o.color=hex;
+  var m=new THREE.MeshBasicMaterial(o);
+  m.color.convertSRGBToLinear();
+  return m;
+}
+function tex(canvas, repeat, srgb){
+  var t=new THREE.CanvasTexture(canvas);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  if(repeat) t.repeat.set(repeat,repeat);
+  t.anisotropy=4;
+  if(srgb) t.encoding=THREE.sRGBEncoding;
+  return t;
+}
+function cv(size){
+  var c=document.createElement('canvas'); c.width=c.height=size; return c;
+}
+
+/* ============================================================
+   NOISE  —  everything about the shape of the island comes from here
+   ============================================================ */
+function hash2(x,y){
+  var n=Math.sin(x*127.1+y*311.7)*43758.5453123;
+  return n-Math.floor(n);
+}
+function vnoise(x,y){
+  var xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  var u=smooth(xf), v=smooth(yf);
+  var a=hash2(xi,yi), b=hash2(xi+1,yi), c=hash2(xi,yi+1), d=hash2(xi+1,yi+1);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;
+}
+function fbm(x,y,oct){
+  var s=0, amp=0.5, f=1, norm=0;
+  for(var i=0;i<oct;i++){ s+=vnoise(x*f,y*f)*amp; norm+=amp; amp*=0.5; f*=2.03; }
+  return s/norm;
+}
+function ridged(x,y,oct){
+  var s=0, amp=0.5, f=1, norm=0;
+  for(var i=0;i<oct;i++){
+    var n=1-Math.abs(vnoise(x*f,y*f)*2-1);
+    s+=n*n*amp; norm+=amp; amp*=0.5; f*=2.07;
+  }
+  return s/norm;
+}
+
+/* ============================================================
+   THE ISLAND HEIGHT FIELD
+   heightAt() is the single source of truth: the terrain mesh, every
+   collision, every spawn and the radar map are all read from it.
+   ============================================================ */
+var WORLD=1160;                 // width of the terrain plane
+var SHORE=430;                  // roughly where the beaches sit
+var SEA=0;                      // sea level
+
+var FLATS=[];                   // levelled pads: the cave mouth and the villages
+
+function islandMask(x,z){
+  var d=Math.sqrt(x*x+z*z);
+  // A wobbly coastline so the island is not a disc.
+  var ang=Math.atan2(z,x);
+  var wob=vnoise(Math.cos(ang)*2.4+40, Math.sin(ang)*2.4+40)*1.0 +
+          vnoise(Math.cos(ang)*5.7+11, Math.sin(ang)*5.7+11)*0.45;
+  var edge=SHORE*(0.72+wob*0.34);
+  var t=clamp((d-edge*0.62)/(edge*0.62), 0, 1);
+  return 1-smooth(t);
+}
+function mountainWeight(x,z){
+  // The high spine leans to the north-west; the south is gentle grazing land.
+  var w=clamp((0.42-(z/SHORE))*0.9 + (0.25-(x/SHORE))*0.35, 0, 1);
+  return 0.28+w*0.95;
+}
+function rawHeight(x,z){
+  var mask=islandMask(x,z);
+  if(mask<=0.001) return -30;
+  var rolling=fbm(x*0.0021+13.5, z*0.0021-7.25, 5);
+  var ridges =ridged(x*0.0042-4.1, z*0.0042+9.7, 4);
+  var detail =vnoise(x*0.021, z*0.021)*3.0 + vnoise(x*0.062, z*0.062)*1.1;
+  var land = rolling*52 + Math.pow(ridges,2.1)*150*mountainWeight(x,z) + detail;
+  var m2=mask*mask;
+  return land*m2 - 32*(1-mask) + 2.2*mask;
+}
+function heightAt(x,z){
+  var h=rawHeight(x,z);
+  for(var i=0;i<FLATS.length;i++){
+    var f=FLATS[i];
+    var dx=x-f.x, dz=z-f.z, d=Math.sqrt(dx*dx+dz*dz);
+    if(d<f.r){ var t=1-smooth(d/f.r); h=h+(f.h-h)*t*(f.k||1); }
+  }
+  return h;
+}
+var _n1=new THREE.Vector3();
+function normalAt(x,z,out){
+  var e=2.2;
+  var hl=heightAt(x-e,z), hr=heightAt(x+e,z), hd=heightAt(x,z-e), hu=heightAt(x,z+e);
+  out=out||new THREE.Vector3();
+  return out.set(hl-hr, 2*e, hd-hu).normalize();
+}
+function slopeAt(x,z){
+  var n=normalAt(x,z,_n1);
+  return 1-n.y;                                   // 0 flat, ~1 vertical
+}
+
+/* ============================================================
+   PROCEDURAL TEXTURES
+   ============================================================ */
+function grainTex(base, spec, size, dots){
+  var c=cv(size||128), g=c.getContext('2d');
+  g.fillStyle=base; g.fillRect(0,0,c.width,c.height);
+  for(var i=0;i<(dots||1400);i++){
+    var x=Math.random()*c.width, y=Math.random()*c.height, r=Math.random()*2.2+0.4;
+    g.fillStyle=spec[(Math.random()*spec.length)|0];
+    g.globalAlpha=0.10+Math.random()*0.35;
+    g.beginPath(); g.arc(x,y,r,0,TAU); g.fill();
+  }
+  g.globalAlpha=1;
+  return c;
+}
+function groundTex(){
+  return grainTex('#5e6b3c',['#4a5730','#6f7d48','#3d4a2a','#7c8a55'],256,3000);
+}
+function waterTex(){
+  var c=cv(256), g=c.getContext('2d');
+  g.fillStyle='#1c5878'; g.fillRect(0,0,256,256);
+  for(var i=0;i<220;i++){
+    g.strokeStyle='rgba(190,230,245,'+(0.04+Math.random()*0.10)+')';
+    g.lineWidth=Math.random()*2.2+0.5;
+    var x=Math.random()*256, y=Math.random()*256, w=18+Math.random()*46;
+    g.beginPath(); g.moveTo(x,y);
+    g.bezierCurveTo(x+w*0.3,y-5,x+w*0.7,y+5,x+w,y);
+    g.stroke();
+  }
+  return c;
+}
+function woodTex(){
+  var c=cv(128), g=c.getContext('2d');
+  g.fillStyle='#5b432c'; g.fillRect(0,0,128,128);
+  for(var i=0;i<80;i++){
+    g.fillStyle='rgba('+(30+Math.random()*60|0)+','+(20+Math.random()*40|0)+',14,'+(0.15+Math.random()*0.4)+')';
+    g.fillRect(Math.random()*128,0,1+Math.random()*3,128);
+  }
+  return c;
+}
+function thatchTex(){
+  var c=cv(128), g=c.getContext('2d');
+  g.fillStyle='#6b5730'; g.fillRect(0,0,128,128);
+  for(var i=0;i<300;i++){
+    g.strokeStyle='rgba('+(120+Math.random()*70|0)+','+(95+Math.random()*55|0)+',50,'+(0.15+Math.random()*0.4)+')';
+    g.lineWidth=1;
+    var y=Math.random()*128;
+    g.beginPath(); g.moveTo(Math.random()*128,y); g.lineTo(Math.random()*128,y+Math.random()*4-2); g.stroke();
+  }
+  return c;
+}
+function scaleTex(hexA,hexB){
+  var c=cv(128), g=c.getContext('2d');
+  g.fillStyle=hexA; g.fillRect(0,0,128,128);
+  for(var y=0;y<128;y+=8){
+    for(var x=(y/8)%2?0:5;x<128;x+=10){
+      g.fillStyle=Math.random()<0.5?hexB:hexA;
+      g.globalAlpha=0.35+Math.random()*0.4;
+      g.beginPath(); g.arc(x,y,5.4,0,PI,false); g.fill();
+    }
+  }
+  g.globalAlpha=1;
+  return c;
+}
+function sailTex(){
+  var c=cv(128), g=c.getContext('2d');
+  g.fillStyle='#d9cdb4'; g.fillRect(0,0,128,128);
+  for(var i=0;i<128;i+=32){ g.fillStyle='#a83a30'; g.fillRect(0,i,128,16); }
+  g.globalAlpha=0.18;
+  for(var j=0;j<400;j++){ g.fillStyle='#000'; g.fillRect(Math.random()*128,Math.random()*128,2,2); }
+  g.globalAlpha=1;
+  return c;
+}
+function flameTex(){
+  var c=cv(64), g=c.getContext('2d');
+  var gr=g.createRadialGradient(32,32,0,32,32,32);
+  gr.addColorStop(0,'rgba(255,244,214,1)');
+  gr.addColorStop(0.24,'rgba(255,196,90,0.95)');
+  gr.addColorStop(0.55,'rgba(226,104,26,0.55)');
+  gr.addColorStop(1,'rgba(120,30,6,0)');
+  g.fillStyle=gr; g.fillRect(0,0,64,64);
+  return c;
+}
+function softTex(hex){
+  var c=cv(64), g=c.getContext('2d');
+  var gr=g.createRadialGradient(32,32,0,32,32,32);
+  gr.addColorStop(0,hex); gr.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=gr; g.fillRect(0,0,64,64);
+  return c;
+}
+function skyTex(){
+  var c=document.createElement('canvas'); c.width=16; c.height=256;
+  var g=c.getContext('2d');
+  var gr=g.createLinearGradient(0,0,0,256);
+  gr.addColorStop(0.00,'#0d2440');
+  gr.addColorStop(0.34,'#2d5c80');
+  gr.addColorStop(0.60,'#79a3b8');
+  gr.addColorStop(0.78,'#d8b183');
+  gr.addColorStop(1.00,'#e7c79c');
+  g.fillStyle=gr; g.fillRect(0,0,16,256);
+  return c;
+}
+
+/* ============================================================
+   RENDERER, SCENE, SKY
+   ============================================================ */
+var canvas=document.getElementById('c');
+var renderer=new THREE.WebGLRenderer({canvas:canvas, antialias:true, powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.04;
+
+var scene=new THREE.Scene();
+var SKY_COL=new THREE.Color(0x8fb0c2), DEEP_COL=new THREE.Color(0x123a4e);
+scene.fog=new THREE.Fog(0x9db9c8, 220, 940);
+scene.background=new THREE.Color(0x9db9c8);
+
+var camera=new THREE.PerspectiveCamera(62, window.innerWidth/window.innerHeight, 0.4, 2600);
+camera.rotation.order='YXZ';
+
+var skyDome=new THREE.Mesh(
+  new THREE.SphereGeometry(1500, 24, 16),
+  new THREE.MeshBasicMaterial({map:tex(skyTex(),0,true), side:THREE.BackSide, fog:false})
+);
+skyDome.material.map.wrapS=THREE.ClampToEdgeWrapping;
+skyDome.material.map.wrapT=THREE.ClampToEdgeWrapping;
+scene.add(skyDome);
+
+var sun=new THREE.DirectionalLight(0xffd9a8, 1.15);
+sun.position.set(-320, 340, 220);
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xbcd6e6, 0x3b4230, 0.62));
+var fireLight=new THREE.PointLight(0xffa03c, 0, 46, 2);
+scene.add(fireLight);
+
+/* A big low-poly sun disc low over the sea, purely for the look of it. */
+var sunDisc=new THREE.Mesh(new THREE.CircleGeometry(90,32),
+  new THREE.MeshBasicMaterial({color:0xffdaa0, fog:false, transparent:true, opacity:0.75}));
+sunDisc.position.set(-980, 210, 700);
+sunDisc.lookAt(0,140,0);
+scene.add(sunDisc);
+
+/* ============================================================
+   LANDMARK SITES  —  chosen before the mesh so the pads bake in
+   ============================================================ */
+var CAVE={x:0,z:0,h:0,yaw:0};
+var VILLAGES=[];
+
+(function chooseSites(){
+  // The cave wants high ground on the mountain side with a shelf to land on.
+  var best=null;
+  for(var i=0;i<4000;i++){
+    var a=srand()*TAU, r=srange(90, 250);
+    var x=Math.cos(a)*r, z=Math.sin(a)*r;
+    var h=rawHeight(x,z);
+    if(h<48 || h>118) continue;
+    var s=slopeAt(x,z);
+    var score=h*0.5 - s*140 - (z>0?60:0);   // favour the northern spine
+    if(!best || score>best.score) best={x:x,z:z,h:h,score:score};
+  }
+  if(!best) best={x:-120,z:-140,h:rawHeight(-120,-140),score:0};
+  CAVE.x=best.x; CAVE.z=best.z; CAVE.h=best.h;
+  CAVE.yaw=Math.atan2(-CAVE.z, -CAVE.x);        // the mouth looks toward the middle of the isle
+  FLATS.push({x:CAVE.x, z:CAVE.z, r:34, h:CAVE.h, k:1});
+  // A landing shelf running out from the mouth, so there is somewhere to touch down.
+  FLATS.push({x:CAVE.x+Math.sin(CAVE.yaw)*20, z:CAVE.z+Math.cos(CAVE.yaw)*20, r:30, h:CAVE.h, k:1});
+
+  // Villages want flat, low, coastal ground, spread out and away from the cave.
+  var names=['Skarhavn','Grimsfjord','Ulfsvik','Rauðsted','Havnbol'];
+  var tries=0;
+  while(VILLAGES.length<4 && tries<9000){
+    tries++;
+    var aa=srand()*TAU, rr=srange(150, 360);
+    var vx=Math.cos(aa)*rr, vz=Math.sin(aa)*rr;
+    var vh=rawHeight(vx,vz);
+    if(vh<4 || vh>26) continue;
+    if(slopeAt(vx,vz)>0.16) continue;
+    if(Math.hypot(vx-CAVE.x, vz-CAVE.z)<190) continue;
+    var ok=true;
+    for(var v=0;v<VILLAGES.length;v++){
+      if(Math.hypot(vx-VILLAGES[v].x, vz-VILLAGES[v].z)<190){ ok=false; break; }
+    }
+    if(!ok) continue;
+    VILLAGES.push({x:vx, z:vz, h:vh, name:names[VILLAGES.length], yaw:Math.atan2(-vz,-vx)});
+    FLATS.push({x:vx, z:vz, r:44, h:vh, k:0.9});
+  }
+})();
+
+/* ============================================================
+   TERRAIN
+   ============================================================ */
+var SEG=192;
+var terrainGeo=new THREE.PlaneGeometry(WORLD, WORLD, SEG, SEG);
+terrainGeo.rotateX(-PI/2);
+(function shapeTerrain(){
+  var pos=terrainGeo.attributes.position, n=pos.count;
+  var colors=new Float32Array(n*3);
+  var c=new THREE.Color();
+  for(var i=0;i<n;i++){
+    var x=pos.getX(i), z=pos.getZ(i);
+    var h=heightAt(x,z);
+    pos.setY(i,h);
+    var s=slopeAt(x,z);
+    var j=(vnoise(x*0.05, z*0.05)-0.5)*0.16;
+    if(h<-1.2)        c.setRGB(0.30+j,0.31+j,0.24+j);            // silt under the water
+    else if(h<1.9)    c.setRGB(0.76+j,0.70+j,0.52+j);            // wet sand
+    else if(h<4.6)    c.setRGB(0.80+j,0.74+j,0.56+j);            // beach
+    else if(h<58)     c.setRGB(0.26+j*1.4,0.36+j*1.4,0.17+j);    // grass
+    else if(h<92)     c.setRGB(0.34+j,0.33+j,0.29+j);            // bare rock
+    else              c.setRGB(0.86+j*0.4,0.88+j*0.4,0.92+j*0.4);// snow
+    if(s>0.34 && h>3){                                           // cliffs show stone
+      var t=clamp((s-0.34)/0.34,0,1);
+      c.lerp(new THREE.Color(0.31+j,0.29+j,0.26+j), t*0.9);
+    }
+    colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+  }
+  terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+  terrainGeo.computeVertexNormals();
+})();
+var terrainMat=new THREE.MeshStandardMaterial({
+  vertexColors:true, roughness:0.96, metalness:0.0,
+  map:tex(groundTex(), 160, true)
+});
+terrainMat.map.anisotropy=8;
+var terrain=new THREE.Mesh(terrainGeo, terrainMat);
+scene.add(terrain);
+
+/* ---- the sea ---- */
+var waterTexA=tex(waterTex(), 46, true);
+var waterTexB=tex(waterTex(), 23, true);
+var waterMat=new THREE.MeshStandardMaterial({
+  map:waterTexA, color:0x8fd0e8, transparent:true, opacity:0.80,
+  roughness:0.16, metalness:0.32
+});
+waterMat.color.convertSRGBToLinear();
+var water=new THREE.Mesh(new THREE.PlaneGeometry(WORLD*2.2, WORLD*2.2), waterMat);
+water.rotation.x=-PI/2; water.position.y=SEA;
+scene.add(water);
+
+var water2=new THREE.Mesh(new THREE.PlaneGeometry(WORLD*2.2, WORLD*2.2),
+  new THREE.MeshBasicMaterial({map:waterTexB, transparent:true, opacity:0.22, depthWrite:false}));
+water2.rotation.x=-PI/2; water2.position.y=SEA+0.10;
+scene.add(water2);
+
+/* ============================================================
+   SCATTER: pines, boulders, shore grass — one draw call each
+   ============================================================ */
+function scatter(geo, mat, count, place){
+  var m=new THREE.InstancedMesh(geo, mat, count);
+  m.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  var dummy=new THREE.Object3D();
+  var made=0, guard=0;
+  while(made<count && guard<count*60){
+    guard++;
+    if(place(dummy, made)){ dummy.updateMatrix(); m.setMatrixAt(made, dummy.matrix); made++; }
+  }
+  m.count=made;
+  m.frustumCulled=false;
+  scene.add(m);
+  return m;
+}
+function freeSpot(x,z,pad){
+  if(Math.hypot(x-CAVE.x, z-CAVE.z) < 38+pad) return false;
+  for(var i=0;i<VILLAGES.length;i++){
+    if(Math.hypot(x-VILLAGES[i].x, z-VILLAGES[i].z) < 56+pad) return false;
+  }
+  return true;
+}
+
+var trunkMat=solidMat(0x4a3524, 0.95, 0.0);
+var pineMat =solidMat(0x22401f, 0.92, 0.0);
+var pineMat2=solidMat(0x2c4d24, 0.92, 0.0);
+var rockMat =solidMat(0x6b6459, 0.94, 0.02);
+
+var trunkGeo=new THREE.CylinderGeometry(0.34, 0.62, 6.4, 5);
+trunkGeo.translate(0, 3.2, 0);
+var crownGeo=new THREE.ConeGeometry(3.0, 10.5, 7);
+crownGeo.translate(0, 9.2, 0);
+var rockGeo=new THREE.DodecahedronGeometry(1, 0);
+var bushGeo=new THREE.ConeGeometry(1.1, 1.8, 5);
+bushGeo.translate(0, 0.9, 0);
+
+var treeSpots=[];
+scatter(trunkGeo, trunkMat, 1300, function(d){
+  var a=srand()*TAU, r=srange(20, SHORE*1.06);
+  var x=Math.cos(a)*r, z=Math.sin(a)*r;
+  var h=heightAt(x,z);
+  if(h<5.5 || h>76) return false;
+  if(slopeAt(x,z)>0.40) return false;
+  if(!freeSpot(x,z,10)) return false;
+  var s=srange(0.72, 1.45);
+  d.position.set(x,h-0.4,z); d.rotation.set(0, srand()*TAU, 0); d.scale.set(s,s*srange(0.85,1.25),s);
+  treeSpots.push({x:x,y:h,z:z,s:s});
+  return true;
+});
+(function(){
+  var m=new THREE.InstancedMesh(crownGeo, pineMat, treeSpots.length);
+  var d=new THREE.Object3D();
+  for(var i=0;i<treeSpots.length;i++){
+    var t=treeSpots[i];
+    d.position.set(t.x, t.y-0.4, t.z);
+    d.rotation.set(srange(-0.05,0.05), srand()*TAU, srange(-0.05,0.05));
+    d.scale.set(t.s, t.s*srange(0.8,1.3), t.s);
+    d.updateMatrix(); m.setMatrixAt(i, d.matrix);
+  }
+  m.frustumCulled=false; scene.add(m);
+  // a second, lighter crown layer gives the canopy some variation
+  var m2=new THREE.InstancedMesh(crownGeo, pineMat2, treeSpots.length);
+  for(var j=0;j<treeSpots.length;j++){
+    var t2=treeSpots[j];
+    d.position.set(t2.x, t2.y+2.2, t2.z);
+    d.rotation.set(0, srand()*TAU, 0);
+    d.scale.set(t2.s*0.66, t2.s*0.6, t2.s*0.66);
+    d.updateMatrix(); m2.setMatrixAt(j, d.matrix);
+  }
+  m2.frustumCulled=false; scene.add(m2);
+})();
+
+scatter(rockGeo, rockMat, 420, function(d){
+  var a=srand()*TAU, r=srange(10, SHORE*1.15);
+  var x=Math.cos(a)*r, z=Math.sin(a)*r;
+  var h=heightAt(x,z);
+  if(h<-3 || h>128) return false;
+  if(!freeSpot(x,z,4)) return false;
+  var s=srange(0.9, 4.6);
+  d.position.set(x, h+s*0.32, z);
+  d.rotation.set(srand()*TAU, srand()*TAU, srand()*TAU);
+  d.scale.set(s, s*srange(0.55,1.0), s*srange(0.7,1.2));
+  return true;
+});
+
+scatter(bushGeo, solidMat(0x59683a,0.95,0), 900, function(d){
+  var a=srand()*TAU, r=srange(30, SHORE*1.05);
+  var x=Math.cos(a)*r, z=Math.sin(a)*r;
+  var h=heightAt(x,z);
+  if(h<3.0 || h>52) return false;
+  if(slopeAt(x,z)>0.34) return false;
+  var s=srange(0.6,1.9);
+  d.position.set(x,h,z); d.rotation.set(0,srand()*TAU,0); d.scale.set(s,s*srange(0.6,1.3),s);
+  return true;
+});
+
+/* ============================================================
+   THE CAVE — your home, your hoard, your shop
+   ============================================================ */
+var caveGroup=new THREE.Group();
+scene.add(caveGroup);
+var hoardPieces=[];
+
+(function buildCave(){
+  var cx=CAVE.x, cz=CAVE.z, cy=CAVE.h;
+  caveGroup.position.set(cx, cy, cz);
+  caveGroup.rotation.y=CAVE.yaw;
+
+  var stone =solidMat(0x554f47, 0.97, 0.02);
+  var stone2=solidMat(0x413c36, 0.98, 0.02);
+
+  // The bluff the mouth is cut into: a few chunky rocks behind the opening.
+  for(var i=0;i<10;i++){
+    var b=new THREE.Mesh(new THREE.DodecahedronGeometry(rand(5,12),0), i%2?stone:stone2);
+    b.position.set(rand(-19,19), rand(-2,9), rand(-22,-7));
+    b.rotation.set(rand(0,PI),rand(0,PI),rand(0,PI));
+    b.scale.set(1, rand(0.6,1.3), rand(0.8,1.3));
+    caveGroup.add(b);
+  }
+  // Mouth: two pillars, a lintel and a black interior.
+  var pl=new THREE.Mesh(new THREE.BoxGeometry(4.4, 15, 8), stone);
+  pl.position.set(-8.6, 7, -2); caveGroup.add(pl);
+  var pr=pl.clone(); pr.position.x=8.6; caveGroup.add(pr);
+  var lint=new THREE.Mesh(new THREE.BoxGeometry(22, 5, 9), stone2);
+  lint.position.set(0, 16.2, -2); caveGroup.add(lint);
+  var arch=new THREE.Mesh(new THREE.CylinderGeometry(6.6,6.6,9,14,1,false,0,PI), stone);
+  arch.rotation.z=0; arch.rotation.x=PI/2; arch.position.set(0,13.6,-2); caveGroup.add(arch);
+
+  var dark=new THREE.Mesh(new THREE.PlaneGeometry(17.2, 15.5), basicMat(0x07090c,{fog:true}));
+  dark.position.set(0, 7.4, -5.6); caveGroup.add(dark);
+  var floor=new THREE.Mesh(new THREE.CircleGeometry(15, 20), solidMat(0x4c463d,0.98,0));
+  floor.rotation.x=-PI/2; floor.position.set(0,0.12,-1); caveGroup.add(floor);
+
+  // The hoard: loose gold in the mouth of the cave.
+  var goldMat=solidMat(0xd9a828, 0.32, 0.85);
+  var coinG=new THREE.CylinderGeometry(0.42,0.42,0.09,8);
+  var pileG=new THREE.SphereGeometry(1,7,5);
+  for(var p=0;p<7;p++){
+    var pile=new THREE.Mesh(pileG, goldMat);
+    pile.position.set(rand(-7,7), 0.25, rand(-5.5,1.5));
+    pile.scale.set(rand(1.4,3.2), rand(0.5,1.0), rand(1.4,3.0));
+    caveGroup.add(pile);
+  }
+  for(var q=0;q<70;q++){
+    var cn=new THREE.Mesh(coinG, goldMat);
+    cn.position.set(rand(-8.5,8.5), rand(0.1,1.4), rand(-6.5,2.5));
+    cn.rotation.set(rand(0,PI), rand(0,PI), rand(0,PI));
+    caveGroup.add(cn);
+    hoardPieces.push(cn);
+  }
+  // Braziers either side so the mouth reads at a distance.
+  var brazierLights=[];
+  for(var s=-1;s<=1;s+=2){
+    var bowl=new THREE.Mesh(new THREE.CylinderGeometry(1.1,0.7,0.9,10), solidMat(0x2b2723,0.8,0.4));
+    bowl.position.set(s*11.5, 2.4, 3.2); caveGroup.add(bowl);
+    var stem=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.28,2.2,6), solidMat(0x2b2723,0.8,0.4));
+    stem.position.set(s*11.5, 1.0, 3.2); caveGroup.add(stem);
+    var glow=new THREE.Mesh(new THREE.SphereGeometry(0.95,8,6), basicMat(0xff9a34,{transparent:true,opacity:0.85}));
+    glow.position.set(s*11.5, 3.1, 3.2); caveGroup.add(glow);
+    var lt=new THREE.PointLight(0xffa040, 2.2, 30, 2);
+    lt.position.set(s*11.5, 3.4, 3.2); caveGroup.add(lt);
+    brazierLights.push({glow:glow, light:lt, phase:rand(0,TAU)});
+  }
+  caveGroup.userData.braziers=brazierLights;
+
+  // Three stands: armour, claws, powers. They mark what the shop sells.
+  var standMat=solidMat(0x3a342c,0.9,0.1);
+  for(var t=0;t<3;t++){
+    var st=new THREE.Mesh(new THREE.CylinderGeometry(0.8,1.05,2.0,8), standMat);
+    st.position.set(-9.4+t*0.2, 1.0, -1.6+t*3.4); st.rotation.y=0.5; caveGroup.add(st);
+  }
+  var shield=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,0.18,14), solidMat(0x8d9199,0.4,0.7));
+  shield.rotation.x=PI/2; shield.rotation.y=0.5; shield.position.set(-9.4, 2.9, -1.6); caveGroup.add(shield);
+  var talon=new THREE.Mesh(new THREE.ConeGeometry(0.36, 2.1, 7), solidMat(0xcfd4da,0.3,0.85));
+  talon.position.set(-9.2, 3.1, 1.8); talon.rotation.z=0.35; caveGroup.add(talon);
+  var orb=new THREE.Mesh(new THREE.SphereGeometry(0.85,12,10), basicMat(0xff8a2a,{transparent:true,opacity:0.9}));
+  orb.position.set(-9.0, 3.0, 5.2); caveGroup.add(orb);
+  caveGroup.userData.orb=orb;
+})();
+
+/* A flat world-space anchor for spawning and prompts. */
+var CAVE_PAD=new THREE.Vector3(
+  CAVE.x + Math.sin(CAVE.yaw)*0 + Math.cos(CAVE.yaw)*0,
+  CAVE.h,
+  CAVE.z
+);
+var CAVE_FRONT=new THREE.Vector3(
+  CAVE.x + Math.sin(CAVE.yaw)*22, CAVE.h, CAVE.z + Math.cos(CAVE.yaw)*22
+);
+
+/* ============================================================
+   VIKING VILLAGES
+   ============================================================ */
+var woodMat  =new THREE.MeshStandardMaterial({map:tex(woodTex(),1,true), roughness:0.92});
+var thatchMat=new THREE.MeshStandardMaterial({map:tex(thatchTex(),2,true), roughness:0.95});
+var sailMatTx=new THREE.MeshStandardMaterial({map:tex(sailTex(),1,true), roughness:0.85, side:THREE.DoubleSide});
+var campfires=[];
+
+function buildLonghouse(len, wid, hgt){
+  var g=new THREE.Group();
+  var walls=new THREE.Mesh(new THREE.BoxGeometry(wid, hgt, len), woodMat);
+  walls.position.y=hgt/2; g.add(walls);
+  // Gable roof: two thatched panels leaning on each other over a ridge.
+  var half=wid*0.5, ang=0.72, rise=half*Math.tan(ang), plen=half/Math.cos(ang);
+  for(var sd=-1; sd<=1; sd+=2){
+    var panel=new THREE.Mesh(new THREE.BoxGeometry(plen*1.14, 0.24, len*1.08), thatchMat);
+    panel.position.set(sd*half*0.52, hgt+rise*0.5, 0);
+    panel.rotation.z=-sd*ang;
+    g.add(panel);
+  }
+  var ridge=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,len*1.1,5), woodMat);
+  ridge.rotation.x=PI/2; ridge.position.y=hgt+rise; g.add(ridge);
+  // Gable ends, so you cannot see straight through the loft.
+  var shape=new THREE.Shape();
+  shape.moveTo(-half*1.02, 0); shape.lineTo(half*1.02, 0); shape.lineTo(0, rise); shape.lineTo(-half*1.02, 0);
+  for(var ge=-1; ge<=1; ge+=2){
+    var gable=new THREE.Mesh(new THREE.ShapeGeometry(shape), woodMat);
+    gable.position.set(0, hgt, ge*len*0.5);
+    if(ge<0) gable.rotation.y=PI;
+    g.add(gable);
+    // Carved beast head on the ridge, the way they really did it.
+    var post=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.18,rise*0.9,6), woodMat);
+    post.position.set(0, hgt+rise*1.15, ge*len*0.5); post.rotation.x=ge*0.30; g.add(post);
+    var head=new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.9, 5), woodMat);
+    head.position.set(0, hgt+rise*1.62, ge*len*0.56); head.rotation.x=ge*1.1; g.add(head);
+  }
+  var door=new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.2), basicMat(0x140f0a));
+  door.position.set(wid/2+0.02, 1.1, 0); door.rotation.y=PI/2; g.add(door);
+  return g;
+}
+
+(function buildVillages(){
+  for(var v=0; v<VILLAGES.length; v++){
+    var V=VILLAGES[v];
+    var grp=new THREE.Group();
+    grp.position.set(V.x, 0, V.z);
+    scene.add(grp);
+    V.group=grp;
+
+    var n=irand(5,8);
+    for(var i=0;i<n;i++){
+      var a=(i/n)*TAU+srange(-0.3,0.3), r=srange(11,27);
+      var hx=V.x+Math.cos(a)*r, hz=V.z+Math.sin(a)*r;
+      var hh=heightAt(hx,hz);
+      if(hh<2.0) continue;
+      var lh=buildLonghouse(srange(9,16), srange(4.6,6.4), srange(2.6,3.6));
+      lh.position.set(Math.cos(a)*r, hh, Math.sin(a)*r);
+      lh.rotation.y=srand()*TAU;
+      grp.add(lh);
+    }
+    // Palisade stakes around the back half.
+    var stakeGeo=new THREE.CylinderGeometry(0.18,0.24,3.0,5);
+    for(var p=0;p<34;p++){
+      var pa=V.yaw+PI+ (p/34-0.5)*3.4;
+      var pr=31+srange(-1.5,1.5);
+      var px=V.x+Math.cos(pa)*pr, pz=V.z+Math.sin(pa)*pr;
+      var ph=heightAt(px,pz);
+      if(ph<1.5) continue;
+      var stk=new THREE.Mesh(stakeGeo, woodMat);
+      stk.position.set(Math.cos(pa)*pr, ph+1.4, Math.sin(pa)*pr);
+      stk.rotation.set(srange(-0.08,0.08), srand()*TAU, srange(-0.08,0.08));
+      grp.add(stk);
+    }
+    // Campfire in the middle.
+    var fh=heightAt(V.x, V.z);
+    var ring=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.28,5,10), solidMat(0x555049,0.95,0));
+    ring.rotation.x=PI/2; ring.position.set(0, fh+0.12, 0); grp.add(ring);
+    for(var lg=0; lg<5; lg++){
+      var log=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.24,2.1,5), woodMat);
+      log.position.set(0, fh+0.4, 0);
+      log.rotation.set(rand(1.0,1.4), rand(0,PI), 0);
+      grp.add(log);
+    }
+    var flame=new THREE.Mesh(new THREE.ConeGeometry(0.85, 2.2, 7),
+      basicMat(0xff8a2a,{transparent:true, opacity:0.85}));
+    flame.position.set(0, fh+1.4, 0); grp.add(flame);
+    var flight=new THREE.PointLight(0xffa040, 2.0, 26, 2);
+    flight.position.set(0, fh+2.0, 0); grp.add(flight);
+    campfires.push({mesh:flame, light:flight, phase:rand(0,TAU)});
+
+    // A dock and a beached longship pointing out to sea.
+    var da=V.yaw+PI;                                  // seaward
+    var bx=V.x, bz=V.z, step=6;
+    for(var s2=0;s2<28;s2++){
+      var nx=bx+Math.cos(da)*step, nz=bz+Math.sin(da)*step;
+      if(heightAt(nx,nz)<0.6) break;
+      bx=nx; bz=nz;
+    }
+    V.shore={x:bx, z:bz};
+    var ship=buildLongship();
+    ship.position.set(bx-V.x, 0.2, bz-V.z);
+    ship.rotation.y=-da+PI/2;
+    grp.add(ship);
+  }
+})();
+
+/* ============================================================
+   LONGSHIPS
+   ============================================================ */
+function buildLongship(){
+  var g=new THREE.Group();
+  var hull=new THREE.Mesh(new THREE.SphereGeometry(1, 14, 9, 0, TAU, 0, PI/2), woodMat);
+  hull.rotation.x=PI;                            // bowl, opening up
+  hull.scale.set(2.6, 1.5, 9.5);
+  hull.position.y=1.4;
+  g.add(hull);
+  var rail=new THREE.Mesh(new THREE.TorusGeometry(1,0.16,5,20), woodMat);
+  rail.rotation.x=PI/2; rail.scale.set(2.6,9.5,1); rail.position.y=1.5; g.add(rail);
+  // Prow and stern rise into carved heads.
+  for(var s=-1;s<=1;s+=2){
+    var neck=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.5,4.4,6), woodMat);
+    neck.position.set(0, 2.6, s*9.0); neck.rotation.x=s*0.42; g.add(neck);
+    var head=new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.7, 6), woodMat);
+    head.position.set(0, 4.5, s*9.9); head.rotation.x=s*1.15; g.add(head);
+  }
+  var mast=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.30,11,7), woodMat);
+  mast.position.y=6.2; g.add(mast);
+  var sail=new THREE.Mesh(new THREE.PlaneGeometry(6.6, 6.2), sailMatTx);
+  sail.position.set(0, 8.2, 0.1); g.add(sail);
+  var yard=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,7.2,5), woodMat);
+  yard.rotation.z=PI/2; yard.position.y=11.2; g.add(yard);
+  // Shields on the rail.
+  var shieldGeo=new THREE.CylinderGeometry(0.72,0.72,0.13,12);
+  for(var i=-4;i<=4;i++){
+    for(var side=-1;side<=1;side+=2){
+      var sh=new THREE.Mesh(shieldGeo, (i%2)?solidMat(0xa8352d,0.7,0.1):solidMat(0xd8cdb2,0.7,0.1));
+      sh.rotation.z=PI/2;
+      sh.position.set(side*2.55, 1.9, i*1.7);
+      g.add(sh);
+    }
+  }
+  return g;
+}
+
+/* ============================================================
+   DRAGON BUILDER
+   One rig, used for the player and for the friendly dragons. Everything is
+   primitives; the pivots that come back are what the animation drives.
+   ============================================================ */
+var _va=new THREE.Vector3(), _vb=new THREE.Vector3(), _vc=new THREE.Vector3();
+
+var GEOC={};
+function G(key, make){
+  var g=GEOC[key];
+  if(!g){ g=GEOC[key]=make(); }
+  return g;
+}
+function boneMesh(ax,ay,az, bx,by,bz, r1, r2, mat, seg){
+  var a=new THREE.Vector3(ax,ay,az), b=new THREE.Vector3(bx,by,bz);
+  var len=a.distanceTo(b);
+  var g=G('bone|'+len.toFixed(3)+'|'+r1+'|'+r2+'|'+(seg||6), function(){
+    return new THREE.CylinderGeometry(r2, r1, len, seg||6);
+  });
+  var m=new THREE.Mesh(g, mat);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), _vc.subVectors(b,a).normalize());
+  return m;
+}
+function membrane(points, mat){
+  // points: array of [x,y,z] fanned from the first point
+  var g=G('mem|'+JSON.stringify(points), function(){
+    var verts=[], idx=[];
+    for(var i=0;i<points.length;i++) verts.push(points[i][0], points[i][1], points[i][2]);
+    for(var t=1;t<points.length-1;t++) idx.push(0, t, t+1);
+    var bg=new THREE.BufferGeometry();
+    bg.setAttribute('position', new THREE.Float32BufferAttribute(verts,3));
+    bg.setIndex(idx);
+    bg.computeVertexNormals();
+    return bg;
+  });
+  return new THREE.Mesh(g, mat);
+}
+
+function buildDragon(cfg){
+  var C={
+    scale:  cfg.scale===undefined?1:cfg.scale,
+    body:   cfg.body||0x3f5a46,
+    belly:  cfg.belly||0xb8a06a,
+    wing:   cfg.wing||0x7a3f34,
+    horn:   cfg.horn||0xd8cbb0,
+    eye:    cfg.eye||0xffb52e,
+    claw:   cfg.claw||0xe8e2d2
+  };
+  var bodyMat=new THREE.MeshStandardMaterial({map:tex(scaleTex('#d6d6d6','#9c9c9c'),3,true), roughness:0.72, metalness:0.06});
+  bodyMat.color.setHex(C.body); bodyMat.color.convertSRGBToLinear();
+  var bellyMat=solidMat(C.belly, 0.78, 0.04);
+  var wingMat =new THREE.MeshStandardMaterial({color:C.wing, roughness:0.85, metalness:0.02,
+                                               side:THREE.DoubleSide, transparent:true, opacity:0.96});
+  wingMat.color.convertSRGBToLinear();
+  var hornMat =solidMat(C.horn, 0.55, 0.12);
+  var clawMat =solidMat(C.claw, 0.34, 0.55);
+  var eyeMat  =basicMat(C.eye);
+  var spikeMat=solidMat(C.horn, 0.6, 0.1);
+
+  var root=new THREE.Group();
+  var tilt=new THREE.Group();                 // body pitch and roll live here
+  root.add(tilt);
+  var rig={root:root, tilt:tilt, mats:{body:bodyMat, belly:bellyMat, wing:wingMat, claw:clawMat, eye:eyeMat, horn:hornMat},
+           legs:[], tail:[], wings:[], claws:[], plates:[], spikes:[], scale:C.scale};
+
+  /* ---- torso ---- */
+  var chest=new THREE.Mesh(new THREE.SphereGeometry(1, 14, 11), bodyMat);
+  chest.scale.set(0.98, 0.90, 1.62); chest.position.set(0, 0, 0.25);
+  tilt.add(chest);
+  var hips=new THREE.Mesh(new THREE.SphereGeometry(1, 12, 10), bodyMat);
+  hips.scale.set(0.86, 0.80, 1.05); hips.position.set(0, -0.04, -1.30);
+  tilt.add(hips);
+  var belly=new THREE.Mesh(new THREE.SphereGeometry(1, 12, 9), bellyMat);
+  belly.scale.set(0.74, 0.44, 1.55); belly.position.set(0, -0.55, 0.15);
+  tilt.add(belly);
+
+  /* ---- back spikes ---- */
+  for(var s=0;s<9;s++){
+    var t=s/8;
+    var sp=new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.52, 4), spikeMat);
+    sp.position.set(0, 0.78-t*0.28, 1.35-t*2.9);
+    sp.rotation.x=-0.34;
+    sp.scale.setScalar(1.15-Math.abs(t-0.35)*0.9);
+    tilt.add(sp); rig.spikes.push(sp);
+  }
+
+  /* ---- neck: three chained segments ---- */
+  var neckMats=[bodyMat, bodyMat, bodyMat];
+  var neck=[], parent=tilt, ny=0.42, nz=1.30;
+  for(var n=0;n<3;n++){
+    var seg=new THREE.Group();
+    seg.position.set(0, n===0?ny:0.10, n===0?nz:0.72);
+    parent.add(seg);
+    var tube=new THREE.Mesh(new THREE.CylinderGeometry(0.30-n*0.045, 0.40-n*0.045, 0.78, 8), neckMats[n]);
+    tube.rotation.x=PI/2; tube.position.z=0.39;
+    seg.add(tube);
+    var joint=new THREE.Mesh(new THREE.SphereGeometry(0.34-n*0.045, 8, 6), neckMats[n]);
+    seg.add(joint);
+    var nspike=new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.34, 4), spikeMat);
+    nspike.position.set(0, 0.32-n*0.03, 0.38); nspike.rotation.x=-0.5;
+    seg.add(nspike);
+    neck.push(seg); parent=seg;
+  }
+  rig.neck=neck;
+
+  /* ---- head ---- */
+  var head=new THREE.Group();
+  head.position.set(0, 0.10, 0.70);
+  neck[2].add(head);
+  rig.head=head;
+
+  var skull=new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 9), bodyMat);
+  skull.scale.set(0.92, 0.86, 1.12); head.add(skull);
+  var snout=new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.30, 0.82, 7), bodyMat);
+  snout.rotation.x=PI/2; snout.position.set(0, -0.06, 0.62); head.add(snout);
+  var snoutTip=new THREE.Mesh(new THREE.SphereGeometry(0.18,8,6), bodyMat);
+  snoutTip.position.set(0,-0.06,1.02); head.add(snoutTip);
+  var brow=new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.13, 0.30), bodyMat);
+  brow.position.set(0, 0.24, 0.32); brow.rotation.x=-0.2; head.add(brow);
+
+  var jaw=new THREE.Group();
+  jaw.position.set(0, -0.16, 0.16);
+  head.add(jaw); rig.jaw=jaw;
+  var jawMesh=new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.15, 0.86), bodyMat);
+  jawMesh.position.set(0, -0.06, 0.42); jaw.add(jawMesh);
+  var mouth=new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.80), basicMat(0x2a0c06));
+  mouth.rotation.x=-PI/2; mouth.position.set(0, 0.02, 0.44); jaw.add(mouth);
+  for(var tt=0; tt<5; tt++){
+    for(var sd=-1; sd<=1; sd+=2){
+      var tooth=new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 4), hornMat);
+      tooth.position.set(sd*0.13, -0.10, 0.22+tt*0.16); head.add(tooth);
+      tooth.rotation.x=PI;
+      var lower=new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.13, 4), hornMat);
+      lower.position.set(sd*0.12, 0.04, 0.22+tt*0.16); jaw.add(lower);
+    }
+  }
+  rig.mouth=new THREE.Object3D();               // where fire comes from
+  rig.mouth.position.set(0, -0.06, 1.15);
+  head.add(rig.mouth);
+
+  for(var e=-1;e<=1;e+=2){
+    var eye=new THREE.Mesh(new THREE.SphereGeometry(0.095, 8, 7), eyeMat);
+    eye.position.set(e*0.27, 0.13, 0.35); head.add(eye);
+    var pupil=new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.03), basicMat(0x110600));
+    pupil.position.set(e*0.30, 0.13, 0.40); head.add(pupil);
+    // Horns sweeping back off the skull.
+    var horn=new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.95, 6), hornMat);
+    horn.position.set(e*0.24, 0.36, -0.10);
+    horn.rotation.set(1.05, 0, e*-0.30); head.add(horn);
+    var horn2=new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.52, 5), hornMat);
+    horn2.position.set(e*0.33, 0.16, -0.18);
+    horn2.rotation.set(1.5, 0, e*-0.55); head.add(horn2);
+    // Ear fin.
+    var fin=new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.42, 4), wingMat);
+    fin.position.set(e*0.34, 0.06, -0.24);
+    fin.rotation.set(1.3, 0, e*-0.9); fin.scale.set(1,1,0.35); head.add(fin);
+    var cheek=new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.26, 4), spikeMat);
+    cheek.position.set(e*0.30, -0.10, 0.06);
+    cheek.rotation.set(1.4, 0, e*-1.1); head.add(cheek);
+  }
+
+  /* ---- wings ---- */
+  function makeWing(side){
+    var rootG=new THREE.Group();
+    rootG.position.set(side*0.58, 0.44, 0.42);
+    tilt.add(rootG);
+
+    var upper=boneMesh(0,0,0, side*2.9, 0.25, -0.25, 0.15, 0.11, bodyMat);
+    rootG.add(upper);
+
+    var inner=membrane([
+      [0,0,0.05],
+      [side*2.9, 0.22, -0.25],
+      [side*2.55, 0.05, -1.85],
+      [side*0.9,  -0.12, -2.35],
+      [0, -0.05, -1.55]
+    ], wingMat);
+    rootG.add(inner);
+
+    var elbow=new THREE.Group();
+    elbow.position.set(side*2.9, 0.25, -0.25);
+    rootG.add(elbow);
+
+    var tips=[
+      [side*4.55, -0.05,  0.30],
+      [side*4.25, -0.16, -1.55],
+      [side*3.35, -0.24, -3.05],
+      [side*1.75, -0.26, -3.85]
+    ];
+    for(var f=0; f<tips.length; f++){
+      elbow.add(boneMesh(0,0,0, tips[f][0], tips[f][1], tips[f][2], 0.10, 0.035, bodyMat, 5));
+      var claw=new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.24, 5), clawMat);
+      claw.position.set(tips[f][0], tips[f][1], tips[f][2]);
+      claw.rotation.set(-0.4, 0, side*-1.0);
+      elbow.add(claw);
+    }
+    var outer=membrane([
+      [0,0,0.05],
+      tips[0], tips[1], tips[2], tips[3],
+      [side*0.15, -0.10, -2.15]
+    ], wingMat);
+    elbow.add(outer);
+
+    rig.wings.push({root:rootG, elbow:elbow, side:side});
+    return rootG;
+  }
+  makeWing(1); makeWing(-1);
+
+  /* ---- legs ---- */
+  function makeLeg(side, front){
+    var hip=new THREE.Group();
+    hip.position.set(side*(front?0.56:0.66), front?-0.34:-0.30, front?0.92:-1.28);
+    tilt.add(hip);
+    var thighLen=front?0.78:0.92;
+    hip.add(boneMesh(0,0,0, side*0.10, -thighLen, front?0.06:-0.14, 0.20, 0.15, bodyMat));
+    var knee=new THREE.Group();
+    knee.position.set(side*0.10, -thighLen, front?0.06:-0.14);
+    hip.add(knee);
+    var shinLen=front?0.72:0.86;
+    knee.add(boneMesh(0,0,0, 0, -shinLen, front?0.02:0.22, 0.14, 0.11, bodyMat));
+    var ankle=new THREE.Group();
+    ankle.position.set(0, -shinLen, front?0.02:0.22);
+    knee.add(ankle);
+    var foot=new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.16, 0.50), bodyMat);
+    foot.position.set(0, -0.08, 0.14); ankle.add(foot);
+    for(var t2=-1;t2<=1;t2++){
+      var claw=new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.34, 5), clawMat);
+      claw.position.set(t2*0.12, -0.10, 0.38);
+      claw.rotation.x=PI/2+0.35;
+      ankle.add(claw);
+      rig.claws.push(claw);
+    }
+    var legObj={hip:hip, knee:knee, ankle:ankle, side:side, front:front,
+                phase:(front? (side>0?0:PI) : (side>0?PI:0))};
+    rig.legs.push(legObj);
+    return legObj;
+  }
+  makeLeg(1,true); makeLeg(-1,true); makeLeg(1,false); makeLeg(-1,false);
+
+  /* ---- tail ---- */
+  var tp=tilt, tz=-2.1;
+  for(var k=0;k<9;k++){
+    var tg=new THREE.Group();
+    tg.position.set(0, k===0?0.02:0, k===0?tz:-0.52);
+    tp.add(tg);
+    var r1=0.40-k*0.040, r2=0.40-(k+1)*0.040;
+    var tm=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(r2,0.04), Math.max(r1,0.05), 0.54, 7), bodyMat);
+    tm.rotation.x=PI/2; tm.position.z=-0.27;
+    tg.add(tm);
+    if(k<7){
+      var tsp=new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.30, 4), spikeMat);
+      tsp.position.set(0, r1*0.75, -0.24); tsp.rotation.x=-0.9;
+      tg.add(tsp); rig.spikes.push(tsp);
+    }
+    rig.tail.push(tg);
+    tp=tg;
+  }
+  // Tail fin at the very end.
+  var fin1=new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.95, 4), wingMat);
+  fin1.position.set(0, 0.18, -0.55); fin1.rotation.x=-0.5; fin1.scale.set(1,1,0.3);
+  rig.tail[8].add(fin1);
+  var fin2=new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.7, 4), spikeMat);
+  fin2.position.set(0, 0.05, -0.7); fin2.rotation.x=-PI/2;
+  rig.tail[8].add(fin2);
+  rig.tailTip=rig.tail[8];
+
+  /* ---- armour plates: built once, shown as they are bought ---- */
+  var plateMat=solidMat(0x8d949c, 0.42, 0.72);
+  rig.plateMat=plateMat;
+  function plate(w,h,d,x,y,z,rx,parent){
+    var p=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), plateMat);
+    p.position.set(x,y,z); p.rotation.x=rx||0;
+    p.visible=false;
+    (parent||tilt).add(p);
+    rig.plates.push(p);
+    return p;
+  }
+  plate(1.30,0.28,1.70, 0, 0.62, 0.30, -0.06);          // spine plate
+  plate(1.55,0.22,0.90, 0, 0.15, 1.05, 0.30);           // shoulder guard
+  plate(0.95,0.20,0.80, 0, -0.02,-1.35, 0);             // hip guard
+  for(var pw=-1;pw<=1;pw+=2){
+    plate(0.42,0.20,0.95, pw*0.72, 0.30, 0.55, 0);      // flank plates
+  }
+  var neckRing=new THREE.Mesh(new THREE.TorusGeometry(0.36,0.09,5,10), plateMat);
+  neckRing.rotation.x=PI/2; neckRing.position.z=0.30; neckRing.visible=false;
+  neck[1].add(neckRing); rig.plates.push(neckRing);
+  var mask=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.20,0.42), plateMat);
+  mask.position.set(0, 0.30, 0.22); mask.visible=false;
+  head.add(mask); rig.plates.push(mask);
+
+  root.scale.setScalar(C.scale);
+  return rig;
+}
+
+/* Blob shadow that hugs the ground under anything that moves. */
+var shadowTex=tex(softTex('rgba(0,0,0,0.55)'));
+function makeShadow(size){
+  var m=new THREE.Mesh(new THREE.PlaneGeometry(size,size),
+    new THREE.MeshBasicMaterial({map:shadowTex, transparent:true, depthWrite:false, opacity:0.5}));
+  m.rotation.x=-PI/2;
+  scene.add(m);
+  return m;
+}
+function placeShadow(sh, x, z, y, spread, alpha){
+  var gh=heightAt(x,z);
+  if(gh<SEA) gh=SEA;
+  var air=clamp((y-gh)/40, 0, 1);
+  sh.position.set(x, gh+0.14, z);
+  var s=spread*(1+air*1.9);
+  sh.scale.set(s,s,s);
+  sh.material.opacity=alpha*(1-air*0.72);
+  sh.visible=sh.material.opacity>0.02;
+}
+
+/* ============================================================
+   PARTICLES  —  one draw call per system
+   Additive systems fade by draining their colour, which costs nothing.
+   ============================================================ */
+function ParticleSys(max, size, texture, additive, opacity){
+  var geo=new THREE.BufferGeometry();
+  var pos=new Float32Array(max*3), col=new Float32Array(max*3);
+  for(var i=0;i<max;i++){ pos[i*3+1]=-9999; }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col,3));
+  var mat=new THREE.PointsMaterial({
+    size:size, map:texture, vertexColors:true, transparent:true,
+    opacity:opacity===undefined?1:opacity,
+    blending:additive?THREE.AdditiveBlending:THREE.NormalBlending,
+    depthWrite:false, sizeAttenuation:true
+  });
+  var pts=new THREE.Points(geo, mat);
+  pts.frustumCulled=false;
+  scene.add(pts);
+  var live=[], free=[];
+  for(var j=max-1;j>=0;j--) free.push(j);
+  return {
+    points:pts,
+    spawn:function(x,y,z, vx,vy,vz, life, r,g,b, grav, drag){
+      if(!free.length) return;
+      var id=free.pop();
+      live.push({i:id, x:x,y:y,z:z, vx:vx,vy:vy,vz:vz, t:0, life:life,
+                 r:r,g:g,b:b, grav:grav===undefined?0:grav, drag:drag===undefined?1.4:drag});
+    },
+    update:function(dt){
+      var p=geo.attributes.position.array, c=geo.attributes.color.array;
+      for(var k=live.length-1;k>=0;k--){
+        var q=live[k];
+        q.t+=dt;
+        if(q.t>=q.life){
+          p[q.i*3+1]=-9999; free.push(q.i); live.splice(k,1); continue;
+        }
+        var d=Math.pow(0.5, dt*q.drag);
+        q.vx*=d; q.vz*=d; q.vy=q.vy*d+q.grav*dt;
+        q.x+=q.vx*dt; q.y+=q.vy*dt; q.z+=q.vz*dt;
+        var f=1-q.t/q.life;
+        p[q.i*3]=q.x; p[q.i*3+1]=q.y; p[q.i*3+2]=q.z;
+        c[q.i*3]=q.r*f; c[q.i*3+1]=q.g*f; c[q.i*3+2]=q.b*f;
+      }
+      geo.attributes.position.needsUpdate=true;
+      geo.attributes.color.needsUpdate=true;
+    },
+    clear:function(){
+      var p=geo.attributes.position.array;
+      for(var k=0;k<live.length;k++){ p[live[k].i*3+1]=-9999; free.push(live[k].i); }
+      live.length=0;
+      geo.attributes.position.needsUpdate=true;
+    }
+  };
+}
+var flameTexture=tex(flameTex());
+var softWhite=tex(softTex('rgba(255,255,255,1)'));
+var FX={
+  fire:   ParticleSys(720, 3.4, flameTexture, true, 0.95),
+  ember:  ParticleSys(320, 1.0, flameTexture, true, 0.9),
+  splash: ParticleSys(300, 1.5, softWhite, true, 0.55),
+  hit:    ParticleSys(260, 0.8, softWhite, true, 0.9),
+  dust:   ParticleSys(240, 1.4, softWhite, false, 0.30)
+};
+function fxUpdate(dt){
+  FX.fire.update(dt); FX.ember.update(dt); FX.splash.update(dt);
+  FX.hit.update(dt); FX.dust.update(dt);
+}
+function burstHit(x,y,z,n,r,g,b){
+  for(var i=0;i<n;i++){
+    FX.hit.spawn(x,y,z, rand(-5,5),rand(1,7),rand(-5,5), rand(0.25,0.55), r,g,b, -12, 1.8);
+  }
+}
+function burstSplash(x,y,z,n,power){
+  for(var i=0;i<n;i++){
+    var a=rand(0,TAU), s=rand(1,power);
+    FX.splash.spawn(x,y,z, Math.cos(a)*s, rand(power*0.5,power*1.4), Math.sin(a)*s,
+                    rand(0.35,0.85), 0.55,0.85,1.0, -16, 0.9);
+  }
+}
+function burstDust(x,y,z,n){
+  for(var i=0;i<n;i++){
+    FX.dust.spawn(x,y,z, rand(-2.5,2.5),rand(0.5,3),rand(-2.5,2.5), rand(0.5,1.1), 0.55,0.50,0.40, -1.2, 0.7);
+  }
+}
+
+/* ============================================================
+   PROGRESSION: armour, claws, powers
+   ============================================================ */
+var ARMOUR=[
+  {name:'BARE HIDE',      cost:0,    dr:0.00, hp:100, plates:0, tint:0x3f5a46, desc:'Scales and nerve. Nothing between you and an axe.'},
+  {name:'BOILED HIDE',    cost:70,   dr:0.10, hp:125, plates:1, tint:0x4a4436, desc:'Ox hide lashed over the shoulders. Takes the edge off.'},
+  {name:'IRON SCALE',     cost:230,  dr:0.20, hp:155, plates:3, tint:0x4c5a5e, desc:'Riveted iron over the spine and flanks.'},
+  {name:'STEEL PLATE',    cost:560,  dr:0.32, hp:195, plates:5, tint:0x6b757c, desc:'Full barding. Arrows skip off it.'},
+  {name:'DRAGONBONE',     cost:1300, dr:0.45, hp:250, plates:7, tint:0xb9b2a0, desc:'Plates cut from an older wyrm. Nothing a Viking carries goes through.'}
+];
+var WEAPONS=[
+  {name:'FANGS',           cost:0,    dmg:24,  reach:6.5, tint:0xe8e2d2, desc:'Your own teeth. They have never let you down.'},
+  {name:'IRON CLAWS',      cost:100,  dmg:38,  reach:7.0, tint:0x9aa0a6, desc:'Iron sheaths bound to every talon.'},
+  {name:'STEEL TALONS',    cost:290,  dmg:58,  reach:7.6, tint:0xc9d1d8, desc:'Ground to a razor. Cuts mail like cloth.'},
+  {name:'OBSIDIAN TALONS', cost:700,  dmg:86,  reach:8.2, tint:0x2a2733, desc:'Volcanic glass. Brittle, vicious, beautiful.'},
+  {name:'BONECRUSHER',     cost:1500, dmg:124, reach:9.4, tint:0xd8b45a, desc:'A tail club of fused bone. One swing clears a shield wall.'}
+];
+var POWERS=[
+  {key:'fireTank', name:'DEEPER LUNGS',  costs:[140,360,780],  desc:'A bigger belly of flame before you have to stop.'},
+  {key:'fireDmg',  name:'HOTTER BREATH', costs:[170,430,940],  desc:'Fire that goes through mail and shield alike.'},
+  {key:'wings',    name:'STRONGER WINGS',costs:[130,330,700],  desc:'Climb harder and hold the sky far longer.'},
+  {key:'swim',     name:'SEA SERPENT',   costs:[90, 240,520],  desc:'Cut through water almost as fast as you run.'},
+  {key:'regen',    name:'OLD BLOOD',     costs:[150,380,820],  desc:'Wounds close on their own between fights.'},
+  {key:'magnet',   name:'GREED',         costs:[80, 200,440],  desc:'Coin comes to you from further off.'}
+];
+
+var SAVE_KEY='dragonIsle.save.v1';
+var save={coins:0, armour:0, weapon:0, kills:0, ownedA:[0], ownedW:[0],
+          powers:{fireTank:0,fireDmg:0,wings:0,swim:0,regen:0,magnet:0}};
+function loadSave(){
+  try{
+    var raw=window.localStorage.getItem(SAVE_KEY);
+    if(!raw) return;
+    var s=JSON.parse(raw);
+    if(typeof s.coins==='number') save.coins=clamp(s.coins|0, 0, 9999999);
+    if(typeof s.armour==='number') save.armour=clamp(s.armour|0,0,ARMOUR.length-1);
+    if(typeof s.weapon==='number') save.weapon=clamp(s.weapon|0,0,WEAPONS.length-1);
+    if(typeof s.kills==='number') save.kills=Math.max(0,s.kills|0);
+    if(s.ownedA instanceof Array) save.ownedA=s.ownedA.filter(function(n){ return n>=0&&n<ARMOUR.length; });
+    if(s.ownedW instanceof Array) save.ownedW=s.ownedW.filter(function(n){ return n>=0&&n<WEAPONS.length; });
+    if(save.ownedA.indexOf(0)<0) save.ownedA.push(0);
+    if(save.ownedW.indexOf(0)<0) save.ownedW.push(0);
+    if(save.ownedA.indexOf(save.armour)<0) save.armour=0;
+    if(save.ownedW.indexOf(save.weapon)<0) save.weapon=0;
+    if(s.powers) for(var i=0;i<POWERS.length;i++){
+      var k=POWERS[i].key;
+      if(typeof s.powers[k]==='number') save.powers[k]=clamp(s.powers[k]|0,0,3);
+    }
+  }catch(e){}
+}
+function writeSave(){
+  try{ window.localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){}
+}
+loadSave();
+
+function pw(key){ return save.powers[key]||0; }
+function stats(){
+  var a=ARMOUR[save.armour], w=WEAPONS[save.weapon];
+  return {
+    hpMax:   a.hp,
+    dr:      a.dr,
+    melee:   w.dmg,
+    reach:   w.reach,
+    fireMax: 100 + pw('fireTank')*45,
+    fireDps: 46 + pw('fireDmg')*26,
+    stamMax: 100 + pw('wings')*40,
+    climb:   1 + pw('wings')*0.22,
+    swimSpd: 8 + pw('swim')*2.6,
+    regen:   1.4 + pw('regen')*2.4,
+    magnet:  11 + pw('magnet')*6
+  };
+}
+
+/* ============================================================
+   SOUND  —  all synthesised, nothing downloaded
+   ============================================================ */
+var AC=null, master=null, noiseBuf=null, muted=false, fireNode=null;
+function initAudio(){
+  if(AC) return;
+  var Ctx=window.AudioContext||window.webkitAudioContext;
+  if(!Ctx) return;
+  AC=new Ctx();
+  master=AC.createGain(); master.gain.value=0.55; master.connect(AC.destination);
+  var len=AC.sampleRate*2;
+  noiseBuf=AC.createBuffer(1, len, AC.sampleRate);
+  var d=noiseBuf.getChannelData(0);
+  for(var i=0;i<len;i++) d[i]=Math.random()*2-1;
+}
+function wakeAudio(){
+  if(!AC) initAudio();
+  if(AC && AC.state==='suspended') AC.resume();
+}
+function noiseSrc(){
+  var s=AC.createBufferSource(); s.buffer=noiseBuf; s.loop=true; return s;
+}
+function env(node, t0, peak, atk, dec){
+  node.gain.setValueAtTime(0.0001, t0);
+  node.gain.exponentialRampToValueAtTime(Math.max(peak,0.0002), t0+atk);
+  node.gain.exponentialRampToValueAtTime(0.0001, t0+atk+dec);
+}
+function tone(type, f0, f1, dur, vol, t0){
+  if(!AC||muted) return;
+  t0=t0||AC.currentTime;
+  var o=AC.createOscillator(), g=AC.createGain();
+  o.type=type; o.frequency.setValueAtTime(f0,t0);
+  if(f1!==f0) o.frequency.exponentialRampToValueAtTime(Math.max(f1,1), t0+dur);
+  env(g, t0, vol, Math.min(0.02,dur*0.2), dur);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0+dur+0.05);
+}
+function noiseHit(freq, q, dur, vol, type){
+  if(!AC||muted) return;
+  var t0=AC.currentTime;
+  var s=noiseSrc(), f=AC.createBiquadFilter(), g=AC.createGain();
+  f.type=type||'bandpass'; f.frequency.value=freq; f.Q.value=q;
+  env(g, t0, vol, 0.008, dur);
+  s.connect(f); f.connect(g); g.connect(master);
+  s.start(t0); s.stop(t0+dur+0.1);
+}
+var sfx={
+  roar:function(){
+    if(!AC||muted) return;
+    var t0=AC.currentTime;
+    for(var i=0;i<3;i++){
+      var o=AC.createOscillator(), g=AC.createGain(), f=AC.createBiquadFilter();
+      o.type=i?'sawtooth':'square';
+      o.frequency.setValueAtTime(72+i*23, t0);
+      o.frequency.exponentialRampToValueAtTime(40+i*14, t0+1.1);
+      f.type='lowpass'; f.frequency.setValueAtTime(1500,t0);
+      f.frequency.exponentialRampToValueAtTime(320,t0+1.1);
+      env(g, t0, 0.32/(i+1), 0.09, 1.0);
+      o.connect(f); f.connect(g); g.connect(master);
+      o.start(t0); o.stop(t0+1.3);
+    }
+    noiseHit(700, 1.2, 0.9, 0.22);
+  },
+  flap:function(){ noiseHit(240, 0.9, 0.30, 0.20, 'lowpass'); },
+  step:function(){ noiseHit(120, 1.4, 0.11, 0.16, 'lowpass'); },
+  bite:function(){ noiseHit(1500, 2.4, 0.10, 0.28); tone('square', 150, 60, 0.10, 0.16); },
+  hit:function(){ noiseHit(900, 1.6, 0.10, 0.22); },
+  armourHit:function(){ noiseHit(2600, 3.2, 0.14, 0.20); tone('triangle', 620, 280, 0.10, 0.10); },
+  coin:function(){ tone('square', 1180, 1780, 0.08, 0.13); tone('square', 1760, 2360, 0.10, 0.09, AC?AC.currentTime+0.05:0); },
+  buy:function(){ tone('triangle', 520, 900, 0.14, 0.16); tone('triangle', 780, 1300, 0.18, 0.12, AC?AC.currentTime+0.09:0); },
+  deny:function(){ tone('square', 200, 110, 0.16, 0.14); },
+  splash:function(big){ noiseHit(big?400:900, 0.7, big?0.55:0.30, big?0.34:0.20, 'lowpass'); },
+  arrow:function(){ noiseHit(2400, 5.0, 0.20, 0.10); },
+  axe:function(){ noiseHit(320, 1.1, 0.20, 0.26, 'lowpass'); tone('square', 180, 70, 0.14, 0.12); },
+  shout:function(){
+    if(!AC||muted) return;
+    var t0=AC.currentTime, o=AC.createOscillator(), g=AC.createGain(), f=AC.createBiquadFilter();
+    o.type='sawtooth';
+    o.frequency.setValueAtTime(rand(150,220), t0);
+    o.frequency.exponentialRampToValueAtTime(rand(80,130), t0+0.35);
+    f.type='bandpass'; f.frequency.value=900; f.Q.value=1.4;
+    env(g, t0, 0.16, 0.03, 0.32);
+    o.connect(f); f.connect(g); g.connect(master); o.start(t0); o.stop(t0+0.5);
+  },
+  horn:function(){
+    if(!AC||muted) return;
+    var t0=AC.currentTime;
+    tone('sawtooth', 132, 128, 1.5, 0.18, t0);
+    tone('sawtooth', 198, 194, 1.5, 0.12, t0+0.04);
+  },
+  death:function(){ tone('sawtooth', 180, 40, 1.5, 0.28); noiseHit(300, 0.8, 1.2, 0.20, 'lowpass'); },
+  thud:function(v){ noiseHit(90, 1.0, 0.28, clamp(v,0.05,0.4), 'lowpass'); }
+};
+function fireSoundStart(){
+  if(!AC||muted||fireNode) return;
+  var s=noiseSrc(), f=AC.createBiquadFilter(), g=AC.createGain(), lfo=AC.createOscillator(), lg=AC.createGain();
+  f.type='bandpass'; f.frequency.value=680; f.Q.value=0.65;
+  g.gain.setValueAtTime(0.0001, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.30, AC.currentTime+0.10);
+  lfo.type='sine'; lfo.frequency.value=7.5; lg.gain.value=260;
+  lfo.connect(lg); lg.connect(f.frequency);
+  s.connect(f); f.connect(g); g.connect(master);
+  s.start(); lfo.start();
+  fireNode={src:s, gain:g, lfo:lfo};
+}
+function fireSoundStop(){
+  if(!fireNode) return;
+  var n=fireNode; fireNode=null;
+  try{
+    n.gain.gain.cancelScheduledValues(AC.currentTime);
+    n.gain.gain.setValueAtTime(Math.max(n.gain.gain.value,0.0002), AC.currentTime);
+    n.gain.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime+0.18);
+    n.src.stop(AC.currentTime+0.25); n.lfo.stop(AC.currentTime+0.25);
+  }catch(e){}
+}
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+var game={
+  running:false, paused:false, shopOpen:false, dead:false,
+  t:0, raid:1, raidT:70, nextShipT:55, kills:save.kills, sessionKills:0,
+  nearCave:false, rallyT:0, roarT:0
+};
+
+var player={
+  rig:null, pos:new THREE.Vector3(), vel:new THREE.Vector3(),
+  yaw:0, pitch:0, roll:0, mode:'ground', speed:0,
+  hp:100, hpMax:100, fire:100, fireMax:100, stam:100, stamMax:100,
+  breathing:false, meleeCd:0, meleeT:0, roarT:0, dead:false, hurtCd:0, noCombatT:0, flapT:0, stepT:0,
+  wingBlend:0, gait:0, takeoffCd:0, swimDepth:0, deadT:0, headYaw:0, headPitch:0,
+  shadow:null, lastGroundY:0, crashCd:0
+};
+var PSCALE=1.15;
+var LEG_Y=2.10*PSCALE;
+
+player.rig=buildDragon({scale:PSCALE, body:0x40604c, belly:0xc0a468, wing:0x8a4234,
+                        horn:0xe0d4b6, eye:0xffc020, claw:0xe8e2d2});
+scene.add(player.rig.root);
+player.shadow=makeShadow(9);
+
+function applyGear(){
+  var a=ARMOUR[save.armour], w=WEAPONS[save.weapon], st=stats();
+  var rig=player.rig;
+  rig.mats.body.color.setHex(a.tint); rig.mats.body.color.convertSRGBToLinear();
+  rig.mats.claw.color.setHex(w.tint); rig.mats.claw.color.convertSRGBToLinear();
+  for(var i=0;i<rig.plates.length;i++) rig.plates[i].visible = i < a.plates;
+  player.hpMax=st.hpMax;
+  player.fireMax=st.fireMax;
+  player.stamMax=st.stamMax;
+  if(player.hp>player.hpMax) player.hp=player.hpMax;
+  if(player.fire>player.fireMax) player.fire=player.fireMax;
+  if(player.stam>player.stamMax) player.stam=player.stamMax;
+  ui.armourTag.innerHTML=a.name+' &middot; <b>'+w.name+'</b>';
+}
+
+/* ============================================================
+   COINS
+   ============================================================ */
+var coinGeo=new THREE.CylinderGeometry(0.34,0.34,0.09,10);
+var coinMat=solidMat(0xf2c245, 0.28, 0.9);
+var coins=[], coinPool=[];
+function dropCoins(x,y,z,value){
+  var n=clamp(Math.round(value/6), 1, 9);
+  var each=Math.max(1, Math.round(value/n));
+  for(var i=0;i<n;i++){
+    var m=coinPool.length?coinPool.pop():new THREE.Mesh(coinGeo, coinMat);
+    m.visible=true; scene.add(m);
+    m.position.set(x+rand(-1.2,1.2), y+rand(0.4,1.6), z+rand(-1.2,1.2));
+    m.rotation.set(rand(0,PI), rand(0,PI), rand(0,PI));
+    coins.push({mesh:m, v:each, vy:rand(3,7), vx:rand(-3,3), vz:rand(-3,3), t:0, spin:rand(3,7)});
+  }
+}
+function updateCoins(dt){
+  var mag=stats().magnet;
+  for(var i=coins.length-1;i>=0;i--){
+    var c=coins[i], p=c.mesh.position;
+    c.t+=dt;
+    var gh=Math.max(heightAt(p.x,p.z), SEA+0.25)+0.34;
+    var d=p.distanceTo(player.pos);
+    if(d<mag && c.t>0.35){
+      // pulled in, faster the closer it gets
+      _va.subVectors(player.pos, p).normalize().multiplyScalar(((1-d/mag)*54+14)*dt);
+      p.add(_va);
+      if(d<3.4){
+        save.coins+=c.v;
+        sfx.coin(); writeSave(); updateHUD();
+        scene.remove(c.mesh); coinPool.push(c.mesh); coins.splice(i,1);
+        continue;
+      }
+    }else{
+      c.vy-=22*dt;
+      p.x+=c.vx*dt; p.z+=c.vz*dt; p.y+=c.vy*dt;
+      c.vx*=Math.pow(0.2,dt); c.vz*=Math.pow(0.2,dt);
+      if(p.y<gh){ p.y=gh; c.vy=Math.abs(c.vy)*0.34; if(c.vy<1.2) c.vy=0; }
+    }
+    c.mesh.rotation.y+=c.spin*dt;
+    c.mesh.rotation.x=lerp(c.mesh.rotation.x, PI/2, dt*3);
+    if(c.t>75){ scene.remove(c.mesh); coinPool.push(c.mesh); coins.splice(i,1); }
+  }
+}
+
+/* ============================================================
+   PROJECTILES: arrows and thrown spears
+   ============================================================ */
+var arrowGeo=new THREE.CylinderGeometry(0.035,0.035,1.5,4);
+arrowGeo.rotateX(PI/2);
+var spearGeo=new THREE.CylinderGeometry(0.06,0.06,2.6,5);
+spearGeo.rotateX(PI/2);
+var shaftMat=solidMat(0x6b5133,0.9,0.05);
+var shots=[], shotPool=[];
+function fireShot(x,y,z, tx,ty,tz, speed, dmg, spear){
+  var m;
+  if(shotPool.length){ m=shotPool.pop(); m.geometry=spear?spearGeo:arrowGeo; }
+  else m=new THREE.Mesh(spear?spearGeo:arrowGeo, shaftMat);
+  m.visible=true; scene.add(m);
+  m.position.set(x,y,z);
+  var dir=_va.set(tx-x, ty-y, tz-z);
+  var dist=dir.length();
+  dir.normalize();
+  var drop=spear?0.30:0.16;
+  dir.y+=dist*drop/speed*0.5;                 // aim high so gravity brings it in
+  dir.normalize();
+  shots.push({mesh:m, vx:dir.x*speed, vy:dir.y*speed, vz:dir.z*speed, dmg:dmg, t:0, spear:!!spear});
+  sfx.arrow();
+}
+function updateShots(dt){
+  for(var i=shots.length-1;i>=0;i--){
+    var s=shots[i], p=s.mesh.position;
+    s.t+=dt;
+    s.vy-=(s.spear?15:9.5)*dt;
+    p.x+=s.vx*dt; p.y+=s.vy*dt; p.z+=s.vz*dt;
+    _va.set(s.vx,s.vy,s.vz).normalize();
+    s.mesh.quaternion.setFromUnitVectors(_vb.set(0,0,1), _va);
+    var hit=false;
+    if(!player.dead && p.distanceTo(player.pos)<2.7*PSCALE){ hurtPlayer(s.dmg, p.x,p.y,p.z); hit=true; }
+    if(!hit && p.y<Math.max(heightAt(p.x,p.z), SEA-1)){ hit=true; }
+    if(hit || s.t>7){
+      scene.remove(s.mesh); shotPool.push(s.mesh); shots.splice(i,1);
+    }
+  }
+}
+
+/* ============================================================
+   VIKINGS
+   ============================================================ */
+var VTYPE={
+  raider:   {hp:62,  spd:5.4, dmg:11, coin:14, range:3.4,  sight:52, ranged:0,  scale:1.00, tunic:0x7d4b32},
+  archer:   {hp:46,  spd:4.8, dmg:11, coin:19, range:3.0,  sight:66, ranged:62, scale:0.96, tunic:0x4c5a3a},
+  spearman: {hp:74,  spd:5.0, dmg:17, coin:22, range:4.4,  sight:56, ranged:34, scale:1.02, tunic:0x59496b},
+  shield:   {hp:140, spd:3.7, dmg:19, coin:30, range:3.6,  sight:46, ranged:0,  scale:1.10, tunic:0x37506b},
+  berserker:{hp:100, spd:7.6, dmg:27, coin:36, range:3.6,  sight:58, ranged:0,  scale:1.06, tunic:0x7a2b26},
+  chief:    {hp:290, spd:5.2, dmg:32, coin:130,range:4.2,  sight:72, ranged:0,  scale:1.26, tunic:0x2f3d55}
+};
+var tunicMats={}, vikingMats={
+  skin:  solidMat(0xc79a72, 0.9, 0),
+  hair:  solidMat(0x8a5c2c, 0.95, 0),
+  iron:  solidMat(0x9aa1a8, 0.42, 0.72),
+  dark:  solidMat(0x3a3a3e, 0.7, 0.35),
+  wood:  solidMat(0x6b5133, 0.92, 0.04),
+  leather:solidMat(0x4a3524, 0.9, 0.05),
+  shield1:solidMat(0xb03a2e, 0.7, 0.08),
+  shield2:solidMat(0xd8cdb2, 0.7, 0.08),
+  gold:  solidMat(0xd9a828, 0.3, 0.85)
+};
+for(var tk in VTYPE) tunicMats[tk]=solidMat(VTYPE[tk].tunic, 0.92, 0.02);
+
+function buildViking(){
+  var g=new THREE.Group();
+  var M=vikingMats;
+  var parts={};
+
+  var torso=new THREE.Mesh(G('v1',function(){ return new THREE.BoxGeometry(0.62,0.78,0.40); }), tunicMats.raider);
+  torso.position.y=1.30; g.add(torso); parts.torso=torso;
+  var belt=new THREE.Mesh(G('v2',function(){ return new THREE.BoxGeometry(0.66,0.14,0.44); }), M.leather);
+  belt.position.y=0.95; g.add(belt);
+  var cape=new THREE.Mesh(G('v3',function(){ return new THREE.PlaneGeometry(0.72,0.95); }), M.shield1);
+  cape.position.set(0,1.20,-0.24); cape.visible=false; g.add(cape); parts.cape=cape;
+
+  var head=new THREE.Mesh(G('v4',function(){ return new THREE.SphereGeometry(0.23,10,8); }), M.skin);
+  head.position.y=1.86; g.add(head); parts.head=head;
+  var beard=new THREE.Mesh(G('v5',function(){ return new THREE.ConeGeometry(0.19,0.34,7); }), M.hair);
+  beard.position.set(0,1.68,0.10); beard.rotation.x=0.25; g.add(beard); parts.beard=beard;
+  var helm=new THREE.Mesh(G('v6',function(){ return new THREE.SphereGeometry(0.25,10,6,0,TAU,0,PI/2); }), M.iron);
+  helm.position.y=1.88; g.add(helm);
+  var band=new THREE.Mesh(G('v7',function(){ return new THREE.TorusGeometry(0.245,0.035,5,12); }), M.iron);
+  band.rotation.x=PI/2; band.position.y=1.86; g.add(band);
+  for(var s=-1;s<=1;s+=2){
+    var horn=new THREE.Mesh(G('v8',function(){ return new THREE.ConeGeometry(0.07,0.42,6); }), M.shield2);
+    horn.position.set(s*0.22,1.99,0);
+    horn.rotation.set(0.25, 0, s*-1.05);
+    g.add(horn);
+  }
+
+  var armL=new THREE.Group(); armL.position.set(-0.40,1.62,0); g.add(armL); parts.armL=armL;
+  var armR=new THREE.Group(); armR.position.set( 0.40,1.62,0); g.add(armR); parts.armR=armR;
+  var upperL=new THREE.Mesh(G('v9',function(){ return new THREE.CylinderGeometry(0.10,0.09,0.66,6); }), tunicMats.raider);
+  upperL.position.y=-0.33; armL.add(upperL);
+  var upperR=upperL.clone(); armR.add(upperR);
+  parts.sleeveL=upperL; parts.sleeveR=upperR;
+  var handL=new THREE.Mesh(G('v10',function(){ return new THREE.SphereGeometry(0.11,7,6); }), M.skin);
+  handL.position.y=-0.70; armL.add(handL);
+  var handR=handL.clone(); armR.add(handR);
+
+  var legL=new THREE.Group(); legL.position.set(-0.18,0.92,0); g.add(legL); parts.legL=legL;
+  var legR=new THREE.Group(); legR.position.set( 0.18,0.92,0); g.add(legR); parts.legR=legR;
+  var thighL=new THREE.Mesh(G('v11',function(){ return new THREE.CylinderGeometry(0.13,0.11,0.92,6); }), M.dark);
+  thighL.position.y=-0.46; legL.add(thighL);
+  legR.add(thighL.clone());
+  var bootL=new THREE.Mesh(G('v12',function(){ return new THREE.BoxGeometry(0.20,0.16,0.34); }), M.leather);
+  bootL.position.set(0,-0.94,0.06); legL.add(bootL);
+  legR.add(bootL.clone());
+
+  // Weapons, all hung off the right arm, shown one at a time.
+  var axe=new THREE.Group(); axe.position.set(0,-0.72,0); armR.add(axe); parts.axe=axe;
+  var haft=new THREE.Mesh(G('v13',function(){ return new THREE.CylinderGeometry(0.045,0.05,1.0,5); }), M.wood);
+  haft.position.y=-0.36; axe.add(haft);
+  var blade=new THREE.Mesh(G('v14',function(){ return new THREE.BoxGeometry(0.09,0.34,0.30); }), M.iron);
+  blade.position.set(0,-0.80,0.14); axe.add(blade);
+  var blade2=new THREE.Mesh(G('v15',function(){ return new THREE.ConeGeometry(0.20,0.30,3); }), M.iron);
+  blade2.position.set(0,-0.80,0.26); blade2.rotation.x=PI/2; blade2.rotation.z=PI/2; axe.add(blade2);
+
+  var spear=new THREE.Group(); spear.position.set(0,-0.72,0); armR.add(spear); parts.spear=spear;
+  var shaft=new THREE.Mesh(G('v16',function(){ return new THREE.CylinderGeometry(0.04,0.045,2.4,5); }), M.wood);
+  shaft.rotation.x=PI/2; spear.add(shaft);
+  var tip=new THREE.Mesh(G('v17',function(){ return new THREE.ConeGeometry(0.09,0.36,6); }), M.iron);
+  tip.position.z=1.36; tip.rotation.x=PI/2; spear.add(tip);
+
+  var bow=new THREE.Group(); bow.position.set(0,-0.72,0); armR.add(bow); parts.bow=bow;
+  var limb=new THREE.Mesh(G('v18',function(){ return new THREE.TorusGeometry(0.52,0.032,4,14,2.2); }), M.wood);
+  limb.rotation.y=PI/2; limb.rotation.z=-1.1; bow.add(limb);
+  var strng=new THREE.Mesh(G('v19',function(){ return new THREE.CylinderGeometry(0.008,0.008,0.92,3); }), M.shield2);
+  strng.position.z=-0.02; bow.add(strng);
+
+  var shield=new THREE.Group(); shield.position.set(0,-0.66,0.12); armL.add(shield); parts.shield=shield;
+  var disc=new THREE.Mesh(G('v20',function(){ return new THREE.CylinderGeometry(0.46,0.46,0.08,14); }), M.shield1);
+  disc.rotation.x=PI/2; shield.add(disc);
+  var boss=new THREE.Mesh(G('v21',function(){ return new THREE.SphereGeometry(0.11,8,6); }), M.iron);
+  boss.position.z=0.08; shield.add(boss);
+  var rimM=new THREE.Mesh(G('v22',function(){ return new THREE.TorusGeometry(0.46,0.035,5,16); }), M.iron);
+  shield.add(rimM);
+
+  var warhorn=new THREE.Mesh(G('v23',function(){ return new THREE.ConeGeometry(0.12,0.52,7,1,true); }), M.shield2);
+  warhorn.position.set(0,-0.72,0.16); warhorn.rotation.x=-1.2;
+  armL.add(warhorn); parts.horn=warhorn;
+
+  g.userData.parts=parts;
+  return g;
+}
+
+var vikings=[], vikingPool=[];
+var VIKING_CAP=44;
+
+function spawnViking(type, x, z, opts){
+  if(vikings.length>=VIKING_CAP) return null;
+  var T=VTYPE[type];
+  var v=vikingPool.pop();
+  if(!v){
+    if(vikings.length + 1 > VIKING_CAP) return null;
+    v={group:buildViking(), shadow:makeShadow(2.4)};
+  }
+  var P=v.group.userData.parts;
+  v.group.visible=true; v.shadow.visible=true;
+  scene.add(v.group);
+  var lvl=game.raid;
+  v.type=type;
+  v.hp=v.hpMax=Math.round(T.hp*(1+(lvl-1)*0.13));
+  v.dmg=T.dmg*(1+(lvl-1)*0.09);
+  v.spd=T.spd;
+  v.coin=Math.round(T.coin*(1+(lvl-1)*0.10));
+  v.sight=T.sight;
+  v.range=T.range;
+  v.ranged=T.ranged;
+  v.x=x; v.z=z; v.y=heightAt(x,z);
+  v.yaw=rand(0,TAU);
+  v.state='idle';
+  v.home=(opts&&opts.home)||{x:x,z:z};
+  v.wander=null; v.wanderT=0;
+  v.atkCd=rand(0.4,1.4); v.shotCd=rand(0.6,2.0);
+  v.lastSeen=null; v.searchT=0; v.alertT=0;
+  v.burn=0; v.burnT=0; v.flash=0;
+  v.dead=false; v.deadT=0; v.step=rand(0,TAU); v.stepSnd=0;
+  v.hornCd=rand(3,9);
+  v.target=null;
+
+  // Dress for the role.
+  P.torso.material=P.sleeveL.material=P.sleeveR.material=tunicMats[type];
+  P.axe.visible   = (type==='raider'||type==='shield'||type==='berserker'||type==='chief');
+  P.spear.visible = (type==='spearman');
+  P.bow.visible   = (type==='archer');
+  P.shield.visible= (type==='shield'||type==='raider');
+  P.horn.visible  = (type==='chief');
+  P.cape.visible  = (type==='chief');
+  P.beard.material= (type==='berserker')?vikingMats.shield2:vikingMats.hair;
+  v.group.scale.setScalar(T.scale);
+  v.group.position.set(v.x, v.y, v.z);
+  vikings.push(v);
+  return v;
+}
+function despawnViking(i){
+  var v=vikings[i];
+  scene.remove(v.group);
+  v.shadow.visible=false;
+  vikingPool.push(v);
+  vikings.splice(i,1);
+}
+
+function alertNear(v, radius){
+  for(var i=0;i<vikings.length;i++){
+    var o=vikings[i];
+    if(o===v || o.dead) continue;
+    if(Math.hypot(o.x-v.x, o.z-v.z)<radius && o.state==='idle'){
+      o.state='search'; o.searchT=rand(7,13);
+      o.lastSeen={x:player.pos.x, z:player.pos.z};
+    }
+  }
+}
+function hurtViking(v, dmg, burn){
+  if(v.dead) return;
+  v.hp-=dmg; v.flash=0.12;
+  if(burn){ v.burn=Math.max(v.burn, 3.4); }
+  if(v.state==='idle'){ v.state='hunt'; alertNear(v, 28); }
+  v.lastSeen={x:player.pos.x, z:player.pos.z};
+  if(v.hp<=0) killViking(v);
+}
+function killViking(v){
+  if(v.dead) return;
+  v.dead=true; v.deadT=0;
+  dropCoins(v.x, v.y+1.0, v.z, v.coin);
+  burstHit(v.x, v.y+1.2, v.z, 12, 0.6,0.10,0.08);
+  game.kills++; game.sessionKills++; save.kills=game.kills; writeSave();
+  sfx.hit();
+  updateHUD();
+}
+function vikingHeadY(v){ return v.y + 1.86*VTYPE[v.type].scale; }
+
+function stepViking(v, tx, tz, speed, dt){
+  var dx=tx-v.x, dz=tz-v.z, d=Math.hypot(dx,dz);
+  if(d<0.001) return 0;
+  dx/=d; dz/=d;
+  // Vikings do not swim. If the next step is in the sea, slide along the shore.
+  var probe=2.6;
+  if(heightAt(v.x+dx*probe, v.z+dz*probe) < 0.7){
+    var found=false;
+    for(var a=0.6; a<=2.6; a+=0.6){
+      for(var sgn=-1; sgn<=1; sgn+=2){
+        var nx=dx*Math.cos(a*sgn)-dz*Math.sin(a*sgn);
+        var nz=dx*Math.sin(a*sgn)+dz*Math.cos(a*sgn);
+        if(heightAt(v.x+nx*probe, v.z+nz*probe) > 1.0){ dx=nx; dz=nz; found=true; break; }
+      }
+      if(found) break;
+    }
+    if(!found) return d;
+  }
+  // Slow going uphill, quick downhill.
+  var ahead=heightAt(v.x+dx*1.6, v.z+dz*1.6);
+  var grade=clamp((ahead-v.y)/1.6, -0.7, 0.9);
+  var sp=speed*(1-grade*0.55);
+  v.x+=dx*sp*dt; v.z+=dz*sp*dt;
+  v.y=heightAt(v.x, v.z);
+  v.yaw=angLerp(v.yaw, Math.atan2(dx,dz), 1-Math.pow(0.0005, dt));
+  v.step+=sp*dt*1.5;
+  return d;
+}
+
+function updateVikings(dt){
+  var px=player.pos.x, pz=player.pos.z, py=player.pos.y;
+  var loud = player.breathing || game.roarT>0;
+  for(var i=vikings.length-1;i>=0;i--){
+    var v=vikings[i], P=v.group.userData.parts;
+
+    if(v.dead){
+      v.deadT+=dt;
+      v.group.rotation.x=Math.min(PI/2, v.deadT*4.2);
+      v.group.position.y=v.y - Math.min(0.35, v.deadT*0.6);
+      if(v.deadT>2.4){ despawnViking(i); }
+      else placeShadow(v.shadow, v.x, v.z, v.y, 2.0, 0.45*(1-v.deadT/2.4));
+      continue;
+    }
+
+    // burning
+    if(v.burn>0){
+      v.burn-=dt;
+      v.hp-=16*dt*(1+pw('fireDmg')*0.35);
+      v.burnT-=dt;
+      if(v.burnT<=0){
+        v.burnT=0.06;
+        FX.ember.spawn(v.x+rand(-0.4,0.4), v.y+rand(0.6,2.0), v.z+rand(-0.4,0.4),
+                       rand(-0.6,0.6), rand(1.4,3.4), rand(-0.6,0.6), rand(0.35,0.8),
+                       1.0, rand(0.35,0.7), 0.10, 2.0, 1.0);
+      }
+      if(v.hp<=0){ killViking(v); continue; }
+    }
+
+    var dxp=px-v.x, dzp=pz-v.z;
+    var dist=Math.hypot(dxp, dzp);
+    var groundGap=py - heightAt(px,pz);
+    var sight=v.sight*(player.mode==='fly'?1.35:1)*(loud?1.7:1)*(game.roarT>0?1.3:1);
+    var facing=Math.abs(angWrap(Math.atan2(dxp,dzp)-v.yaw));
+    var sees = dist<sight && (facing<1.5 || dist<16) && !player.dead;
+
+    if(sees && v.state!=='hunt'){
+      v.state='hunt';
+      if(v.alertT<=0){ v.alertT=6; if(dist<70 && Math.random()<0.5) sfx.shout(); alertNear(v, 30); }
+    }
+    if(v.alertT>0) v.alertT-=dt;
+    if(sees) v.lastSeen={x:px, z:pz};
+
+    // pick a nearer target: a friendly dragon in your place
+    var tgtX=px, tgtZ=pz, tgtY=py, tgtIsPlayer=true;
+    var bestAlly=null, bestD=22;
+    for(var a=0;a<allies.length;a++){
+      var al=allies[a];
+      if(al.down) continue;
+      var ad=Math.hypot(al.pos.x-v.x, al.pos.z-v.z);
+      if(ad<bestD && al.pos.y-heightAt(al.pos.x,al.pos.z) < 7){ bestD=ad; bestAlly=al; }
+    }
+    if(bestAlly && (bestD<dist*0.7)){
+      tgtX=bestAlly.pos.x; tgtZ=bestAlly.pos.z; tgtY=bestAlly.pos.y; tgtIsPlayer=false;
+      if(v.state==='idle') v.state='hunt';
+    }
+    var tDist=Math.hypot(tgtX-v.x, tgtZ-v.z);
+    var tGap=tgtY - heightAt(tgtX,tgtZ);
+
+    // low on blood, some of them break
+    var stubborn = (v.type==='chief'||v.type==='shield'||v.type==='berserker');
+    if(!stubborn && v.hp<v.hpMax*0.22 && v.state==='hunt' && Math.random()<dt*0.9){
+      v.state='flee';
+    }
+
+    if(v.state==='idle'){
+      v.wanderT-=dt;
+      if(v.wanderT<=0 || !v.wander){
+        v.wanderT=rand(3,8);
+        var wa=rand(0,TAU), wr=rand(6,26);
+        v.wander={x:v.home.x+Math.cos(wa)*wr, z:v.home.z+Math.sin(wa)*wr};
+      }
+      stepViking(v, v.wander.x, v.wander.z, v.spd*0.36, dt);
+
+    }else if(v.state==='search'){
+      v.searchT-=dt;
+      var ls=v.lastSeen||v.home;
+      var dls=stepViking(v, ls.x, ls.z, v.spd*0.72, dt);
+      if(dls<5){ v.yaw+=dt*1.6; }
+      if(v.searchT<=0){ v.state='idle'; }
+      if(sees) v.state='hunt';
+
+    }else if(v.state==='hunt'){
+      if(!sees && !bestAlly){
+        v.searchT=rand(8,15); v.state='search';
+      }else{
+        var reachable = tGap < 5.5;
+        if(v.ranged>0 && tDist<v.ranged && tDist>7){
+          // hold ground and shoot
+          v.yaw=angLerp(v.yaw, Math.atan2(tgtX-v.x, tgtZ-v.z), 1-Math.pow(0.001,dt));
+          if(tDist>v.ranged*0.55) stepViking(v, tgtX, tgtZ, v.spd*0.5, dt);
+          v.shotCd-=dt;
+          if(v.shotCd<=0){
+            v.shotCd=(v.type==='archer'?rand(1.5,2.6):rand(2.6,4.2))/(1+game.raid*0.03);
+            var lead=tgtIsPlayer?1:0.6;
+            var spd=v.type==='archer'?54:34;
+            var lx=tgtX+player.vel.x*(tDist/spd)*lead;
+            var ly=tgtY+player.vel.y*(tDist/spd)*lead+0.6;
+            var lz=tgtZ+player.vel.z*(tDist/spd)*lead;
+            fireShot(v.x, vikingHeadY(v), v.z, lx, ly, lz, spd, v.dmg, v.type==='spearman');
+            v.swingT=0.35;
+          }
+        }else if(reachable && tDist<v.range+1.6){
+          v.yaw=angLerp(v.yaw, Math.atan2(tgtX-v.x, tgtZ-v.z), 1-Math.pow(0.0002,dt));
+          v.atkCd-=dt;
+          if(v.atkCd<=0){
+            v.atkCd=rand(1.0,1.7);
+            v.swingT=0.42; v.pending=true;
+          }
+        }else{
+          stepViking(v, tgtX, tgtZ, v.spd*(v.type==='berserker'?1.05:1), dt);
+        }
+        // the chief calls the island in
+        if(v.type==='chief'){
+          v.hornCd-=dt;
+          if(v.hornCd<=0){ v.hornCd=rand(14,24); sfx.horn(); alertNear(v, 210); if(dist<200) toast('A WAR HORN SOUNDS'); }
+        }
+      }
+
+    }else if(v.state==='flee'){
+      var fd=stepViking(v, v.home.x, v.home.z, v.spd*1.12, dt);
+      if(fd<8){ v.state='idle'; v.hp=Math.min(v.hpMax, v.hp+v.hpMax*0.2); }
+    }
+
+    // swing follow-through
+    if(v.swingT>0){
+      var was=v.swingT;
+      v.swingT-=dt;
+      if(v.pending && was>0.18 && v.swingT<=0.18){
+        v.pending=false;
+        if(tgtIsPlayer){
+          if(Math.hypot(px-v.x, pz-v.z)<v.range+2.4 && (py-heightAt(px,pz))<6.0){
+            hurtPlayer(v.dmg, v.x, v.y+1.4, v.z);
+            sfx.axe();
+          }
+        }else if(bestAlly && Math.hypot(bestAlly.pos.x-v.x, bestAlly.pos.z-v.z)<v.range+2.6){
+          hurtAlly(bestAlly, v.dmg);
+          sfx.axe();
+        }
+      }
+    }
+
+    // pose
+    v.group.position.set(v.x, v.y, v.z);
+    v.group.rotation.y=v.yaw;
+    var sw=Math.sin(v.step)*0.62, swing=v.swingT>0 ? (1-v.swingT/0.42) : 0;
+    P.legL.rotation.x= sw;
+    P.legR.rotation.x=-sw;
+    P.armL.rotation.x=-sw*0.6;
+    P.armR.rotation.x= v.swingT>0 ? lerp(-2.1, 0.9, swing) : sw*0.6;
+    P.armR.rotation.z= v.swingT>0 ? -0.3 : 0;
+    v.group.position.y = v.y + Math.abs(Math.sin(v.step))*0.06;
+    if(v.flash>0){
+      v.flash-=dt;
+      P.torso.material=v.flash>0?vikingMats.shield2:tunicMats[v.type];
+    }
+    if(v.burn>0){
+      P.torso.material=vikingMats.gold;
+    }
+    // footfalls you can hear when they are close
+    v.stepSnd-=dt;
+    if(dist<26 && v.stepSnd<=0 && v.state!=='idle'){ v.stepSnd=0.42; if(Math.random()<0.25) sfx.step(); }
+
+    var far=dist>250;
+    v.group.visible=!far;
+    v.shadow.visible=!far;
+    if(!far) placeShadow(v.shadow, v.x, v.z, v.y, 2.0, 0.42);
+  }
+}
+
+/* ============================================================
+   FIRE BREATH  —  shared by you and by your kin
+   ============================================================ */
+var _fo=new THREE.Vector3(), _fd=new THREE.Vector3(), _ft=new THREE.Vector3();
+function fireCone(origin, dir, dt, dps, range, fromPlayer, accum){
+  var n=Math.min(6, Math.floor(accum.v));
+  accum.v-=n;
+  for(var i=0;i<n;i++){
+    var spread=0.10;
+    var vx=dir.x+rand(-spread,spread), vy=dir.y+rand(-spread,spread), vz=dir.z+rand(-spread,spread);
+    var sp=rand(range*0.9, range*1.5);
+    FX.fire.spawn(origin.x+rand(-0.2,0.2), origin.y+rand(-0.2,0.2), origin.z+rand(-0.2,0.2),
+                  vx*sp, vy*sp+rand(0.5,2.4), vz*sp, rand(0.42,0.80),
+                  1.0, rand(0.55,0.86), rand(0.14,0.34), 3.5, 2.1);
+    if(Math.random()<0.35){
+      FX.ember.spawn(origin.x, origin.y, origin.z,
+                     vx*sp*1.25, vy*sp*1.25+rand(1,4), vz*sp*1.25, rand(0.5,1.1),
+                     1.0, rand(0.4,0.7), 0.12, 1.2, 1.2);
+    }
+  }
+  // Damage: the stream is a widening tube, not a ray. Anything whose chest sits
+  // inside it takes the heat and catches light.
+  for(var k=vikings.length-1;k>=0;k--){
+    var v=vikings[k];
+    if(v.dead) continue;
+    _ft.set(v.x-origin.x, (v.y+1.05)-origin.y, v.z-origin.z);
+    var along=_ft.dot(dir);
+    if(along< -1.4 || along>range) continue;
+    var perp=Math.sqrt(Math.max(0, _ft.lengthSq()-along*along));
+    var width=1.9 + Math.max(0,along)/range*5.6;   // splays out with distance
+    if(perp>width) continue;
+    var mult=1;
+    if(v.type==='shield'){                       // a shield wall turns some of it
+      var face=Math.abs(angWrap(Math.atan2(origin.x-v.x, origin.z-v.z)-v.yaw));
+      if(face<0.9) mult=0.42;
+    }
+    hurtViking(v, dps*dt*mult, true);
+  }
+}
+
+/* ============================================================
+   FRIENDLY DRAGONS
+   ============================================================ */
+var ALLY_LOOK=[
+  {body:0x2f4f6b, belly:0x9fb6c2, wing:0x35566e, horn:0xdcd6c4, eye:0x8fe8ff, name:'Saltwing'},
+  {body:0x6b4a2a, belly:0xd0b487, wing:0x8a5a30, horn:0xe6dcc2, eye:0xffd06a, name:'Ashmaw'},
+  {body:0x4a3a5e, belly:0xb9a7cf, wing:0x5c4470, horn:0xded6ea, eye:0xc39bff, name:'Nightfell'},
+  {body:0x2f5c3c, belly:0xaecf9a, wing:0x3d6b45, horn:0xd9e4c8, eye:0x9dff7a, name:'Fernscale'}
+];
+var allies=[];
+function spawnAllies(){
+  for(var i=0;i<ALLY_LOOK.length;i++){
+    var L=ALLY_LOOK[i];
+    var rig=buildDragon({scale:0.82, body:L.body, belly:L.belly, wing:L.wing,
+                         horn:L.horn, eye:L.eye, claw:0xd8d2c2});
+    scene.add(rig.root);
+    var a={
+      rig:rig, name:L.name, pos:new THREE.Vector3(), vel:new THREE.Vector3(),
+      yaw:rand(0,TAU), pitch:0, roll:0, speed:18,
+      hp:220, hpMax:220, state:'patrol', wp:null, wpT:0, target:null,
+      breathT:0, fireAcc:{v:0}, down:false, downT:0, flap:rand(0,TAU),
+      shadow:makeShadow(7), gait:1
+    };
+    a.pos.set(CAVE.x+rand(-40,40), CAVE.h+rand(45,75), CAVE.z+rand(-40,40));
+    allies.push(a);
+  }
+}
+function hurtAlly(a, dmg){
+  if(a.down) return;
+  a.hp-=dmg;
+  burstHit(a.pos.x, a.pos.y, a.pos.z, 6, 0.55,0.12,0.10);
+  if(a.hp<=0){
+    a.hp=0; a.down=true; a.downT=26;
+    toast(a.name.toUpperCase()+' IS DOWN');
+  }
+}
+function newWaypoint(a){
+  if(game.rallyT>0){
+    var ra=rand(0,TAU), rr=rand(28,70);
+    a.wp=new THREE.Vector3(player.pos.x+Math.cos(ra)*rr, 0, player.pos.z+Math.sin(ra)*rr);
+  }else{
+    var ang=rand(0,TAU), r=rand(60, SHORE*0.95);
+    a.wp=new THREE.Vector3(Math.cos(ang)*r, 0, Math.sin(ang)*r);
+  }
+  a.wp.y=Math.max(heightAt(a.wp.x, a.wp.z), SEA)+rand(38, 66);
+  a.wpT=rand(14,26);
+}
+function updateAllies(dt){
+  for(var i=0;i<allies.length;i++){
+    var a=allies[i];
+
+    if(a.down){
+      a.downT-=dt;
+      a.pos.y=damp(a.pos.y, Math.max(heightAt(a.pos.x,a.pos.z),SEA)+0.6, 0.02, dt);
+      a.rig.root.position.copy(a.pos);
+      a.rig.tilt.rotation.z=damp(a.rig.tilt.rotation.z, 1.5, 0.05, dt);
+      placeShadow(a.shadow, a.pos.x, a.pos.z, a.pos.y, 6, 0.35);
+      if(a.downT<=0){
+        a.down=false; a.hp=a.hpMax;
+        a.pos.set(CAVE.x+rand(-24,24), CAVE.h+rand(50,70), CAVE.z+rand(-24,24));
+        a.rig.tilt.rotation.z=0; a.state='patrol'; a.wp=null;
+        toast(a.name.toUpperCase()+' IS BACK IN THE AIR');
+      }
+      continue;
+    }
+
+    // pick a target worth diving on
+    a.target=null;
+    var best=1e9;
+    for(var k=0;k<vikings.length;k++){
+      var v=vikings[k];
+      if(v.dead) continue;
+      var d=Math.hypot(v.x-a.pos.x, v.z-a.pos.z);
+      var bias=(v.state==='hunt')?0.6:1.0;
+      if(d*bias<best && d<150){ best=d*bias; a.target=v; }
+    }
+
+    var tgt;
+    if(a.target){
+      a.state='attack';
+      tgt=_va.set(a.target.x, Math.max(a.target.y, SEA)+rand(9,13), a.target.z);
+    }else{
+      a.state='patrol';
+      a.wpT-=dt;
+      if(!a.wp || a.wpT<=0 || a.pos.distanceTo(a.wp)<26) newWaypoint(a);
+      tgt=_va.copy(a.wp);
+    }
+
+    // steer
+    var want=Math.atan2(tgt.x-a.pos.x, tgt.z-a.pos.z);
+    var turn=angWrap(want-a.yaw);
+    var rate=clamp(turn, -1.5, 1.5);
+    a.yaw+=rate*dt*1.25;
+    a.roll=damp(a.roll, -clamp(rate,-1,1)*0.75, 0.02, dt);
+    var flat=Math.hypot(tgt.x-a.pos.x, tgt.z-a.pos.z);
+    var wantPitch=clamp(Math.atan2(tgt.y-a.pos.y, Math.max(flat,6)), -0.7, 0.7);
+    a.pitch=damp(a.pitch, wantPitch, 0.05, dt);
+    a.speed=damp(a.speed, a.state==='attack'?26:19, 0.2, dt);
+
+    var cp=Math.cos(a.pitch);
+    a.vel.set(Math.sin(a.yaw)*cp, Math.sin(a.pitch), Math.cos(a.yaw)*cp).multiplyScalar(a.speed);
+    a.pos.addScaledVector(a.vel, dt);
+    var floor=Math.max(heightAt(a.pos.x,a.pos.z), SEA)+7;
+    if(a.pos.y<floor){ a.pos.y=floor; a.pitch=Math.max(a.pitch, 0.12); }
+    if(a.pos.y>240) a.pos.y=240;
+
+    // breathe on whatever is in front of it
+    a.breathT-=dt;
+    if(a.target){
+      var dd=Math.hypot(a.target.x-a.pos.x, a.target.z-a.pos.z);
+      var dy=a.pos.y-a.target.y;
+      _fd.set(a.target.x-a.pos.x, (a.target.y+1.2)-a.pos.y, a.target.z-a.pos.z).normalize();
+      var aim=_fd.dot(_vb.set(Math.sin(a.yaw)*cp, Math.sin(a.pitch), Math.cos(a.yaw)*cp).normalize());
+      if(a.breathT<-2.2) a.breathT=2.0;                 // 2s of fire, then a rest
+      if(dd<30 && dy<34 && aim>0.86 && a.breathT>0){
+        a.fireAcc.v+=dt*46;
+        a.rig.mouth.getWorldPosition(_fo);
+        fireCone(_fo, _fd, dt, 30, 26, false, a.fireAcc);
+        a.rig.jaw.rotation.x=0.6;
+      }else{
+        a.rig.jaw.rotation.x=damp(a.rig.jaw.rotation.x, 0, 0.02, dt);
+      }
+    }else{
+      a.rig.jaw.rotation.x=damp(a.rig.jaw.rotation.x, 0, 0.02, dt);
+    }
+
+    a.rig.root.position.copy(a.pos);
+    a.rig.root.rotation.y=a.yaw;
+    a.rig.tilt.rotation.x=-a.pitch;
+    a.rig.tilt.rotation.z=a.roll;
+    a.flap+=dt*(3.0+a.speed*0.05);
+    animateDragon(a.rig, dt, {mode:'fly', flap:a.flap, gait:0, speed:a.speed, turn:rate});
+    placeShadow(a.shadow, a.pos.x, a.pos.z, a.pos.y, 6, 0.4);
+  }
+}
+
+/* ============================================================
+   DRAGON ANIMATION
+   ============================================================ */
+function wingSpread(w, target, dt){
+  var k=damp(w.root.scale.x, target, 0.004, dt);
+  w.root.scale.set(k,k,k);
+}
+function animateDragon(rig, dt, o){
+  var mode=o.mode, flap=o.flap||0, gait=o.gait||0, spd=o.speed||0, turn=o.turn||0;
+  var i, w, seg;
+
+  if(mode==='fly'){
+    var effort=clamp(o.effort===undefined?0.6:o.effort, 0, 1);
+    var amp=0.42+effort*0.72;
+    var s=Math.sin(flap);
+    for(i=0;i<rig.wings.length;i++){
+      w=rig.wings[i];
+      w.root.rotation.z=damp(w.root.rotation.z, w.side*(s*amp+0.10), 0.0001, dt);
+      w.root.rotation.y=damp(w.root.rotation.y, w.side*(Math.cos(flap)*0.22-0.05), 0.0001, dt);
+      w.root.rotation.x=damp(w.root.rotation.x, -0.10-effort*0.12, 0.001, dt);
+      w.elbow.rotation.z=damp(w.elbow.rotation.z, w.side*(-s*amp*0.55), 0.0001, dt);
+      w.elbow.rotation.y=damp(w.elbow.rotation.y, w.side*(0.16-effort*0.10), 0.001, dt);
+      wingSpread(w, 1, dt);
+    }
+    for(i=0;i<rig.legs.length;i++){
+      var lg=rig.legs[i];
+      lg.hip.rotation.x=damp(lg.hip.rotation.x, 1.05+Math.sin(flap+lg.phase)*0.06, 0.01, dt);
+      lg.knee.rotation.x=damp(lg.knee.rotation.x, -2.00, 0.01, dt);
+      lg.ankle.rotation.x=damp(lg.ankle.rotation.x, 0.55, 0.01, dt);
+    }
+    for(i=0;i<rig.tail.length;i++){
+      seg=rig.tail[i];
+      seg.rotation.y=damp(seg.rotation.y, Math.sin(flap*0.55-i*0.34)*0.10 - turn*0.10, 0.001, dt);
+      seg.rotation.x=damp(seg.rotation.x, Math.sin(flap*0.5-i*0.3)*0.05+0.02, 0.001, dt);
+    }
+  }else if(mode==='swim'){
+    var ss=Math.sin(gait*1.5);
+    for(i=0;i<rig.wings.length;i++){
+      w=rig.wings[i];
+      w.root.rotation.z=damp(w.root.rotation.z, w.side*(0.25+ss*0.28), 0.001, dt);
+      w.root.rotation.y=damp(w.root.rotation.y, w.side*1.05, 0.003, dt);
+      w.root.rotation.x=damp(w.root.rotation.x, 0.10, 0.01, dt);
+      w.elbow.rotation.y=damp(w.elbow.rotation.y, w.side*1.75, 0.003, dt);
+      w.elbow.rotation.z=damp(w.elbow.rotation.z, 0, 0.01, dt);
+      wingSpread(w, 0.62, dt);
+    }
+    for(i=0;i<rig.legs.length;i++){
+      var lg2=rig.legs[i];
+      lg2.hip.rotation.x=damp(lg2.hip.rotation.x, Math.sin(gait*2.2+lg2.phase)*0.55-0.25, 0.001, dt);
+      lg2.knee.rotation.x=damp(lg2.knee.rotation.x, 0.85+Math.cos(gait*2.2+lg2.phase)*0.35, 0.001, dt);
+      lg2.ankle.rotation.x=damp(lg2.ankle.rotation.x, 0.2, 0.01, dt);
+    }
+    for(i=0;i<rig.tail.length;i++){
+      seg=rig.tail[i];
+      seg.rotation.y=damp(seg.rotation.y, Math.sin(gait*2.0-i*0.55)*0.30, 0.0005, dt);
+      seg.rotation.x=damp(seg.rotation.x, 0.02, 0.01, dt);
+    }
+  }else{
+    // on foot: wings folded along the flanks
+    for(i=0;i<rig.wings.length;i++){
+      w=rig.wings[i];
+      w.root.rotation.z=damp(w.root.rotation.z, w.side*(0.26+Math.sin(gait*0.5)*0.04), 0.003, dt);
+      w.root.rotation.y=damp(w.root.rotation.y, w.side*1.50, 0.003, dt);
+      w.root.rotation.x=damp(w.root.rotation.x, 0.06, 0.01, dt);
+      w.elbow.rotation.y=damp(w.elbow.rotation.y, w.side*2.55, 0.003, dt);
+      w.elbow.rotation.z=damp(w.elbow.rotation.z, w.side*0.30, 0.01, dt);
+      wingSpread(w, 0.46, dt);
+    }
+    var stride=clamp(spd/14, 0, 1.25);
+    for(i=0;i<rig.legs.length;i++){
+      var lg3=rig.legs[i];
+      var ph=gait+lg3.phase;
+      var sw=Math.sin(ph);
+      lg3.hip.rotation.x=damp(lg3.hip.rotation.x, sw*0.62*stride+(lg3.front?0.05:-0.05), 0.0004, dt);
+      lg3.knee.rotation.x=damp(lg3.knee.rotation.x, Math.max(0,-sw)*1.05*stride+0.22, 0.0004, dt);
+      lg3.ankle.rotation.x=damp(lg3.ankle.rotation.x, clamp(-sw*0.4,-0.4,0.4)*stride, 0.0008, dt);
+    }
+    for(i=0;i<rig.tail.length;i++){
+      seg=rig.tail[i];
+      seg.rotation.y=damp(seg.rotation.y, Math.sin(gait*0.5-i*0.36)*0.13 - turn*0.14, 0.001, dt);
+      seg.rotation.x=damp(seg.rotation.x, 0.04+i*0.012, 0.01, dt);
+    }
+  }
+
+  // neck and head lean into the turn and follow the look direction
+  var hy=o.headYaw||0, hp=o.headPitch||0;
+  for(i=0;i<rig.neck.length;i++){
+    rig.neck[i].rotation.y=damp(rig.neck[i].rotation.y, hy*0.26 - turn*0.14, 0.002, dt);
+    rig.neck[i].rotation.x=damp(rig.neck[i].rotation.x, hp*0.22 + (mode==='ground'?-0.10:0.02), 0.002, dt);
+  }
+  rig.head.rotation.y=damp(rig.head.rotation.y, hy*0.34, 0.002, dt);
+  rig.head.rotation.x=damp(rig.head.rotation.x, hp*0.30, 0.002, dt);
+}
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+var keys={};
+var move={x:0, y:0};
+var look={x:0, y:0};
+var held={fire:false, up:false, down:false, run:false};
+var isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+
+var ui={};
+function $(id){ return document.getElementById(id); }
+['hud','bars','hpFill','fireFill','stamFill','armourTag','kills','radar','coinNum','raid','modePill','toast',
+ 'prompt','reticle','stick','knob','stickZone','lookZone','bFire','bBite','bUp','bDown','bRoar','menuBtn',
+ 'shopBtn','start','startBtn','menu','menuStats','resumeBtn','muteBtn','wipeBtn','shop','shopCoins','items',
+ 'closeShop','loading','hurt','wet','fade','vignette'].forEach(function(id){ ui[id]=$(id); });
+var radarCtx=ui.radar.getContext('2d');
+
+/* ---- keyboard ---- */
+window.addEventListener('keydown', function(e){
+  if(e.code==='Space' || e.code.indexOf('Arrow')===0) e.preventDefault();
+  if(e.repeat) return;
+  keys[e.code]=true;
+  if(e.code==='Escape'){ if(game.shopOpen) closeShop(); else togglePause(); }
+  if(!game.running || game.paused || game.shopOpen) return;
+  if(e.code==='KeyE') meleeAttack();
+  if(e.code==='KeyR') roar();
+  if(e.code==='KeyB' && game.nearCave) openShop();
+  if(e.code==='KeyM') toggleMute();
+}, false);
+window.addEventListener('keyup', function(e){ keys[e.code]=false; }, false);
+
+/* ---- mouse ---- */
+var pointerLocked=false;
+canvas.addEventListener('click', function(){
+  if(game.running && !game.paused && !game.shopOpen && !isTouch && !pointerLocked){
+    canvas.requestPointerLock&&canvas.requestPointerLock();
+  }
+});
+document.addEventListener('pointerlockchange', function(){
+  pointerLocked=(document.pointerLockElement===canvas);
+});
+document.addEventListener('mousemove', function(e){
+  if(!pointerLocked) return;
+  look.x-=e.movementX*0.0026;
+  look.y-=e.movementY*0.0022;
+});
+document.addEventListener('mousedown', function(e){
+  if(!game.running||game.paused||game.shopOpen) return;
+  if(!pointerLocked && !isTouch) return;
+  if(e.button===0) held.fire=true;
+  if(e.button===2) meleeAttack();
+});
+document.addEventListener('mouseup', function(e){ if(e.button===0) held.fire=false; });
+document.addEventListener('contextmenu', function(e){ if(game.running) e.preventDefault(); });
+
+/* ---- touch: left stick, right drag to look ---- */
+var stickId=null, stickOx=0, stickOy=0, lookId=null, lookLx=0, lookLy=0;
+ui.stickZone.addEventListener('touchstart', function(e){
+  e.preventDefault();
+  var t=e.changedTouches[0];
+  stickId=t.identifier; stickOx=t.clientX; stickOy=t.clientY;
+  ui.stick.style.left=stickOx+'px'; ui.stick.style.top=stickOy+'px'; ui.stick.style.opacity=1;
+}, {passive:false});
+ui.lookZone.addEventListener('touchstart', function(e){
+  e.preventDefault();
+  var t=e.changedTouches[0];
+  if(lookId===null){ lookId=t.identifier; lookLx=t.clientX; lookLy=t.clientY; }
+}, {passive:false});
+window.addEventListener('touchmove', function(e){
+  for(var i=0;i<e.changedTouches.length;i++){
+    var t=e.changedTouches[i];
+    if(t.identifier===stickId){
+      var dx=t.clientX-stickOx, dy=t.clientY-stickOy;
+      var d=Math.hypot(dx,dy), max=54;
+      if(d>max){ dx*=max/d; dy*=max/d; d=max; }
+      ui.knob.style.transform='translate('+dx+'px,'+dy+'px)';
+      move.x=dx/max; move.y=dy/max;
+      held.run=(d>max*0.86);
+    }else if(t.identifier===lookId){
+      look.x-=(t.clientX-lookLx)*0.0052;
+      look.y-=(t.clientY-lookLy)*0.0044;
+      lookLx=t.clientX; lookLy=t.clientY;
+    }
+  }
+}, {passive:false});
+function endTouch(e){
+  for(var i=0;i<e.changedTouches.length;i++){
+    var t=e.changedTouches[i];
+    if(t.identifier===stickId){
+      stickId=null; move.x=move.y=0; held.run=false;
+      ui.stick.style.opacity=0; ui.knob.style.transform='';
+    }else if(t.identifier===lookId){ lookId=null; }
+  }
+}
+window.addEventListener('touchend', endTouch);
+window.addEventListener('touchcancel', endTouch);
+
+function bindHold(el, on, off){
+  el.addEventListener('touchstart', function(e){ e.preventDefault(); el.classList.add('on'); on(); }, {passive:false});
+  el.addEventListener('touchend',   function(e){ e.preventDefault(); el.classList.remove('on'); if(off) off(); }, {passive:false});
+  el.addEventListener('touchcancel',function(){ el.classList.remove('on'); if(off) off(); });
+  el.addEventListener('mousedown',  function(e){ e.preventDefault(); el.classList.add('on'); on(); });
+  el.addEventListener('mouseup',    function(e){ e.preventDefault(); el.classList.remove('on'); if(off) off(); });
+  el.addEventListener('mouseleave', function(){ if(el.classList.contains('on')){ el.classList.remove('on'); if(off) off(); } });
+}
+bindHold(ui.bFire, function(){ held.fire=true; }, function(){ held.fire=false; });
+bindHold(ui.bUp,   function(){ held.up=true;  }, function(){ held.up=false; });
+bindHold(ui.bDown, function(){ held.down=true;}, function(){ held.down=false; });
+bindHold(ui.bBite, function(){ meleeAttack(); });
+bindHold(ui.bRoar, function(){ roar(); });
+bindHold(ui.shopBtn, function(){ if(game.nearCave) openShop(); });
+bindHold(ui.menuBtn, function(){ togglePause(); });
+
+function readInput(){
+  var mx=move.x, my=move.y;
+  if(keys['KeyW']||keys['ArrowUp'])    my-=1;
+  if(keys['KeyS']||keys['ArrowDown'])  my+=1;
+  if(keys['KeyA']||keys['ArrowLeft'])  mx-=1;
+  if(keys['KeyD']||keys['ArrowRight']) mx+=1;
+  var d=Math.hypot(mx,my);
+  if(d>1){ mx/=d; my/=d; }
+  var run=held.run||!!(keys['ShiftLeft']||keys['ShiftRight']);
+  var up=held.up||!!keys['Space'];
+  var down=held.down||!!(keys['ControlLeft']||keys['ControlRight']||keys['KeyC']);
+  var fire=held.fire||!!keys['KeyF'];
+  return {x:mx, y:my, mag:Math.min(1,d), run:run, up:up, down:down, fire:fire};
+}
+
+/* ============================================================
+   PLAYER: combat actions
+   ============================================================ */
+var fireAcc={v:0};
+var roarCd=0;
+
+function meleeAttack(){
+  if(!game.running||game.paused||game.shopOpen||player.dead) return;
+  if(player.meleeCd>0) return;
+  var st=stats();
+  player.meleeCd=0.62;
+  player.meleeT=0.42;
+  sfx.bite();
+  var fx=Math.sin(player.yaw), fz=Math.cos(player.yaw);
+  var reach=st.reach*PSCALE, hitAny=false;
+  for(var i=vikings.length-1;i>=0;i--){
+    var v=vikings[i];
+    if(v.dead) continue;
+    var dx=v.x-player.pos.x, dz=v.z-player.pos.z, dy=(v.y+1.1)-player.pos.y;
+    var d=Math.hypot(dx,dz);
+    if(d>reach || Math.abs(dy)>5.5) continue;
+    if((dx/d)*fx+(dz/d)*fz < 0.42) continue;
+    hurtViking(v, st.melee*rand(0.9,1.15), false);
+    burstHit(v.x, v.y+1.3, v.z, 8, 0.7,0.16,0.12);
+    v.x+=(dx/d)*1.4; v.z+=(dz/d)*1.4;
+    hitAny=true;
+  }
+  if(hitAny) sfx.armourHit();
+}
+
+function roar(){
+  if(!game.running||game.paused||game.shopOpen||player.dead) return;
+  if(roarCd>0) return;
+  roarCd=5.5;
+  game.roarT=3.5;
+  game.rallyT=24;
+  player.roarT=0.9;
+  sfx.roar();
+  toast('YOUR KIN ANSWER');
+  for(var i=0;i<vikings.length;i++){
+    var v=vikings[i];
+    if(v.dead) continue;
+    var d=Math.hypot(v.x-player.pos.x, v.z-player.pos.z);
+    if(d<44){ v.atkCd=Math.max(v.atkCd, 0.9); v.swingT=0; v.pending=false; }
+    if(d<90 && v.state==='idle'){ v.state='search'; v.searchT=rand(8,14); v.lastSeen={x:player.pos.x,z:player.pos.z}; }
+  }
+  for(var a=0;a<allies.length;a++) allies[a].wp=null;
+}
+
+function hurtPlayer(dmg, sx, sy, sz){
+  if(player.dead || player.hurtCd>0) return;
+  var st=stats();
+  dmg=dmg*(1-st.dr);
+  player.hp-=dmg;
+  player.hurtCd=0.45;
+  player.noCombatT=0;
+  ui.hurt.style.opacity=Math.min(0.85, 0.25+dmg/60);
+  setTimeout(function(){ ui.hurt.style.opacity=0; }, 90);
+  if(sx!==undefined) burstHit(sx, sy, sz, 5, 0.6,0.14,0.12);
+  sfx.armourHit();
+  updateHUD();
+  if(player.hp<=0) killPlayer();
+}
+
+function killPlayer(){
+  if(player.dead) return;
+  player.dead=true; player.deadT=0; player.hp=0;
+  player.breathing=false; fireSoundStop();
+  sfx.death();
+  ui.fade.style.opacity=1;
+  var lost=Math.floor(save.coins*0.25);
+  save.coins-=lost; writeSave();
+  toast(lost>0 ? ('YOU FALL — '+lost+' COINS SCATTERED') : 'YOU FALL');
+  updateHUD();
+}
+
+function respawn(){
+  player.dead=false;
+  player.hp=player.hpMax;
+  player.fire=player.fireMax;
+  player.stam=player.stamMax;
+  player.mode='ground';
+  player.speed=0;
+  player.vel.set(0,0,0);
+  player.pitch=0; player.roll=0;
+  player.pos.set(CAVE_FRONT.x, heightAt(CAVE_FRONT.x, CAVE_FRONT.z)+LEG_Y, CAVE_FRONT.z);
+  player.yaw=CAVE.yaw;
+  cam.yaw=CAVE.yaw; cam.pitch=-0.10;
+  camPos.set(player.pos.x-Math.sin(cam.yaw)*cam.dist, player.pos.y+7, player.pos.z-Math.cos(cam.yaw)*cam.dist);
+  ui.fade.style.opacity=0;
+  updateHUD();
+}
+
+/* You breathe where you are looking. The body swings round to follow, so the
+   stream always leaves the mouth in a direction that makes sense. */
+function aimDir(out){
+  var bodyYaw=player.yaw, bodyPitch=player.pitch;
+  var wantYaw=cam.yaw, wantPitch=-cam.pitch;
+  var dy=clamp(angWrap(wantYaw-bodyYaw), -1.0, 1.0);
+  var dp=clamp(wantPitch-bodyPitch, -0.9, 0.9);
+  var y=bodyYaw+dy, p=clamp(bodyPitch+dp, -1.25, 1.25);
+  var cp=Math.cos(p);
+  return out.set(Math.sin(y)*cp, Math.sin(p), Math.cos(y)*cp).normalize();
+}
+
+/* ============================================================
+   PLAYER: movement, camera
+   ============================================================ */
+var cam={yaw:0, pitch:-0.18, dist:15, distNow:15, idle:0};
+var camPos=new THREE.Vector3(), camTarget=new THREE.Vector3(), camWant=new THREE.Vector3();
+var STALL=11;
+
+function updatePlayer(dt){
+  var inp=readInput();
+  var st=stats();
+
+  if(player.dead){
+    player.deadT+=dt;
+    player.rig.tilt.rotation.z=damp(player.rig.tilt.rotation.z, 1.4, 0.06, dt);
+    player.pos.y=damp(player.pos.y, Math.max(heightAt(player.pos.x,player.pos.z),SEA)+0.8, 0.02, dt);
+    if(player.deadT>2.6) respawn();
+    return;
+  }
+  player.rig.tilt.rotation.z=damp(player.rig.tilt.rotation.z, player.roll, 0.02, dt);
+
+  if(player.meleeCd>0) player.meleeCd-=dt;
+  if(player.meleeT>0) player.meleeT-=dt;
+  if(player.hurtCd>0) player.hurtCd-=dt;
+  if(roarCd>0) roarCd-=dt;
+  if(player.roarT>0) player.roarT-=dt;
+  if(game.roarT>0) game.roarT-=dt;
+  if(game.rallyT>0) game.rallyT-=dt;
+  if(player.takeoffCd>0) player.takeoffCd-=dt;
+  player.noCombatT+=dt;
+
+  var gh=heightAt(player.pos.x, player.pos.z);
+  var deepWater=(gh < SEA-1.2);
+
+  /* -------- ON FOOT -------- */
+  if(player.mode==='ground'){
+    var cy=cam.yaw;
+    var dirX=Math.cos(cy)*inp.x + Math.sin(cy)*(-inp.y);
+    var dirZ=-Math.sin(cy)*inp.x + Math.cos(cy)*(-inp.y);
+    var mag=Math.hypot(dirX,dirZ);
+    var wantSpd=0;
+    if(mag>0.06){
+      dirX/=mag; dirZ/=mag;
+      var running=inp.run && player.stam>2;
+      wantSpd=(running?17.5:8.4)*Math.min(1,inp.mag||mag);
+      if(running) player.stam-=13*dt;
+      // an uphill wall stops you
+      var ahead=heightAt(player.pos.x+dirX*3.4, player.pos.z+dirZ*3.4);
+      var grade=(ahead-gh)/3.4;
+      if(grade>0.95) wantSpd=0;
+      else wantSpd*=clamp(1-grade*0.55, 0.25, 1.35);
+      player.yaw=angLerp(player.yaw, Math.atan2(dirX,dirZ), 1-Math.pow(0.00004, dt));
+    }
+    player.speed=damp(player.speed, wantSpd, 0.0008, dt);
+    player.pos.x+=Math.sin(player.yaw)*player.speed*dt;
+    player.pos.z+=Math.cos(player.yaw)*player.speed*dt;
+    gh=heightAt(player.pos.x, player.pos.z);
+    player.pos.y=damp(player.pos.y, gh+LEG_Y, 0.0001, dt);
+    player.gait+=player.speed*dt*0.62;
+    // slope pitch
+    var fwdH=heightAt(player.pos.x+Math.sin(player.yaw)*4, player.pos.z+Math.cos(player.yaw)*4);
+    player.pitch=damp(player.pitch, clamp(-(fwdH-gh)/4*0.7, -0.5, 0.5), 0.02, dt);
+    player.roll=damp(player.roll, 0, 0.02, dt);
+    // footfalls
+    player.stepT-=dt*player.speed*0.55;
+    if(player.speed>1 && player.stepT<=0){
+      player.stepT=1;
+      sfx.step();
+      burstDust(player.pos.x, gh+0.2, player.pos.z, 3);
+    }
+    // take off
+    if(inp.up && player.stam>12 && player.takeoffCd<=0){
+      player.mode='fly';
+      player.speed=Math.max(player.speed, 15);
+      player.pitch=0.42;
+      player.pos.y+=1.2;
+      player.stam-=12;
+      player.flapT=0;
+      player.takeoffCd=0.5;
+      sfx.flap();
+      burstDust(player.pos.x, gh+0.2, player.pos.z, 16);
+      toast('AIRBORNE');
+    }
+    if(deepWater || player.pos.y<SEA-0.2){ enterSwim(); }
+
+  /* -------- FLYING -------- */
+  }else if(player.mode==='fly'){
+    var turnRate=1.55*(inp.run?1.2:1);
+    player.yaw+=inp.x*turnRate*dt;
+    var pTarget=clamp(-inp.y*0.72, -0.85, 0.85);
+    if(inp.down) pTarget=-0.95;
+    var thrusting=false;
+    if(inp.up && player.stam>0){
+      pTarget=clamp(pTarget+0.42, -0.9, 0.95);
+      thrusting=true;
+      player.stam-=(15/st.climb)*dt;
+      player.speed+=13*st.climb*dt;
+    }
+    if(inp.run && player.stam>0 && !inp.down){
+      player.speed+=16*dt; player.stam-=10*dt; thrusting=true;
+    }
+    player.pitch=damp(player.pitch, pTarget, 0.01, dt);
+    // gravity trades height for speed, drag bleeds it back
+    player.speed+=-Math.sin(player.pitch)*24*dt;
+    player.speed+=(20-player.speed)*0.30*dt;
+    player.speed-=player.speed*player.speed*0.0016*dt;
+    player.speed=clamp(player.speed, 5, 64);
+    player.roll=damp(player.roll, -clamp(inp.x,-1,1)*0.85, 0.02, dt);
+
+    var cp=Math.cos(player.pitch);
+    player.vel.set(Math.sin(player.yaw)*cp, Math.sin(player.pitch), Math.cos(player.yaw)*cp)
+              .multiplyScalar(player.speed);
+    if(player.speed<STALL) player.vel.y-=(STALL-player.speed)*1.5;   // not enough air over the wings
+    player.pos.addScaledVector(player.vel, dt);
+
+    player.flapT-=dt;
+    var effort=thrusting?1:clamp(0.25-player.pitch,0,1);
+    player.wingBlend=damp(player.wingBlend, thrusting?1:0.35, 0.02, dt);
+    player.gait+=dt*(2.4+player.wingBlend*4.6+player.speed*0.035);
+    if(player.flapT<=0 && (thrusting || player.speed<20)){
+      player.flapT=thrusting?0.46:0.95;
+      sfx.flap();
+    }
+
+    gh=heightAt(player.pos.x, player.pos.z);
+    if(player.takeoffCd<=0 && player.pos.y < Math.max(gh,SEA)+LEG_Y*0.92){
+      if(gh<SEA-1.2){ enterSwim(); }
+      else{
+        var impact=Math.max(0, -player.vel.y);
+        player.mode='ground';
+        player.pos.y=gh+LEG_Y;
+        player.pitch=0; player.roll=0;
+        player.takeoffCd=0.35;
+        player.speed=Math.min(player.speed, 16);
+        burstDust(player.pos.x, gh+0.2, player.pos.z, 14);
+        sfx.thud(clamp(impact/60,0.06,0.4));
+        if(impact>30){
+          hurtPlayer((impact-30)*1.2, player.pos.x, player.pos.y, player.pos.z);
+          toast('HARD LANDING');
+        }
+      }
+    }
+    if(player.pos.y>320){ player.pos.y=320; player.pitch=Math.min(player.pitch,0); }
+
+  /* -------- SWIMMING -------- */
+  }else{
+    var cy2=cam.yaw;
+    var sdx=Math.cos(cy2)*inp.x + Math.sin(cy2)*(-inp.y);
+    var sdz=-Math.sin(cy2)*inp.x + Math.cos(cy2)*(-inp.y);
+    var smag=Math.hypot(sdx,sdz);
+    var swim=st.swimSpd*(inp.run?1.45:1);
+    if(smag>0.06){
+      sdx/=smag; sdz/=smag;
+      player.yaw=angLerp(player.yaw, Math.atan2(sdx,sdz), 1-Math.pow(0.0002, dt));
+      player.speed=damp(player.speed, swim*Math.min(1,inp.mag||smag), 0.004, dt);
+    }else{
+      player.speed=damp(player.speed, 0, 0.02, dt);
+    }
+    player.pos.x+=Math.sin(player.yaw)*player.speed*dt;
+    player.pos.z+=Math.cos(player.yaw)*player.speed*dt;
+    gh=heightAt(player.pos.x, player.pos.z);
+
+    var seabed=gh+1.4;
+    if(inp.down) player.swimDepth=Math.min(player.swimDepth+9*dt, 26);
+    else player.swimDepth=Math.max(0, player.swimDepth-(inp.up?14:5)*dt);
+    var wantY=Math.max(seabed, SEA-0.7-player.swimDepth);
+    player.pos.y=damp(player.pos.y, wantY, 0.004, dt);
+    player.pitch=damp(player.pitch, inp.down?-0.5:(inp.up?0.35:0.03), 0.02, dt);
+    player.roll=damp(player.roll, -clamp(inp.x,-1,1)*0.35, 0.03, dt);
+    player.gait+=dt*(1.6+player.speed*0.26);
+    player.stam=Math.min(player.stamMax, player.stam+16*dt);
+
+    // wake at the surface
+    if(player.swimDepth<0.6 && player.speed>1.5 && Math.random()<dt*26){
+      burstSplash(player.pos.x-Math.sin(player.yaw)*2, SEA+0.1, player.pos.z-Math.cos(player.yaw)*2, 2, 2.2);
+    }
+    // burst out of the water
+    if(inp.up && player.swimDepth<0.4 && player.stam>16){
+      player.mode='fly';
+      player.speed=19; player.pitch=0.70;
+      player.pos.y=SEA+LEG_Y*1.7;
+      player.stam-=16;
+      player.swimDepth=0;
+      player.takeoffCd=0.55;
+      sfx.splash(true);
+      burstSplash(player.pos.x, SEA+0.2, player.pos.z, 26, 6);
+      toast('AIRBORNE');
+    }
+    // wade back out onto the sand
+    if(gh>SEA-0.35 && player.swimDepth<0.5){
+      player.mode='ground';
+      player.pos.y=gh+LEG_Y;
+      player.swimDepth=0;
+      player.pitch=0;
+    }
+  }
+
+  /* -------- fire breath -------- */
+  var mouthPos=_fo;
+  player.rig.mouth.getWorldPosition(mouthPos);
+  var wantFire = inp.fire && player.fire>0.5 && !player.dead && mouthPos.y>SEA+0.35;
+  if(inp.fire && mouthPos.y<=SEA+0.35 && player.fire>0.5){
+    if(Math.random()<dt*8) burstSplash(mouthPos.x, SEA+0.05, mouthPos.z, 2, 1.6);
+  }
+  if(wantFire){
+    if(!player.breathing){ player.breathing=true; fireSoundStart(); }
+    if(player.mode!=='fly') player.yaw=angLerp(player.yaw, cam.yaw, 1-Math.pow(0.06, dt));
+    player.fire=Math.max(0, player.fire-30*dt);
+    player.noCombatT=0;
+    aimDir(_fd);
+    fireAcc.v+=dt*180;
+    fireCone(mouthPos, _fd, dt, st.fireDps, 34, true, fireAcc);
+    player.rig.jaw.rotation.x=damp(player.rig.jaw.rotation.x, 0.72, 0.001, dt);
+    fireLight.position.copy(mouthPos).addScaledVector(_fd, 6);
+    fireLight.intensity=damp(fireLight.intensity, 6.5, 0.01, dt);
+    // scorch the ground under the stream
+    if(Math.random()<dt*20){
+      var sx2=mouthPos.x+_fd.x*rand(6,26), sz2=mouthPos.z+_fd.z*rand(6,26);
+      var sy2=heightAt(sx2,sz2);
+      if(sy2>SEA) burstDust(sx2, sy2+0.3, sz2, 1);
+    }
+  }else{
+    if(player.breathing){ player.breathing=false; fireSoundStop(); }
+    player.rig.jaw.rotation.x=damp(player.rig.jaw.rotation.x, player.meleeT>0?0.85:0.02, 0.002, dt);
+    fireLight.intensity=damp(fireLight.intensity, 0, 0.001, dt);
+    if(player.noCombatT>0.9) player.fire=Math.min(player.fireMax, player.fire+18*dt);
+  }
+
+  /* -------- upkeep -------- */
+  if(player.mode!=='fly' || !inp.up) player.stam=Math.min(player.stamMax, player.stam+(player.mode==='ground'?18:9)*dt);
+  player.stam=clamp(player.stam, 0, player.stamMax);
+  var atHome=Math.hypot(player.pos.x-CAVE.x, player.pos.z-CAVE.z)<26;
+  game.nearCave=atHome && Math.abs(player.pos.y-CAVE.h)<26;
+  if(player.noCombatT>4) player.hp=Math.min(player.hpMax, player.hp+st.regen*dt);
+  if(game.nearCave) player.hp=Math.min(player.hpMax, player.hp+14*dt);
+
+  /* -------- pose the dragon -------- */
+  player.rig.root.position.copy(player.pos);
+  player.rig.root.rotation.y=player.yaw;
+  player.rig.tilt.rotation.x=-player.pitch;
+  var lookOff=angWrap(cam.yaw-player.yaw);
+  player.headYaw=damp(player.headYaw, clamp(lookOff,-1.0,1.0)*0.7, 0.02, dt);
+  player.headPitch=damp(player.headPitch, clamp(-cam.pitch,-0.6,0.6)*0.5 + (player.meleeT>0?0.5:0), 0.02, dt);
+  animateDragon(player.rig, dt, {
+    mode:player.mode, flap:player.gait, gait:player.gait, speed:player.speed,
+    turn:inp.x, effort:player.wingBlend, headYaw:player.headYaw, headPitch:player.headPitch
+  });
+  placeShadow(player.shadow, player.pos.x, player.pos.z, player.pos.y, 8, 0.5);
+}
+
+function enterSwim(){
+  if(player.mode==='swim') return;
+  player.mode='swim';
+  player.swimDepth=0;
+  player.speed=Math.min(player.speed, 10);
+  player.pos.y=SEA-0.7;
+  player.pitch=0; player.roll=0;
+  sfx.splash(true);
+  burstSplash(player.pos.x, SEA+0.1, player.pos.z, 24, 5);
+  toast('IN THE WATER');
+}
+
+function updateCamera(dt){
+  cam.yaw+=look.x;
+  cam.pitch=clamp(cam.pitch+look.y, -1.15, 0.85);
+  if(Math.abs(look.x)>0.0001 || Math.abs(look.y)>0.0001) cam.idle=0; else cam.idle+=dt;
+  look.x=look.y=0;
+  if(player.mode==='fly' && cam.idle>1.1 && !player.dead){
+    cam.yaw=angLerp(cam.yaw, player.yaw, 1-Math.pow(0.30, dt));
+    cam.pitch=damp(cam.pitch, clamp(-player.pitch*0.5-0.06,-0.9,0.5), 0.4, dt);
+  }
+  // Close enough to see the scales, far enough to see what is coming. Flying
+  // needs more room because the wings are wide and the ground moves fast.
+  var want=cam.dist*(1+clamp(player.speed/70,0,0.42));
+  if(player.mode==='fly')  want=cam.dist*1.50*(1+clamp(player.speed/80,0,0.34));
+  if(player.mode==='swim') want=cam.dist*0.80;
+  cam.distNow=damp(cam.distNow, want, 0.08, dt);
+
+  camTarget.copy(player.pos);
+  camTarget.y+=2.4*PSCALE;
+  var cpp=Math.cos(cam.pitch);
+  camWant.set(
+    camTarget.x - Math.sin(cam.yaw)*cpp*cam.distNow,
+    camTarget.y - Math.sin(cam.pitch)*cam.distNow + (player.mode==='fly'?3.0:2.2),
+    camTarget.z - Math.cos(cam.yaw)*cpp*cam.distNow
+  );
+  // never let the ground get between you and your dragon
+  var floorH=Math.max(heightAt(camWant.x, camWant.z), (player.mode==='swim'&&player.swimDepth>1)?-9999:SEA-0.6)+2.6;
+  if(camWant.y<floorH) camWant.y=floorH;
+  var k=1-Math.pow(player.dead?0.06:0.0006, dt);
+  camPos.lerp(camWant, k);
+  camera.position.copy(camPos);
+  camera.lookAt(camTarget.x, camTarget.y+0.6, camTarget.z);
+
+  // under the surface everything goes blue and quiet
+  var under=camera.position.y<SEA;
+  scene.fog.color.setHex(under?0x14425c:0x9db9c8);
+  scene.fog.near=under?1:220;
+  scene.fog.far=under?90:940;
+  scene.background=scene.fog.color;
+  skyDome.visible=!under;
+  ui.wet.style.opacity=under?0.9:(player.mode==='swim'?0.25:0);
+}
+
+/* ============================================================
+   RAIDS: village garrisons and longships from over the horizon
+   ============================================================ */
+var ships=[], garrisonT=0;
+var LAND_TYPES=['raider','raider','archer','spearman','shield','berserker'];
+
+function villageOf(v){
+  var best=null, bd=1e9;
+  for(var i=0;i<VILLAGES.length;i++){
+    var d=Math.hypot(v.home.x-VILLAGES[i].x, v.home.z-VILLAGES[i].z);
+    if(d<bd){ bd=d; best=i; }
+  }
+  return best;
+}
+function garrison(dt){
+  garrisonT-=dt;
+  if(garrisonT>0) return;
+  garrisonT=rand(2.4, 4.6);
+  for(var i=0;i<VILLAGES.length;i++){
+    var V=VILLAGES[i], count=0;
+    for(var k=0;k<vikings.length;k++){
+      if(!vikings[k].dead && vikings[k].village===i) count++;
+    }
+    var target=Math.min(11, 4+Math.floor(game.raid*0.9));
+    if(count>=target) continue;
+    var a=rand(0,TAU), r=rand(8,30);
+    var x=V.x+Math.cos(a)*r, z=V.z+Math.sin(a)*r;
+    if(heightAt(x,z)<1.6) continue;
+    if(Math.hypot(x-player.pos.x, z-player.pos.z)<60) continue;   // never pop in on top of you
+    var type=pick(LAND_TYPES);
+    if(game.raid>=3 && Math.random()<0.10) type='chief';
+    var v2=spawnViking(type, x, z, {home:{x:V.x, z:V.z}});
+    if(v2) v2.village=i;
+  }
+}
+
+function launchShip(){
+  if(ships.length>=3) return;
+  var V=VILLAGES.length?VILLAGES[irand(0,VILLAGES.length-1)]:null;
+  var land = V && V.shore ? V.shore : {x:0, z:SHORE*0.8};
+  var ang=Math.atan2(land.z, land.x);
+  var g=buildLongship();
+  var sx=Math.cos(ang)*(SHORE+230), sz=Math.sin(ang)*(SHORE+230);
+  g.position.set(sx, SEA+0.4, sz);
+  scene.add(g);
+  var troops=[];
+  var n=irand(4, Math.min(9, 4+game.raid));
+  for(var i=0;i<n;i++) troops.push(pick(LAND_TYPES));
+  if(game.raid>=2 && Math.random()<0.4) troops.push('chief');
+  ships.push({group:g, x:sx, z:sz, yaw:0, land:land, state:'in', t:0, troops:troops,
+              home:{x:land.x, z:land.z}, bob:rand(0,TAU)});
+  toast('A LONGSHIP IS COMING IN');
+  sfx.horn();
+}
+
+function updateShips(dt){
+  for(var i=ships.length-1;i>=0;i--){
+    var s=ships[i];
+    s.bob+=dt;
+    var tx, tz, spd=12;
+    if(s.state==='in'){ tx=s.land.x; tz=s.land.z; }
+    else { tx=s.x + (s.x-s.land.x); tz=s.z + (s.z-s.land.z); spd=14; }
+    var dx=tx-s.x, dz=tz-s.z, d=Math.hypot(dx,dz)||1;
+    if(s.state==='in' && d<14){
+      s.state='unload'; s.t=0;
+    }
+    if(s.state==='unload'){
+      s.t+=dt;
+      if(s.t>0.7 && s.troops.length){
+        s.t=0;
+        var type=s.troops.pop();
+        var ux=s.x+rand(-4,4), uz=s.z+rand(-4,4);
+        // walk them up onto the nearest dry ground
+        for(var g2=0; g2<26 && heightAt(ux,uz)<1.4; g2++){
+          ux+=(s.land.x-s.x)*0.10+rand(-1,1);
+          uz+=(s.land.z-s.z)*0.10+rand(-1,1);
+        }
+        var v=spawnViking(type, ux, uz, {home:{x:s.land.x, z:s.land.z}});
+        if(v){ v.village=-1; v.state='search'; v.searchT=rand(20,40);
+               v.lastSeen={x:player.pos.x, z:player.pos.z}; }
+      }
+      if(!s.troops.length){ s.state='out'; s.t=0; }
+    }else{
+      s.x+=dx/d*spd*dt; s.z+=dz/d*spd*dt;
+      s.yaw=angLerp(s.yaw, Math.atan2(dx,dz), 1-Math.pow(0.05,dt));
+    }
+    s.group.position.set(s.x, SEA+0.35+Math.sin(s.bob*1.4)*0.28, s.z);
+    s.group.rotation.y=s.yaw;
+    s.group.rotation.z=Math.sin(s.bob*1.1)*0.05;
+    if(s.state==='out' && Math.hypot(s.x,s.z)>SHORE+320){
+      scene.remove(s.group); ships.splice(i,1);
+    }
+  }
+}
+
+function updateRaid(dt){
+  garrison(dt);
+  updateShips(dt);
+  game.raidT-=dt;
+  if(game.raidT<=0){
+    game.raidT=Math.max(55, 120-game.raid*4);
+    game.raid++;
+    toast('RAID '+game.raid+' — MORE SAILS ON THE HORIZON');
+    updateHUD();
+  }
+  game.nextShipT-=dt;
+  if(game.nextShipT<=0){
+    game.nextShipT=Math.max(28, 70-game.raid*3.5)+rand(-8,8);
+    launchShip();
+  }
+}
+
+/* ============================================================
+   HUD, TOASTS, RADAR
+   ============================================================ */
+var toastT=0;
+function toast(msg){
+  ui.toast.textContent=msg;
+  ui.toast.style.opacity=1;
+  toastT=2.6;
+}
+function updateHUD(){
+  ui.hpFill.style.width=clamp(player.hp/player.hpMax*100,0,100)+'%';
+  ui.fireFill.style.width=clamp(player.fire/player.fireMax*100,0,100)+'%';
+  ui.stamFill.style.width=clamp(player.stam/player.stamMax*100,0,100)+'%';
+  ui.coinNum.textContent=save.coins;
+  ui.kills.textContent='VIKINGS FELLED '+game.kills;
+  ui.raid.textContent='RAID '+game.raid;
+  ui.raid.classList.toggle('hidden', game.raid<2);
+  ui.modePill.textContent = player.dead?'FALLEN'
+    : (player.mode==='fly'?'IN FLIGHT':(player.mode==='swim'?(player.swimDepth>1.5?'DIVING':'SWIMMING'):'ON FOOT'));
+}
+
+/* The island is drawn once; only the blips are redrawn each frame. */
+var radarBase=document.createElement('canvas');
+radarBase.width=radarBase.height=272;
+(function bakeRadar(){
+  var g=radarBase.getContext('2d');
+  var R=136, span=SHORE*1.30;
+  g.clearRect(0,0,272,272);
+  var img=g.createImageData(272,272);
+  for(var py=0;py<272;py++){
+    for(var px=0;px<272;px++){
+      var wx=(px-R)/R*span, wz=(py-R)/R*span;
+      var idx=(py*272+px)*4;
+      if(Math.hypot(px-R,py-R)>R-1){ img.data[idx+3]=0; continue; }
+      var h=rawHeight(wx,wz);
+      var r,gg,b,a=255;
+      if(h<SEA-6){      r=12;  gg=34; b=52;  a=175; }
+      else if(h<SEA){   r=24;  gg=58; b=78;  a=195; }
+      else if(h<4){     r=104; gg=94; b=64;  a=225; }
+      else if(h<50){    r=44;  gg=68; b=38;  a=225; }
+      else if(h<92){    r=72;  gg=70; b=60;  a=230; }
+      else{             r=150; gg=155;b=160; a=235; }
+      img.data[idx]=r; img.data[idx+1]=gg; img.data[idx+2]=b; img.data[idx+3]=a;
+    }
+  }
+  g.putImageData(img,0,0);
+})();
+
+var radarSweep=0;
+function drawRadar(dt){
+  var g=radarCtx, R=136, span=SHORE*1.30;
+  g.clearRect(0,0,272,272);
+  g.drawImage(radarBase,0,0);
+  function toR(x,z){ return {x:R+x/span*R, y:R+z/span*R}; }
+  function blip(x,z,size,color,glow){
+    var p=toR(x,z);
+    if(Math.hypot(p.x-R,p.y-R)>R-3) return;
+    if(glow){ g.fillStyle=glow; g.beginPath(); g.arc(p.x,p.y,size*2.3,0,TAU); g.fill(); }
+    g.fillStyle=color; g.beginPath(); g.arc(p.x,p.y,size,0,TAU); g.fill();
+  }
+  // home, villages, ships
+  for(var i=0;i<VILLAGES.length;i++) blip(VILLAGES[i].x, VILLAGES[i].z, 4, 'rgba(214,150,60,0.85)');
+  for(var s=0;s<ships.length;s++) blip(ships[s].x, ships[s].z, 3.4, '#f2ecdc');
+  blip(CAVE.x, CAVE.z, 5, '#f0c04a', 'rgba(240,192,74,0.22)');
+
+  // vikings
+  for(var v=0;v<vikings.length;v++){
+    var k=vikings[v];
+    if(k.dead) continue;
+    var hot=(k.state==='hunt');
+    blip(k.x, k.z, k.type==='chief'?4.2:2.8,
+         hot?'#ff5a4a':'rgba(190,70,60,0.72)',
+         hot?'rgba(255,90,74,0.20)':null);
+  }
+  // kin
+  for(var a=0;a<allies.length;a++){
+    var al=allies[a];
+    blip(al.pos.x, al.pos.z, al.down?2.6:4, al.down?'rgba(102,209,158,0.4)':'#66d19e',
+         al.down?null:'rgba(102,209,158,0.20)');
+  }
+  // you: an arrow pointing where you face
+  var p=toR(player.pos.x, player.pos.z);
+  g.save();
+  g.translate(p.x,p.y); g.rotate(-player.yaw);
+  g.fillStyle='#ffffff';
+  g.beginPath(); g.moveTo(0,-8); g.lineTo(5.5,6); g.lineTo(0,3); g.lineTo(-5.5,6); g.closePath(); g.fill();
+  g.restore();
+
+  // sweep line
+  radarSweep+=dt*1.3;
+  var sx=R+Math.sin(radarSweep)*R, sy=R-Math.cos(radarSweep)*R;
+  var grad=g.createLinearGradient(R,R,sx,sy);
+  grad.addColorStop(0,'rgba(150,220,190,0.30)');
+  grad.addColorStop(1,'rgba(150,220,190,0)');
+  g.strokeStyle=grad; g.lineWidth=3;
+  g.beginPath(); g.moveTo(R,R); g.lineTo(sx,sy); g.stroke();
+
+  g.strokeStyle='rgba(239,230,210,0.18)'; g.lineWidth=1;
+  g.beginPath(); g.arc(R,R,R*0.5,0,TAU); g.stroke();
+  g.beginPath(); g.moveTo(R,R-6); g.lineTo(R,R+6); g.moveTo(R-6,R); g.lineTo(R+6,R); g.stroke();
+  g.fillStyle='rgba(239,230,210,0.5)'; g.font='13px Helvetica,Arial'; g.textAlign='center';
+  g.fillText('N', R, 18);
+}
+
+/* ============================================================
+   THE SHOP
+   ============================================================ */
+var shopTab='armour';
+function openShop(){
+  if(game.shopOpen) return;
+  game.shopOpen=true;
+  held.fire=held.up=held.down=false;
+  if(player.breathing){ player.breathing=false; fireSoundStop(); }
+  if(document.pointerLockElement) document.exitPointerLock&&document.exitPointerLock();
+  ui.shop.classList.remove('hidden');
+  renderShop();
+}
+function closeShop(){
+  if(!game.shopOpen) return;
+  game.shopOpen=false;
+  ui.shop.classList.add('hidden');
+}
+function renderShop(){
+  ui.shopCoins.textContent=save.coins+' COINS';
+  var list=ui.items;
+  list.innerHTML='';
+  var i, el;
+  function card(title, desc, priceText, cls, onClick){
+    var d=document.createElement('div');
+    d.className='item '+cls;
+    d.innerHTML='<b>'+title+'</b><small>'+desc+'</small><span class="price">'+priceText+'</span>';
+    d.addEventListener('click', onClick);
+    list.appendChild(d);
+  }
+  if(shopTab==='armour'){
+    for(i=0;i<ARMOUR.length;i++){
+      (function(idx){
+        var a=ARMOUR[idx];
+        var owned=save.ownedA.indexOf(idx)>=0;
+        var eq=(save.armour===idx);
+        var can=save.coins>=a.cost;
+        card(a.name,
+             a.desc+'<br>Damage taken &minus;'+Math.round(a.dr*100)+'% &middot; Health '+a.hp,
+             eq?'EQUIPPED':(owned?'OWNED — TAP TO WEAR':(a.cost+' COINS')),
+             eq?'equipped':(owned?'owned':(can?'':'broke')),
+             function(){
+               if(eq) return;
+               if(owned){ save.armour=idx; sfx.buy(); }
+               else if(save.coins>=a.cost){
+                 save.coins-=a.cost; save.ownedA.push(idx); save.armour=idx; sfx.buy();
+                 toast(a.name+' STRAPPED ON');
+               }else{ sfx.deny(); return; }
+               writeSave(); applyGear(); updateHUD(); renderShop();
+             });
+      })(i);
+    }
+  }else if(shopTab==='weapon'){
+    for(i=0;i<WEAPONS.length;i++){
+      (function(idx){
+        var w=WEAPONS[idx];
+        var owned=save.ownedW.indexOf(idx)>=0;
+        var eq=(save.weapon===idx);
+        var can=save.coins>=w.cost;
+        card(w.name,
+             w.desc+'<br>Bite damage '+w.dmg+' &middot; Reach '+w.reach.toFixed(1)+'m',
+             eq?'EQUIPPED':(owned?'OWNED — TAP TO WEAR':(w.cost+' COINS')),
+             eq?'equipped':(owned?'owned':(can?'':'broke')),
+             function(){
+               if(eq) return;
+               if(owned){ save.weapon=idx; sfx.buy(); }
+               else if(save.coins>=w.cost){
+                 save.coins-=w.cost; save.ownedW.push(idx); save.weapon=idx; sfx.buy();
+                 toast(w.name+' FITTED');
+               }else{ sfx.deny(); return; }
+               writeSave(); applyGear(); updateHUD(); renderShop();
+             });
+      })(i);
+    }
+  }else{
+    for(i=0;i<POWERS.length;i++){
+      (function(idx){
+        var p=POWERS[idx], lvl=save.powers[p.key]||0;
+        var maxed=lvl>=3;
+        var cost=maxed?0:p.costs[lvl];
+        var can=save.coins>=cost;
+        var pips='';
+        for(var b=0;b<3;b++) pips+= (b<lvl?'&#9679;':'&#9675;');
+        card(p.name+' &nbsp;'+pips,
+             p.desc,
+             maxed?'MASTERED':(cost+' COINS'),
+             maxed?'equipped':(can?'':'broke'),
+             function(){
+               if(maxed) return;
+               if(save.coins<cost){ sfx.deny(); return; }
+               save.coins-=cost; save.powers[p.key]=lvl+1;
+               sfx.buy(); toast(p.name+' RISES');
+               writeSave(); applyGear(); updateHUD(); renderShop();
+             });
+      })(i);
+    }
+  }
+}
+var tabEls=document.querySelectorAll('.tab');
+for(var ti=0; ti<tabEls.length; ti++){
+  (function(el){
+    el.addEventListener('click', function(){
+      for(var j=0;j<tabEls.length;j++) tabEls[j].classList.remove('on');
+      el.classList.add('on');
+      shopTab=el.getAttribute('data-tab');
+      renderShop();
+    });
+  })(tabEls[ti]);
+}
+ui.closeShop.addEventListener('click', closeShop);
+ui.prompt.textContent = isTouch ? 'TAP SHOP TO SPEND YOUR COIN' : 'PRESS B TO SPEND YOUR COIN';
+
+/* ============================================================
+   PAUSE, SOUND, RESET
+   ============================================================ */
+function togglePause(){
+  if(!game.running) return;
+  if(game.shopOpen){ closeShop(); return; }
+  game.paused=!game.paused;
+  ui.menu.classList.toggle('hidden', !game.paused);
+  if(game.paused){
+    held.fire=held.up=held.down=false;
+    if(player.breathing){ player.breathing=false; fireSoundStop(); }
+    if(document.pointerLockElement) document.exitPointerLock&&document.exitPointerLock();
+    ui.menuStats.innerHTML=
+      'VIKINGS FELLED &nbsp;'+game.kills+'<br>'+
+      'COINS &nbsp;'+save.coins+'<br>'+
+      'RAID &nbsp;'+game.raid+'<br>'+
+      ARMOUR[save.armour].name+' &middot; '+WEAPONS[save.weapon].name;
+  }
+}
+function toggleMute(){
+  muted=!muted;
+  if(muted && player.breathing) fireSoundStop();
+  if(master) master.gain.value=muted?0:0.55;
+  ui.muteBtn.textContent=muted?'SOUND OFF':'SOUND ON';
+}
+ui.resumeBtn.addEventListener('click', togglePause);
+ui.muteBtn.addEventListener('click', toggleMute);
+ui.wipeBtn.addEventListener('click', function(){
+  save.coins=0; save.armour=0; save.weapon=0; save.kills=0;
+  save.ownedA=[0]; save.ownedW=[0];
+  for(var i=0;i<POWERS.length;i++) save.powers[POWERS[i].key]=0;
+  writeSave();
+  game.kills=0; game.raid=1; game.raidT=70; game.nextShipT=45;
+  applyGear();
+  player.hp=player.hpMax; player.fire=player.fireMax; player.stam=player.stamMax;
+  respawn();
+  togglePause();
+  toast('THE ISLE FORGETS YOU');
+});
+
+/* ============================================================
+   MAIN LOOP
+   ============================================================ */
+var clock=new THREE.Clock();
+var hudT=0, titleAngle=0, waterT=0;
+
+function ambient(dt){
+  waterT+=dt;
+  waterTexA.offset.set(waterT*0.010, waterT*0.014);
+  waterTexB.offset.set(-waterT*0.007, waterT*0.005);
+  skyDome.position.set(camera.position.x, 0, camera.position.z);
+  sunDisc.position.set(camera.position.x-980, 210, camera.position.z+700);
+  sunDisc.lookAt(camera.position.x, 190, camera.position.z);
+
+  var br=caveGroup.userData.braziers;
+  for(var i=0;i<br.length;i++){
+    var b=br[i];
+    b.phase+=dt*(6+i);
+    var f=0.8+Math.sin(b.phase)*0.16+Math.sin(b.phase*2.7)*0.09;
+    b.light.intensity=2.2*f;
+    b.glow.scale.setScalar(f);
+  }
+  for(var c=0;c<campfires.length;c++){
+    var cf=campfires[c];
+    cf.phase+=dt*(7+c*0.7);
+    var g=0.8+Math.sin(cf.phase)*0.2;
+    cf.light.intensity=2.0*g;
+    cf.mesh.scale.set(g, 0.8+Math.sin(cf.phase*1.7)*0.3, g);
+  }
+  var orb=caveGroup.userData.orb;
+  orb.rotation.y+=dt*0.9;
+  orb.scale.setScalar(1+Math.sin(game.t*3)*0.06);
+  for(var h=0;h<hoardPieces.length;h+=1){
+    if((h+((game.t*20)|0))%37===0) hoardPieces[h].rotation.y+=dt*2;
+  }
+}
+
+function update(dt){
+  game.t+=dt;
+  updatePlayer(dt);
+  updateVikings(dt);
+  updateAllies(dt);
+  updateShots(dt);
+  updateCoins(dt);
+  updateRaid(dt);
+  fxUpdate(dt);
+  updateCamera(dt);
+  ambient(dt);
+
+  if(toastT>0){ toastT-=dt; if(toastT<=0) ui.toast.style.opacity=0; }
+  ui.prompt.style.opacity=(game.nearCave && !player.dead)?1:0;
+  ui.reticle.style.opacity=(!isTouch && !player.dead)?(player.mode==='fly'?0.8:0.45):0;
+  ui.shopBtn.classList.toggle('hidden', !(game.nearCave && !player.dead));
+
+  hudT-=dt;
+  if(hudT<=0){ hudT=0.1; updateHUD(); }
+}
+
+function titleSpin(dt){
+  titleAngle+=dt*0.10;
+  var r=44, cy=CAVE.h;
+  camera.position.set(CAVE.x+Math.sin(titleAngle)*r, cy+16+Math.sin(titleAngle*0.6)*4, CAVE.z+Math.cos(titleAngle)*r);
+  camera.lookAt(CAVE.x, cy+6, CAVE.z);
+  ambient(dt);
+  fxUpdate(dt);
+  animateDragon(player.rig, dt, {mode:'ground', gait:game.t*0.4, speed:0.4, turn:0,
+                                 headYaw:Math.sin(game.t*0.5)*0.5, headPitch:Math.sin(game.t*0.31)*0.2});
+  game.t+=dt;
+  placeShadow(player.shadow, player.pos.x, player.pos.z, player.pos.y, 8, 0.5);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  var dt=Math.min(clock.getDelta(), 0.05);
+  if(game.running && !game.paused && !game.shopOpen){
+    update(dt);
+  }else if(!game.running){
+    titleSpin(dt);
+  }
+  if(game.running && !game.paused && !game.shopOpen) drawRadar(dt);
+  renderer.render(scene, camera);
+}
+
+/* ============================================================
+   RESIZE
+   ============================================================ */
+function resize(){
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function(){ setTimeout(resize, 250); });
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function placePlayerAtCave(){
+  var x=CAVE_FRONT.x, z=CAVE_FRONT.z;
+  player.pos.set(x, heightAt(x,z)+LEG_Y, z);
+  player.yaw=CAVE.yaw;
+  cam.yaw=CAVE.yaw;
+  camPos.set(x-Math.sin(cam.yaw)*cam.dist, player.pos.y+8, z-Math.cos(cam.yaw)*cam.dist);
+  player.rig.root.position.copy(player.pos);
+  player.rig.root.rotation.y=player.yaw;
+}
+
+spawnAllies();
+applyGear();
+placePlayerAtCave();
+player.hp=player.hpMax; player.fire=player.fireMax; player.stam=player.stamMax;
+updateHUD();
+
+function beginPlay(){
+  wakeAudio();
+  game.running=true;
+  game.paused=false;
+  game.t=0;
+  game.raid=1; game.raidT=90; game.nextShipT=38;
+  ui.start.classList.add('hidden');
+  ui.hud.classList.remove('hidden');
+  ui.lookZone.classList.remove('hidden');
+  ui.stickZone.classList.remove('hidden');
+  ui.menuBtn.classList.remove('hidden');
+  if(isTouch){
+    ui.bFire.classList.remove('hidden');
+    ui.bBite.classList.remove('hidden');
+    ui.bUp.classList.remove('hidden');
+    ui.bDown.classList.remove('hidden');
+    ui.bRoar.classList.remove('hidden');
+  }
+  placePlayerAtCave();
+  // A welcoming party, so there is something to do straight away.
+  for(var i=0;i<VILLAGES.length;i++){
+    for(var k=0;k<4;k++){
+      var a=rand(0,TAU), r=rand(8,26);
+      var vx=VILLAGES[i].x+Math.cos(a)*r, vz=VILLAGES[i].z+Math.sin(a)*r;
+      if(heightAt(vx,vz)<1.6) continue;
+      var v=spawnViking(pick(LAND_TYPES), vx, vz, {home:{x:VILLAGES[i].x, z:VILLAGES[i].z}});
+      if(v) v.village=i;
+    }
+  }
+  toast('THE ISLE IS YOURS TO KEEP');
+  if(!isTouch && canvas.requestPointerLock) canvas.requestPointerLock();
+}
+ui.startBtn.addEventListener('click', beginPlay);
+
+ui.loading.classList.add('hidden');
+animate();
+
+/* Offline: cache the page and everything it needs on first visit. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/experiments/dragon-isle/sw.js').catch(function(){});
+  });
+}
+
+})();
+</script>
+</body>
+</html>
+{% endraw %}
