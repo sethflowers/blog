@@ -2,7 +2,7 @@
    Precaches everything the game needs so it runs with no connection once it
    has been opened once. Cached files are served immediately and refreshed in
    the background, so an update shows up the next time the game is opened. */
-var CACHE = 'dragon-isle-v1';
+var CACHE = 'dragon-isle-v2';
 var BASE = '/experiments/dragon-isle/';
 var ASSETS = [
   BASE,
@@ -15,7 +15,14 @@ var ASSETS = [
 
 self.addEventListener('install', function (e) {
   e.waitUntil(
-    caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); })
+    caches.open(CACHE).then(function (c) {
+      // One asset failing must not throw away the whole install: without the
+      // page and three.min.js there is no offline game at all, and the rest are
+      // only icons.
+      return Promise.all(ASSETS.map(function (url) {
+        return c.add(new Request(url, { cache: 'reload' })).catch(function () {});
+      }));
+    }).then(function () { return self.skipWaiting(); })
   );
 });
 
@@ -32,10 +39,15 @@ self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
-  if (url.origin !== self.location.origin || url.pathname.indexOf(BASE) !== 0) return;
+  if (url.origin !== self.location.origin) return;
 
-  // The page itself, whatever the query string or navigation flavour.
-  var key = (req.mode === 'navigate' || url.pathname === BASE) ? BASE : url.pathname;
+  var navigating = (req.mode === 'navigate');
+  if (!navigating && url.pathname.indexOf(BASE) !== 0) return;
+
+  // Any navigation into the game — with a query string, from the home screen,
+  // or from a link — is answered with the one cached page.
+  var key = (navigating || url.pathname === BASE || url.pathname === BASE + 'index.html')
+    ? BASE : url.pathname;
 
   e.respondWith(
     caches.open(CACHE).then(function (c) {
@@ -43,7 +55,9 @@ self.addEventListener('fetch', function (e) {
         var network = fetch(req).then(function (res) {
           if (res && res.ok) c.put(key, res.clone());
           return res;
-        }).catch(function () { return cached; });
+        }).catch(function () {
+          return cached || (navigating ? c.match(BASE) : undefined);
+        });
         return cached || network;
       });
     })

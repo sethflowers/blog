@@ -304,6 +304,15 @@ function solidMat(hex, rough, metal){
   m.color.convertSRGBToLinear();          // the renderer is in sRGB; untextured colours need this
   return m;
 }
+/* The ground, the sea and the forest cover most of the screen most of the time.
+   Full physical shading on all of it is what a tablet chokes on, and none of it
+   is metal or glossy, so they get the cheap lit material instead. */
+function worldMat(hex, opts){
+  var o=opts||{}; o.color=hex;
+  var m=new THREE.MeshLambertMaterial(o);
+  m.color.convertSRGBToLinear();
+  return m;
+}
 function basicMat(hex, opts){
   var o=opts||{}; o.color=hex;
   var m=new THREE.MeshBasicMaterial(o);
@@ -509,13 +518,111 @@ function skyTex(){
   return c;
 }
 
+
+/* ============================================================
+   GEOMETRY MERGING
+   A village is a hundred little boxes. Drawn one at a time that is a hundred
+   draw calls for something that never moves, which is what was dragging the
+   frame rate down. collapse() bakes a whole group into one mesh per material.
+   ============================================================ */
+function mergeGeos(entries){
+  var pos=[], nrm=[], uvs=[];
+  var m3=new THREE.Matrix3(), v=new THREE.Vector3();
+  for(var i=0;i<entries.length;i++){
+    var src=entries[i].geo;
+    var g=src.index ? src.toNonIndexed() : src;
+    var mat=entries[i].matrix;
+    m3.getNormalMatrix(mat);
+    var pa=g.attributes.position, na=g.attributes.normal, ua=g.attributes.uv;
+    for(var k=0;k<pa.count;k++){
+      v.fromBufferAttribute(pa,k).applyMatrix4(mat);
+      pos.push(v.x, v.y, v.z);
+      if(na){ v.fromBufferAttribute(na,k).applyMatrix3(m3).normalize(); nrm.push(v.x, v.y, v.z); }
+      else nrm.push(0,1,0);
+      if(ua) uvs.push(ua.getX(k), ua.getY(k)); else uvs.push(0,0);
+    }
+    if(g!==src) g.dispose();
+  }
+  var out=new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  out.setAttribute('normal',   new THREE.Float32BufferAttribute(nrm,3));
+  out.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs,2));
+  out.computeBoundingSphere();
+  return out;
+}
+/* Merge the meshes hanging directly off one pivot into a mesh per material.
+   Child groups are left alone, so everything that has to move still can. A
+   dragon goes from about a hundred and twenty draw calls to under sixty. */
+function fuse(group, skip){
+  var mats=[], buckets=[], kill=[];
+  for(var i=0;i<group.children.length;i++){
+    var o=group.children[i];
+    if(!o.isMesh) continue;
+    if(skip && skip.indexOf(o)>=0) continue;
+    var idx=mats.indexOf(o.material);
+    if(idx<0){ idx=mats.length; mats.push(o.material); buckets.push([]); }
+    o.updateMatrix();
+    buckets[idx].push({geo:o.geometry, matrix:o.matrix.clone()});
+    kill.push(o);
+  }
+  for(var k=0;k<kill.length;k++) group.remove(kill[k]);
+  for(var m=0;m<mats.length;m++) group.add(new THREE.Mesh(mergeGeos(buckets[m]), mats[m]));
+}
+function collapse(group){
+  group.updateMatrixWorld(true);
+  var inv=new THREE.Matrix4().copy(group.matrixWorld).invert();
+  var mats=[], buckets=[];
+  group.traverse(function(o){
+    if(!o.isMesh) return;
+    var idx=mats.indexOf(o.material);
+    if(idx<0){ idx=mats.length; mats.push(o.material); buckets.push([]); }
+    buckets[idx].push({geo:o.geometry, matrix:new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)});
+  });
+  var out=new THREE.Group();
+  out.position.copy(group.position);
+  out.rotation.copy(group.rotation);
+  out.scale.copy(group.scale);
+  for(var i=0;i<mats.length;i++) out.add(new THREE.Mesh(mergeGeos(buckets[i]), mats[i]));
+  return out;
+}
+
 /* ============================================================
    RENDERER, SCENE, SKY
    ============================================================ */
 var canvas=document.getElementById('c');
 var renderer=new THREE.WebGLRenderer({canvas:canvas, antialias:true, powerPreference:'high-performance'});
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+
+/* Retina tablets ask for four times the pixels of a plain screen. Start a notch
+   below full and give back resolution if the frames start arriving late, rather
+   than grinding to a halt and taking the tab with it. */
+var quality={ratio:Math.min(window.devicePixelRatio||1, 1.75), acc:0, frames:0, drops:0};
+renderer.setPixelRatio(quality.ratio);
 renderer.setSize(window.innerWidth, window.innerHeight);
+function qualityWatch(raw){
+  if(quality.drops>=3) return;
+  quality.acc+=raw; quality.frames++;
+  if(quality.acc<2.0) return;
+  var avg=quality.acc/quality.frames;
+  quality.acc=0; quality.frames=0;
+  if(avg>0.032 && quality.ratio>1){
+    quality.drops++;
+    quality.ratio=Math.max(1, quality.ratio*0.78);
+    renderer.setPixelRatio(quality.ratio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+}
+
+/* If the driver drops the context, ask for it back instead of dying. */
+var contextLost=false;
+canvas.addEventListener('webglcontextlost', function(e){
+  e.preventDefault();
+  contextLost=true;
+}, false);
+canvas.addEventListener('webglcontextrestored', function(){
+  contextLost=false;
+  renderer.setPixelRatio(quality.ratio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}, false);
 renderer.outputEncoding=THREE.sRGBEncoding;
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.04;
@@ -536,10 +643,10 @@ skyDome.material.map.wrapS=THREE.ClampToEdgeWrapping;
 skyDome.material.map.wrapT=THREE.ClampToEdgeWrapping;
 scene.add(skyDome);
 
-var sun=new THREE.DirectionalLight(0xffd9a8, 1.15);
+var sun=new THREE.DirectionalLight(0xffd9a8, 1.32);
 sun.position.set(-320, 340, 220);
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xbcd6e6, 0x3b4230, 0.62));
+scene.add(new THREE.HemisphereLight(0xbcd6e6, 0x3b4230, 0.76));
 var fireLight=new THREE.PointLight(0xffa03c, 0, 46, 2);
 scene.add(fireLight);
 
@@ -627,9 +734,8 @@ terrainGeo.rotateX(-PI/2);
   terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors,3));
   terrainGeo.computeVertexNormals();
 })();
-var terrainMat=new THREE.MeshStandardMaterial({
-  vertexColors:true, roughness:0.96, metalness:0.0,
-  map:tex(groundTex(), 160, true)
+var terrainMat=new THREE.MeshLambertMaterial({
+  vertexColors:true, map:tex(groundTex(), 160, true)
 });
 terrainMat.map.anisotropy=8;
 var terrain=new THREE.Mesh(terrainGeo, terrainMat);
@@ -638,9 +744,9 @@ scene.add(terrain);
 /* ---- the sea ---- */
 var waterTexA=tex(waterTex(), 46, true);
 var waterTexB=tex(waterTex(), 23, true);
-var waterMat=new THREE.MeshStandardMaterial({
+var waterMat=new THREE.MeshPhongMaterial({
   map:waterTexA, color:0x8fd0e8, transparent:true, opacity:0.80,
-  roughness:0.16, metalness:0.32
+  specular:0x9fd8ee, shininess:64
 });
 waterMat.color.convertSRGBToLinear();
 var water=new THREE.Mesh(new THREE.PlaneGeometry(WORLD*2.2, WORLD*2.2), waterMat);
@@ -677,10 +783,10 @@ function freeSpot(x,z,pad){
   return true;
 }
 
-var trunkMat=solidMat(0x4a3524, 0.95, 0.0);
-var pineMat =solidMat(0x22401f, 0.92, 0.0);
-var pineMat2=solidMat(0x2c4d24, 0.92, 0.0);
-var rockMat =solidMat(0x6b6459, 0.94, 0.02);
+var trunkMat=worldMat(0x4a3524);
+var pineMat =worldMat(0x22401f);
+var pineMat2=worldMat(0x2c4d24);
+var rockMat =worldMat(0x6b6459);
 
 var trunkGeo=new THREE.CylinderGeometry(0.34, 0.62, 6.4, 5);
 trunkGeo.translate(0, 3.2, 0);
@@ -739,7 +845,7 @@ scatter(rockGeo, rockMat, 420, function(d){
   return true;
 });
 
-scatter(bushGeo, solidMat(0x59683a,0.95,0), 900, function(d){
+scatter(bushGeo, worldMat(0x59683a), 900, function(d){
   var a=srand()*TAU, r=srange(30, SHORE*1.05);
   var x=Math.cos(a)*r, z=Math.sin(a)*r;
   var h=heightAt(x,z);
@@ -755,15 +861,15 @@ scatter(bushGeo, solidMat(0x59683a,0.95,0), 900, function(d){
    ============================================================ */
 var caveGroup=new THREE.Group();
 scene.add(caveGroup);
-var hoardPieces=[];
 
 (function buildCave(){
   var cx=CAVE.x, cz=CAVE.z, cy=CAVE.h;
   caveGroup.position.set(cx, cy, cz);
   caveGroup.rotation.y=CAVE.yaw;
+  var stat=new THREE.Group();          // collapsed into a handful of meshes below
 
-  var stone =solidMat(0x554f47, 0.97, 0.02);
-  var stone2=solidMat(0x413c36, 0.98, 0.02);
+  var stone =worldMat(0x6e675c);
+  var stone2=worldMat(0x57514a);
 
   // The bluff the mouth is cut into: a few chunky rocks behind the opening.
   for(var i=0;i<10;i++){
@@ -771,67 +877,67 @@ var hoardPieces=[];
     b.position.set(rand(-19,19), rand(-2,9), rand(-22,-7));
     b.rotation.set(rand(0,PI),rand(0,PI),rand(0,PI));
     b.scale.set(1, rand(0.6,1.3), rand(0.8,1.3));
-    caveGroup.add(b);
+    stat.add(b);
   }
   // Mouth: two pillars, a lintel and a black interior.
   var pl=new THREE.Mesh(new THREE.BoxGeometry(4.4, 15, 8), stone);
-  pl.position.set(-8.6, 7, -2); caveGroup.add(pl);
-  var pr=pl.clone(); pr.position.x=8.6; caveGroup.add(pr);
+  pl.position.set(-8.6, 7, -2); stat.add(pl);
+  var pr=pl.clone(); pr.position.x=8.6; stat.add(pr);
   var lint=new THREE.Mesh(new THREE.BoxGeometry(22, 5, 9), stone2);
-  lint.position.set(0, 16.2, -2); caveGroup.add(lint);
+  lint.position.set(0, 16.2, -2); stat.add(lint);
   var arch=new THREE.Mesh(new THREE.CylinderGeometry(6.6,6.6,9,14,1,false,0,PI), stone);
-  arch.rotation.z=0; arch.rotation.x=PI/2; arch.position.set(0,13.6,-2); caveGroup.add(arch);
+  arch.rotation.z=0; arch.rotation.x=PI/2; arch.position.set(0,13.6,-2); stat.add(arch);
 
   var dark=new THREE.Mesh(new THREE.PlaneGeometry(17.2, 15.5), basicMat(0x07090c,{fog:true}));
-  dark.position.set(0, 7.4, -5.6); caveGroup.add(dark);
+  dark.position.set(0, 7.4, -5.6); stat.add(dark);
   var floor=new THREE.Mesh(new THREE.CircleGeometry(15, 20), solidMat(0x4c463d,0.98,0));
-  floor.rotation.x=-PI/2; floor.position.set(0,0.12,-1); caveGroup.add(floor);
+  floor.rotation.x=-PI/2; floor.position.set(0,0.12,-1); stat.add(floor);
 
   // The hoard: loose gold in the mouth of the cave.
-  var goldMat=solidMat(0xd9a828, 0.32, 0.85);
+  var goldMat=worldMat(0xd9a828);
   var coinG=new THREE.CylinderGeometry(0.42,0.42,0.09,8);
   var pileG=new THREE.SphereGeometry(1,7,5);
   for(var p=0;p<7;p++){
     var pile=new THREE.Mesh(pileG, goldMat);
     pile.position.set(rand(-7,7), 0.25, rand(-5.5,1.5));
     pile.scale.set(rand(1.4,3.2), rand(0.5,1.0), rand(1.4,3.0));
-    caveGroup.add(pile);
+    stat.add(pile);
   }
   for(var q=0;q<70;q++){
     var cn=new THREE.Mesh(coinG, goldMat);
     cn.position.set(rand(-8.5,8.5), rand(0.1,1.4), rand(-6.5,2.5));
     cn.rotation.set(rand(0,PI), rand(0,PI), rand(0,PI));
-    caveGroup.add(cn);
-    hoardPieces.push(cn);
+    stat.add(cn);
   }
   // Braziers either side so the mouth reads at a distance.
   var brazierLights=[];
   for(var s=-1;s<=1;s+=2){
     var bowl=new THREE.Mesh(new THREE.CylinderGeometry(1.1,0.7,0.9,10), solidMat(0x2b2723,0.8,0.4));
-    bowl.position.set(s*11.5, 2.4, 3.2); caveGroup.add(bowl);
+    bowl.position.set(s*11.5, 2.4, 3.2); stat.add(bowl);
     var stem=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.28,2.2,6), solidMat(0x2b2723,0.8,0.4));
-    stem.position.set(s*11.5, 1.0, 3.2); caveGroup.add(stem);
-    var glow=new THREE.Mesh(new THREE.SphereGeometry(0.95,8,6), basicMat(0xff9a34,{transparent:true,opacity:0.85}));
-    glow.position.set(s*11.5, 3.1, 3.2); caveGroup.add(glow);
-    var lt=new THREE.PointLight(0xffa040, 2.2, 30, 2);
-    lt.position.set(s*11.5, 3.4, 3.2); caveGroup.add(lt);
-    brazierLights.push({glow:glow, light:lt, phase:rand(0,TAU)});
+    stem.position.set(s*11.5, 1.0, 3.2); stat.add(stem);
+    var glow=new THREE.Mesh(new THREE.SphereGeometry(1.15,10,8),
+      basicMat(0xffa53c,{transparent:true, opacity:0.9, blending:THREE.AdditiveBlending, depthWrite:false}));
+    glow.position.set(s*11.5, 3.2, 3.2); caveGroup.add(glow);
+    brazierLights.push({glow:glow, phase:rand(0,TAU)});
   }
   caveGroup.userData.braziers=brazierLights;
 
   // Three stands: armour, claws, powers. They mark what the shop sells.
-  var standMat=solidMat(0x3a342c,0.9,0.1);
+  var standMat=worldMat(0x3a342c);
   for(var t=0;t<3;t++){
     var st=new THREE.Mesh(new THREE.CylinderGeometry(0.8,1.05,2.0,8), standMat);
-    st.position.set(-9.4+t*0.2, 1.0, -1.6+t*3.4); st.rotation.y=0.5; caveGroup.add(st);
+    st.position.set(-9.4+t*0.2, 1.0, -1.6+t*3.4); st.rotation.y=0.5; stat.add(st);
   }
-  var shield=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,0.18,14), solidMat(0x8d9199,0.4,0.7));
-  shield.rotation.x=PI/2; shield.rotation.y=0.5; shield.position.set(-9.4, 2.9, -1.6); caveGroup.add(shield);
-  var talon=new THREE.Mesh(new THREE.ConeGeometry(0.36, 2.1, 7), solidMat(0xcfd4da,0.3,0.85));
-  talon.position.set(-9.2, 3.1, 1.8); talon.rotation.z=0.35; caveGroup.add(talon);
+  var shield=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.3,0.18,14), worldMat(0x8d9199));
+  shield.rotation.x=PI/2; shield.rotation.y=0.5; shield.position.set(-9.4, 2.9, -1.6); stat.add(shield);
+  var talon=new THREE.Mesh(new THREE.ConeGeometry(0.36, 2.1, 7), worldMat(0xcfd4da));
+  talon.position.set(-9.2, 3.1, 1.8); talon.rotation.z=0.35; stat.add(talon);
   var orb=new THREE.Mesh(new THREE.SphereGeometry(0.85,12,10), basicMat(0xff8a2a,{transparent:true,opacity:0.9}));
   orb.position.set(-9.0, 3.0, 5.2); caveGroup.add(orb);
   caveGroup.userData.orb=orb;
+  var merged=collapse(stat);
+  while(merged.children.length) caveGroup.add(merged.children[0]);
 })();
 
 /* A flat world-space anchor for spawning and prompts. */
@@ -847,9 +953,11 @@ var CAVE_FRONT=new THREE.Vector3(
 /* ============================================================
    VIKING VILLAGES
    ============================================================ */
-var woodMat  =new THREE.MeshStandardMaterial({map:tex(woodTex(),1,true), roughness:0.92});
-var thatchMat=new THREE.MeshStandardMaterial({map:tex(thatchTex(),2,true), roughness:0.95});
-var sailMatTx=new THREE.MeshStandardMaterial({map:tex(sailTex(),1,true), roughness:0.85, side:THREE.DoubleSide});
+var woodMat  =new THREE.MeshLambertMaterial({map:tex(woodTex(),1,true)});
+var thatchMat=new THREE.MeshLambertMaterial({map:tex(thatchTex(),2,true)});
+var sailMatTx=new THREE.MeshLambertMaterial({map:tex(sailTex(),1,true), side:THREE.DoubleSide});
+var doorMat=basicMat(0x140f0a);
+var shipShieldA=worldMat(0xa8352d), shipShieldB=worldMat(0xd8cdb2);
 var campfires=[];
 
 function buildLonghouse(len, wid, hgt){
@@ -880,7 +988,7 @@ function buildLonghouse(len, wid, hgt){
     var head=new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.9, 5), woodMat);
     head.position.set(0, hgt+rise*1.62, ge*len*0.56); head.rotation.x=ge*1.1; g.add(head);
   }
-  var door=new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.2), basicMat(0x140f0a));
+  var door=new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.2), doorMat);
   door.position.set(wid/2+0.02, 1.1, 0); door.rotation.y=PI/2; g.add(door);
   return g;
 }
@@ -892,6 +1000,7 @@ function buildLonghouse(len, wid, hgt){
     grp.position.set(V.x, 0, V.z);
     scene.add(grp);
     V.group=grp;
+    var stat=new THREE.Group();       // houses, stakes, firepit, beached ship
 
     var n=irand(5,8);
     for(var i=0;i<n;i++){
@@ -902,7 +1011,7 @@ function buildLonghouse(len, wid, hgt){
       var lh=buildLonghouse(srange(9,16), srange(4.6,6.4), srange(2.6,3.6));
       lh.position.set(Math.cos(a)*r, hh, Math.sin(a)*r);
       lh.rotation.y=srand()*TAU;
-      grp.add(lh);
+      stat.add(lh);
     }
     // Palisade stakes around the back half.
     var stakeGeo=new THREE.CylinderGeometry(0.18,0.24,3.0,5);
@@ -915,24 +1024,22 @@ function buildLonghouse(len, wid, hgt){
       var stk=new THREE.Mesh(stakeGeo, woodMat);
       stk.position.set(Math.cos(pa)*pr, ph+1.4, Math.sin(pa)*pr);
       stk.rotation.set(srange(-0.08,0.08), srand()*TAU, srange(-0.08,0.08));
-      grp.add(stk);
+      stat.add(stk);
     }
     // Campfire in the middle.
     var fh=heightAt(V.x, V.z);
-    var ring=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.28,5,10), solidMat(0x555049,0.95,0));
-    ring.rotation.x=PI/2; ring.position.set(0, fh+0.12, 0); grp.add(ring);
+    var ring=new THREE.Mesh(new THREE.TorusGeometry(1.5,0.28,5,10), worldMat(0x555049));
+    ring.rotation.x=PI/2; ring.position.set(0, fh+0.12, 0); stat.add(ring);
     for(var lg=0; lg<5; lg++){
       var log=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.24,2.1,5), woodMat);
       log.position.set(0, fh+0.4, 0);
       log.rotation.set(rand(1.0,1.4), rand(0,PI), 0);
-      grp.add(log);
+      stat.add(log);
     }
-    var flame=new THREE.Mesh(new THREE.ConeGeometry(0.85, 2.2, 7),
-      basicMat(0xff8a2a,{transparent:true, opacity:0.85}));
-    flame.position.set(0, fh+1.4, 0); grp.add(flame);
-    var flight=new THREE.PointLight(0xffa040, 2.0, 26, 2);
-    flight.position.set(0, fh+2.0, 0); grp.add(flight);
-    campfires.push({mesh:flame, light:flight, phase:rand(0,TAU)});
+    var flame=new THREE.Mesh(new THREE.ConeGeometry(1.0, 2.6, 8),
+      basicMat(0xff9a34,{transparent:true, opacity:0.9, blending:THREE.AdditiveBlending, depthWrite:false}));
+    flame.position.set(0, fh+1.5, 0); grp.add(flame);
+    campfires.push({mesh:flame, phase:rand(0,TAU)});
 
     // A dock and a beached longship pointing out to sea.
     var da=V.yaw+PI;                                  // seaward
@@ -946,7 +1053,10 @@ function buildLonghouse(len, wid, hgt){
     var ship=buildLongship();
     ship.position.set(bx-V.x, 0.2, bz-V.z);
     ship.rotation.y=-da+PI/2;
-    grp.add(ship);
+    stat.add(ship);
+
+    var merged=collapse(stat);
+    while(merged.children.length) grp.add(merged.children[0]);
   }
 })();
 
@@ -979,13 +1089,13 @@ function buildLongship(){
   var shieldGeo=new THREE.CylinderGeometry(0.72,0.72,0.13,12);
   for(var i=-4;i<=4;i++){
     for(var side=-1;side<=1;side+=2){
-      var sh=new THREE.Mesh(shieldGeo, (i%2)?solidMat(0xa8352d,0.7,0.1):solidMat(0xd8cdb2,0.7,0.1));
+      var sh=new THREE.Mesh(shieldGeo, (i%2)?shipShieldA:shipShieldB);
       sh.rotation.z=PI/2;
       sh.position.set(side*2.55, 1.9, i*1.7);
       g.add(sh);
     }
   }
-  return g;
+  return collapse(g);
 }
 
 /* ============================================================
@@ -1037,6 +1147,9 @@ function buildDragon(cfg){
     eye:    cfg.eye||0xffb52e,
     claw:   cfg.claw||0xe8e2d2
   };
+  // Your kin are nearly always seen from a distance, so they skip the trim:
+  // teeth, pupils, ear fins, cheek spikes and the row of spines down the back.
+  var trim=!cfg.simple;
   var bodyMat=new THREE.MeshStandardMaterial({map:tex(scaleTex('#d6d6d6','#9c9c9c'),3,true), roughness:0.72, metalness:0.06});
   bodyMat.color.setHex(C.body); bodyMat.color.convertSRGBToLinear();
   var bellyMat=solidMat(C.belly, 0.78, 0.04);
@@ -1052,7 +1165,7 @@ function buildDragon(cfg){
   var tilt=new THREE.Group();                 // body pitch and roll live here
   root.add(tilt);
   var rig={root:root, tilt:tilt, mats:{body:bodyMat, belly:bellyMat, wing:wingMat, claw:clawMat, eye:eyeMat, horn:hornMat},
-           legs:[], tail:[], wings:[], claws:[], plates:[], spikes:[], scale:C.scale};
+           legs:[], tail:[], wings:[], plates:[], scale:C.scale};
 
   /* ---- torso ---- */
   var chest=new THREE.Mesh(new THREE.SphereGeometry(1, 14, 11), bodyMat);
@@ -1066,13 +1179,13 @@ function buildDragon(cfg){
   tilt.add(belly);
 
   /* ---- back spikes ---- */
-  for(var s=0;s<9;s++){
+  for(var s=0; trim && s<9; s++){
     var t=s/8;
     var sp=new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.52, 4), spikeMat);
     sp.position.set(0, 0.78-t*0.28, 1.35-t*2.9);
     sp.rotation.x=-0.34;
     sp.scale.setScalar(1.15-Math.abs(t-0.35)*0.9);
-    tilt.add(sp); rig.spikes.push(sp);
+    tilt.add(sp);
   }
 
   /* ---- neck: three chained segments ---- */
@@ -1087,9 +1200,11 @@ function buildDragon(cfg){
     seg.add(tube);
     var joint=new THREE.Mesh(new THREE.SphereGeometry(0.34-n*0.045, 8, 6), neckMats[n]);
     seg.add(joint);
-    var nspike=new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.34, 4), spikeMat);
-    nspike.position.set(0, 0.32-n*0.03, 0.38); nspike.rotation.x=-0.5;
-    seg.add(nspike);
+    if(trim){
+      var nspike=new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.34, 4), spikeMat);
+      nspike.position.set(0, 0.32-n*0.03, 0.38); nspike.rotation.x=-0.5;
+      seg.add(nspike);
+    }
     neck.push(seg); parent=seg;
   }
   rig.neck=neck;
@@ -1114,9 +1229,11 @@ function buildDragon(cfg){
   head.add(jaw); rig.jaw=jaw;
   var jawMesh=new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.15, 0.86), bodyMat);
   jawMesh.position.set(0, -0.06, 0.42); jaw.add(jawMesh);
-  var mouth=new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.80), basicMat(0x2a0c06));
-  mouth.rotation.x=-PI/2; mouth.position.set(0, 0.02, 0.44); jaw.add(mouth);
-  for(var tt=0; tt<5; tt++){
+  if(trim){
+    var mouth=new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.80), basicMat(0x2a0c06));
+    mouth.rotation.x=-PI/2; mouth.position.set(0, 0.02, 0.44); jaw.add(mouth);
+  }
+  for(var tt=0; trim && tt<5; tt++){
     for(var sd=-1; sd<=1; sd+=2){
       var tooth=new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 4), hornMat);
       tooth.position.set(sd*0.13, -0.10, 0.22+tt*0.16); head.add(tooth);
@@ -1132,8 +1249,10 @@ function buildDragon(cfg){
   for(var e=-1;e<=1;e+=2){
     var eye=new THREE.Mesh(new THREE.SphereGeometry(0.095, 8, 7), eyeMat);
     eye.position.set(e*0.27, 0.13, 0.35); head.add(eye);
-    var pupil=new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.03), basicMat(0x110600));
-    pupil.position.set(e*0.30, 0.13, 0.40); head.add(pupil);
+    if(trim){
+      var pupil=new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.10, 0.03), basicMat(0x110600));
+      pupil.position.set(e*0.30, 0.13, 0.40); head.add(pupil);
+    }
     // Horns sweeping back off the skull.
     var horn=new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.95, 6), hornMat);
     horn.position.set(e*0.24, 0.36, -0.10);
@@ -1142,12 +1261,14 @@ function buildDragon(cfg){
     horn2.position.set(e*0.33, 0.16, -0.18);
     horn2.rotation.set(1.5, 0, e*-0.55); head.add(horn2);
     // Ear fin.
-    var fin=new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.42, 4), wingMat);
-    fin.position.set(e*0.34, 0.06, -0.24);
-    fin.rotation.set(1.3, 0, e*-0.9); fin.scale.set(1,1,0.35); head.add(fin);
-    var cheek=new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.26, 4), spikeMat);
-    cheek.position.set(e*0.30, -0.10, 0.06);
-    cheek.rotation.set(1.4, 0, e*-1.1); head.add(cheek);
+    if(trim){
+      var fin=new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.42, 4), wingMat);
+      fin.position.set(e*0.34, 0.06, -0.24);
+      fin.rotation.set(1.3, 0, e*-0.9); fin.scale.set(1,1,0.35); head.add(fin);
+      var cheek=new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.26, 4), spikeMat);
+      cheek.position.set(e*0.30, -0.10, 0.06);
+      cheek.rotation.set(1.4, 0, e*-1.1); head.add(cheek);
+    }
   }
 
   /* ---- wings ---- */
@@ -1219,7 +1340,6 @@ function buildDragon(cfg){
       claw.position.set(t2*0.12, -0.10, 0.38);
       claw.rotation.x=PI/2+0.35;
       ankle.add(claw);
-      rig.claws.push(claw);
     }
     var legObj={hip:hip, knee:knee, ankle:ankle, side:side, front:front,
                 phase:(front? (side>0?0:PI) : (side>0?PI:0))};
@@ -1230,30 +1350,30 @@ function buildDragon(cfg){
 
   /* ---- tail ---- */
   var tp=tilt, tz=-2.1;
-  for(var k=0;k<9;k++){
+  for(var k=0;k<7;k++){
     var tg=new THREE.Group();
-    tg.position.set(0, k===0?0.02:0, k===0?tz:-0.52);
+    tg.position.set(0, k===0?0.02:0, k===0?tz:-0.68);
     tp.add(tg);
-    var r1=0.40-k*0.040, r2=0.40-(k+1)*0.040;
-    var tm=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(r2,0.04), Math.max(r1,0.05), 0.54, 7), bodyMat);
-    tm.rotation.x=PI/2; tm.position.z=-0.27;
+    var r1=0.40-k*0.051, r2=0.40-(k+1)*0.051;
+    var tm=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(r2,0.04), Math.max(r1,0.05), 0.70, 7), bodyMat);
+    tm.rotation.x=PI/2; tm.position.z=-0.35;
     tg.add(tm);
-    if(k<7){
-      var tsp=new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.30, 4), spikeMat);
-      tsp.position.set(0, r1*0.75, -0.24); tsp.rotation.x=-0.9;
-      tg.add(tsp); rig.spikes.push(tsp);
+    if(trim && k<6 && k%2===0){
+      var tsp=new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.32, 4), spikeMat);
+      tsp.position.set(0, r1*0.75, -0.30); tsp.rotation.x=-0.9;
+      tg.add(tsp);
     }
     rig.tail.push(tg);
     tp=tg;
   }
   // Tail fin at the very end.
   var fin1=new THREE.Mesh(new THREE.ConeGeometry(0.30, 0.95, 4), wingMat);
-  fin1.position.set(0, 0.18, -0.55); fin1.rotation.x=-0.5; fin1.scale.set(1,1,0.3);
-  rig.tail[8].add(fin1);
+  fin1.position.set(0, 0.18, -0.70); fin1.rotation.x=-0.5; fin1.scale.set(1,1,0.3);
+  rig.tail[6].add(fin1);
   var fin2=new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.7, 4), spikeMat);
-  fin2.position.set(0, 0.05, -0.7); fin2.rotation.x=-PI/2;
-  rig.tail[8].add(fin2);
-  rig.tailTip=rig.tail[8];
+  fin2.position.set(0, 0.05, -0.86); fin2.rotation.x=-PI/2;
+  rig.tail[6].add(fin2);
+  rig.tailTip=rig.tail[6];
 
   /* ---- armour plates: built once, shown as they are bought ---- */
   var plateMat=solidMat(0x8d949c, 0.42, 0.72);
@@ -1278,6 +1398,23 @@ function buildDragon(cfg){
   var mask=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.20,0.42), plateMat);
   mask.position.set(0, 0.30, 0.22); mask.visible=false;
   head.add(mask); rig.plates.push(mask);
+
+  /* Everything is built; now collapse each pivot's own meshes. The armour
+     plates are left out because they are shown and hidden one at a time. */
+  fuse(tilt, rig.plates);
+  for(var f=0; f<neck.length; f++) fuse(neck[f], rig.plates);
+  fuse(head, rig.plates);
+  fuse(jaw);
+  for(var fw=0; fw<rig.wings.length; fw++){
+    fuse(rig.wings[fw].root);
+    fuse(rig.wings[fw].elbow);
+  }
+  for(var fl=0; fl<rig.legs.length; fl++){
+    fuse(rig.legs[fl].hip);
+    fuse(rig.legs[fl].knee);
+    fuse(rig.legs[fl].ankle);
+  }
+  for(var ft=0; ft<rig.tail.length; ft++) fuse(rig.tail[ft]);
 
   root.scale.setScalar(C.scale);
   return rig;
@@ -1453,7 +1590,7 @@ function stats(){
     melee:   w.dmg,
     reach:   w.reach,
     fireMax: 100 + pw('fireTank')*45,
-    fireDps: 46 + pw('fireDmg')*26,
+    fireDps: 54 + pw('fireDmg')*28,
     stamMax: 100 + pw('wings')*40,
     climb:   1 + pw('wings')*0.22,
     swimSpd: 8 + pw('swim')*2.6,
@@ -1740,20 +1877,22 @@ function buildViking(){
   var cape=new THREE.Mesh(G('v3',function(){ return new THREE.PlaneGeometry(0.72,0.95); }), M.shield1);
   cape.position.set(0,1.20,-0.24); cape.visible=false; g.add(cape); parts.cape=cape;
 
+  var headKit=new THREE.Group(); g.add(headKit);
   var head=new THREE.Mesh(G('v4',function(){ return new THREE.SphereGeometry(0.23,10,8); }), M.skin);
-  head.position.y=1.86; g.add(head); parts.head=head;
+  head.position.y=1.86; headKit.add(head);
   var beard=new THREE.Mesh(G('v5',function(){ return new THREE.ConeGeometry(0.19,0.34,7); }), M.hair);
   beard.position.set(0,1.68,0.10); beard.rotation.x=0.25; g.add(beard); parts.beard=beard;
   var helm=new THREE.Mesh(G('v6',function(){ return new THREE.SphereGeometry(0.25,10,6,0,TAU,0,PI/2); }), M.iron);
-  helm.position.y=1.88; g.add(helm);
+  helm.position.y=1.88; headKit.add(helm);
   var band=new THREE.Mesh(G('v7',function(){ return new THREE.TorusGeometry(0.245,0.035,5,12); }), M.iron);
-  band.rotation.x=PI/2; band.position.y=1.86; g.add(band);
+  band.rotation.x=PI/2; band.position.y=1.86; headKit.add(band);
   for(var s=-1;s<=1;s+=2){
     var horn=new THREE.Mesh(G('v8',function(){ return new THREE.ConeGeometry(0.07,0.42,6); }), M.shield2);
     horn.position.set(s*0.22,1.99,0);
     horn.rotation.set(0.25, 0, s*-1.05);
-    g.add(horn);
+    headKit.add(horn);
   }
+  fuse(headKit);
 
   var armL=new THREE.Group(); armL.position.set(-0.40,1.62,0); g.add(armL); parts.armL=armL;
   var armR=new THREE.Group(); armR.position.set( 0.40,1.62,0); g.add(armR); parts.armR=armR;
@@ -1802,6 +1941,7 @@ function buildViking(){
   boss.position.z=0.08; shield.add(boss);
   var rimM=new THREE.Mesh(G('v22',function(){ return new THREE.TorusGeometry(0.46,0.035,5,16); }), M.iron);
   shield.add(rimM);
+  fuse(shield); fuse(axe);
 
   var warhorn=new THREE.Mesh(G('v23',function(){ return new THREE.ConeGeometry(0.12,0.52,7,1,true); }), M.shield2);
   warhorn.position.set(0,-0.72,0.16); warhorn.rotation.x=-1.2;
@@ -1812,7 +1952,7 @@ function buildViking(){
 }
 
 var vikings=[], vikingPool=[];
-var VIKING_CAP=44;
+var VIKING_CAP=36;
 
 function spawnViking(type, x, z, opts){
   if(vikings.length>=VIKING_CAP) return null;
@@ -2089,7 +2229,7 @@ function updateVikings(dt){
     v.stepSnd-=dt;
     if(dist<26 && v.stepSnd<=0 && v.state!=='idle'){ v.stepSnd=0.42; if(Math.random()<0.25) sfx.step(); }
 
-    var far=dist>250;
+    var far=dist>210;
     v.group.visible=!far;
     v.shadow.visible=!far;
     if(!far) placeShadow(v.shadow, v.x, v.z, v.y, 2.0, 0.42);
@@ -2104,16 +2244,18 @@ function fireCone(origin, dir, dt, dps, range, fromPlayer, accum){
   var n=Math.min(6, Math.floor(accum.v));
   accum.v-=n;
   for(var i=0;i<n;i++){
-    var spread=0.10;
+    var spread=0.17;
     var vx=dir.x+rand(-spread,spread), vy=dir.y+rand(-spread,spread), vz=dir.z+rand(-spread,spread);
-    var sp=rand(range*0.9, range*1.5);
+    var sp=rand(range*1.2, range*1.9);
+    // Only a little buoyancy: the plume has to travel where the stream does, or
+    // it looks like you are missing when you are not.
     FX.fire.spawn(origin.x+rand(-0.2,0.2), origin.y+rand(-0.2,0.2), origin.z+rand(-0.2,0.2),
-                  vx*sp, vy*sp+rand(0.5,2.4), vz*sp, rand(0.42,0.80),
-                  1.0, rand(0.55,0.86), rand(0.14,0.34), 3.5, 2.1);
+                  vx*sp, vy*sp+rand(0.2,1.2), vz*sp, rand(0.45,0.85),
+                  1.0, rand(0.55,0.86), rand(0.14,0.34), 1.0, 1.5);
     if(Math.random()<0.35){
       FX.ember.spawn(origin.x, origin.y, origin.z,
-                     vx*sp*1.25, vy*sp*1.25+rand(1,4), vz*sp*1.25, rand(0.5,1.1),
-                     1.0, rand(0.4,0.7), 0.12, 1.2, 1.2);
+                     vx*sp*1.2, vy*sp*1.2+rand(0.6,2.6), vz*sp*1.2, rand(0.5,1.1),
+                     1.0, rand(0.4,0.7), 0.12, 2.2, 1.1);
     }
   }
   // Damage: the stream is a widening tube, not a ray. Anything whose chest sits
@@ -2125,7 +2267,7 @@ function fireCone(origin, dir, dt, dps, range, fromPlayer, accum){
     var along=_ft.dot(dir);
     if(along< -1.4 || along>range) continue;
     var perp=Math.sqrt(Math.max(0, _ft.lengthSq()-along*along));
-    var width=1.9 + Math.max(0,along)/range*5.6;   // splays out with distance
+    var width=2.7 + Math.max(0,along)/range*7.2;   // splays out with distance
     if(perp>width) continue;
     var mult=1;
     if(v.type==='shield'){                       // a shield wall turns some of it
@@ -2149,7 +2291,7 @@ var allies=[];
 function spawnAllies(){
   for(var i=0;i<ALLY_LOOK.length;i++){
     var L=ALLY_LOOK[i];
-    var rig=buildDragon({scale:0.82, body:L.body, belly:L.belly, wing:L.wing,
+    var rig=buildDragon({scale:0.82, simple:true, body:L.body, belly:L.belly, wing:L.wing,
                          horn:L.horn, eye:L.eye, claw:0xd8d2c2});
     scene.add(rig.root);
     var a={
@@ -2262,13 +2404,18 @@ function updateAllies(dt){
       a.rig.jaw.rotation.x=damp(a.rig.jaw.rotation.x, 0, 0.02, dt);
     }
 
+    var seen=a.pos.distanceTo(player.pos)<340;
+    a.rig.root.visible=seen;
+    a.shadow.visible=seen;
     a.rig.root.position.copy(a.pos);
     a.rig.root.rotation.y=a.yaw;
     a.rig.tilt.rotation.x=-a.pitch;
     a.rig.tilt.rotation.z=a.roll;
     a.flap+=dt*(3.0+a.speed*0.05);
-    animateDragon(a.rig, dt, {mode:'fly', flap:a.flap, gait:0, speed:a.speed, turn:rate});
-    placeShadow(a.shadow, a.pos.x, a.pos.z, a.pos.y, 6, 0.4);
+    if(seen){
+      animateDragon(a.rig, dt, {mode:'fly', flap:a.flap, gait:0, speed:a.speed, turn:rate});
+      placeShadow(a.shadow, a.pos.x, a.pos.z, a.pos.y, 6, 0.4);
+    }
   }
 }
 
@@ -2590,11 +2737,13 @@ function respawn(){
 /* You breathe where you are looking. The body swings round to follow, so the
    stream always leaves the mouth in a direction that makes sense. */
 function aimDir(out){
+  // cam.pitch is already the camera's own pitch: negative looks down. Taking the
+  // opposite of it sent the stream over the raiders' heads.
   var bodyYaw=player.yaw, bodyPitch=player.pitch;
-  var wantYaw=cam.yaw, wantPitch=-cam.pitch;
+  var wantYaw=cam.yaw, wantPitch=cam.pitch;
   var dy=clamp(angWrap(wantYaw-bodyYaw), -1.0, 1.0);
-  var dp=clamp(wantPitch-bodyPitch, -0.9, 0.9);
-  var y=bodyYaw+dy, p=clamp(bodyPitch+dp, -1.25, 1.25);
+  var dp=clamp(wantPitch-bodyPitch, -1.25, 1.25);
+  var y=bodyYaw+dy, p=clamp(bodyPitch+dp, -1.38, 1.38);
   var cp=Math.cos(p);
   return out.set(Math.sin(y)*cp, Math.sin(p), Math.cos(y)*cp).normalize();
 }
@@ -2635,8 +2784,8 @@ function updatePlayer(dt){
   /* -------- ON FOOT -------- */
   if(player.mode==='ground'){
     var cy=cam.yaw;
-    var dirX=Math.cos(cy)*inp.x + Math.sin(cy)*(-inp.y);
-    var dirZ=-Math.sin(cy)*inp.x + Math.cos(cy)*(-inp.y);
+    var dirX=-Math.cos(cy)*inp.x + Math.sin(cy)*(-inp.y);
+    var dirZ= Math.sin(cy)*inp.x + Math.cos(cy)*(-inp.y);
     var mag=Math.hypot(dirX,dirZ);
     var wantSpd=0;
     if(mag>0.06){
@@ -2686,7 +2835,7 @@ function updatePlayer(dt){
   /* -------- FLYING -------- */
   }else if(player.mode==='fly'){
     var turnRate=1.55*(inp.run?1.2:1);
-    player.yaw+=inp.x*turnRate*dt;
+    player.yaw-=inp.x*turnRate*dt;
     var pTarget=clamp(-inp.y*0.72, -0.85, 0.85);
     if(inp.down) pTarget=-0.95;
     var thrusting=false;
@@ -2705,7 +2854,7 @@ function updatePlayer(dt){
     player.speed+=(20-player.speed)*0.30*dt;
     player.speed-=player.speed*player.speed*0.0016*dt;
     player.speed=clamp(player.speed, 5, 64);
-    player.roll=damp(player.roll, -clamp(inp.x,-1,1)*0.85, 0.02, dt);
+    player.roll=damp(player.roll, clamp(inp.x,-1,1)*0.85, 0.02, dt);
 
     var cp=Math.cos(player.pitch);
     player.vel.set(Math.sin(player.yaw)*cp, Math.sin(player.pitch), Math.cos(player.yaw)*cp)
@@ -2745,8 +2894,8 @@ function updatePlayer(dt){
   /* -------- SWIMMING -------- */
   }else{
     var cy2=cam.yaw;
-    var sdx=Math.cos(cy2)*inp.x + Math.sin(cy2)*(-inp.y);
-    var sdz=-Math.sin(cy2)*inp.x + Math.cos(cy2)*(-inp.y);
+    var sdx=-Math.cos(cy2)*inp.x + Math.sin(cy2)*(-inp.y);
+    var sdz= Math.sin(cy2)*inp.x + Math.cos(cy2)*(-inp.y);
     var smag=Math.hypot(sdx,sdz);
     var swim=st.swimSpd*(inp.run?1.45:1);
     if(smag>0.06){
@@ -2766,7 +2915,7 @@ function updatePlayer(dt){
     var wantY=Math.max(seabed, SEA-0.7-player.swimDepth);
     player.pos.y=damp(player.pos.y, wantY, 0.004, dt);
     player.pitch=damp(player.pitch, inp.down?-0.5:(inp.up?0.35:0.03), 0.02, dt);
-    player.roll=damp(player.roll, -clamp(inp.x,-1,1)*0.35, 0.03, dt);
+    player.roll=damp(player.roll, clamp(inp.x,-1,1)*0.35, 0.03, dt);
     player.gait+=dt*(1.6+player.speed*0.26);
     player.stam=Math.min(player.stamMax, player.stam+16*dt);
 
@@ -2805,7 +2954,7 @@ function updatePlayer(dt){
   if(wantFire){
     if(!player.breathing){ player.breathing=true; fireSoundStart(); }
     if(player.mode!=='fly') player.yaw=angLerp(player.yaw, cam.yaw, 1-Math.pow(0.06, dt));
-    player.fire=Math.max(0, player.fire-30*dt);
+    player.fire=Math.max(0, player.fire-24*dt);
     player.noCombatT=0;
     aimDir(_fd);
     fireAcc.v+=dt*180;
@@ -2823,7 +2972,7 @@ function updatePlayer(dt){
     if(player.breathing){ player.breathing=false; fireSoundStop(); }
     player.rig.jaw.rotation.x=damp(player.rig.jaw.rotation.x, player.meleeT>0?0.85:0.02, 0.002, dt);
     fireLight.intensity=damp(fireLight.intensity, 0, 0.001, dt);
-    if(player.noCombatT>0.9) player.fire=Math.min(player.fireMax, player.fire+18*dt);
+    if(player.noCombatT>0.9) player.fire=Math.min(player.fireMax, player.fire+22*dt);
   }
 
   /* -------- upkeep -------- */
@@ -2843,7 +2992,7 @@ function updatePlayer(dt){
   player.headPitch=damp(player.headPitch, clamp(-cam.pitch,-0.6,0.6)*0.5 + (player.meleeT>0?0.5:0), 0.02, dt);
   animateDragon(player.rig, dt, {
     mode:player.mode, flap:player.gait, gait:player.gait, speed:player.speed,
-    turn:inp.x, effort:player.wingBlend, headYaw:player.headYaw, headPitch:player.headPitch
+    turn:-inp.x, effort:player.wingBlend, headYaw:player.headYaw, headPitch:player.headPitch
   });
   placeShadow(player.shadow, player.pos.x, player.pos.z, player.pos.y, 8, 0.5);
 }
@@ -2867,7 +3016,8 @@ function updateCamera(dt){
   look.x=look.y=0;
   if(player.mode==='fly' && cam.idle>1.1 && !player.dead){
     cam.yaw=angLerp(cam.yaw, player.yaw, 1-Math.pow(0.30, dt));
-    cam.pitch=damp(cam.pitch, clamp(-player.pitch*0.5-0.06,-0.9,0.5), 0.4, dt);
+    // cam.pitch positive looks up, so following a dive means going negative too.
+    cam.pitch=damp(cam.pitch, clamp(player.pitch*0.92-0.07,-1.0,0.6), 0.05, dt);
   }
   // Close enough to see the scales, far enough to see what is coming. Flying
   // needs more room because the wings are wide and the ground moves fast.
@@ -3274,7 +3424,7 @@ ui.wipeBtn.addEventListener('click', function(){
    MAIN LOOP
    ============================================================ */
 var clock=new THREE.Clock();
-var hudT=0, titleAngle=0, waterT=0;
+var hudT=0, titleAngle=0, waterT=0, radarT=0;
 
 function ambient(dt){
   waterT+=dt;
@@ -3288,23 +3438,17 @@ function ambient(dt){
   for(var i=0;i<br.length;i++){
     var b=br[i];
     b.phase+=dt*(6+i);
-    var f=0.8+Math.sin(b.phase)*0.16+Math.sin(b.phase*2.7)*0.09;
-    b.light.intensity=2.2*f;
-    b.glow.scale.setScalar(f);
+    b.glow.scale.setScalar(0.85+Math.sin(b.phase)*0.16+Math.sin(b.phase*2.7)*0.09);
   }
   for(var c=0;c<campfires.length;c++){
     var cf=campfires[c];
     cf.phase+=dt*(7+c*0.7);
-    var g=0.8+Math.sin(cf.phase)*0.2;
-    cf.light.intensity=2.0*g;
-    cf.mesh.scale.set(g, 0.8+Math.sin(cf.phase*1.7)*0.3, g);
+    var g=0.85+Math.sin(cf.phase)*0.2;
+    cf.mesh.scale.set(g, 0.85+Math.sin(cf.phase*1.7)*0.3, g);
   }
   var orb=caveGroup.userData.orb;
   orb.rotation.y+=dt*0.9;
   orb.scale.setScalar(1+Math.sin(game.t*3)*0.06);
-  for(var h=0;h<hoardPieces.length;h+=1){
-    if((h+((game.t*20)|0))%37===0) hoardPieces[h].rotation.y+=dt*2;
-  }
 }
 
 function update(dt){
@@ -3343,13 +3487,17 @@ function titleSpin(dt){
 
 function animate(){
   requestAnimationFrame(animate);
-  var dt=Math.min(clock.getDelta(), 0.05);
+  var raw=clock.getDelta();
+  var dt=Math.min(raw, 0.05);
+  if(contextLost) return;
+  qualityWatch(raw);
   if(game.running && !game.paused && !game.shopOpen){
     update(dt);
+    radarT-=dt;
+    if(radarT<=0){ radarT=0.08; drawRadar(0.08); }     // twelve times a second is plenty
   }else if(!game.running){
     titleSpin(dt);
   }
-  if(game.running && !game.paused && !game.shopOpen) drawRadar(dt);
   renderer.render(scene, camera);
 }
 
@@ -3359,6 +3507,7 @@ function animate(){
 function resize(){
   camera.aspect=window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
+  renderer.setPixelRatio(quality.ratio);
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 window.addEventListener('resize', resize);
@@ -3420,11 +3569,13 @@ ui.startBtn.addEventListener('click', beginPlay);
 ui.loading.classList.add('hidden');
 animate();
 
-/* Offline: cache the page and everything it needs on first visit. */
+/* Offline: cache the page and everything it needs on first visit. Registered
+   straight away rather than on load, so a short first visit is still enough to
+   fill the cache. A home screen icon added on iOS gets its own storage, so the
+   first launch from the icon has to happen with a connection; after that it
+   runs with the network off. */
 if('serviceWorker' in navigator){
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('/experiments/dragon-isle/sw.js').catch(function(){});
-  });
+  navigator.serviceWorker.register('/experiments/dragon-isle/sw.js').catch(function(){});
 }
 
 })();
