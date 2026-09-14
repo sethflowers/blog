@@ -1,0 +1,1987 @@
+---
+title: Ticket Book Trivia
+description: A pass-and-play trivia game built out of a Disneyland ticket book. Pick a category, then punch tickets worth one to five points — Disney, the Bible, animals, Pokémon, American Girl or Nintendo.
+date: 2026-09-14
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#170A2E">
+<meta name="apple-mobile-web-app-title" content="Ticket Book">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/experiments/ticket-book-trivia/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/ticket-book-trivia/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/ticket-book-trivia/icon-192.png">
+<title>Ticket Book Trivia</title>
+<style>
+  /* Fonts are served from this page's own folder rather than Google Fonts, so
+     a round still looks right with the network off. Latin subsets only — the
+     question bank is English. */
+  @font-face{
+    font-family:'Bungee';font-style:normal;font-weight:400;font-display:swap;
+    src:url(/experiments/ticket-book-trivia/fonts/bungee-400.woff2) format('woff2');
+  }
+  @font-face{
+    font-family:'Fredoka';font-style:normal;font-weight:300 700;font-display:swap;
+    src:url(/experiments/ticket-book-trivia/fonts/fredoka-var.woff2) format('woff2');
+  }
+  @font-face{
+    font-family:'Courier Prime';font-style:normal;font-weight:400;font-display:swap;
+    src:url(/experiments/ticket-book-trivia/fonts/courier-prime-400.woff2) format('woff2');
+  }
+  @font-face{
+    font-family:'Courier Prime';font-style:normal;font-weight:700;font-display:swap;
+    src:url(/experiments/ticket-book-trivia/fonts/courier-prime-700.woff2) format('woff2');
+  }
+  :root{
+    --night:#170A2E;
+    --cream:#FFF4DC;
+    --ink:#241046;
+    --sun:#FFC53D;
+    --coral:#FF5C7A;
+    --teal:#14C4C0;
+    --grape:#8B5CF6;
+    --tangerine:#FF8A2B;
+    --good:#1FA97A;
+    --bad:#D93A5B;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(900px 500px at 10% -5%, rgba(139,92,246,.55), transparent 60%),
+      radial-gradient(800px 500px at 95% 10%, rgba(20,196,192,.35), transparent 55%),
+      radial-gradient(700px 600px at 50% 110%, rgba(255,92,122,.35), transparent 60%),
+      var(--night);
+    background-attachment:fixed;
+    color:var(--cream);
+    font-family:'Fredoka', system-ui, sans-serif;
+    min-height:100vh;
+    padding:
+      calc(20px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right))
+      calc(40px + env(safe-area-inset-bottom)) calc(14px + env(safe-area-inset-left));
+    -webkit-text-size-adjust:100%;
+    overscroll-behavior-y:none;
+  }
+  button{-webkit-user-select:none;user-select:none;}
+  .wrap{max-width:660px;margin:0 auto;}
+
+  .masthead{text-align:center;margin-bottom:18px;}
+  .eyebrow{
+    font-family:'Courier Prime',monospace;font-weight:700;
+    letter-spacing:.32em;font-size:11px;text-transform:uppercase;
+    color:var(--sun);margin:0 0 10px;
+  }
+  h1{
+    font-family:'Bungee',cursive;font-weight:400;line-height:.95;
+    font-size:clamp(30px,8.5vw,52px);margin:0;color:var(--cream);
+    text-shadow:3px 3px 0 var(--coral), 6px 6px 0 var(--grape);
+  }
+
+  /* ---------- ticket ---------- */
+  .ticket{
+    background:var(--cream);color:var(--ink);border-radius:16px;
+    display:flex;align-items:stretch;
+    box-shadow:0 18px 0 -6px rgba(0,0,0,.28), 0 26px 50px rgba(0,0,0,.45);
+    overflow:hidden;position:relative;
+  }
+  .stub{
+    background:var(--tier,var(--teal));color:#1A0C33;
+    width:88px;flex:0 0 88px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:6px;padding:18px 6px;position:relative;
+  }
+  .stub::after{
+    content:"";position:absolute;top:8px;bottom:8px;right:-1px;
+    border-right:3px dashed rgba(36,16,70,.35);
+  }
+  .notch{position:absolute;right:-11px;width:22px;height:22px;border-radius:50%;background:var(--night);}
+  .notch.top{top:-11px;}
+  .notch.bot{bottom:-11px;}
+  .tier-letter{font-family:'Bungee',cursive;font-size:40px;line-height:1;}
+  .tier-word{
+    font-family:'Courier Prime',monospace;font-weight:700;font-size:10px;
+    letter-spacing:.18em;text-transform:uppercase;text-align:center;
+  }
+  .ticket-body{padding:20px 20px 22px;flex:1;min-width:0;}
+  .serial{
+    font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:.12em;
+    color:rgba(36,16,70,.55);text-transform:uppercase;margin-bottom:10px;
+    display:flex;justify-content:space-between;gap:10px;
+  }
+  .question{font-size:clamp(18px,4.6vw,23px);font-weight:600;line-height:1.3;margin:0 0 14px;}
+
+  /* ---------- timer ---------- */
+  .clock{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .clock-track{
+    flex:1;height:10px;border-radius:999px;background:rgba(36,16,70,.12);overflow:hidden;
+  }
+  .clock-fill{
+    height:100%;width:100%;border-radius:999px;background:var(--good);
+    transition:background .3s ease;
+  }
+  .clock-fill.hurry{background:var(--bad);}
+  .clock-num{
+    font-family:'Courier Prime',monospace;font-weight:700;font-size:14px;
+    color:rgba(36,16,70,.7);min-width:30px;text-align:right;
+  }
+
+  /* ---------- answers ---------- */
+  .answers{display:grid;gap:9px;}
+  .answer{
+    font-family:'Fredoka',sans-serif;font-size:16px;font-weight:500;text-align:left;
+    background:#fff;color:var(--ink);
+    border:2.5px solid rgba(36,16,70,.18);border-radius:11px;
+    padding:12px 14px;cursor:pointer;
+    display:flex;align-items:center;gap:11px;width:100%;
+    transition:transform .12s ease, border-color .12s ease, background .12s ease;
+  }
+  .answer:hover:not(:disabled){border-color:var(--tier,var(--teal));transform:translateX(3px);}
+  .answer:focus-visible{outline:3px solid var(--grape);outline-offset:2px;}
+  .answer:disabled{cursor:default;}
+  .pip{
+    flex:0 0 26px;height:26px;border-radius:50%;background:rgba(36,16,70,.1);
+    font-family:'Courier Prime',monospace;font-weight:700;font-size:13px;
+    display:grid;place-items:center;
+  }
+  .answer.correct{background:#E4F7EF;border-color:var(--good);}
+  .answer.correct .pip{background:var(--good);color:#fff;}
+  .answer.wrong{background:#FCE8ED;border-color:var(--bad);}
+  .answer.wrong .pip{background:var(--bad);color:#fff;}
+
+  .stamp{
+    position:absolute;right:14px;bottom:14px;
+    font-family:'Bungee',cursive;font-size:15px;letter-spacing:.06em;
+    padding:7px 14px;border:3px solid currentColor;border-radius:8px;
+    transform:rotate(-11deg);opacity:.9;pointer-events:none;
+  }
+  .stamp.punched{color:var(--good);}
+  .stamp.missed{color:var(--bad);}
+  .pop{animation:pop .32s cubic-bezier(.2,1.5,.4,1);}
+  @keyframes pop{from{transform:rotate(-11deg) scale(.3);opacity:0;}}
+
+  /* ---------- status ---------- */
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;font-size:13px;}
+  .progress{font-family:'Courier Prime',monospace;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--sun);}
+  .turn{font-weight:600;}
+  .turn b{color:var(--sun);}
+  .scores{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;}
+  .chip{background:rgba(255,255,255,.09);border:2px solid transparent;border-radius:999px;padding:6px 13px;font-size:14px;font-weight:500;}
+  .chip.active{border-color:var(--sun);background:rgba(255,197,61,.16);}
+  .chip span{font-family:'Courier Prime',monospace;font-weight:700;color:var(--sun);margin-left:6px;}
+
+  .strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:18px;min-height:30px;align-items:center;}
+  .strip .label{font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;opacity:.55;margin-right:4px;}
+  .mini{width:26px;height:30px;border-radius:5px;display:grid;place-items:center;font-family:'Bungee',cursive;font-size:13px;color:#1A0C33;box-shadow:0 3px 0 rgba(0,0,0,.3);}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    font-family:'Bungee',cursive;font-size:16px;letter-spacing:.03em;
+    background:var(--sun);color:#241046;border:none;border-radius:12px;
+    padding:14px 26px;cursor:pointer;box-shadow:0 5px 0 #C9922A;
+    transition:transform .1s ease, box-shadow .1s ease;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 #C9922A;}
+  .btn:focus-visible{outline:3px solid var(--teal);outline-offset:3px;}
+  .btn.ghost{background:transparent;color:var(--cream);box-shadow:none;border:2.5px solid rgba(255,244,220,.4);}
+  .btn.ghost:active{transform:none;}
+  .center{text-align:center;margin-top:18px;}
+
+  /* ---------- setup ---------- */
+  .panel{background:rgba(255,255,255,.07);border:2.5px solid rgba(255,244,220,.16);border-radius:18px;padding:22px;margin-top:22px;}
+  .panel h2{font-family:'Bungee',cursive;font-size:17px;margin:0 0 4px;color:var(--sun);}
+  .panel p{margin:0 0 16px;font-size:14px;opacity:.8;}
+  .panel h3{
+    font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;opacity:.65;margin:20px 0 9px;font-weight:700;
+  }
+  .opts{display:flex;gap:8px;flex-wrap:wrap;}
+  .opts button{
+    font-family:'Fredoka',sans-serif;font-weight:600;font-size:15px;
+    background:rgba(255,255,255,.08);color:var(--cream);
+    border:2.5px solid rgba(255,244,220,.22);border-radius:11px;padding:10px 18px;cursor:pointer;
+  }
+  .opts button[aria-pressed="true"]{background:var(--teal);border-color:var(--teal);color:#0C2B2B;}
+  .opts button:focus-visible{outline:3px solid var(--sun);outline-offset:2px;}
+  .names{display:grid;gap:8px;}
+  .names input{
+    font-family:'Fredoka',sans-serif;font-size:15px;background:rgba(0,0,0,.25);color:var(--cream);
+    border:2.5px solid rgba(255,244,220,.2);border-radius:11px;padding:11px 14px;width:100%;
+  }
+  .names input:focus{outline:none;border-color:var(--sun);}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:.08em;}
+  .legend i{font-style:normal;padding:5px 9px;border-radius:6px;color:#1A0C33;font-weight:700;}
+  .tally{text-align:center;font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;opacity:.6;margin-top:16px;}
+
+  /* ---------- results ---------- */
+  .result{display:flex;align-items:center;gap:14px;background:var(--cream);color:var(--ink);border-radius:13px;padding:14px 16px;margin-bottom:9px;}
+  .result .rank{font-family:'Bungee',cursive;font-size:22px;color:var(--coral);min-width:34px;}
+  .result .who{flex:1;font-weight:600;font-size:17px;}
+  .result .pts{font-family:'Courier Prime',monospace;font-weight:700;font-size:15px;}
+  .result.win{box-shadow:0 0 0 4px var(--sun);}
+  .verdict{font-family:'Bungee',cursive;font-size:clamp(20px,6vw,30px);text-align:center;margin:6px 0 18px;color:var(--sun);}
+
+  .hidden{display:none !important;}
+  @media (max-width:430px){
+    .stub{width:66px;flex:0 0 66px;}
+    .tier-letter{font-size:32px;}
+    .ticket-body{padding:16px 15px 18px;}
+    .stamp{position:static;display:inline-block;margin-top:14px;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow" id="eyebrow">All things Disney</p>
+    <h1>Ticket Book<br>Trivia</h1>
+  </header>
+
+  <!-- ============ SETUP ============ -->
+  <section id="setup">
+    <div class="panel">
+      <h2>Pick a category</h2>
+      <p>The whole round comes from the one you choose.</p>
+      <div class="opts" id="category" role="group" aria-label="Category"></div>
+      <h3>Who's playing?</h3>
+      <div class="opts" id="count" role="group" aria-label="Number of players"></div>
+      <h3>Names</h3>
+      <div class="names" id="names"></div>
+      <h3>Time per ticket</h3>
+      <div class="opts" id="timing" role="group" aria-label="Time per question"></div>
+      <div class="legend">
+        <i style="background:var(--teal)">A = 1 pt</i>
+        <i style="background:var(--sun)">B = 2 pts</i>
+        <i style="background:var(--tangerine)">C = 3 pts</i>
+        <i style="background:var(--coral)">D = 4 pts</i>
+        <i style="background:var(--grape)">E = 5 pts</i>
+      </div>
+    </div>
+    <div class="center"><button class="btn" id="start">Start the round</button></div>
+    <p class="tally" id="tally"></p>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="game" class="hidden">
+    <div class="bar">
+      <span class="progress" id="progress">Ticket 1 of 15</span>
+      <span class="turn" id="turn"></span>
+    </div>
+    <div class="scores" id="scores"></div>
+
+    <article class="ticket" id="ticket">
+      <div class="stub">
+        <span class="tier-letter" id="tierLetter">A</span>
+        <span class="tier-word" id="tierWord">1 point</span>
+        <span class="notch top"></span>
+        <span class="notch bot"></span>
+      </div>
+      <div class="ticket-body">
+        <div class="serial">
+          <span id="serial">No. 71-0001</span>
+          <span id="ticketTag">Admit One</span>
+        </div>
+        <h2 class="question" id="question">Question</h2>
+        <div class="clock" id="clock">
+          <div class="clock-track"><div class="clock-fill" id="clockFill"></div></div>
+          <span class="clock-num" id="clockNum">10s</span>
+        </div>
+        <div class="answers" id="answers"></div>
+        <div id="stampSlot" aria-live="polite"></div>
+      </div>
+    </article>
+
+    <div class="center"><button class="btn hidden" id="next">Next ticket</button></div>
+    <div class="strip" id="strip"><span class="label">Tickets punched</span></div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="end" class="hidden">
+    <p class="verdict" id="verdict"></p>
+    <div id="results"></div>
+    <div class="center">
+      <button class="btn" id="again">Play another round</button>
+      <div style="margin-top:12px"><button class="btn ghost" id="newPlayers">Change setup</button></div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const TIERS = {
+  A:{pts:1,color:'#14C4C0',word:'1 point'},
+  B:{pts:2,color:'#FFC53D',word:'2 points'},
+  C:{pts:3,color:'#FF8A2B',word:'3 points'},
+  D:{pts:4,color:'#FF5C7A',word:'4 points'},
+  E:{pts:5,color:'#8B5CF6',word:'5 points'}
+};
+
+/* ============================================================
+   THE TICKET BOOK — categories, each with questions by tier
+   ============================================================ */
+const CATEGORIES = {
+
+disney:{ label:'Disney', tagline:'All things Disney', bank:{
+
+/* ---------- A: 1 point ---------- */
+A:[
+{q:"Who is Mickey Mouse's sweetheart?",o:["Daisy Duck","Minnie Mouse","Clarabelle Cow","Clarice"],a:"Minnie Mouse"},
+{q:"Which dog is Mickey's pet?",o:["Goofy","Pluto","Bolt","Copper"],a:"Pluto"},
+{q:"Who is Donald Duck's girlfriend?",o:["Daisy Duck","Della Duck","Minnie Mouse","Clarabelle Cow"],a:"Daisy Duck"},
+{q:"What kind of animal is Dumbo?",o:["A giraffe","A mouse","An elephant","A rhino"],a:"An elephant"},
+{q:"Whose nose grows when he tells a lie?",o:["Pinocchio","Peter Pan","Jiminy Cricket","Geppetto"],a:"Pinocchio"},
+{q:"Which princess loses a glass slipper at the ball?",o:["Aurora","Belle","Cinderella","Snow White"],a:"Cinderella"},
+{q:"Which mermaid dreams of life on land?",o:["Ariel","Moana","Ursula","Melody"],a:"Ariel"},
+{q:"Which crab looks after Ariel?",o:["Sebastian","Flounder","Scuttle","Tamatoa"],a:"Sebastian"},
+{q:"Who is Simba's father in The Lion King?",o:["Scar","Mufasa","Rafiki","Zazu"],a:"Mufasa"},
+{q:"Which warthog sings with Timon?",o:["Pumbaa","Zazu","Ed","Banzai"],a:"Pumbaa"},
+{q:"Which meerkat is Pumbaa's best friend?",o:["Rafiki","Timon","Nala","Kovu"],a:"Timon"},
+{q:"Which Frozen snowman loves warm hugs?",o:["Marshmallow","Sven","Olaf","Kristoff"],a:"Olaf"},
+{q:"Who is Elsa's younger sister?",o:["Anna","Rapunzel","Honeymaren","Merida"],a:"Anna"},
+{q:"What powers does Elsa have?",o:["Fire","Ice and snow","Flight","Invisibility"],a:"Ice and snow"},
+{q:"What kind of toy is Woody?",o:["A space ranger","A cowboy doll","A piggy bank","A dinosaur"],a:"A cowboy doll"},
+{q:"What is Buzz Lightyear?",o:["A robot dog","A space ranger","A toy soldier","A cowboy"],a:"A space ranger"},
+{q:"Which clownfish goes missing?",o:["Dory","Marlin","Nemo","Bruce"],a:"Nemo"},
+{q:"Who is Nemo's worried father?",o:["Gill","Marlin","Crush","Nigel"],a:"Marlin"},
+{q:"Which blue fish keeps forgetting things?",o:["Dory","Bubbles","Deb","Destiny"],a:"Dory"},
+{q:"What kind of animal is Bambi?",o:["A rabbit","A deer","A fox","A skunk"],a:"A deer"},
+{q:"Cruella de Vil wants coats made from which puppies?",o:["Poodles","Dalmatians","Beagles","Corgis"],a:"Dalmatians"},
+{q:"How many dwarfs live with Snow White?",o:["Five","Six","Seven","Eight"],a:"Seven"},
+{q:"Which of the seven dwarfs never speaks?",o:["Bashful","Sleepy","Dopey","Sneezy"],a:"Dopey"},
+{q:"What poisoned food does Snow White eat?",o:["A pear","An apple","A cake","A plum"],a:"An apple"},
+{q:"What is the name of Aladdin's monkey?",o:["Abu","Rajah","Iago","Meeko"],a:"Abu"},
+{q:"What kind of animal is Jasmine's pet Rajah?",o:["A lion","A tiger","A panther","A leopard"],a:"A tiger"},
+{q:"In Beauty and the Beast, what is Lumiere?",o:["A clock","A teapot","A candelabra","A wardrobe"],a:"A candelabra"},
+{q:"What is Rapunzel famous for in Tangled?",o:["Her singing","Her very long hair","Her sword","Her wings"],a:"Her very long hair"},
+{q:"What kind of animal is Rapunzel's friend Pascal?",o:["A chameleon","A frog","A lizard","A gecko"],a:"A chameleon"},
+{q:"Which demigod does Moana set out to find?",o:["Maui","Tamatoa","Chief Tui","Te Ka"],a:"Maui"},
+{q:"What is Winnie the Pooh's favorite food?",o:["Berries","Honey","Acorns","Carrots"],a:"Honey"},
+{q:"Which gloomy donkey is Pooh's friend?",o:["Eeyore","Piglet","Rabbit","Owl"],a:"Eeyore"},
+{q:"What kind of animal is Tigger?",o:["A tiger","A cat","A lion","A leopard"],a:"A tiger"},
+{q:"Which race car stars in Cars?",o:["Doc Hudson","Lightning McQueen","Mater","Chick Hicks"],a:"Lightning McQueen"},
+{q:"Which fairy is Peter Pan's friend?",o:["Tinker Bell","The Blue Fairy","Merryweather","Vidia"],a:"Tinker Bell"},
+{q:"Who is Peter Pan's pirate enemy?",o:["Captain Hook","Mr. Smee","Blackbeard","Long John Silver"],a:"Captain Hook"},
+{q:"What ticks inside the crocodile chasing Captain Hook?",o:["A bomb","A clock","A bell","A music box"],a:"A clock"},
+{q:"Where does Peter Pan live?",o:["Wonderland","Neverland","Arendelle","Agrabah"],a:"Neverland"},
+{q:"What kind of animal is Baloo in The Jungle Book?",o:["A bear","A panther","A tiger","A wolf"],a:"A bear"},
+{q:"Who is the boy raised in the jungle by wolves?",o:["Tarzan","Mowgli","Peter","Kuzco"],a:"Mowgli"},
+{q:"What kind of animal is Zootopia's Judy Hopps?",o:["A fox","A rabbit","A sloth","A sheep"],a:"A rabbit"},
+{q:"Which film has two dogs sharing a plate of spaghetti?",o:["Lady and the Tramp","101 Dalmatians","Oliver and Company","The Fox and the Hound"],a:"Lady and the Tramp"},
+{q:"Which movie is Stitch from?",o:["Lilo and Stitch","Treasure Planet","Chicken Little","Meet the Robinsons"],a:"Lilo and Stitch"},
+{q:"What is the kingdom in Frozen called?",o:["Corona","Arendelle","Agrabah","DunBroch"],a:"Arendelle"},
+{q:"Which Disney park is in Anaheim, California?",o:["Disneyland","Magic Kingdom","EPCOT","Disney California Adventure"],a:"Disneyland"},
+{q:"Which two mice help Cinderella with her dress?",o:["Bernard and Bianca","Gus and Jaq","Timothy and Dumbo","Chip and Dale"],a:"Gus and Jaq"},
+{q:"What kind of animal is Robin Hood in Disney's version?",o:["A fox","A wolf","A lion","A bear"],a:"A fox"},
+{q:"Which Disney film features a flying carpet?",o:["Aladdin","Hercules","Mulan","Tarzan"],a:"Aladdin"}
+],
+
+/* ---------- B: 2 points ---------- */
+B:[
+{q:"What year did Disneyland open in California?",o:["1949","1955","1961","1971"],a:"1955"},
+{q:"Which cartoon short introduced Mickey Mouse with sound?",o:["Steamboat Willie","Plane Crazy","The Karnival Kid","Fantasia"],a:"Steamboat Willie"},
+{q:"What was Disney's first full-length animated film?",o:["Pinocchio","Snow White and the Seven Dwarfs","Fantasia","Dumbo"],a:"Snow White and the Seven Dwarfs"},
+{q:"What name was Mickey almost given?",o:["Marvin Mouse","Mortimer Mouse","Milton Mouse","Morris Mouse"],a:"Mortimer Mouse"},
+{q:"What are the names of Donald Duck's three nephews?",o:["Huey, Dewey and Louie","Chip, Dale and Clarice","Moe, Larry and Curly","Abner, Elmer and Gus"],a:"Huey, Dewey and Louie"},
+{q:"Who is the villain in Sleeping Beauty?",o:["Maleficent","The Evil Queen","Ursula","Lady Tremaine"],a:"Maleficent"},
+{q:"What is the princess called in Sleeping Beauty?",o:["Aurora","Odette","Belle","Giselle"],a:"Aurora"},
+{q:"Name the three good fairies in Sleeping Beauty.",o:["Flora, Fauna and Merryweather","Hope, Faith and Charity","Iris, Lily and Rose","Vidia, Rosetta and Silvermist"],a:"Flora, Fauna and Merryweather"},
+{q:"Which Frozen song won the Academy Award for Best Original Song?",o:["Let It Go","Do You Want to Build a Snowman","For the First Time in Forever","Love Is an Open Door"],a:"Let It Go"},
+{q:"What is the name of Kristoff's reindeer?",o:["Sven","Comet","Olaf","Bruni"],a:"Sven"},
+{q:"What is Kristoff's job in Frozen?",o:["Blacksmith","Ice harvester","Royal guard","Sailor"],a:"Ice harvester"},
+{q:"What is the name of the rat who wants to cook in Ratatouille?",o:["Emile","Remy","Django","Linguini"],a:"Remy"},
+{q:"Which Pixar film takes place mostly inside a girl's mind?",o:["Soul","Inside Out","Onward","Brave"],a:"Inside Out"},
+{q:"Which of these is NOT one of the five original emotions in Inside Out?",o:["Joy","Anxiety","Disgust","Anger"],a:"Anxiety"},
+{q:"Which two monsters are the stars of Monsters, Inc.?",o:["Sulley and Mike","Randall and Roz","Fungus and Celia","Boo and Needleman"],a:"Sulley and Mike"},
+{q:"Which Pixar film follows a robot left to clean up Earth?",o:["WALL-E","Meet the Robinsons","Big Hero 6","Treasure Planet"],a:"WALL-E"},
+{q:"What is the name of the grumpy old man in Up?",o:["Carl Fredricksen","Charles Muntz","Russell","Frank"],a:"Carl Fredricksen"},
+{q:"Which young Wilderness Explorer stows away in Up?",o:["Dug","Kevin","Russell","Andy"],a:"Russell"},
+{q:"Coco takes place during which holiday?",o:["Day of the Dead","Christmas","Carnival","Midsummer"],a:"Day of the Dead"},
+{q:"Which Disney heroine disguises herself as a soldier?",o:["Mulan","Merida","Pocahontas","Tiana"],a:"Mulan"},
+{q:"What is the name of Mulan's small dragon guardian?",o:["Mushu","Cri-Kee","Khan","Sisu"],a:"Mushu"},
+{q:"What kind of animal is Pocahontas's friend Meeko?",o:["A raccoon","A hummingbird","An otter","A squirrel"],a:"A raccoon"},
+{q:"What is Tiana's big dream in The Princess and the Frog?",o:["To open a restaurant","To marry a prince","To sail the world","To sing on stage"],a:"To open a restaurant"},
+{q:"Which city is The Princess and the Frog set in?",o:["Savannah","New Orleans","Charleston","Memphis"],a:"New Orleans"},
+{q:"What is the name of Hercules' winged horse?",o:["Pegasus","Phil","Zeus","Nessus"],a:"Pegasus"},
+{q:"Who is Hercules' father?",o:["Hades","Zeus","Poseidon","Apollo"],a:"Zeus"},
+{q:"What is the name of the gorilla who raises Tarzan?",o:["Kala","Kerchak","Terk","Sabor"],a:"Kala"},
+{q:"Which musician wrote and performed the songs for Tarzan?",o:["Elton John","Phil Collins","Sting","Randy Newman"],a:"Phil Collins"},
+{q:"Which U.S. state is Lilo and Stitch set in?",o:["Hawaii","Florida","California","Alaska"],a:"Hawaii"},
+{q:"What is Stitch's experiment number?",o:["101","626","113","224"],a:"626"},
+{q:"Which sly fox teams up with Judy Hopps?",o:["Nick Wilde","Finnick","Gideon Grey","Robin"],a:"Nick Wilde"},
+{q:"Which film features the inflatable robot Baymax?",o:["Big Hero 6","Wreck-It Ralph","Meet the Robinsons","Chicken Little"],a:"Big Hero 6"},
+{q:"What is the family surname in Encanto?",o:["Madrigal","Mendoza","Rivera","Marquez"],a:"Madrigal"},
+{q:"Which country is Encanto set in?",o:["Mexico","Colombia","Peru","Brazil"],a:"Colombia"},
+{q:"Which Encanto character does the family avoid talking about?",o:["Bruno","Camilo","Felix","Agustin"],a:"Bruno"},
+{q:"What is the name of Moana's island?",o:["Motunui","Te Fiti","Lalotai","Kokomo"],a:"Motunui"},
+{q:"Which scatterbrained rooster joins Moana's voyage?",o:["Heihei","Pua","Tamatoa","Kakamora"],a:"Heihei"},
+{q:"What is the name of the dragon in Raya and the Last Dragon?",o:["Sisu","Mushu","Elliot","Maleficent"],a:"Sisu"},
+{q:"Who owns the toys in the first Toy Story?",o:["Sid","Andy","Bonnie","Emily"],a:"Andy"},
+{q:"Which neighbor kid destroys toys in Toy Story?",o:["Sid","Al","Andy","Randy"],a:"Sid"},
+{q:"Which cowgirl doll joins the gang in Toy Story 2?",o:["Jessie","Bo Peep","Dolly","Trixie"],a:"Jessie"},
+{q:"Which rusty tow truck is Lightning McQueen's best friend?",o:["Mater","Doc","Luigi","Sarge"],a:"Mater"},
+{q:"What is the family surname in The Incredibles?",o:["Parr","Pine","Powers","Prince"],a:"Parr"},
+{q:"What is Mr. Incredible's real name?",o:["Bob Parr","Rick Dicker","Lucius Best","Buddy Pine"],a:"Bob Parr"},
+{q:"What is Elastigirl's real first name?",o:["Helen","Violet","Edna","Mirage"],a:"Helen"},
+{q:"Which Pixar film follows an ant colony and a circus troupe?",o:["A Bug's Life","Antz","Bee Movie","The Good Dinosaur"],a:"A Bug's Life"},
+{q:"Which city's harbor does Nemo end up near?",o:["Sydney","Melbourne","Auckland","Brisbane"],a:"Sydney"},
+{q:"Which emperor is turned into a llama?",o:["Kuzco","Kronk","Pacha","Yzma"],a:"Kuzco"},
+{q:"What kind of animal is the movie star Bolt?",o:["A dog","A cat","A hamster","A pigeon"],a:"A dog"},
+{q:"Which Disney film features the song The Bare Necessities?",o:["The Jungle Book","Robin Hood","The Aristocats","Tarzan"],a:"The Jungle Book"}
+],
+
+/* ---------- C: 3 points ---------- */
+C:[
+{q:"What year did Snow White and the Seven Dwarfs premiere?",o:["1928","1937","1942","1950"],a:"1937"},
+{q:"Who provided Mickey Mouse's original voice?",o:["Walt Disney","Roy Disney","Ub Iwerks","Cliff Edwards"],a:"Walt Disney"},
+{q:"Which character did Walt create before Mickey Mouse?",o:["Oswald the Lucky Rabbit","Felix the Cat","Bugs Bunny","Horace Horsecollar"],a:"Oswald the Lucky Rabbit"},
+{q:"What was the first fully computer-animated feature film?",o:["Toy Story","Shrek","A Bug's Life","Antz"],a:"Toy Story"},
+{q:"What year was Toy Story released?",o:["1991","1993","1995","1998"],a:"1995"},
+{q:"Which animated film was the first ever nominated for Best Picture?",o:["Beauty and the Beast","The Lion King","Aladdin","Up"],a:"Beauty and the Beast"},
+{q:"Which studio did Disney buy in 2006?",o:["Pixar","Marvel","Lucasfilm","DreamWorks"],a:"Pixar"},
+{q:"In what year did Disney acquire Marvel?",o:["2005","2009","2012","2015"],a:"2009"},
+{q:"In what year did Disney acquire Lucasfilm?",o:["2006","2009","2012","2016"],a:"2012"},
+{q:"Which film opens with the song Circle of Life?",o:["The Lion King","Tarzan","Brother Bear","Pocahontas"],a:"The Lion King"},
+{q:"Who voices Mushu in Mulan?",o:["Eddie Murphy","Chris Rock","Martin Lawrence","Robin Williams"],a:"Eddie Murphy"},
+{q:"Who voiced the Genie in the 1992 Aladdin?",o:["Robin Williams","Nathan Lane","Danny DeVito","Steve Martin"],a:"Robin Williams"},
+{q:"What breaks the Beast's curse in Beauty and the Beast?",o:["He must love and be loved in return","He must find the mirror","He must defeat Gaston","He must leave the castle"],a:"He must love and be loved in return"},
+{q:"What is the name of Belle's father?",o:["Maurice","Marcel","Henri","Gaston"],a:"Maurice"},
+{q:"Who is Gaston's bumbling sidekick?",o:["LeFou","Cogsworth","Chip","Philippe"],a:"LeFou"},
+{q:"Which villain carries a snake-headed staff?",o:["Jafar","Hades","Scar","Frollo"],a:"Jafar"},
+{q:"What are the names of Ursula's two eels?",o:["Flotsam and Jetsam","Pain and Panic","Banzai and Ed","Kaa and Shere"],a:"Flotsam and Jetsam"},
+{q:"How many sisters does Ariel have?",o:["Three","Five","Six","Nine"],a:"Six"},
+{q:"What is the name of Ariel's fish friend?",o:["Flounder","Scuttle","Sebastian","Bubbles"],a:"Flounder"},
+{q:"What does the Swahili word simba mean?",o:["Lion","King","Brave","Friend"],a:"Lion"},
+{q:"What does the name Rafiki mean in Swahili?",o:["Friend","Wise one","Monkey","Elder"],a:"Friend"},
+{q:"What does hakuna matata mean?",o:["No worries","Good morning","Long live the king","Together forever"],a:"No worries"},
+{q:"What is the name of the Pixar lamp in the studio's logo?",o:["Luxo Jr.","Lampy","Pixie","Bulb"],a:"Luxo Jr."},
+{q:"Which code number is hidden as an Easter egg in nearly every Pixar film?",o:["A113","1928","B227","C3PO"],a:"A113"},
+{q:"Which Pixar film was the first to win the Best Animated Feature Oscar?",o:["Monsters, Inc.","Finding Nemo","The Incredibles","Toy Story 2"],a:"Finding Nemo"},
+{q:"Who bought Pixar in 1986 and led it for years before Disney?",o:["Steve Jobs","Bill Gates","George Lucas","Michael Eisner"],a:"Steve Jobs"},
+{q:"Frozen is loosely based on which fairy tale?",o:["The Snow Queen","The Ice Princess","The Nutcracker","The Little Match Girl"],a:"The Snow Queen"},
+{q:"Which author wrote the original story behind The Little Mermaid?",o:["Hans Christian Andersen","The Brothers Grimm","Charles Perrault","Rudyard Kipling"],a:"Hans Christian Andersen"},
+{q:"Which Disney film is based on a Victor Hugo novel?",o:["The Hunchback of Notre Dame","Beauty and the Beast","Treasure Planet","Oliver and Company"],a:"The Hunchback of Notre Dame"},
+{q:"What is the name of the bell ringer of Notre Dame?",o:["Quasimodo","Frollo","Phoebus","Clopin"],a:"Quasimodo"},
+{q:"Treasure Planet is a space retelling of which novel?",o:["Treasure Island","Moby Dick","Robinson Crusoe","Kidnapped"],a:"Treasure Island"},
+{q:"Who is the young linguist hero of Atlantis: The Lost Empire?",o:["Milo Thatch","Jim Hawkins","Lewis Robinson","Cody"],a:"Milo Thatch"},
+{q:"Which Pixar film is set on the Italian Riviera?",o:["Luca","Cars 2","Coco","Onward"],a:"Luca"},
+{q:"In Turning Red, what does Mei turn into?",o:["A giant red panda","A dragon","A fox","A tiger"],a:"A giant red panda"},
+{q:"Which city is Turning Red set in?",o:["Toronto","Vancouver","Seattle","Chicago"],a:"Toronto"},
+{q:"What is the name of the music teacher at the center of Soul?",o:["Joe Gardner","Dez","Curley","Paul"],a:"Joe Gardner"},
+{q:"Which instrument does Joe play in Soul?",o:["Piano","Trumpet","Saxophone","Bass"],a:"Piano"},
+{q:"What is the name of the boy who travels to the Land of the Dead in Coco?",o:["Miguel","Hector","Ernesto","Mateo"],a:"Miguel"},
+{q:"What is the name of Miguel's scruffy dog in Coco?",o:["Dante","Pepita","Chico","Coco"],a:"Dante"},
+{q:"Which Disney park opened in 1983?",o:["Tokyo Disneyland","Disneyland Paris","Hong Kong Disneyland","EPCOT"],a:"Tokyo Disneyland"},
+{q:"What year did Disneyland Paris open?",o:["1987","1992","1996","2001"],a:"1992"},
+{q:"What year did Shanghai Disneyland open?",o:["2005","2011","2016","2019"],a:"2016"},
+{q:"Which Disney resort opened in 2005?",o:["Hong Kong Disneyland","Shanghai Disneyland","Tokyo DisneySea","Disneyland Paris"],a:"Hong Kong Disneyland"},
+{q:"Which Magic Kingdom land is the Haunted Mansion in?",o:["Frontierland","Liberty Square","Fantasyland","Adventureland"],a:"Liberty Square"},
+{q:"How many happy haunts are said to live in the Haunted Mansion?",o:["99","666","999","1,313"],a:"999"},
+{q:"How tall is Cinderella Castle at Magic Kingdom?",o:["129 feet","189 feet","250 feet","320 feet"],a:"189 feet"},
+{q:"How many country pavilions circle EPCOT's World Showcase?",o:["8","11","14","20"],a:"11"},
+{q:"Which Hollywood Studios land is set on the planet Batuu?",o:["Toy Story Land","Star Wars: Galaxy's Edge","Pandora","Echo Lake"],a:"Star Wars: Galaxy's Edge"},
+{q:"Which Magic Kingdom attraction opened in 2024 where Splash Mountain stood?",o:["Tiana's Bayou Adventure","Journey of Water","Frozen Ever After","Rainbow Falls"],a:"Tiana's Bayou Adventure"},
+{q:"Which Walt Disney World hotel has the monorail running through its lobby?",o:["Polynesian Village","Grand Floridian","Contemporary Resort","Wilderness Lodge"],a:"Contemporary Resort"}
+],
+
+/* ---------- D: 4 points ---------- */
+D:[
+{q:"What was Walt Disney's middle name?",o:["Elias","Edward","Ellis","Emmett"],a:"Elias"},
+{q:"Which brother co-founded the studio with Walt?",o:["Roy O. Disney","Ray Disney","Herbert Disney","Robert Disney"],a:"Roy O. Disney"},
+{q:"In what year did Walt found his Hollywood studio with his brother?",o:["1919","1923","1928","1934"],a:"1923"},
+{q:"Which studio ended up owning Oswald the Lucky Rabbit, forcing Walt to create Mickey?",o:["Universal","Warner Bros.","MGM","Paramount"],a:"Universal"},
+{q:"Which Disney feature debuted the Fantasound stereo system?",o:["Fantasia","Pinocchio","Dumbo","Bambi"],a:"Fantasia"},
+{q:"In which Fantasia segment does Mickey play a wizard's helper?",o:["The Sorcerer's Apprentice","Night on Bald Mountain","The Nutcracker Suite","Rite of Spring"],a:"The Sorcerer's Apprentice"},
+{q:"Which conductor appears in Fantasia?",o:["Leopold Stokowski","Arturo Toscanini","Herbert von Karajan","Leonard Bernstein"],a:"Leopold Stokowski"},
+{q:"Which was Disney's second animated feature?",o:["Pinocchio","Fantasia","Dumbo","Bambi"],a:"Pinocchio"},
+{q:"Which Pinocchio song won the Academy Award for Best Original Song?",o:["When You Wish Upon a Star","Give a Little Whistle","I've Got No Strings","Hi-Diddle-Dee-Dee"],a:"When You Wish Upon a Star"},
+{q:"Which cricket serves as Pinocchio's conscience?",o:["Jiminy Cricket","Cri-Kee","Chester","Timothy"],a:"Jiminy Cricket"},
+{q:"What is the name of Geppetto's cat?",o:["Figaro","Cleo","Lucifer","Oliver"],a:"Figaro"},
+{q:"What is the name of Geppetto's goldfish?",o:["Cleo","Figaro","Bubbles","Marina"],a:"Cleo"},
+{q:"Who brings Pinocchio to life?",o:["The Blue Fairy","The Star Fairy","Jiminy Cricket","Geppetto"],a:"The Blue Fairy"},
+{q:"Which songwriting duo wrote the songs for The Little Mermaid?",o:["Alan Menken and Howard Ashman","Richard and Robert Sherman","Elton John and Tim Rice","Kristen Anderson-Lopez and Robert Lopez"],a:"Alan Menken and Howard Ashman"},
+{q:"Which lyricist died during the making of Beauty and the Beast?",o:["Howard Ashman","Tim Rice","Alan Menken","Stephen Schwartz"],a:"Howard Ashman"},
+{q:"Which lyricist worked with Elton John on The Lion King?",o:["Tim Rice","Howard Ashman","Stephen Schwartz","Randy Newman"],a:"Tim Rice"},
+{q:"Which Disney short first used the multiplane camera?",o:["The Old Mill","Flowers and Trees","The Three Little Pigs","Steamboat Willie"],a:"The Old Mill"},
+{q:"Which Silly Symphony was the first cartoon in full Technicolor?",o:["Flowers and Trees","The Old Mill","The Skeleton Dance","The Ugly Duckling"],a:"Flowers and Trees"},
+{q:"Which hit song came from The Three Little Pigs?",o:["Who's Afraid of the Big Bad Wolf","Heigh-Ho","Zip-A-Dee-Doo-Dah","Whistle While You Work"],a:"Who's Afraid of the Big Bad Wolf"},
+{q:"What nickname was given to Walt's core team of master animators?",o:["The Nine Old Men","The Ink Squad","The Founding Nine","The Animation Guild"],a:"The Nine Old Men"},
+{q:"Whose music was adapted for the Sleeping Beauty score?",o:["Tchaikovsky","Beethoven","Stravinsky","Debussy"],a:"Tchaikovsky"},
+{q:"What year was Mary Poppins released?",o:["1959","1964","1968","1971"],a:"1964"},
+{q:"Who won the Best Actress Oscar for playing Mary Poppins?",o:["Julie Andrews","Angela Lansbury","Hayley Mills","Audrey Hepburn"],a:"Julie Andrews"},
+{q:"Which actor played Bert the chimney sweep?",o:["Dick Van Dyke","David Tomlinson","Fred Astaire","Gene Kelly"],a:"Dick Van Dyke"},
+{q:"Which word from Mary Poppins is said when you have nothing to say?",o:["Supercalifragilisticexpialidocious","Bibbidi-Bobbidi-Boo","Abracadabra","Hocus Pocus"],a:"Supercalifragilisticexpialidocious"},
+{q:"Which Disney film features a flying bed and an apprentice witch?",o:["Bedknobs and Broomsticks","Pete's Dragon","The Love Bug","Escape to Witch Mountain"],a:"Bedknobs and Broomsticks"},
+{q:"Which Shakespeare play is The Lion King often compared to?",o:["Hamlet","Macbeth","King Lear","Othello"],a:"Hamlet"},
+{q:"Which actor voices Scar?",o:["Jeremy Irons","Anthony Hopkins","Ian McKellen","Alan Rickman"],a:"Jeremy Irons"},
+{q:"Which actor voices Mufasa in the 1994 film?",o:["James Earl Jones","Morgan Freeman","Danny Glover","Samuel L. Jackson"],a:"James Earl Jones"},
+{q:"Which actress voiced Ursula in The Little Mermaid?",o:["Pat Carroll","Eartha Kitt","Bette Midler","Angela Lansbury"],a:"Pat Carroll"},
+{q:"Which actress voiced Elsa in Frozen?",o:["Idina Menzel","Kristen Bell","Sutton Foster","Kelly Clarkson"],a:"Idina Menzel"},
+{q:"Which actress voiced Anna in Frozen?",o:["Kristen Bell","Anna Kendrick","Idina Menzel","Amy Adams"],a:"Kristen Bell"},
+{q:"Who wrote the songs for Encanto?",o:["Lin-Manuel Miranda","Alan Menken","Randy Newman","Robert Lopez"],a:"Lin-Manuel Miranda"},
+{q:"Which Coco song won the Academy Award for Best Original Song?",o:["Remember Me","Un Poco Loco","The World Es Mi Familia","Proud Corazon"],a:"Remember Me"},
+{q:"Which Moana song was nominated for Best Original Song?",o:["How Far I'll Go","You're Welcome","Shiny","We Know the Way"],a:"How Far I'll Go"},
+{q:"Which film won Best Animated Feature for 2013?",o:["Frozen","Big Hero 6","Brave","Wreck-It Ralph"],a:"Frozen"},
+{q:"What was Disney's Hollywood Studios called when it opened in 1989?",o:["Disney-MGM Studios","Disney Studio Park","Disney Backlot","Sunset Studios"],a:"Disney-MGM Studios"},
+{q:"In Tower of Terror, what is the hotel called?",o:["The Hollywood Tower Hotel","The Sunset Arms","The Twilight Inn","The Grand Californian"],a:"The Hollywood Tower Hotel"},
+{q:"What did the name EPCOT originally stand for?",o:["Experimental Prototype Community of Tomorrow","Every Person Comes Out Thrilled","Epic Center of Tomorrow","Exploration Park of Communities"],a:"Experimental Prototype Community of Tomorrow"},
+{q:"How tall is the mountain of Expedition Everest?",o:["144 feet","199 feet","265 feet","400 feet"],a:"199 feet"},
+{q:"Which reserve do you tour on Kilimanjaro Safaris?",o:["Harambe Wildlife Reserve","Serka Zong Reserve","Anandapur Preserve","Safari Village"],a:"Harambe Wildlife Reserve"},
+{q:"Which World Showcase pavilion has the Gran Fiesta Tour boat ride?",o:["Mexico","Norway","Morocco","Italy"],a:"Mexico"},
+{q:"Which Disney animated film features the villain Judge Claude Frollo?",o:["The Hunchback of Notre Dame","Pocahontas","Hercules","Mulan"],a:"The Hunchback of Notre Dame"},
+{q:"Which Disney film introduced the character Kida?",o:["Atlantis: The Lost Empire","Treasure Planet","Brother Bear","Home on the Range"],a:"Atlantis: The Lost Empire"}
+],
+
+/* ---------- E: 5 points ---------- */
+E:[
+{q:"What year was Steamboat Willie released?",o:["1923","1928","1932","1937"],a:"1928"},
+{q:"What date is celebrated as Mickey Mouse's birthday?",o:["November 18","October 1","July 17","December 5"],a:"November 18"},
+{q:"Wayne Allwine voiced Mickey for decades. Whom did he marry?",o:["Russi Taylor, the voice of Minnie","Pat Carroll, the voice of Ursula","Kathryn Beaumont, the voice of Alice","Ilene Woods, the voice of Cinderella"],a:"Russi Taylor, the voice of Minnie"},
+{q:"Which film did Jennifer Lee co-direct, making her Disney Animation's first woman feature director?",o:["Frozen","Moana","Zootopia","Encanto"],a:"Frozen"},
+{q:"What is the name of the demon on Bald Mountain in Fantasia?",o:["Chernabog","Chernomor","Nightmare","Baldur"],a:"Chernabog"},
+{q:"Which Pixar film had the working title The Bear and the Bow?",o:["Brave","Onward","Coco","Luca"],a:"Brave"},
+{q:"What is Andy's last name in Toy Story?",o:["Davis","Anderson","Miller","Barnes"],a:"Davis"},
+{q:"Who is the rival scarer in Monsters, Inc.?",o:["Randall Boggs","Henry Waternoose","Fungus","Needleman"],a:"Randall Boggs"},
+{q:"Where is Carl trying to move his house in Up?",o:["Paradise Falls","Angel Falls","Eagle Point","Cloud Ridge"],a:"Paradise Falls"},
+{q:"What was the name of Carl's wife in Up?",o:["Ellie","Edith","Elsie","Eva"],a:"Ellie"},
+{q:"What does Russell name the giant bird in Up?",o:["Kevin","Dug","Beta","Gamma"],a:"Kevin"},
+{q:"Which talking dog befriends Carl and Russell?",o:["Dug","Alpha","Beta","Bolt"],a:"Dug"},
+{q:"What is the name of WALL-E's cockroach companion?",o:["Hal","Mo","Gus","Roachy"],a:"Hal"},
+{q:"What is the name of the starship in WALL-E?",o:["Axiom","Odyssey","Elysium","Horizon"],a:"Axiom"},
+{q:"Which classic movie musical does WALL-E watch on repeat?",o:["Hello, Dolly!","Singin' in the Rain","The Music Man","Oklahoma!"],a:"Hello, Dolly!"},
+{q:"Who is the feared food critic in Ratatouille?",o:["Anton Ego","Auguste Gusteau","Skinner","Colette"],a:"Anton Ego"},
+{q:"What is the name of the restaurant in Ratatouille?",o:["Gusteau's","Le Bistro","Chez Remy","La Ratatouille"],a:"Gusteau's"},
+{q:"What is the name of Remy's food-loving brother?",o:["Emile","Django","Linguini","Horst"],a:"Emile"},
+{q:"In Beauty and the Beast, what object is Cogsworth?",o:["A clock","A teapot","A footstool","A wardrobe"],a:"A clock"},
+{q:"Who is Mrs. Potts' son?",o:["Chip","Lumiere","Cogsworth","Chipper"],a:"Chip"},
+{q:"What is the name of Jafar's parrot?",o:["Iago","Zazu","Abu","Rajah"],a:"Iago"},
+{q:"Which comedian voiced Iago in the 1992 Aladdin?",o:["Gilbert Gottfried","Jon Lovitz","Rick Moranis","Martin Short"],a:"Gilbert Gottfried"},
+{q:"What is the name of Mulan's horse?",o:["Khan","Cri-Kee","Maximus","Philippe"],a:"Khan"},
+{q:"Who is the villain leading the Huns in Mulan?",o:["Shan Yu","Chi-Fu","Li Shang","Yao"],a:"Shan Yu"},
+{q:"What is the name of Mulan's lucky cricket?",o:["Cri-Kee","Mushu","Chirp","Jiminy"],a:"Cri-Kee"},
+{q:"Which ancient tree gives Pocahontas advice?",o:["Grandmother Willow","Old Oak","Mother Birch","Elder Pine"],a:"Grandmother Willow"},
+{q:"Who trains Hercules to be a hero?",o:["Philoctetes","Pegasus","Hermes","Amphitryon"],a:"Philoctetes"},
+{q:"What are the names of Hades' two minions?",o:["Pain and Panic","Flotsam and Jetsam","Banzai and Ed","Pete and Repeat"],a:"Pain and Panic"},
+{q:"What do the three Fates in Hercules share between them?",o:["One eye","One tooth","One robe","One thread"],a:"One eye"},
+{q:"Who is Yzma's kind-hearted henchman?",o:["Kronk","Pacha","Bucky","Rudy"],a:"Kronk"},
+{q:"What is the name of Lilo's older sister?",o:["Nani","Mertle","Pleakley","Leilani"],a:"Nani"},
+{q:"Which alien scientist created Stitch?",o:["Jumba","Pleakley","Gantu","Cobra Bubbles"],a:"Jumba"},
+{q:"What is the name of the sloth working at the DMV in Zootopia?",o:["Flash","Bogo","Clawhauser","Finnick"],a:"Flash"},
+{q:"Who turns out to be the villain in Zootopia?",o:["Assistant Mayor Bellwether","Mayor Lionheart","Mr. Big","Duke Weaselton"],a:"Assistant Mayor Bellwether"},
+{q:"What is the name of the city in Big Hero 6?",o:["San Fransokyo","New Tokyo","Neo Francisco","Kyoto Bay"],a:"San Fransokyo"},
+{q:"Who is Hiro's older brother in Big Hero 6?",o:["Tadashi","Wasabi","Fred","Baymax"],a:"Tadashi"},
+{q:"Who leads the trolls in Frozen?",o:["Grand Pabbie","Bulda","Cliff","Marshmallow"],a:"Grand Pabbie"},
+{q:"Which visiting dignitary schemes against Elsa?",o:["The Duke of Weselton","The Earl of Corona","Lord Weaselby","The Baron of Vesterland"],a:"The Duke of Weselton"},
+{q:"Which prince betrays Anna in Frozen?",o:["Hans","Kristoff","Eugene","Naveen"],a:"Hans"},
+{q:"What is the name of the palace horse who chases Flynn Rider?",o:["Maximus","Philippe","Khan","Angus"],a:"Maximus"},
+{q:"What is Flynn Rider's real name?",o:["Eugene Fitzherbert","Edmund Fitzgerald","Eugene Fitzwilliam","Ewan Fitzroy"],a:"Eugene Fitzherbert"},
+{q:"Which giant treasure-hoarding crab does Moana meet?",o:["Tamatoa","Te Ka","Kakamora","Matangi"],a:"Tamatoa"},
+{q:"What is Luisa's gift in Encanto?",o:["Super strength","Healing","Talking to animals","Shapeshifting"],a:"Super strength"},
+{q:"What is Isabela's gift in Encanto?",o:["Making flowers bloom","Super hearing","Weather control","Seeing the future"],a:"Making flowers bloom"},
+{q:"Who is the musician Miguel idolizes in Coco?",o:["Ernesto de la Cruz","Hector Rivera","Chicharron","Juan Ortodoncia"],a:"Ernesto de la Cruz"},
+{q:"What is the name of the hatchet-wielding bride in the Haunted Mansion attic?",o:["Constance Hatchaway","Madame Leota","Little Leota","Emily Rose"],a:"Constance Hatchaway"},
+{q:"What are the service tunnels beneath Magic Kingdom called?",o:["The Utilidors","The Understory","The Backlot","The Undercroft"],a:"The Utilidors"},
+{q:"Which anniversary turned Cinderella Castle into a giant pink birthday cake?",o:["25th","10th","20th","50th"],a:"25th"},
+{q:"Which is the fastest ride at Walt Disney World?",o:["Test Track","Rock 'n' Roller Coaster","Slinky Dog Dash","Space Mountain"],a:"Test Track"},
+{q:"Roughly how many animal carvings cover the Tree of Life?",o:["More than 300","About 20","About 90","More than 2,000"],a:"More than 300"},
+{q:"Who was the original voice of the Haunted Mansion's Ghost Host?",o:["Paul Frees","Thurl Ravenscroft","Vincent Price","Walt Disney"],a:"Paul Frees"}
+]}},
+
+/* ============================================================
+   BIBLE — stories, people and places
+   ============================================================ */
+bible:{ label:'Bible', tagline:'Stories of the Bible', bank:{
+
+/* ---------- A: 1 point ---------- */
+A:[
+{q:"Who built the ark before the great flood?",o:["Noah","Abraham","Moses","Enoch"],a:"Noah"},
+{q:"What did God put in the sky as a promise after the flood?",o:["A rainbow","A star","A cloud","A dove"],a:"A rainbow"},
+{q:"Who was the first man God created?",o:["Adam","Cain","Seth","Abel"],a:"Adam"},
+{q:"Who was the first woman?",o:["Eve","Sarah","Mary","Naomi"],a:"Eve"},
+{q:"What was the name of the garden where Adam and Eve lived?",o:["Eden","Gethsemane","Canaan","Zion"],a:"Eden"},
+{q:"Which creature tempted Eve to eat the fruit?",o:["A serpent","A lion","A raven","A goat"],a:"A serpent"},
+{q:"Which brother killed Abel?",o:["Cain","Seth","Ham","Esau"],a:"Cain"},
+{q:"Who was thrown into the lions' den and kept safe?",o:["Daniel","David","Joseph","Elijah"],a:"Daniel"},
+{q:"Who was swallowed by a great fish?",o:["Jonah","Job","Jeremiah","Amos"],a:"Jonah"},
+{q:"How many days and nights was Jonah inside the fish?",o:["One","Three","Seven","Forty"],a:"Three"},
+{q:"Which city was Jonah told to preach to?",o:["Nineveh","Jericho","Babylon","Damascus"],a:"Nineveh"},
+{q:"Who defeated the giant Goliath?",o:["David","Saul","Samson","Jonathan"],a:"David"},
+{q:"What did David use to bring down Goliath?",o:["A sling and a stone","A sword","A spear","A bow"],a:"A sling and a stone"},
+{q:"Who led the Israelites out of slavery in Egypt?",o:["Moses","Joshua","Aaron","Abraham"],a:"Moses"},
+{q:"Which sea did God part so Israel could cross?",o:["The Red Sea","The Dead Sea","The Sea of Galilee","The Mediterranean"],a:"The Red Sea"},
+{q:"How many commandments did God give Moses?",o:["Five","Seven","Ten","Twelve"],a:"Ten"},
+{q:"What were the Ten Commandments written on?",o:["Stone tablets","A scroll","A wall","Papyrus"],a:"Stone tablets"},
+{q:"Baby Moses was hidden in a basket among what?",o:["Reeds by the river","A cave","A stable","A field"],a:"Reeds by the river"},
+{q:"In which town was Jesus born?",o:["Bethlehem","Nazareth","Jerusalem","Capernaum"],a:"Bethlehem"},
+{q:"What was baby Jesus laid in?",o:["A manger","A cradle","A basket","A boat"],a:"A manger"},
+{q:"Who was Jesus' mother?",o:["Mary","Martha","Elizabeth","Ruth"],a:"Mary"},
+{q:"Who was Mary's husband?",o:["Joseph","Zechariah","Simeon","Nathan"],a:"Joseph"},
+{q:"What led the wise men to Jesus?",o:["A star","A dream","An angel","A map"],a:"A star"},
+{q:"Who were watching their flocks when angels announced Jesus' birth?",o:["Shepherds","Fishermen","Soldiers","Farmers"],a:"Shepherds"},
+{q:"How many disciples did Jesus choose?",o:["Seven","Ten","Twelve","Forty"],a:"Twelve"},
+{q:"Who baptized Jesus?",o:["John the Baptist","Peter","Paul","Andrew"],a:"John the Baptist"},
+{q:"In which river was Jesus baptized?",o:["The Jordan","The Nile","The Euphrates","The Tigris"],a:"The Jordan"},
+{q:"What did Jesus turn water into at a wedding?",o:["Wine","Oil","Honey","Milk"],a:"Wine"},
+{q:"What did Jesus use to feed five thousand people?",o:["Five loaves and two fish","A basket of bread","Manna","Grain from a field"],a:"Five loaves and two fish"},
+{q:"What did Jesus walk on to reach his disciples' boat?",o:["Water","A bridge","The shore","A rope"],a:"Water"},
+{q:"Which disciple stepped out of the boat and began to sink?",o:["Peter","John","Thomas","Andrew"],a:"Peter"},
+{q:"Which disciple betrayed Jesus?",o:["Judas","Peter","Thomas","Philip"],a:"Judas"},
+{q:"What happened three days after Jesus was buried?",o:["He rose from the dead","He appeared in a dream","He sent an angel","He was carried to heaven"],a:"He rose from the dead"},
+{q:"What is the first book of the Bible?",o:["Genesis","Exodus","Matthew","Psalms"],a:"Genesis"},
+{q:"What is the last book of the Bible?",o:["Revelation","Malachi","Acts","Jude"],a:"Revelation"},
+{q:"On which day did God rest from creating?",o:["The seventh","The third","The sixth","The first"],a:"The seventh"},
+{q:"What did God create on the very first day?",o:["Light","Animals","Stars","The sea"],a:"Light"},
+{q:"Who was given a beautiful coat by his father Jacob?",o:["Joseph","Benjamin","Judah","Reuben"],a:"Joseph"},
+{q:"What did Joseph's brothers do to him?",o:["Sold him into slavery","Sent him to school","Made him king","Left him at home"],a:"Sold him into slavery"},
+{q:"Whose great strength was connected to his long hair?",o:["Samson","Gideon","Saul","Goliath"],a:"Samson"},
+{q:"Which king was known as the wisest man?",o:["Solomon","David","Saul","Hezekiah"],a:"Solomon"},
+{q:"Which shepherd boy grew up to be king of Israel?",o:["David","Samuel","Joshua","Caleb"],a:"David"},
+{q:"Which instrument did David play?",o:["A harp","A trumpet","A drum","A flute"],a:"A harp"},
+{q:"Which book of the Bible is a collection of songs and prayers?",o:["Psalms","Proverbs","Acts","Judges"],a:"Psalms"},
+{q:"Which garden did God plant the tree of life in?",o:["Eden","Gethsemane","Carmel","Sharon"],a:"Eden"},
+{q:"How many days did it rain during the great flood?",o:["Forty","Seven","Twelve","Three hundred"],a:"Forty"},
+{q:"What did Jesus often use to teach lessons?",o:["Parables","Riddles","Songs","Letters"],a:"Parables"},
+{q:"Who wrote many letters to the early churches?",o:["Paul","Pilate","Herod","Lazarus"],a:"Paul"},
+{q:"Who made the heavens and the earth?",o:["God","Adam","The angels","Moses"],a:"God"},
+{q:"Whose Son is Jesus?",o:["God's","Joseph's only","Abraham's","David's only"],a:"God's"},
+{q:"Why did Jesus die on the cross?",o:["To pay for our sins","To end a war","To prove he was strong","To teach a lesson only"],a:"To pay for our sins"},
+{q:"On which day of the week did Jesus rise from the dead?",o:["The first day","The seventh day","The third day of the month","The Sabbath"],a:"The first day"},
+{q:"What happened to Jesus after he appeared to his followers?",o:["He went up into heaven","He returned to Nazareth","He sailed away","He stayed hidden"],a:"He went up into heaven"},
+{q:"Whom did Jesus send to help his followers after he went to heaven?",o:["The Holy Spirit","An army of angels","John the Baptist","Elijah"],a:"The Holy Spirit"},
+{q:"What is the good news about Jesus called?",o:["The gospel","The law","The psalm","The proverb"],a:"The gospel"},
+{q:"What did Jesus tell his followers to do before he went to heaven?",o:["Tell the whole world about him","Build a temple","Stay in Jerusalem forever","Write a new law"],a:"Tell the whole world about him"}
+],
+
+/* ---------- B: 2 points ---------- */
+B:[
+{q:"How many people were saved on Noah's ark?",o:["Four","Six","Eight","Twelve"],a:"Eight"},
+{q:"Which bird returned to Noah with an olive leaf?",o:["A dove","A raven","An eagle","A sparrow"],a:"A dove"},
+{q:"Where did the ark come to rest?",o:["Mount Ararat","Mount Sinai","Mount Carmel","Mount Nebo"],a:"Mount Ararat"},
+{q:"Who was Abraham's wife?",o:["Sarah","Rebekah","Rachel","Hagar"],a:"Sarah"},
+{q:"What was the name of the son God promised to Abraham and Sarah?",o:["Isaac","Ishmael","Jacob","Joseph"],a:"Isaac"},
+{q:"What did God provide so Abraham would not have to sacrifice Isaac?",o:["A ram","A lamb","A dove","An ox"],a:"A ram"},
+{q:"Who were Isaac's twin sons?",o:["Jacob and Esau","Cain and Abel","Ephraim and Manasseh","James and John"],a:"Jacob and Esau"},
+{q:"Who traded his birthright for a bowl of stew?",o:["Esau","Jacob","Reuben","Levi"],a:"Esau"},
+{q:"What new name did God give Jacob?",o:["Israel","Abraham","Peter","Paul"],a:"Israel"},
+{q:"What did Jacob see angels climbing in his dream?",o:["A stairway to heaven","A mountain","A tower","A tree"],a:"A stairway to heaven"},
+{q:"How many sons did Jacob have?",o:["Seven","Ten","Twelve","Fourteen"],a:"Twelve"},
+{q:"Who interpreted Pharaoh's dreams about cows and grain?",o:["Joseph","Daniel","Moses","Aaron"],a:"Joseph"},
+{q:"How many plagues did God send on Egypt?",o:["Seven","Ten","Twelve","Three"],a:"Ten"},
+{q:"What was the first plague on Egypt?",o:["Water turned to blood","Frogs","Locusts","Darkness"],a:"Water turned to blood"},
+{q:"What was the last and most terrible plague?",o:["Death of the firstborn","Hail","Boils","Flies"],a:"Death of the firstborn"},
+{q:"What meal did the Israelites eat the night they left Egypt?",o:["The Passover","The Last Supper","The Feast of Booths","A wedding feast"],a:"The Passover"},
+{q:"What food did God send from heaven in the wilderness?",o:["Manna","Bread and fish","Honey","Figs"],a:"Manna"},
+{q:"How many years did the Israelites wander in the wilderness?",o:["Forty","Seven","Twelve","Seventy"],a:"Forty"},
+{q:"Who led Israel into the promised land after Moses died?",o:["Joshua","Caleb","Aaron","Gideon"],a:"Joshua"},
+{q:"Which city's walls fell down after Israel marched around them?",o:["Jericho","Jerusalem","Babylon","Ai"],a:"Jericho"},
+{q:"Who hid the Israelite spies in Jericho?",o:["Rahab","Ruth","Deborah","Hannah"],a:"Rahab"},
+{q:"Which woman served as a judge and leader of Israel?",o:["Deborah","Miriam","Esther","Abigail"],a:"Deborah"},
+{q:"Who laid out a wool fleece to be sure of God's calling?",o:["Gideon","Samson","Barak","Jephthah"],a:"Gideon"},
+{q:"Who cut Samson's hair and took away his strength?",o:["Delilah","Jezebel","Rahab","Michal"],a:"Delilah"},
+{q:"Who refused to leave her mother-in-law Naomi?",o:["Ruth","Orpah","Esther","Hannah"],a:"Ruth"},
+{q:"Whom did Ruth marry?",o:["Boaz","Obed","Jesse","Elimelech"],a:"Boaz"},
+{q:"Which boy heard God calling him in the night at the tabernacle?",o:["Samuel","David","Joash","Timothy"],a:"Samuel"},
+{q:"Who was the first king of Israel?",o:["Saul","David","Solomon","Samuel"],a:"Saul"},
+{q:"Which son of Saul was David's loyal friend?",o:["Jonathan","Ishbosheth","Absalom","Abner"],a:"Jonathan"},
+{q:"What did Solomon build in Jerusalem?",o:["The temple","The city wall","A palace for David","The tabernacle"],a:"The temple"},
+{q:"Which prophet was taken to heaven in a whirlwind?",o:["Elijah","Elisha","Isaiah","Ezekiel"],a:"Elijah"},
+{q:"Who received Elijah's cloak and became the next prophet?",o:["Elisha","Obadiah","Micaiah","Jehu"],a:"Elisha"},
+{q:"Who were the three men thrown into the fiery furnace?",o:["Shadrach, Meshach and Abednego","Peter, James and John","Daniel, Ezra and Nehemiah","Moses, Aaron and Hur"],a:"Shadrach, Meshach and Abednego"},
+{q:"Which queen bravely saved her people from Haman's plot?",o:["Esther","Vashti","Jezebel","Athaliah"],a:"Esther"},
+{q:"Who lost his family and health but stayed faithful to God?",o:["Job","Jeremiah","Hosea","Habakkuk"],a:"Job"},
+{q:"Which angel told Mary she would have a son?",o:["Gabriel","Michael","Raphael","Uriel"],a:"Gabriel"},
+{q:"In which town did Jesus grow up?",o:["Nazareth","Bethlehem","Bethany","Jericho"],a:"Nazareth"},
+{q:"What was Joseph's trade?",o:["Carpenter","Fisherman","Shepherd","Tentmaker"],a:"Carpenter"},
+{q:"How many days did Jesus fast in the wilderness?",o:["Forty","Seven","Three","Twelve"],a:"Forty"},
+{q:"Which disciple denied knowing Jesus three times?",o:["Peter","Judas","Thomas","John"],a:"Peter"},
+{q:"Which disciple said he would not believe until he touched Jesus' wounds?",o:["Thomas","Philip","Bartholomew","Simon"],a:"Thomas"},
+{q:"Which short tax collector climbed a tree to see Jesus?",o:["Zacchaeus","Matthew","Nicodemus","Jairus"],a:"Zacchaeus"},
+{q:"Whom did Jesus raise after four days in the tomb?",o:["Lazarus","Jairus' daughter","The widow's son","Malchus"],a:"Lazarus"},
+{q:"Which prayer did Jesus teach his disciples?",o:["The Lord's Prayer","The Shema","The Magnificat","The Benediction"],a:"The Lord's Prayer"},
+{q:"What is the name of the place where Jesus was crucified?",o:["Golgotha","Gethsemane","Bethesda","Siloam"],a:"Golgotha"},
+{q:"Which woman was first to find the tomb empty?",o:["Mary Magdalene","Martha","Salome","Joanna"],a:"Mary Magdalene"},
+{q:"Which of the disciples was a fisherman before following Jesus?",o:["Peter","Matthew","Judas","Nathanael"],a:"Peter"},
+{q:"What did God create human beings in?",o:["His own image","A day of rest","The seventh day","A cloud"],a:"His own image"},
+{q:"Which tower did people build hoping to reach the heavens?",o:["The Tower of Babel","The Tower of Siloam","The Tower of David","The Tower of Shechem"],a:"The Tower of Babel"},
+{q:"What happened to the builders of that tower?",o:["Their languages were confused","They were flooded","They were struck blind","They were made kings"],a:"Their languages were confused"},
+{q:"God loved the world so much that he gave whom?",o:["His only Son","His prophets","His angels","His law"],a:"His only Son"},
+{q:"Jesus told Nicodemus that a person must be what?",o:["Born again","Baptized in the sea","Circumcised","Taught the law"],a:"Born again"},
+{q:"What are the first four books of the New Testament called?",o:["The Gospels","The Letters","The Prophets","The Acts"],a:"The Gospels"},
+{q:"Which four men wrote the Gospels?",o:["Matthew, Mark, Luke and John","Peter, James, John and Jude","Paul, Silas, Timothy and Titus","Moses, Joshua, Samuel and Ezra"],a:"Matthew, Mark, Luke and John"},
+{q:"How long after the resurrection did Jesus go up to heaven?",o:["Forty days","Three days","One year","Seven days"],a:"Forty days"},
+{q:"Jesus said he is the way, the truth and what else?",o:["The life","The light of the law","The door of the temple","The rock"],a:"The life"},
+{q:"What did Jesus call himself, the good what?",o:["Shepherd","Farmer","Teacher","Builder"],a:"Shepherd"},
+{q:"What did John the Baptist call Jesus when he saw him coming?",o:["The Lamb of God","The King of Kings","The Son of Man","The Rock of Ages"],a:"The Lamb of God"}
+],
+
+/* ---------- C: 3 points ---------- */
+C:[
+{q:"Who was Abraham's nephew rescued from Sodom?",o:["Lot","Laban","Nahor","Eliezer"],a:"Lot"},
+{q:"What happened to Lot's wife when she looked back?",o:["She became a pillar of salt","She was struck blind","She turned to stone","She was carried away"],a:"She became a pillar of salt"},
+{q:"Who was the mother of Ishmael?",o:["Hagar","Sarah","Keturah","Rebekah"],a:"Hagar"},
+{q:"On which mountain did Moses receive the Ten Commandments?",o:["Mount Sinai","Mount Ararat","Mount Carmel","Mount Zion"],a:"Mount Sinai"},
+{q:"What was burning but not burning up when God spoke to Moses?",o:["A bush","A tree","An altar","A lamp"],a:"A bush"},
+{q:"Who spoke to Pharaoh on Moses' behalf?",o:["Aaron","Joshua","Hur","Caleb"],a:"Aaron"},
+{q:"Who was the sister who watched over baby Moses in the river?",o:["Miriam","Zipporah","Jochebed","Puah"],a:"Miriam"},
+{q:"What did Aaron's staff become before Pharaoh?",o:["A serpent","A river","A flame","A tree"],a:"A serpent"},
+{q:"What sacred chest held the stone tablets?",o:["The Ark of the Covenant","The Ark of Noah","The Bronze Altar","The Mercy Basket"],a:"The Ark of the Covenant"},
+{q:"How many spies did Moses send into Canaan?",o:["Twelve","Two","Seven","Forty"],a:"Twelve"},
+{q:"Which two spies gave a hopeful report about Canaan?",o:["Joshua and Caleb","Aaron and Hur","Nadab and Abihu","Dathan and Abiram"],a:"Joshua and Caleb"},
+{q:"How many times did Israel march around Jericho on the seventh day?",o:["Seven","One","Three","Twelve"],a:"Seven"},
+{q:"How many men did Gideon take into battle against the Midianites?",o:["300","3,000","30","1,000"],a:"300"},
+{q:"What did Samson use to defeat a thousand Philistines?",o:["The jawbone of a donkey","A sword","A sling","A wooden club"],a:"The jawbone of a donkey"},
+{q:"Which prophet anointed both Saul and David as king?",o:["Samuel","Nathan","Elijah","Gad"],a:"Samuel"},
+{q:"Which son of David led a rebellion against him?",o:["Absalom","Solomon","Amnon","Adonijah"],a:"Absalom"},
+{q:"What did Solomon ask God to give him?",o:["Wisdom","Riches","Long life","Victory in battle"],a:"Wisdom"},
+{q:"In Solomon's famous judgment, two women argued over what?",o:["A baby","A field","A necklace","A well"],a:"A baby"},
+{q:"Which queen traveled far to test Solomon with hard questions?",o:["The Queen of Sheba","Queen Esther","Queen Jezebel","Queen Athaliah"],a:"The Queen of Sheba"},
+{q:"On Mount Carmel, Elijah challenged the prophets of which god?",o:["Baal","Molech","Dagon","Asherah"],a:"Baal"},
+{q:"Which wicked queen hunted Elijah?",o:["Jezebel","Athaliah","Herodias","Michal"],a:"Jezebel"},
+{q:"Which army commander was healed of leprosy in the Jordan River?",o:["Naaman","Ben-Hadad","Sisera","Cornelius"],a:"Naaman"},
+{q:"How many times did Naaman have to dip in the river?",o:["Seven","Three","One","Twelve"],a:"Seven"},
+{q:"Which king was given fifteen more years of life after he prayed?",o:["Hezekiah","Josiah","Uzziah","Asa"],a:"Hezekiah"},
+{q:"Which prophet was lowered into a muddy cistern?",o:["Jeremiah","Ezekiel","Daniel","Amos"],a:"Jeremiah"},
+{q:"Which prophet saw a valley full of dry bones come to life?",o:["Ezekiel","Isaiah","Daniel","Zechariah"],a:"Ezekiel"},
+{q:"Who rebuilt the walls of Jerusalem after the exile?",o:["Nehemiah","Ezra","Zerubbabel","Haggai"],a:"Nehemiah"},
+{q:"Which scribe taught the law to the returning exiles?",o:["Ezra","Nehemiah","Malachi","Baruch"],a:"Ezra"},
+{q:"Which king dreamed of a great statue that Daniel explained?",o:["Nebuchadnezzar","Belshazzar","Darius","Cyrus"],a:"Nebuchadnezzar"},
+{q:"Which king saw a hand writing on the palace wall?",o:["Belshazzar","Nebuchadnezzar","Xerxes","Herod"],a:"Belshazzar"},
+{q:"Which disciple had been a tax collector?",o:["Matthew","Mark","Luke","Simon"],a:"Matthew"},
+{q:"Which two brothers did Jesus nickname the Sons of Thunder?",o:["James and John","Peter and Andrew","Philip and Bartholomew","Simon and Judas"],a:"James and John"},
+{q:"Which disciple first brought his brother Peter to Jesus?",o:["Andrew","John","Philip","Thomas"],a:"Andrew"},
+{q:"The Last Supper was a meal for which festival?",o:["Passover","Pentecost","Booths","Purim"],a:"Passover"},
+{q:"Where did Jesus pray the night before he was arrested?",o:["The Garden of Gethsemane","The Mount of Olives inn","The upper room","The temple courts"],a:"The Garden of Gethsemane"},
+{q:"Which Roman governor sentenced Jesus?",o:["Pontius Pilate","Herod Antipas","Felix","Festus"],a:"Pontius Pilate"},
+{q:"Who was forced to carry Jesus' cross?",o:["Simon of Cyrene","Joseph of Arimathea","Nicodemus","Barabbas"],a:"Simon of Cyrene"},
+{q:"Which parable tells of a son who wastes his money and comes home?",o:["The Prodigal Son","The Rich Fool","The Two Builders","The Talents"],a:"The Prodigal Son"},
+{q:"Which parable tells of a traveler helped after being beaten by robbers?",o:["The Good Samaritan","The Lost Sheep","The Sower","The Great Banquet"],a:"The Good Samaritan"},
+{q:"Which disciple was chosen to replace Judas?",o:["Matthias","Barnabas","Stephen","Silas"],a:"Matthias"},
+{q:"Who was blinded by a bright light on the road to Damascus?",o:["Saul","Stephen","Philip","Timothy"],a:"Saul"},
+{q:"What was Paul's name before it was changed?",o:["Saul","Silas","Simeon","Sosthenes"],a:"Saul"},
+{q:"On which day did the Holy Spirit come with tongues of fire?",o:["Pentecost","Passover","Sabbath","Purim"],a:"Pentecost"},
+{q:"How long did the flood waters rain down?",o:["Forty days and nights","Seven days","One hundred days","A whole year"],a:"Forty days and nights"},
+{q:"Where did God tell Abraham to take Isaac to be sacrificed?",o:["Mount Moriah","Mount Sinai","Mount Hermon","Mount Gilboa"],a:"Mount Moriah"},
+{q:"Which sea did Jesus calm during a storm?",o:["The Sea of Galilee","The Red Sea","The Dead Sea","The Mediterranean"],a:"The Sea of Galilee"},
+{q:"Which tribe of Israel served as priests?",o:["Levi","Judah","Benjamin","Dan"],a:"Levi"},
+{q:"What did Jesus say are the two greatest commandments?",o:["Love God and love your neighbor","Pray and fast","Give and forgive","Rest and worship"],a:"Love God and love your neighbor"},
+{q:"Paul wrote in Romans that all people have done what?",o:["Sinned and fallen short of God's glory","Forgotten the law","Refused the prophets","Left their homeland"],a:"Sinned and fallen short of God's glory"},
+{q:"According to Ephesians, we are saved by grace through faith, and not by what?",o:["Works","Prayer","Suffering","Learning"],a:"Works"},
+{q:"Which quality is listed first in the fruit of the Spirit?",o:["Love","Patience","Kindness","Self-control"],a:"Love"},
+{q:"In the armor of God, which piece is faith?",o:["The shield","The helmet","The sword","The belt"],a:"The shield"},
+{q:"In the armor of God, what is the sword of the Spirit?",o:["The word of God","Prayer","Truth","Righteousness"],a:"The word of God"},
+{q:"The Beatitudes come from which teaching of Jesus?",o:["The Sermon on the Mount","The Last Supper","The Olivet Discourse","The parable of the sower"],a:"The Sermon on the Mount"},
+{q:"Which name for Jesus means God with us?",o:["Immanuel","Messiah","Rabboni","Alpha"],a:"Immanuel"},
+{q:"What does the title Christ mean?",o:["Anointed One","Carpenter","Teacher","Saviour of Rome"],a:"Anointed One"},
+{q:"What happened to the temple curtain when Jesus died?",o:["It tore in two from top to bottom","It caught fire","It was taken down","It turned white"],a:"It tore in two from top to bottom"}
+],
+
+/* ---------- D: 4 points ---------- */
+D:[
+{q:"Who lived 969 years, the longest life in the Bible?",o:["Methuselah","Adam","Noah","Enoch"],a:"Methuselah"},
+{q:"Who walked with God and was taken away without dying?",o:["Enoch","Elijah","Moses","Melchizedek"],a:"Enoch"},
+{q:"What were the names of Noah's three sons?",o:["Shem, Ham and Japheth","Cain, Abel and Seth","Jacob, Esau and Levi","Peleg, Nahor and Terah"],a:"Shem, Ham and Japheth"},
+{q:"What was Abraham's name before God changed it?",o:["Abram","Aram","Amram","Abiel"],a:"Abram"},
+{q:"Whom did Jacob work fourteen years for in order to marry?",o:["Laban","Bethuel","Nahor","Eliezer"],a:"Laban"},
+{q:"Who were Jacob's two wives?",o:["Leah and Rachel","Sarah and Hagar","Ruth and Orpah","Mary and Martha"],a:"Leah and Rachel"},
+{q:"What did Jacob name the place where he wrestled until dawn?",o:["Peniel","Bethel","Shiloh","Mizpah"],a:"Peniel"},
+{q:"Who was the Egyptian officer who bought Joseph as a slave?",o:["Potiphar","Pharaoh","Asenath","Zaphenath"],a:"Potiphar"},
+{q:"How many years of famine did Joseph predict for Egypt?",o:["Seven","Three","Ten","Forty"],a:"Seven"},
+{q:"Who was Joseph's youngest brother?",o:["Benjamin","Judah","Reuben","Simeon"],a:"Benjamin"},
+{q:"Who was Moses' father-in-law?",o:["Jethro","Aaron","Hur","Korah"],a:"Jethro"},
+{q:"What was the name of Moses' wife?",o:["Zipporah","Miriam","Jochebed","Elisheba"],a:"Zipporah"},
+{q:"What did the Israelites put on their doorframes at the first Passover?",o:["The blood of a lamb","Oil","Ashes","Bitter herbs"],a:"The blood of a lamb"},
+{q:"What guided Israel through the wilderness by day and by night?",o:["A pillar of cloud and a pillar of fire","A bright star","The ark alone","A flock of birds"],a:"A pillar of cloud and a pillar of fire"},
+{q:"Who held up Moses' arms during the battle with the Amalekites?",o:["Aaron and Hur","Joshua and Caleb","Nadab and Abihu","Eleazar and Ithamar"],a:"Aaron and Hur"},
+{q:"What golden idol did Israel make while Moses was on the mountain?",o:["A calf","A serpent","An eagle","A bull's horn"],a:"A calf"},
+{q:"Why was Moses not allowed to enter the promised land?",o:["He struck the rock instead of speaking to it","He doubted the spies","He broke the tablets","He married a foreigner"],a:"He struck the rock instead of speaking to it"},
+{q:"On which mountain did Moses die after seeing the promised land?",o:["Mount Nebo","Mount Sinai","Mount Hor","Mount Pisgah Ridge"],a:"Mount Nebo"},
+{q:"Which left-handed judge defeated King Eglon?",o:["Ehud","Othniel","Shamgar","Barak"],a:"Ehud"},
+{q:"Who was Samuel's mother, who had prayed for a son?",o:["Hannah","Peninnah","Naomi","Abigail"],a:"Hannah"},
+{q:"Which priest raised Samuel at the tabernacle?",o:["Eli","Ahimelech","Zadok","Abiathar"],a:"Eli"},
+{q:"Whom did King Saul consult in secret at Endor?",o:["A medium","A prophet","A priest","A scribe"],a:"A medium"},
+{q:"Which woman did David wrongfully take as his wife?",o:["Bathsheba","Michal","Abigail","Ahinoam"],a:"Bathsheba"},
+{q:"Which prophet confronted David about his sin with a story of a lamb?",o:["Nathan","Gad","Samuel","Ahijah"],a:"Nathan"},
+{q:"Which son of Solomon saw the kingdom split in two?",o:["Rehoboam","Jeroboam","Abijah","Asa"],a:"Rehoboam"},
+{q:"Who led the ten northern tribes away from Rehoboam?",o:["Jeroboam","Omri","Ahab","Baasha"],a:"Jeroboam"},
+{q:"What were the two kingdoms called after the split?",o:["Israel and Judah","Samaria and Galilee","Canaan and Edom","Zion and Sharon"],a:"Israel and Judah"},
+{q:"Which empire carried the northern kingdom into captivity?",o:["Assyria","Babylon","Persia","Egypt"],a:"Assyria"},
+{q:"Which empire destroyed Jerusalem and took Judah into exile?",o:["Babylon","Assyria","Rome","Greece"],a:"Babylon"},
+{q:"Which Persian king allowed the exiles to return home?",o:["Cyrus","Darius","Xerxes","Artaxerxes"],a:"Cyrus"},
+{q:"Which prophet was told to marry Gomer as a picture of God's love?",o:["Hosea","Amos","Micah","Joel"],a:"Hosea"},
+{q:"Which prophet saw the Lord in the temple and answered, Here am I?",o:["Isaiah","Jeremiah","Ezekiel","Samuel"],a:"Isaiah"},
+{q:"Who was the cousin who raised Esther?",o:["Mordecai","Haman","Hegai","Memucan"],a:"Mordecai"},
+{q:"How old was Jesus when he was found teaching in the temple?",o:["Twelve","Eight","Sixteen","Thirty"],a:"Twelve"},
+{q:"Which ruler ordered the killing of the baby boys of Bethlehem?",o:["Herod the Great","Herod Antipas","Pontius Pilate","Caesar Augustus"],a:"Herod the Great"},
+{q:"Which ruler had John the Baptist beheaded?",o:["Herod Antipas","Herod the Great","Pilate","Caiaphas"],a:"Herod Antipas"},
+{q:"Who appeared with Jesus at the transfiguration?",o:["Moses and Elijah","Abraham and Isaac","David and Solomon","Peter and John"],a:"Moses and Elijah"},
+{q:"Which three disciples saw the transfiguration?",o:["Peter, James and John","Peter, Andrew and Philip","James, John and Thomas","Matthew, Mark and Luke"],a:"Peter, James and John"},
+{q:"Out of ten healed lepers, how many came back to thank Jesus?",o:["One","Three","Five","None"],a:"One"},
+{q:"Which Gospel writer is described as a physician?",o:["Luke","Mark","Matthew","John"],a:"Luke"},
+{q:"To which island was John exiled when he received Revelation?",o:["Patmos","Cyprus","Malta","Crete"],a:"Patmos"},
+{q:"Which judge made a rash vow before a battle?",o:["Jephthah","Gideon","Samson","Tola"],a:"Jephthah"},
+{q:"Ruth was the great-grandmother of which king?",o:["David","Saul","Solomon","Hezekiah"],a:"David"},
+{q:"Which prophet was a shepherd and a tender of fig trees?",o:["Amos","Hosea","Obadiah","Nahum"],a:"Amos"},
+{q:"Paul wrote that the wages of sin is what?",o:["Death","Exile","Sickness","Poverty"],a:"Death"},
+{q:"Which letter of Paul explains salvation by faith most fully?",o:["Romans","Philemon","Titus","James"],a:"Romans"},
+{q:"Which chapter of Isaiah describes the suffering servant who was pierced for our sins?",o:["Isaiah 53","Isaiah 6","Isaiah 40","Isaiah 1"],a:"Isaiah 53"},
+{q:"Which prophet foretold that the Messiah would be born in Bethlehem?",o:["Micah","Malachi","Joel","Zephaniah"],a:"Micah"},
+{q:"What were the last words of Jesus from the cross recorded in John?",o:["It is finished","Follow me","Peace be with you","Rise and walk"],a:"It is finished"},
+{q:"What did Jesus promise he would do at the end of the age?",o:["Come again","Send another prophet","Rebuild the temple","Write a new law"],a:"Come again"},
+{q:"Where does the Bible say Jesus is seated now?",o:["At the right hand of the Father","In the temple","In Galilee","On Mount Zion"],a:"At the right hand of the Father"},
+{q:"Which Old Testament meal pointed ahead to Jesus as the sacrificed lamb?",o:["The Passover","The Feast of Booths","The Day of Atonement fast","The Feast of Weeks"],a:"The Passover"}
+],
+
+/* ---------- E: 5 points ---------- */
+E:[
+{q:"How many books are in the Bible altogether?",o:["66","72","39","27"],a:"66"},
+{q:"How many books are in the Old Testament?",o:["39","27","46","33"],a:"39"},
+{q:"How many books are in the New Testament?",o:["27","39","21","33"],a:"27"},
+{q:"Which is the longest chapter in the Bible?",o:["Psalm 119","Genesis 1","Isaiah 53","Numbers 7"],a:"Psalm 119"},
+{q:"What guarded the way back into Eden?",o:["Cherubim with a flaming sword","A stone wall","A great flood","A thorn hedge"],a:"Cherubim with a flaming sword"},
+{q:"In which land did Cain settle after he was sent away?",o:["Nod","Ur","Havilah","Shinar"],a:"Nod"},
+{q:"What kind of wood was Noah told to use for the ark?",o:["Gopher wood","Cedar","Acacia","Olive wood"],a:"Gopher wood"},
+{q:"Who became Isaac's wife?",o:["Rebekah","Rachel","Leah","Keturah"],a:"Rebekah"},
+{q:"What did Jacob name the place of his dream about the stairway?",o:["Bethel","Peniel","Gilgal","Shiloh"],a:"Bethel"},
+{q:"What did Joseph's brothers dip his coat in to deceive their father?",o:["Goat's blood","Mud","Wine","Dye"],a:"Goat's blood"},
+{q:"How old was Joseph when he was sold by his brothers?",o:["Seventeen","Twelve","Twenty-five","Thirty"],a:"Seventeen"},
+{q:"How many years had Israel been in Egypt when they left?",o:["430","40","100","250"],a:"430"},
+{q:"Which plague on Egypt was darkness?",o:["The ninth","The first","The fifth","The tenth"],a:"The ninth"},
+{q:"What did manna taste like?",o:["Wafers made with honey","Barley bread","Roasted grain","Sweet figs"],a:"Wafers made with honey"},
+{q:"Besides the tablets, what was kept in the Ark of the Covenant?",o:["Aaron's staff and a jar of manna","Gold and incense","A scroll of the law only","Oil and salt"],a:"Aaron's staff and a jar of manna"},
+{q:"In Samson's riddle, what did he find honey inside of?",o:["The carcass of a lion","A hollow tree","A rock","A beehive in a field"],a:"The carcass of a lion"},
+{q:"Samson pushed down the pillars of a temple to which god?",o:["Dagon","Baal","Molech","Chemosh"],a:"Dagon"},
+{q:"Which Philistine city was struck with trouble after capturing the ark?",o:["Ashdod","Gaza","Gath","Ekron"],a:"Ashdod"},
+{q:"Who was King Saul's father?",o:["Kish","Ner","Abner","Jesse"],a:"Kish"},
+{q:"How tall was Goliath?",o:["Six cubits and a span","Four cubits","Ten cubits","Three cubits and a span"],a:"Six cubits and a span"},
+{q:"Who was the commander of David's army?",o:["Joab","Abner","Benaiah","Asahel"],a:"Joab"},
+{q:"What caught Absalom in the branches of a tree?",o:["His hair","His cloak","His shield","His belt"],a:"His hair"},
+{q:"Who was Solomon's mother?",o:["Bathsheba","Michal","Abigail","Haggith"],a:"Bathsheba"},
+{q:"What did ravens bring Elijah by the brook?",o:["Bread and meat","Water","Figs","Olive oil"],a:"Bread and meat"},
+{q:"Which widow's jar of flour never ran empty during the famine?",o:["The widow of Zarephath","The widow of Nain","The widow at the temple","The widow of Shunem"],a:"The widow of Zarephath"},
+{q:"Which prophet made a borrowed axe head float?",o:["Elisha","Elijah","Isaiah","Jonah"],a:"Elisha"},
+{q:"Which boy king was crowned at seven years old?",o:["Joash","Josiah","Manasseh","Uzziah"],a:"Joash"},
+{q:"Which king was eight years old when he began to reign and later found the book of the law?",o:["Josiah","Joash","Hezekiah","Jotham"],a:"Josiah"},
+{q:"What was Daniel's Babylonian name?",o:["Belteshazzar","Abednego","Shadrach","Belshazzar"],a:"Belteshazzar"},
+{q:"What did Daniel and his friends ask to eat instead of the king's food?",o:["Vegetables and water","Bread and wine","Fish and figs","Only bread"],a:"Vegetables and water"},
+{q:"How many times a day did Daniel pray at his window?",o:["Three","One","Five","Seven"],a:"Three"},
+{q:"Where was Jonah sailing to when he ran from God?",o:["Tarshish","Nineveh","Joppa","Tyre"],a:"Tarshish"},
+{q:"What did God provide to shade Jonah outside Nineveh?",o:["A leafy plant","A fig tree","A palm","A vine of grapes"],a:"A leafy plant"},
+{q:"Who was John the Baptist's mother?",o:["Elizabeth","Mary","Anna","Salome"],a:"Elizabeth"},
+{q:"Who was John the Baptist's father?",o:["Zechariah","Simeon","Zebedee","Alphaeus"],a:"Zechariah"},
+{q:"What did John the Baptist eat in the wilderness?",o:["Locusts and wild honey","Bread and fish","Roots and berries","Barley cakes"],a:"Locusts and wild honey"},
+{q:"Which disciple did Jesus say he saw under a fig tree?",o:["Nathanael","Philip","Thomas","Andrew"],a:"Nathanael"},
+{q:"At which well did Jesus speak with the Samaritan woman?",o:["Jacob's well","Beersheba's well","The well of Bethlehem","Rebekah's well"],a:"Jacob's well"},
+{q:"How many baskets of leftovers were gathered after Jesus fed the five thousand?",o:["Twelve","Seven","Five","Three"],a:"Twelve"},
+{q:"How many baskets were left over after Jesus fed the four thousand?",o:["Seven","Twelve","Four","Two"],a:"Seven"},
+{q:"Which prisoner was released to the crowd instead of Jesus?",o:["Barabbas","Malchus","Bar-Jesus","Simon"],a:"Barabbas"},
+{q:"Who provided the tomb where Jesus was buried?",o:["Joseph of Arimathea","Nicodemus","Simon the Leper","Lazarus"],a:"Joseph of Arimathea"},
+{q:"On the road to which village did two disciples meet the risen Jesus?",o:["Emmaus","Bethany","Jericho","Cana"],a:"Emmaus"},
+{q:"Who was the first Christian martyr?",o:["Stephen","James","Peter","Antipas"],a:"Stephen"},
+{q:"Who explained the scriptures to the Ethiopian official in his chariot?",o:["Philip","Peter","Paul","Barnabas"],a:"Philip"},
+{q:"Which apostle was freed from prison by an angel while the church prayed?",o:["Peter","Paul","Silas","John"],a:"Peter"},
+{q:"Who traveled with Paul on his first missionary journey?",o:["Barnabas","Timothy","Luke","Titus"],a:"Barnabas"},
+{q:"Which young man fell from a window during one of Paul's long sermons?",o:["Eutychus","Trophimus","Onesimus","Demas"],a:"Eutychus"},
+{q:"Which seller of purple cloth became a believer in Philippi?",o:["Lydia","Priscilla","Dorcas","Phoebe"],a:"Lydia"},
+{q:"What phrase appeared on the wall at Belshazzar's feast?",o:["Mene, mene, tekel, upharsin","Holy, holy, holy","Peace be with you","The kingdom is at hand"],a:"Mene, mene, tekel, upharsin"},
+{q:"Which queen tried to destroy the royal family of Judah?",o:["Athaliah","Jezebel","Vashti","Maacah"],a:"Athaliah"},
+{q:"About how many people were added to the church after Peter preached at Pentecost?",o:["Three thousand","Five hundred","One hundred twenty","Twelve thousand"],a:"Three thousand"},
+{q:"Which chapter is often called the faith chapter, listing heroes who trusted God?",o:["Hebrews 11","Romans 8","1 Corinthians 13","Psalm 23"],a:"Hebrews 11"},
+{q:"Which meeting decided that Gentile believers did not have to keep the law of Moses?",o:["The council at Jerusalem","The synod at Antioch","The assembly at Ephesus","The gathering at Troas"],a:"The council at Jerusalem"},
+{q:"What does the name Jesus mean?",o:["The Lord saves","God with us","Anointed One","Prince of Peace"],a:"The Lord saves"},
+{q:"Which prophet first wrote that the righteous shall live by faith?",o:["Habakkuk","Haggai","Zechariah","Jonah"],a:"Habakkuk"},
+{q:"What does the word gospel mean?",o:["Good news","Holy book","New law","Sacred song"],a:"Good news"},
+{q:"What does Revelation promise God will make at the end?",o:["A new heaven and a new earth","A greater temple","A second garden of Eden","A tower to heaven"],a:"A new heaven and a new earth"},
+{q:"Whom did Jacob wrestle with through the night?",o:["The angel of the Lord","His brother Esau","Laban","A Canaanite chief"],a:"The angel of the Lord"}
+]
+
+}},
+
+/* ============================================================
+   ANIMALS — creatures great and small
+   ============================================================ */
+animals:{ label:'Animals', tagline:'Creatures great and small', bank:{
+
+/* ---------- A: 1 point ---------- */
+A:[
+{q:"What is the largest animal on land?",o:["African elephant","Giraffe","Hippopotamus","Rhinoceros"],a:"African elephant"},
+{q:"Which animal is the tallest?",o:["Giraffe","Elephant","Ostrich","Camel"],a:"Giraffe"},
+{q:"Which land animal can run the fastest?",o:["Cheetah","Lion","Horse","Ostrich"],a:"Cheetah"},
+{q:"What is the largest animal in the world?",o:["Blue whale","African elephant","Whale shark","Giant squid"],a:"Blue whale"},
+{q:"Which bird cannot fly and swims in icy water?",o:["Penguin","Seagull","Pelican","Swan"],a:"Penguin"},
+{q:"Which animal is called the king of the beasts?",o:["Lion","Tiger","Bear","Wolf"],a:"Lion"},
+{q:"What do bees make?",o:["Honey","Milk","Silk","Wax candles"],a:"Honey"},
+{q:"What is a baby dog called?",o:["A puppy","A kitten","A cub","A joey"],a:"A puppy"},
+{q:"What is a baby cow called?",o:["A calf","A colt","A lamb","A kid"],a:"A calf"},
+{q:"What is a baby sheep called?",o:["A lamb","A calf","A foal","A cub"],a:"A lamb"},
+{q:"What is a baby frog called?",o:["A tadpole","A fry","A nymph","A grub"],a:"A tadpole"},
+{q:"Which animal has a trunk?",o:["Elephant","Rhino","Hippo","Tapir"],a:"Elephant"},
+{q:"Which animal has black and white stripes?",o:["Zebra","Leopard","Hyena","Okapi"],a:"Zebra"},
+{q:"Which animal carries its baby in a pouch?",o:["Kangaroo","Sloth","Otter","Beaver"],a:"Kangaroo"},
+{q:"Which animal is famous for changing color?",o:["Chameleon","Iguana","Gecko","Newt"],a:"Chameleon"},
+{q:"Which bird can copy human speech?",o:["Parrot","Robin","Sparrow","Owl"],a:"Parrot"},
+{q:"Which animal builds dams across streams?",o:["Beaver","Otter","Muskrat","Badger"],a:"Beaver"},
+{q:"How many legs does a spider have?",o:["Eight","Six","Ten","Four"],a:"Eight"},
+{q:"How many legs does an insect have?",o:["Six","Eight","Four","Ten"],a:"Six"},
+{q:"Which sea creature has eight arms?",o:["Octopus","Squid","Jellyfish","Starfish"],a:"Octopus"},
+{q:"Is a whale a fish or a mammal?",o:["A mammal","A fish","A reptile","An amphibian"],a:"A mammal"},
+{q:"Which animal sleeps hanging upside down?",o:["Bat","Sloth","Possum","Owl"],a:"Bat"},
+{q:"Which is the only mammal that can truly fly?",o:["The bat","The flying squirrel","The sugar glider","The colugo"],a:"The bat"},
+{q:"What do pandas mostly eat?",o:["Bamboo","Fish","Berries","Grass"],a:"Bamboo"},
+{q:"What do koalas eat?",o:["Eucalyptus leaves","Bamboo","Insects","Fruit"],a:"Eucalyptus leaves"},
+{q:"Which bird lays the largest egg?",o:["Ostrich","Emu","Swan","Eagle"],a:"Ostrich"},
+{q:"What is a group of lions called?",o:["A pride","A pack","A herd","A flock"],a:"A pride"},
+{q:"What is a group of wolves called?",o:["A pack","A pride","A gaggle","A pod"],a:"A pack"},
+{q:"Which animal is the largest bird in the world?",o:["Ostrich","Albatross","Emu","Condor"],a:"Ostrich"},
+{q:"Which animal sleeps through the winter in a den?",o:["Bear","Deer","Fox","Wolf"],a:"Bear"},
+{q:"What does a caterpillar turn into?",o:["A butterfly","A beetle","A dragonfly","A bee"],a:"A butterfly"},
+{q:"Which animal has a mane around its head?",o:["Male lion","Male tiger","Male leopard","Male cheetah"],a:"Male lion"},
+{q:"Which farm animal gives us milk?",o:["Cow","Chicken","Pig","Goose"],a:"Cow"},
+{q:"Which farm bird lays the eggs we eat?",o:["Chicken","Turkey","Peacock","Swan"],a:"Chicken"},
+{q:"Which animal is famous for a very long memory?",o:["Elephant","Rabbit","Sheep","Duck"],a:"Elephant"},
+{q:"Which big cat has orange fur with black stripes?",o:["Tiger","Leopard","Jaguar","Puma"],a:"Tiger"},
+{q:"Which animal moves very slowly and hangs in trees?",o:["Sloth","Monkey","Lemur","Koala"],a:"Sloth"},
+{q:"Which sea animal is known for being very smart and friendly?",o:["Dolphin","Shark","Eel","Crab"],a:"Dolphin"},
+{q:"Which bird is awake at night and hoots?",o:["Owl","Crow","Robin","Finch"],a:"Owl"},
+{q:"Which animal has a hard shell it can hide inside?",o:["Turtle","Frog","Lizard","Salamander"],a:"Turtle"}
+],
+
+/* ---------- B: 2 points ---------- */
+B:[
+{q:"Which bird is the fastest animal when diving?",o:["Peregrine falcon","Golden eagle","Swift","Albatross"],a:"Peregrine falcon"},
+{q:"What is the largest fish in the ocean?",o:["Whale shark","Great white shark","Marlin","Manta ray"],a:"Whale shark"},
+{q:"What is a group of fish called?",o:["A school","A herd","A pack","A pride"],a:"A school"},
+{q:"What is a baby kangaroo called?",o:["A joey","A cub","A kit","A pup"],a:"A joey"},
+{q:"What is a baby horse called?",o:["A foal","A calf","A kid","A cub"],a:"A foal"},
+{q:"What is a baby deer called?",o:["A fawn","A kid","A calf","A colt"],a:"A fawn"},
+{q:"What is a baby goat called?",o:["A kid","A lamb","A foal","A pup"],a:"A kid"},
+{q:"Which mammal lays eggs?",o:["Platypus","Dolphin","Bat","Otter"],a:"Platypus"},
+{q:"How many hearts does an octopus have?",o:["Three","One","Two","Five"],a:"Three"},
+{q:"Which bird is the national symbol of the United States?",o:["Bald eagle","Turkey","Cardinal","Hawk"],a:"Bald eagle"},
+{q:"Which is the largest species of bear?",o:["Polar bear","Black bear","Sun bear","Panda"],a:"Polar bear"},
+{q:"Which animal can grow back a lost tail?",o:["Lizard","Mouse","Rabbit","Sparrow"],a:"Lizard"},
+{q:"Which sea creature can regrow a lost arm?",o:["Starfish","Crab","Clam","Seahorse"],a:"Starfish"},
+{q:"Which group do frogs and toads belong to?",o:["Amphibians","Reptiles","Fish","Mammals"],a:"Amphibians"},
+{q:"Why do birds have hollow bones?",o:["To make them light for flying","To store food","To keep them warm","To help them swim"],a:"To make them light for flying"},
+{q:"What is the fastest fish in the sea?",o:["Sailfish","Tuna","Salmon","Barracuda"],a:"Sailfish"},
+{q:"Which whale is famous for its long songs?",o:["Humpback","Beluga","Narwhal","Orca"],a:"Humpback"},
+{q:"How do dolphins find their way and hunt in dark water?",o:["Echolocation","Smell","Taste","Magnetism"],a:"Echolocation"},
+{q:"Which other animal uses echolocation?",o:["Bats","Owls","Cats","Moths"],a:"Bats"},
+{q:"What is a group of ants called?",o:["A colony","A swarm","A pack","A cluster"],a:"A colony"},
+{q:"Which bee lays all the eggs in a hive?",o:["The queen","The drone","The worker","The scout"],a:"The queen"},
+{q:"What is a female horse called?",o:["A mare","A stallion","A filly only","A gelding"],a:"A mare"},
+{q:"What is a male cow called?",o:["A bull","A steer only","A stag","A buck"],a:"A bull"},
+{q:"What is a female chicken called?",o:["A hen","A rooster","A pullet only","A drake"],a:"A hen"},
+{q:"What is a group of whales called?",o:["A pod","A school","A herd","A raft"],a:"A pod"},
+{q:"On which continent do emperor penguins live?",o:["Antarctica","Australia","Africa","South America"],a:"Antarctica"},
+{q:"What is the largest reptile in the world?",o:["Saltwater crocodile","Komodo dragon","Green anaconda","Leatherback turtle"],a:"Saltwater crocodile"},
+{q:"Which snake is the heaviest in the world?",o:["Green anaconda","King cobra","Boa constrictor","Black mamba"],a:"Green anaconda"},
+{q:"Which spider is known for a red hourglass mark?",o:["Black widow","Tarantula","Wolf spider","Orb weaver"],a:"Black widow"},
+{q:"What is a group of geese on the ground called?",o:["A gaggle","A pod","A pride","A troop"],a:"A gaggle"},
+{q:"Which animal has the largest eyes of any creature?",o:["Colossal squid","Blue whale","Ostrich","Horse"],a:"Colossal squid"},
+{q:"What do we call animals that are active at night?",o:["Nocturnal","Diurnal","Migratory","Dormant"],a:"Nocturnal"},
+{q:"What do we call an animal that eats only plants?",o:["A herbivore","A carnivore","An omnivore","A scavenger"],a:"A herbivore"},
+{q:"What do we call an animal that eats only meat?",o:["A carnivore","A herbivore","An omnivore","A forager"],a:"A carnivore"},
+{q:"What do we call an animal that eats both plants and meat?",o:["An omnivore","A herbivore","A carnivore","An insectivore"],a:"An omnivore"},
+{q:"Which stage comes between caterpillar and butterfly?",o:["Chrysalis","Larva","Egg","Nymph"],a:"Chrysalis"},
+{q:"Which animal is famous for storing fat in its humps?",o:["Camel","Bison","Zebu","Yak"],a:"Camel"},
+{q:"Which bird can fly backwards?",o:["Hummingbird","Sparrow","Swift","Kingfisher"],a:"Hummingbird"},
+{q:"Which large rodent is the biggest in the world?",o:["Capybara","Beaver","Porcupine","Muskrat"],a:"Capybara"},
+{q:"Which animals are called marsupials?",o:["Kangaroos and koalas","Bats and moles","Otters and beavers","Lemurs and monkeys"],a:"Kangaroos and koalas"}
+],
+
+/* ---------- C: 3 points ---------- */
+C:[
+{q:"What is a group of owls called?",o:["A parliament","A murder","A pride","A gaggle"],a:"A parliament"},
+{q:"What is a group of crows called?",o:["A murder","A parliament","A flock only","A clutch"],a:"A murder"},
+{q:"What is a group of rhinos called?",o:["A crash","A herd only","A tower","A pack"],a:"A crash"},
+{q:"What is a group of giraffes called?",o:["A tower","A crash","A troop","A band"],a:"A tower"},
+{q:"Which is the largest of the big cats?",o:["Tiger","Lion","Jaguar","Leopard"],a:"Tiger"},
+{q:"Which animal has the strongest measured bite?",o:["Saltwater crocodile","Great white shark","Lion","Hippopotamus"],a:"Saltwater crocodile"},
+{q:"Which animal is responsible for the most human deaths each year?",o:["The mosquito","The shark","The snake","The lion"],a:"The mosquito"},
+{q:"What is a shark's skeleton made of?",o:["Cartilage","Bone","Keratin","Shell"],a:"Cartilage"},
+{q:"Which fish can puff itself up into a spiky ball?",o:["Pufferfish","Angelfish","Lionfish","Clownfish"],a:"Pufferfish"},
+{q:"Which bird migrates farther than any other?",o:["Arctic tern","Canada goose","Swallow","Albatross"],a:"Arctic tern"},
+{q:"Which animal has fingerprints almost identical to a human's?",o:["Koala","Chimpanzee","Gorilla","Raccoon"],a:"Koala"},
+{q:"Which is the smallest bird in the world?",o:["Bee hummingbird","Wren","Goldcrest","Sunbird"],a:"Bee hummingbird"},
+{q:"How many eyes do most spiders have?",o:["Eight","Two","Four","Six"],a:"Eight"},
+{q:"About how long is an elephant pregnant?",o:["22 months","9 months","12 months","3 years"],a:"22 months"},
+{q:"What is a narwhal's long tusk actually?",o:["A tooth","A horn","A bone spike","A fin"],a:"A tooth"},
+{q:"Which animal has the thickest fur of any mammal?",o:["Sea otter","Polar bear","Musk ox","Arctic fox"],a:"Sea otter"},
+{q:"What is the largest invertebrate in the world?",o:["Colossal squid","Giant clam","Lobster","Coconut crab"],a:"Colossal squid"},
+{q:"Which insect builds tall mounds and lives in huge colonies?",o:["Termites","Wasps","Beetles","Cicadas"],a:"Termites"},
+{q:"What is a group of frogs called?",o:["An army","A school","A colony","A bloom"],a:"An army"},
+{q:"Which animal was the first living creature to orbit the Earth?",o:["A dog","A monkey","A mouse","A cat"],a:"A dog"},
+{q:"What is a group of hyenas called?",o:["A clan","A pack","A pride","A crash"],a:"A clan"},
+{q:"Which reptile has a four-chambered heart like a mammal?",o:["Crocodile","Snake","Turtle","Lizard"],a:"Crocodile"},
+{q:"What is the study of birds called?",o:["Ornithology","Entomology","Herpetology","Ichthyology"],a:"Ornithology"},
+{q:"Which two groups of animals are warm-blooded?",o:["Mammals and birds","Reptiles and fish","Amphibians and reptiles","Insects and spiders"],a:"Mammals and birds"},
+{q:"Which desert rodent can live its whole life without drinking water?",o:["Kangaroo rat","Gerbil","Hamster","Jerboa"],a:"Kangaroo rat"},
+{q:"Which land animal makes the longest migration each year?",o:["Caribou","Elephant","Wildebeest","Bison"],a:"Caribou"},
+{q:"Which sea creature squirts ink to escape?",o:["Octopus","Seahorse","Ray","Eel"],a:"Octopus"},
+{q:"Which animal is the smallest mammal by length?",o:["Bumblebee bat","House mouse","Pygmy shrew","Weasel"],a:"Bumblebee bat"},
+{q:"Which continent has no native reptiles at all?",o:["Antarctica","Europe","Australia","Asia"],a:"Antarctica"},
+{q:"What is a group of butterflies called?",o:["A kaleidoscope","A murder","A swarm only","A flutter"],a:"A kaleidoscope"},
+{q:"Which sense is a dog's strongest?",o:["Smell","Sight","Taste","Touch"],a:"Smell"},
+{q:"Which bird has the largest wingspan?",o:["Wandering albatross","Condor","Bald eagle","Pelican"],a:"Wandering albatross"},
+{q:"Which land animal has the largest ears?",o:["African elephant","Fennec fox","Jackrabbit","Bat-eared fox"],a:"African elephant"},
+{q:"What is the main food of the blue whale?",o:["Krill","Squid","Small fish","Seaweed"],a:"Krill"},
+{q:"Which animal group do octopuses and squid belong to?",o:["Cephalopods","Crustaceans","Molluscs only","Echinoderms"],a:"Cephalopods"},
+{q:"Which animal group do starfish and sea urchins belong to?",o:["Echinoderms","Crustaceans","Cephalopods","Cnidarians"],a:"Echinoderms"},
+{q:"What do we call animals without a backbone?",o:["Invertebrates","Vertebrates","Amphibians","Arthropods only"],a:"Invertebrates"},
+{q:"Which animal has a tongue longer than its own body?",o:["Chameleon","Giraffe","Anteater","Frog"],a:"Chameleon"}
+],
+
+/* ---------- D: 4 points ---------- */
+D:[
+{q:"What is the scientific name for modern human beings?",o:["Homo sapiens","Homo erectus","Australopithecus","Homo habilis"],a:"Homo sapiens"},
+{q:"Which shark is the fastest swimmer?",o:["Shortfin mako","Great white","Tiger shark","Hammerhead"],a:"Shortfin mako"},
+{q:"Which sea mammal has long tusks and lives in the Arctic?",o:["Walrus","Sea lion","Manatee","Dugong"],a:"Walrus"},
+{q:"What does a snake use its flicking tongue for?",o:["Smelling the air","Tasting food only","Hearing","Balance"],a:"Smelling the air"},
+{q:"How many compartments does a cow's stomach have?",o:["Four","One","Two","Seven"],a:"Four"},
+{q:"What is a bird's gizzard used for?",o:["Grinding food","Storing air","Filtering blood","Making eggs"],a:"Grinding food"},
+{q:"How do centipedes differ from millipedes?",o:["One pair of legs per segment instead of two","They have wings","They have no legs","They have eight legs total"],a:"One pair of legs per segment instead of two"},
+{q:"What is a young owl called?",o:["An owlet","A chick only","A poult","A squab"],a:"An owlet"},
+{q:"What do we call an animal that feeds on dead animals?",o:["A scavenger","A predator","A grazer","A parasite"],a:"A scavenger"},
+{q:"Which tiny creature can survive extreme cold, heat and even space?",o:["The tardigrade","The dust mite","The flea","The nematode"],a:"The tardigrade"},
+{q:"What is a tardigrade also called?",o:["A water bear","A sea flea","A moss mite","A sand louse"],a:"A water bear"},
+{q:"Which amphibian famously regrows its limbs and stays in its larval form?",o:["Axolotl","Newt","Bullfrog","Caecilian"],a:"Axolotl"},
+{q:"Which country is the axolotl native to?",o:["Mexico","Brazil","Peru","Japan"],a:"Mexico"},
+{q:"Which animal has the largest heart of any creature?",o:["Blue whale","African elephant","Giraffe","Sperm whale"],a:"Blue whale"},
+{q:"Which flightless bird was hunted to extinction on Mauritius?",o:["The dodo","The moa","The great auk","The elephant bird"],a:"The dodo"},
+{q:"Which bird went extinct in 1914 after once numbering in the billions?",o:["The passenger pigeon","The Carolina parakeet","The great auk","The heath hen"],a:"The passenger pigeon"},
+{q:"Which animal is the closest living relative of human beings?",o:["The chimpanzee","The gorilla","The orangutan","The baboon"],a:"The chimpanzee"},
+{q:"Which land animal is the closest living relative of whales?",o:["The hippopotamus","The elephant","The cow","The horse"],a:"The hippopotamus"},
+{q:"What do we call animals most active at dawn and dusk?",o:["Crepuscular","Nocturnal","Diurnal","Migratory"],a:"Crepuscular"},
+{q:"What are baby platypuses called?",o:["Puggles","Kits","Joeys","Pups"],a:"Puggles"},
+{q:"Which animal has the highest blood pressure?",o:["Giraffe","Elephant","Cheetah","Whale"],a:"Giraffe"},
+{q:"What is a group of crocodiles in the water called?",o:["A float","A crash","A bask on land only","A pod"],a:"A float"},
+{q:"What is the largest land carnivore?",o:["Polar bear","Grizzly bear","Siberian tiger","Lion"],a:"Polar bear"},
+{q:"Which relationship describes two species living together to mutual benefit?",o:["Symbiosis","Predation","Parasitism","Competition"],a:"Symbiosis"},
+{q:"Which class of animals includes crabs, lobsters and shrimp?",o:["Crustaceans","Molluscs","Arachnids","Echinoderms"],a:"Crustaceans"},
+{q:"What is the study of insects called?",o:["Entomology","Ornithology","Ichthyology","Herpetology"],a:"Entomology"},
+{q:"What is the study of fish called?",o:["Ichthyology","Entomology","Mammalogy","Herpetology"],a:"Ichthyology"},
+{q:"Which animal has the largest brain of any creature?",o:["Sperm whale","Blue whale","Elephant","Human"],a:"Sperm whale"},
+{q:"What is a group of kangaroos called?",o:["A mob","A herd","A troop","A colony"],a:"A mob"},
+{q:"Which fish was thought extinct for millions of years until one was caught in 1938?",o:["The coelacanth","The lungfish","The sturgeon","The lamprey"],a:"The coelacanth"},
+{q:"Which sea creature delivers one of the fastest punches in nature?",o:["Mantis shrimp","Swordfish","Electric eel","Octopus"],a:"Mantis shrimp"},
+{q:"Which is the largest species of penguin?",o:["Emperor penguin","King penguin","Gentoo penguin","Rockhopper"],a:"Emperor penguin"},
+{q:"Which flightless bird is a national symbol of New Zealand?",o:["The kiwi","The emu","The cassowary","The takahe"],a:"The kiwi"},
+{q:"Which animal's name comes from words meaning river horse?",o:["Hippopotamus","Rhinoceros","Manatee","Tapir"],a:"Hippopotamus"},
+{q:"What is a female fox called?",o:["A vixen","A doe","A jill","A sow"],a:"A vixen"},
+{q:"Which insect has one of the shortest adult lifespans?",o:["The mayfly","The housefly","The moth","The dragonfly"],a:"The mayfly"},
+{q:"How do honeybees tell each other where flowers are?",o:["A waggle dance","A humming call","Leaving scent trails only","Changing color"],a:"A waggle dance"},
+{q:"Which is the longest venomous snake in the world?",o:["King cobra","Black mamba","Taipan","Rattlesnake"],a:"King cobra"}
+],
+
+/* ---------- E: 5 points ---------- */
+E:[
+{q:"What is a group of ravens called?",o:["An unkindness","A murder","A parliament","A clamour"],a:"An unkindness"},
+{q:"What is a group of porcupines called?",o:["A prickle","A bristle","A crash","A colony"],a:"A prickle"},
+{q:"Which mammal has a venomous spur on its hind leg?",o:["The male platypus","The shrew","The slow loris","The echidna"],a:"The male platypus"},
+{q:"Which animal has the longest pregnancy of any mammal?",o:["African elephant","Blue whale","Giraffe","Rhinoceros"],a:"African elephant"},
+{q:"Which creature has blue blood because of a copper-based pigment?",o:["Horseshoe crab","Squid","Jellyfish","Sea star"],a:"Horseshoe crab"},
+{q:"Which jellyfish can revert to an earlier life stage, seeming to avoid death?",o:["The immortal jellyfish","The moon jelly","The box jellyfish","The lion's mane"],a:"The immortal jellyfish"},
+{q:"Which flightless parrot from New Zealand is critically endangered?",o:["The kakapo","The kea","The kaka","The kokako"],a:"The kakapo"},
+{q:"Which animal's name comes from words meaning earth pig?",o:["The aardvark","The warthog","The pangolin","The armadillo"],a:"The aardvark"},
+{q:"What is a male swan called?",o:["A cob","A drake","A gander","A tom"],a:"A cob"},
+{q:"What is a group of ferrets called?",o:["A business","A bevy","A troop","A skulk"],a:"A business"},
+{q:"What is a group of larks called?",o:["An exaltation","A charm","A murmuration","A descent"],a:"An exaltation"},
+{q:"Which snake is considered the most venomous in the world?",o:["The inland taipan","The king cobra","The black mamba","The rattlesnake"],a:"The inland taipan"},
+{q:"Which sea creature is considered the most venomous marine animal?",o:["The box jellyfish","The lionfish","The sea snake","The cone snail"],a:"The box jellyfish"},
+{q:"Which fish carries the deadliest venom?",o:["The stonefish","The lionfish","The pufferfish","The stingray"],a:"The stonefish"},
+{q:"What is the largest arthropod in the world by leg span?",o:["The Japanese spider crab","The coconut crab","The American lobster","The goliath beetle"],a:"The Japanese spider crab"},
+{q:"Which is the largest land-living arthropod?",o:["The coconut crab","The goliath birdeater","The giant weta","The rhinoceros beetle"],a:"The coconut crab"},
+{q:"Which mammal holds the record for the longest dive?",o:["Cuvier's beaked whale","The sperm whale","The elephant seal","The narwhal"],a:"Cuvier's beaked whale"},
+{q:"What is a group of eagles called?",o:["A convocation","A conspiracy","A cast","A wake"],a:"A convocation"},
+{q:"Which animal has more smell-detecting genes than any other?",o:["The African elephant","The bloodhound","The bear","The rat"],a:"The African elephant"},
+{q:"What is a group of jellyfish called?",o:["A smack","A bloom of one only","A swarm","A raft"],a:"A smack"},
+{q:"Which is the heaviest bird that ever lived?",o:["The elephant bird","The moa","The dodo","The terror bird"],a:"The elephant bird"},
+{q:"How many pairs of legs does each millipede body segment carry?",o:["Two","One","Three","Four"],a:"Two"},
+{q:"Which sea creature can change both its color and its skin texture to hide?",o:["The cuttlefish","The seahorse","The clownfish","The manta ray"],a:"The cuttlefish"},
+{q:"What are baleen whale filter plates made of?",o:["Keratin","Bone","Cartilage","Enamel"],a:"Keratin"},
+{q:"Which large mammal has skin secretions that act like natural sunscreen?",o:["The hippopotamus","The rhinoceros","The elephant","The walrus"],a:"The hippopotamus"},
+{q:"Which bird builds the largest nest of any species?",o:["The bald eagle","The stork","The osprey","The heron"],a:"The bald eagle"},
+{q:"Which animal's stripes are unique to each individual, like fingerprints?",o:["The zebra","The skunk","The badger","The lemur"],a:"The zebra"},
+{q:"Which land mammal can sprint fastest over a long distance?",o:["The pronghorn","The cheetah","The horse","The wildebeest"],a:"The pronghorn"},
+{q:"Which primate is the largest in the world?",o:["The eastern gorilla","The orangutan","The chimpanzee","The mandrill"],a:"The eastern gorilla"},
+{q:"Which animal can survive being frozen solid through winter?",o:["The wood frog","The garter snake","The box turtle","The salamander"],a:"The wood frog"},
+{q:"Which bird is known to use tools and solve puzzles as well as a young child?",o:["The New Caledonian crow","The pigeon","The starling","The sparrow"],a:"The New Caledonian crow"},
+{q:"Which animal has the densest fur, with up to a million hairs per square inch?",o:["The sea otter","The chinchilla","The mink","The seal"],a:"The sea otter"},
+{q:"What is a group of pandas called?",o:["An embarrassment","A bamboo","A cuddle","A crash"],a:"An embarrassment"},
+{q:"Which whale has a single spiral tusk and is called the unicorn of the sea?",o:["The narwhal","The beluga","The minke","The pilot whale"],a:"The narwhal"},
+{q:"Which animal builds the elaborate underwater circles known as sand mandalas?",o:["The pufferfish","The octopus","The stingray","The seahorse"],a:"The pufferfish"},
+{q:"Which male animal carries and gives birth to the young?",o:["The seahorse","The clownfish","The pipefish only","The anglerfish"],a:"The seahorse"}
+]
+
+}},
+
+/* ============================================================
+   POKEMON — kept on the friendly side
+   ============================================================ */
+pokemon:{ label:'Pokémon', tagline:'Gotta catch em all', bank:{
+
+/* ---------- A: 1 point ---------- */
+A:[
+{q:"Which yellow electric mouse is the mascot of Pokémon?",o:["Pikachu","Raichu","Jigglypuff","Meowth"],a:"Pikachu"},
+{q:"What type is Pikachu?",o:["Electric","Fire","Water","Grass"],a:"Electric"},
+{q:"What are the balls used to catch Pokémon called?",o:["Poké Balls","Catch Spheres","Beast Orbs","Trainer Balls"],a:"Poké Balls"},
+{q:"What type is Charmander?",o:["Fire","Water","Grass","Rock"],a:"Fire"},
+{q:"What burns on the tip of Charmander's tail?",o:["A flame","A spark","A light","A leaf"],a:"A flame"},
+{q:"What type is Squirtle?",o:["Water","Fire","Grass","Ice"],a:"Water"},
+{q:"What type is Bulbasaur's main type?",o:["Grass","Fire","Water","Flying"],a:"Grass"},
+{q:"What does Charmander evolve into?",o:["Charmeleon","Charizard","Flareon","Magmar"],a:"Charmeleon"},
+{q:"What does Charmeleon evolve into?",o:["Charizard","Charmander","Dragonite","Arcanine"],a:"Charizard"},
+{q:"What does Squirtle evolve into?",o:["Wartortle","Blastoise","Vaporeon","Poliwag"],a:"Wartortle"},
+{q:"What does Bulbasaur evolve into?",o:["Ivysaur","Venusaur","Oddish","Chikorita"],a:"Ivysaur"},
+{q:"Which team do Jessie and James belong to?",o:["Team Rocket","Team Magma","Team Aqua","Team Galactic"],a:"Team Rocket"},
+{q:"Which talking Pokémon travels with Jessie and James?",o:["Meowth","Wobbuffet","Purrloin","Persian"],a:"Meowth"},
+{q:"What is the device that records information about Pokémon?",o:["The Pokédex","The Pokégear","The Poké Ball","The Trainer Card"],a:"The Pokédex"},
+{q:"Which professor gives out starter Pokémon in the Kanto region?",o:["Professor Oak","Professor Elm","Professor Birch","Professor Rowan"],a:"Professor Oak"},
+{q:"Which pink balloon Pokémon sings its enemies to sleep?",o:["Jigglypuff","Clefairy","Chansey","Wigglytuff"],a:"Jigglypuff"},
+{q:"Which huge Pokémon is famous for sleeping and blocking roads?",o:["Snorlax","Slowpoke","Munchlax","Golem"],a:"Snorlax"},
+{q:"Which Pokémon is famous for having many different evolutions?",o:["Eevee","Ditto","Pikachu","Zubat"],a:"Eevee"},
+{q:"What type is Gengar's main type?",o:["Ghost","Dark","Psychic","Poison only"],a:"Ghost"},
+{q:"Which weak fish Pokémon can only splash around?",o:["Magikarp","Feebas","Goldeen","Horsea"],a:"Magikarp"},
+{q:"What does Magikarp evolve into?",o:["Gyarados","Seaking","Lapras","Milotic"],a:"Gyarados"},
+{q:"What region do the very first Pokémon games take place in?",o:["Kanto","Johto","Hoenn","Sinnoh"],a:"Kanto"},
+{q:"Which duck Pokémon is always holding its aching head?",o:["Psyduck","Golduck","Farfetch'd","Ducklett"],a:"Psyduck"},
+{q:"What does Caterpie eventually become?",o:["Butterfree","Beedrill","Venomoth","Ledian"],a:"Butterfree"},
+{q:"What type is Onix?",o:["Rock","Steel","Ground only","Dragon"],a:"Rock"},
+{q:"Which Pokémon type beats Fire?",o:["Water","Grass","Electric","Bug"],a:"Water"},
+{q:"Which Pokémon type beats Grass?",o:["Fire","Water","Ground","Normal"],a:"Fire"},
+{q:"Which Pokémon type beats Water?",o:["Grass","Fire","Flying","Rock"],a:"Grass"},
+{q:"What is the famous Pokémon slogan?",o:["Gotta catch 'em all","Train them all","Catch and release","Be the best"],a:"Gotta catch 'em all"},
+{q:"What color is Pikachu?",o:["Yellow","Orange","Brown","White"],a:"Yellow"},
+{q:"Which of these is one of the three Kanto starter Pokémon?",o:["Bulbasaur","Chikorita","Torchic","Piplup"],a:"Bulbasaur"},
+{q:"What kind of place do trainers go to heal their Pokémon?",o:["A Pokémon Center","A Poké Mart","A gym","A safari zone"],a:"A Pokémon Center"}
+],
+
+/* ---------- B: 2 points ---------- */
+B:[
+{q:"Besides Fire, what other type is Charizard?",o:["Flying","Dragon","Ground","Rock"],a:"Flying"},
+{q:"Which stone turns Pikachu into Raichu?",o:["A Thunder Stone","A Fire Stone","A Water Stone","A Moon Stone"],a:"A Thunder Stone"},
+{q:"Which Eevee evolution is the Water type?",o:["Vaporeon","Jolteon","Flareon","Espeon"],a:"Vaporeon"},
+{q:"Which Eevee evolution is the Fire type?",o:["Flareon","Vaporeon","Jolteon","Umbreon"],a:"Flareon"},
+{q:"Which Eevee evolution is the Electric type?",o:["Jolteon","Flareon","Leafeon","Sylveon"],a:"Jolteon"},
+{q:"How many Pokémon were in the original Kanto Pokédex?",o:["151","150","251","100"],a:"151"},
+{q:"Which Pokémon is number 150?",o:["Mewtwo","Mew","Dragonite","Zapdos"],a:"Mewtwo"},
+{q:"Which Pokémon is number 151?",o:["Mew","Mewtwo","Celebi","Ditto"],a:"Mew"},
+{q:"Besides Ghost, what other type is Gengar?",o:["Poison","Dark","Psychic","Fairy"],a:"Poison"},
+{q:"Which type is completely unaffected by Electric attacks?",o:["Ground","Rock","Grass","Steel"],a:"Ground"},
+{q:"Which type is Fighting strong against?",o:["Normal","Flying","Psychic","Fairy"],a:"Normal"},
+{q:"Which type was added to the games in the sixth generation?",o:["Fairy","Dark","Steel","Ghost"],a:"Fairy"},
+{q:"What type is Snorlax?",o:["Normal","Fighting","Ground","Rock"],a:"Normal"},
+{q:"Who is the boss of Team Rocket?",o:["Giovanni","Archie","Cyrus","Lysandre"],a:"Giovanni"},
+{q:"Which gym leader leads the Rock type gym in Pewter City?",o:["Brock","Misty","Lt. Surge","Erika"],a:"Brock"},
+{q:"Which gym leader leads the Water type gym in Cerulean City?",o:["Misty","Brock","Sabrina","Koga"],a:"Misty"},
+{q:"Which region comes after Kanto in the games?",o:["Johto","Hoenn","Sinnoh","Unova"],a:"Johto"},
+{q:"Which of these is a Johto starter Pokémon?",o:["Cyndaquil","Torchic","Chimchar","Tepig"],a:"Cyndaquil"},
+{q:"Which region is the third generation set in?",o:["Hoenn","Johto","Sinnoh","Kalos"],a:"Hoenn"},
+{q:"Which region is the fourth generation set in?",o:["Sinnoh","Hoenn","Unova","Alola"],a:"Sinnoh"},
+{q:"What is Pikachu's baby form called?",o:["Pichu","Plusle","Minun","Pachirisu"],a:"Pichu"},
+{q:"Which Pokémon is famous for copying the appearance of any other Pokémon?",o:["Ditto","Mew","Zorua","Smeargle"],a:"Ditto"},
+{q:"Which bird Pokémon has three heads?",o:["Dodrio","Doduo","Fearow","Pidgeot"],a:"Dodrio"},
+{q:"What does Dratini eventually evolve into?",o:["Dragonite","Dragonair only","Salamence","Altaria"],a:"Dragonite"},
+{q:"How many arms does Machamp have?",o:["Four","Two","Six","Three"],a:"Four"},
+{q:"What does Abra evolve into?",o:["Kadabra","Alakazam","Hypno","Espeon"],a:"Kadabra"},
+{q:"Which two colors were the first Pokémon games released in the United States?",o:["Red and Blue","Red and Green","Gold and Silver","Yellow and Blue"],a:"Red and Blue"},
+{q:"Which company makes the Pokémon video games?",o:["Nintendo","Sega","Sony","Microsoft"],a:"Nintendo"},
+{q:"In which year did the Pokémon Go phone game come out?",o:["2016","2010","2013","2019"],a:"2016"},
+{q:"Which Pokémon does Ash famously refuse to keep inside a Poké Ball?",o:["Pikachu","Charizard","Bulbasaur","Squirtle"],a:"Pikachu"},
+{q:"How many gym badges do you need to enter the Pokémon League?",o:["Eight","Four","Six","Ten"],a:"Eight"},
+{q:"What is the highest level a Pokémon can reach?",o:["100","50","99","255"],a:"100"},
+{q:"How many Pokémon can a trainer carry in their party at once?",o:["Six","Four","Eight","Ten"],a:"Six"},
+{q:"How many moves can a Pokémon know at one time?",o:["Four","Two","Six","Three"],a:"Four"}
+],
+
+/* ---------- C: 3 points ---------- */
+C:[
+{q:"Which Eevee evolution is the Psychic type?",o:["Espeon","Umbreon","Sylveon","Glaceon"],a:"Espeon"},
+{q:"Which Eevee evolution is the Dark type?",o:["Umbreon","Espeon","Leafeon","Jolteon"],a:"Umbreon"},
+{q:"Which Eevee evolution is the Fairy type?",o:["Sylveon","Espeon","Glaceon","Leafeon"],a:"Sylveon"},
+{q:"Which Eevee evolution is the Ice type?",o:["Glaceon","Leafeon","Vaporeon","Sylveon"],a:"Glaceon"},
+{q:"Which legendary Pokémon controls the sea in Ruby and Sapphire?",o:["Kyogre","Groudon","Rayquaza","Lugia"],a:"Kyogre"},
+{q:"Which legendary Pokémon controls the land in Ruby and Sapphire?",o:["Groudon","Kyogre","Regirock","Rayquaza"],a:"Groudon"},
+{q:"Which region is the fifth generation set in?",o:["Unova","Kalos","Alola","Galar"],a:"Unova"},
+{q:"Which region is the sixth generation set in?",o:["Kalos","Unova","Alola","Paldea"],a:"Kalos"},
+{q:"Which region is the seventh generation set in?",o:["Alola","Galar","Kalos","Paldea"],a:"Alola"},
+{q:"Which region is the eighth generation set in?",o:["Galar","Alola","Paldea","Unova"],a:"Galar"},
+{q:"Which region is the ninth generation set in?",o:["Paldea","Galar","Alola","Hisui"],a:"Paldea"},
+{q:"How many Pokémon types are there in the current games?",o:["18","15","20","17"],a:"18"},
+{q:"Which type is immune to Normal type attacks?",o:["Ghost","Rock","Steel","Dark"],a:"Ghost"},
+{q:"Which two types is Fairy weak against?",o:["Steel and Poison","Fire and Ice","Ground and Rock","Bug and Flying"],a:"Steel and Poison"},
+{q:"What does Gastly evolve into first?",o:["Haunter","Gengar","Misdreavus","Shuppet"],a:"Haunter"},
+{q:"Which legendary trio roams Johto?",o:["Raikou, Entei and Suicune","Articuno, Zapdos and Moltres","Uxie, Mesprit and Azelf","Regirock, Regice and Registeel"],a:"Raikou, Entei and Suicune"},
+{q:"Which legendary Pokémon appear on the boxes of Gold and Silver?",o:["Ho-Oh and Lugia","Kyogre and Groudon","Dialga and Palkia","Reshiram and Zekrom"],a:"Ho-Oh and Lugia"},
+{q:"Which legendary Pokémon appear on the boxes of Diamond and Pearl?",o:["Dialga and Palkia","Ho-Oh and Lugia","Xerneas and Yveltal","Solgaleo and Lunala"],a:"Dialga and Palkia"},
+{q:"Which legendary Pokémon appear on the boxes of Black and White?",o:["Reshiram and Zekrom","Dialga and Palkia","Zacian and Zamazenta","Koraidon and Miraidon"],a:"Reshiram and Zekrom"},
+{q:"Which legendary Pokémon appear on the boxes of X and Y?",o:["Xerneas and Yveltal","Solgaleo and Lunala","Reshiram and Zekrom","Groudon and Kyogre"],a:"Xerneas and Yveltal"},
+{q:"Which legendary Pokémon appear on the boxes of Sun and Moon?",o:["Solgaleo and Lunala","Xerneas and Yveltal","Zacian and Zamazenta","Dialga and Palkia"],a:"Solgaleo and Lunala"},
+{q:"Which legendary Pokémon appear on the boxes of Sword and Shield?",o:["Zacian and Zamazenta","Koraidon and Miraidon","Solgaleo and Lunala","Reshiram and Zekrom"],a:"Zacian and Zamazenta"},
+{q:"Which legendary Pokémon appear on the boxes of Scarlet and Violet?",o:["Koraidon and Miraidon","Zacian and Zamazenta","Xerneas and Yveltal","Dialga and Palkia"],a:"Koraidon and Miraidon"},
+{q:"What type is Lucario?",o:["Fighting and Steel","Fighting and Dark","Steel and Psychic","Fighting only"],a:"Fighting and Steel"},
+{q:"What type is Greninja?",o:["Water and Dark","Water and Poison","Water only","Water and Fighting"],a:"Water and Dark"},
+{q:"Which of these is a Unova starter Pokémon?",o:["Snivy","Turtwig","Chespin","Rowlet"],a:"Snivy"},
+{q:"Which of these is a Kalos starter Pokémon?",o:["Fennekin","Torchic","Litten","Scorbunny"],a:"Fennekin"},
+{q:"Which of these is an Alola starter Pokémon?",o:["Rowlet","Snivy","Grookey","Sprigatito"],a:"Rowlet"},
+{q:"Which of these is a Galar starter Pokémon?",o:["Scorbunny","Torchic","Fuecoco","Cyndaquil"],a:"Scorbunny"},
+{q:"Which of these is a Paldea starter Pokémon?",o:["Sprigatito","Grookey","Rowlet","Chespin"],a:"Sprigatito"},
+{q:"Which Pokémon was created by scientists using the DNA of Mew?",o:["Mewtwo","Porygon","Ditto","Genesect"],a:"Mewtwo"},
+{q:"Which of the legendary birds of Kanto is the Ice type?",o:["Articuno","Zapdos","Moltres","Lugia"],a:"Articuno"},
+{q:"Which of the legendary birds of Kanto is the Fire type?",o:["Moltres","Zapdos","Articuno","Ho-Oh"],a:"Moltres"},
+{q:"What is a shiny Pokémon?",o:["One with a rare alternate color","One with higher levels","One that glows in battle","One that cannot be caught"],a:"One with a rare alternate color"}
+],
+
+/* ---------- D: 4 points ---------- */
+D:[
+{q:"Which Pokémon is said to have created the Pokémon world?",o:["Arceus","Dialga","Mew","Giratina"],a:"Arceus"},
+{q:"Which legendary Pokémon rules over distorted space in Sinnoh?",o:["Giratina","Palkia","Dialga","Darkrai"],a:"Giratina"},
+{q:"What are Uxie, Mesprit and Azelf together called?",o:["The lake guardians","The weather trio","The swords of justice","The forces of nature"],a:"The lake guardians"},
+{q:"Which very plain Pokémon evolves into the beautiful Milotic?",o:["Feebas","Magikarp","Luvdisc","Remoraid"],a:"Feebas"},
+{q:"What is Pikachu's signature Electric move that also hurts the user?",o:["Volt Tackle","Thunderbolt","Thunder","Spark"],a:"Volt Tackle"},
+{q:"What does Larvitar eventually evolve into?",o:["Tyranitar","Salamence","Metagross","Garchomp"],a:"Tyranitar"},
+{q:"What type is Tyranitar?",o:["Rock and Dark","Rock and Ground","Steel and Dark","Dragon and Rock"],a:"Rock and Dark"},
+{q:"What does Beldum eventually evolve into?",o:["Metagross","Magnezone","Bronzong","Aggron"],a:"Metagross"},
+{q:"What type is Metagross?",o:["Steel and Psychic","Steel and Rock","Psychic only","Steel only"],a:"Steel and Psychic"},
+{q:"What does Gible eventually evolve into?",o:["Garchomp","Flygon","Salamence","Haxorus"],a:"Garchomp"},
+{q:"What type is Garchomp?",o:["Dragon and Ground","Dragon and Flying","Ground and Rock","Dragon only"],a:"Dragon and Ground"},
+{q:"What does Deino eventually evolve into?",o:["Hydreigon","Hydreigon's cousin Zweilous only","Druddigon","Noivern"],a:"Hydreigon"},
+{q:"What does Dreepy eventually evolve into?",o:["Dragapult","Duraludon","Drampa","Goodra"],a:"Dragapult"},
+{q:"What is Snorlax's baby form called?",o:["Munchlax","Happiny","Bonsly","Chingling"],a:"Munchlax"},
+{q:"What does Chansey evolve into?",o:["Blissey","Happiny","Audino","Miltank"],a:"Blissey"},
+{q:"Which region is based on the country of France?",o:["Kalos","Galar","Alola","Unova"],a:"Kalos"},
+{q:"Which region is based on the islands of Hawaii?",o:["Alola","Kalos","Paldea","Hoenn"],a:"Alola"},
+{q:"Which region is based on the United Kingdom?",o:["Galar","Kalos","Unova","Sinnoh"],a:"Galar"},
+{q:"Which region is based on Spain and Portugal?",o:["Paldea","Kalos","Galar","Alola"],a:"Paldea"},
+{q:"Which two rival teams appear in the Hoenn region?",o:["Team Aqua and Team Magma","Team Rocket and Team Plasma","Team Skull and Team Yell","Team Flare and Team Galactic"],a:"Team Aqua and Team Magma"},
+{q:"Which villainous team appears in the Sinnoh region?",o:["Team Galactic","Team Plasma","Team Flare","Team Skull"],a:"Team Galactic"},
+{q:"Which villainous team appears in the Unova region?",o:["Team Plasma","Team Galactic","Team Aqua","Team Yell"],a:"Team Plasma"},
+{q:"Which villainous team appears in the Kalos region?",o:["Team Flare","Team Skull","Team Plasma","Team Magma"],a:"Team Flare"},
+{q:"Which champion of Sinnoh is famous for her powerful Garchomp?",o:["Cynthia","Diantha","Iris","Steven"],a:"Cynthia"},
+{q:"Which move always hits its target no matter what?",o:["Swift","Tackle","Hyper Beam","Slam"],a:"Swift"},
+{q:"Which move makes the user faint in order to deal huge damage?",o:["Explosion","Hyper Beam","Giga Impact","Double-Edge"],a:"Explosion"},
+{q:"Which item stops a Pokémon from evolving while it is held?",o:["The Everstone","The Lucky Egg","The Amulet Coin","The Soothe Bell"],a:"The Everstone"},
+{q:"What does a Rare Candy do?",o:["Raises a Pokémon one level","Fully heals a Pokémon","Teaches a new move","Increases catch rate"],a:"Raises a Pokémon one level"},
+{q:"What is special about the Master Ball?",o:["It catches any Pokémon without fail","It heals the Pokémon it catches","It works only on legendaries","It can be used twice"],a:"It catches any Pokémon without fail"},
+{q:"At what level does Magikarp evolve into Gyarados?",o:["Level 20","Level 15","Level 30","Level 36"],a:"Level 20"},
+{q:"Which stone evolves Growlithe into Arcanine?",o:["A Fire Stone","A Sun Stone","A Thunder Stone","A Dusk Stone"],a:"A Fire Stone"},
+{q:"How many tails does Ninetales have?",o:["Nine","Six","Three","Twelve"],a:"Nine"},
+{q:"Which Pokémon is known as the Transform Pokémon?",o:["Ditto","Mew","Zorua","Kecleon"],a:"Ditto"},
+{q:"Which Pokémon is known as the Genetic Pokémon?",o:["Mewtwo","Mew","Porygon","Deoxys"],a:"Mewtwo"}
+],
+
+/* ---------- E: 5 points ---------- */
+E:[
+{q:"Which Pokémon is number 001 in the National Pokédex?",o:["Bulbasaur","Pikachu","Charmander","Rattata"],a:"Bulbasaur"},
+{q:"Which Pokémon is number 025 in the National Pokédex?",o:["Pikachu","Raichu","Pichu","Eevee"],a:"Pikachu"},
+{q:"Which legendary bird is number 144?",o:["Articuno","Zapdos","Moltres","Lugia"],a:"Articuno"},
+{q:"Which Pokémon is known as the Evolution Pokémon?",o:["Eevee","Ditto","Mew","Espeon"],a:"Eevee"},
+{q:"Which Pokémon is said to be the ancestor of all Pokémon?",o:["Mew","Mewtwo","Arceus","Celebi"],a:"Mew"},
+{q:"Which mythical Pokémon can travel through time and lives in a forest shrine?",o:["Celebi","Jirachi","Shaymin","Victini"],a:"Celebi"},
+{q:"What type is an Alolan Vulpix?",o:["Ice","Fire","Fairy","Ghost"],a:"Ice"},
+{q:"What type is an Alolan Raichu?",o:["Electric and Psychic","Electric and Fairy","Electric and Flying","Electric only"],a:"Electric and Psychic"},
+{q:"What type is an Alolan Exeggutor?",o:["Grass and Dragon","Grass and Psychic","Grass and Fire","Grass and Rock"],a:"Grass and Dragon"},
+{q:"What type is a Galarian Ponyta?",o:["Psychic","Fairy","Fire","Ice"],a:"Psychic"},
+{q:"Which type is completely immune to Dragon type attacks?",o:["Fairy","Steel","Dark","Ice"],a:"Fairy"},
+{q:"Which type is immune to Poison type attacks?",o:["Steel","Rock","Ghost","Flying"],a:"Steel"},
+{q:"Which three types is Bug super effective against?",o:["Grass, Psychic and Dark","Fire, Water and Rock","Flying, Steel and Fairy","Ground, Ice and Ghost"],a:"Grass, Psychic and Dark"},
+{q:"Which Poké Ball works better inside caves and at night?",o:["The Dusk Ball","The Net Ball","The Dive Ball","The Quick Ball"],a:"The Dusk Ball"},
+{q:"Which Poké Ball works better on Water and Bug Pokémon?",o:["The Net Ball","The Dive Ball","The Lure Ball","The Fast Ball"],a:"The Net Ball"},
+{q:"Which berry cures paralysis?",o:["The Cheri Berry","The Chesto Berry","The Pecha Berry","The Rawst Berry"],a:"The Cheri Berry"},
+{q:"Which item brings a fainted Pokémon back with half its health?",o:["A Revive","A Full Restore","A Hyper Potion","An Elixir"],a:"A Revive"},
+{q:"Which town in Kanto is home to the haunted Pokémon Tower?",o:["Lavender Town","Celadon City","Fuchsia City","Viridian City"],a:"Lavender Town"},
+{q:"What does Cubone wear on its head?",o:["Its mother's skull","A stone helmet","A shell","A bone mask it carved"],a:"Its mother's skull"},
+{q:"Which Eevee evolution appears when Eevee levels up at night with high friendship?",o:["Umbreon","Espeon","Sylveon","Glaceon"],a:"Umbreon"},
+{q:"Which Pokémon evolve only when they are traded to another player?",o:["Haunter and Machoke","Pikachu and Eevee","Magikarp and Feebas","Growlithe and Vulpix"],a:"Haunter and Machoke"},
+{q:"Who designed the original Pokémon games?",o:["Satoshi Tajiri","Shigeru Miyamoto","Hideo Kojima","Masahiro Sakurai"],a:"Satoshi Tajiri"},
+{q:"In which year did the first Pokémon games come out in Japan?",o:["1996","1991","1999","2001"],a:"1996"},
+{q:"Which generation introduced Mega Evolution?",o:["The sixth","The fourth","The fifth","The seventh"],a:"The sixth"},
+{q:"Which Pokémon appears on the box of Pokémon Red?",o:["Charizard","Blastoise","Venusaur","Pikachu"],a:"Charizard"},
+{q:"Which Pokémon appears on the box of Pokémon Blue?",o:["Blastoise","Charizard","Venusaur","Mewtwo"],a:"Blastoise"},
+{q:"Which status condition sometimes stops a Pokémon from moving at all?",o:["Paralysis","Poison","Burn","Confusion only"],a:"Paralysis"},
+{q:"Which status condition slowly damages a Pokémon and is cured by an Antidote?",o:["Poison","Burn","Freeze","Sleep"],a:"Poison"},
+{q:"Where do Pokémon go when your party is already full?",o:["The storage boxes on the PC","Back to the wild","The Pokémon Center","The professor's lab"],a:"The storage boxes on the PC"},
+{q:"Which Pokémon type is Sableye best known for having no weaknesses to before Fairy existed?",o:["Dark and Ghost","Dark and Steel","Ghost and Poison","Dark and Psychic"],a:"Dark and Ghost"},
+{q:"What is the pre-evolution of Chansey?",o:["Happiny","Blissey","Igglybuff","Cleffa"],a:"Happiny"},
+{q:"Which Pokémon is known as the Mouse Pokémon?",o:["Pikachu","Rattata","Sandshrew","Dedenne"],a:"Pikachu"}
+]
+
+}},
+
+/* ============================================================
+   AMERICAN GIRL — the dolls and their stories
+   ============================================================ */
+americangirl:{ label:'American Girl', tagline:'The dolls and their stories', bank:{
+
+/* ---------- A: 1 point ---------- */
+A:[
+{q:"How tall are the classic American Girl dolls?",o:["18 inches","12 inches","24 inches","36 inches"],a:"18 inches"},
+{q:"What comes with each historical American Girl doll to tell her story?",o:["Books","A movie","A poster","A puzzle"],a:"Books"},
+{q:"Which American Girl wears glasses and lives during World War II?",o:["Molly","Kit","Samantha","Julie"],a:"Molly"},
+{q:"Which American Girl is a Swedish immigrant on the Minnesota frontier?",o:["Kirsten","Josefina","Caroline","Rebecca"],a:"Kirsten"},
+{q:"Which American Girl lives in 1904 with her wealthy grandmother?",o:["Samantha","Felicity","Nellie","Maryellen"],a:"Samantha"},
+{q:"Which American Girl escapes slavery during the Civil War?",o:["Addy","Melody","Claudie","Cécile"],a:"Addy"},
+{q:"Which American Girl lives in colonial Williamsburg?",o:["Felicity","Caroline","Elizabeth","Josefina"],a:"Felicity"},
+{q:"Which American Girl grows up in the Great Depression and wants to be a reporter?",o:["Kit","Molly","Maryellen","Ruthie"],a:"Kit"},
+{q:"Which American Girl is Nez Perce?",o:["Kaya","Josefina","Nanea","Kirsten"],a:"Kaya"},
+{q:"Which American Girl lives in San Francisco in 1974?",o:["Julie","Courtney","Melody","Ivy"],a:"Julie"},
+{q:"Which American Girl lives on a ranch in New Mexico in 1824?",o:["Josefina","Kaya","Marisol","Saige"],a:"Josefina"},
+{q:"Which American Girl lives in Hawaii when Pearl Harbor is attacked?",o:["Nanea","Kanani","Lea","Kaya"],a:"Nanea"},
+{q:"Which American Girl lives in 1964 Detroit and loves to sing?",o:["Melody","Addy","Claudie","Julie"],a:"Melody"},
+{q:"Which American Girl is a 1950s Florida girl who had polio?",o:["Maryellen","Molly","Courtney","Kit"],a:"Maryellen"},
+{q:"Which American Girl dreams of being an actress in 1914 New York?",o:["Rebecca","Samantha","Claudie","Isabelle"],a:"Rebecca"},
+{q:"What is the line of dolls you can customize to look like yourself?",o:["Truly Me","Bitty Baby","WellieWishers","BeForever"],a:"Truly Me"},
+{q:"What is American Girl's baby doll line called?",o:["Bitty Baby","Truly Me","Little Sister","Hopscotch Hill"],a:"Bitty Baby"},
+{q:"What is the special doll released once a year called?",o:["Girl of the Year","Doll of the Month","Star Girl","Season Girl"],a:"Girl of the Year"},
+{q:"What is the place at an American Girl store that repairs damaged dolls called?",o:["The doll hospital","The doll spa","The workshop","The salon"],a:"The doll hospital"},
+{q:"What kind of animal is Kit's pet Grace?",o:["A dog","A cat","A rabbit","A bird"],a:"A dog"},
+{q:"What is the name of Felicity's horse?",o:["Penny","Steps High","Sombrita","Nutmeg"],a:"Penny"},
+{q:"What is the name of Kaya's horse?",o:["Steps High","Penny","Sunny","Blaze"],a:"Steps High"},
+{q:"What is the name of Julie's pet rabbit?",o:["Nutmeg","Grace","Cinnamon","Clover"],a:"Nutmeg"},
+{q:"Which sport does Julie want to play on the boys' team?",o:["Basketball","Soccer","Baseball","Tennis"],a:"Basketball"},
+{q:"What color is Molly's hair?",o:["Brown","Blonde","Red","Black"],a:"Brown"},
+{q:"Which country did Kirsten's family come from?",o:["Sweden","Ireland","Germany","Norway"],a:"Sweden"},
+{q:"Which historical American Girl is known for her singing voice?",o:["Melody","Kit","Kirsten","Felicity"],a:"Melody"},
+{q:"What is the smaller doll line featuring friends in colorful rain boots?",o:["WellieWishers","Bitty Baby","Truly Me","Hopscotch Hill"],a:"WellieWishers"},
+{q:"Which company owns American Girl today?",o:["Mattel","Hasbro","Disney","LEGO"],a:"Mattel"},
+{q:"What kind of animal is Josefina's pet Sombrita?",o:["A goat","A dog","A lamb","A donkey"],a:"A goat"}
+],
+
+/* ---------- B: 2 points ---------- */
+B:[
+{q:"Who founded American Girl?",o:["Pleasant Rowland","Ruth Handler","Barbara Millicent","Margaret Rowland"],a:"Pleasant Rowland"},
+{q:"What was the company originally called?",o:["Pleasant Company","American Doll Co.","Rowland Toys","Heritage Dolls"],a:"Pleasant Company"},
+{q:"In what year was the company founded?",o:["1986","1976","1992","2001"],a:"1986"},
+{q:"Which three dolls were the very first released?",o:["Kirsten, Samantha and Molly","Felicity, Addy and Josefina","Molly, Kit and Julie","Samantha, Addy and Kirsten"],a:"Kirsten, Samantha and Molly"},
+{q:"In what year did Mattel buy the company?",o:["1998","1986","2005","2010"],a:"1998"},
+{q:"In which city did the first American Girl Place store open?",o:["Chicago","New York","Los Angeles","Boston"],a:"Chicago"},
+{q:"In what year is Samantha's story set?",o:["1904","1854","1934","1944"],a:"1904"},
+{q:"In what year is Molly's story set?",o:["1944","1934","1954","1914"],a:"1944"},
+{q:"Which war is Addy's story set during?",o:["The Civil War","World War I","World War II","The Revolutionary War"],a:"The Civil War"},
+{q:"Which city does Addy escape to with her mother?",o:["Philadelphia","Boston","New York","Baltimore"],a:"Philadelphia"},
+{q:"Who is Samantha's best friend, a servant girl next door?",o:["Nellie O'Malley","Ruthie Smithens","Ivy Ling","Elizabeth Cole"],a:"Nellie O'Malley"},
+{q:"Who is Kit's best friend?",o:["Ruthie Smithens","Nellie O'Malley","Emily Bennett","Sarah Moore"],a:"Ruthie Smithens"},
+{q:"Who is the English girl who stays with Molly's family during the war?",o:["Emily Bennett","Ruthie Smithens","Linda","Susan"],a:"Emily Bennett"},
+{q:"Who is Julie's best friend?",o:["Ivy Ling","Nellie O'Malley","Ruthie Smithens","Elizabeth Cole"],a:"Ivy Ling"},
+{q:"Who is Felicity's best friend?",o:["Elizabeth Cole","Nellie O'Malley","Sarah Moore","Emily Bennett"],a:"Elizabeth Cole"},
+{q:"What does Samantha call the grandmother who raises her?",o:["Grandmary","Nana","Gram","Grandmama"],a:"Grandmary"},
+{q:"Which city is Kit's story set in?",o:["Cincinnati","Chicago","Cleveland","Columbus"],a:"Cincinnati"},
+{q:"In what year is Julie's story set?",o:["1974","1964","1984","1954"],a:"1974"},
+{q:"In what year is Kaya's story set?",o:["1764","1824","1854","1704"],a:"1764"},
+{q:"What is Rebecca's family background?",o:["Russian Jewish immigrants","Italian immigrants","Irish immigrants","Polish farmers"],a:"Russian Jewish immigrants"},
+{q:"Which two American Girls share a story set in 1853 New Orleans?",o:["Marie-Grace and Cécile","Kirsten and Josefina","Addy and Melody","Samantha and Nellie"],a:"Marie-Grace and Cécile"},
+{q:"Which American Girl lives near Lake Ontario during the War of 1812?",o:["Caroline","Felicity","Kirsten","Rebecca"],a:"Caroline"},
+{q:"Which American Girl's story is set in 1986 and includes an arcade game?",o:["Courtney","Julie","Maryellen","Melody"],a:"Courtney"},
+{q:"In what year was the first Girl of the Year doll released?",o:["2001","1996","2005","2010"],a:"2001"},
+{q:"Who was the very first Girl of the Year?",o:["Lindsey","Kailey","Marisol","Mia"],a:"Lindsey"},
+{q:"What is Samantha's last name?",o:["Parkington","Pennington","Parker","Prescott"],a:"Parkington"},
+{q:"What is Molly's last name?",o:["McIntire","McIntosh","MacDonald","Mitchell"],a:"McIntire"},
+{q:"What is Kit's last name?",o:["Kittredge","Kingsley","Kendrick","Kelly"],a:"Kittredge"},
+{q:"What is Addy's last name?",o:["Walker","Wells","Watson","Ward"],a:"Walker"},
+{q:"What is Julie's last name?",o:["Albright","Allen","Anderson","Abbott"],a:"Albright"}
+],
+
+/* ---------- C: 3 points ---------- */
+C:[
+{q:"What is the name of Kaya's blind adopted sister?",o:["Speaking Rain","Singing Bird","Swan Circling","Brown Deer"],a:"Speaking Rain"},
+{q:"Who is Addy's friend at school in Philadelphia?",o:["Sarah Moore","Ruthie Smithens","Harriet Davis","Esther Walker"],a:"Sarah Moore"},
+{q:"What is Kit's full first name?",o:["Margaret","Katherine","Kathleen","Kristen"],a:"Margaret"},
+{q:"What does Kit want to become when she grows up?",o:["A newspaper reporter","A nurse","A teacher","A pilot"],a:"A newspaper reporter"},
+{q:"How does Kit's family earn money after her father loses his business?",o:["They take in boarders","They sell the house","They open a bakery","They move to a farm"],a:"They take in boarders"},
+{q:"Who is the aunt who comes to help raise Josefina and her sisters?",o:["Tía Dolores","Tía Magdalena","Tía Ana","Tía Clara"],a:"Tía Dolores"},
+{q:"What is Felicity's last name?",o:["Merriman","Marchand","Morgan","Mitchell"],a:"Merriman"},
+{q:"What is Kirsten's last name?",o:["Larson","Lindgren","Lundquist","Larkin"],a:"Larson"},
+{q:"What is Melody's last name?",o:["Ellison","Edwards","Everett","Ellis"],a:"Ellison"},
+{q:"What is Maryellen's last name?",o:["Larkin","Larson","Lawrence","Lindell"],a:"Larkin"},
+{q:"What is Nanea's last name?",o:["Mitchell","Makani","Moore","Malia"],a:"Mitchell"},
+{q:"What is Courtney's last name?",o:["Moore","Miller","Morgan","Mitchell"],a:"Moore"},
+{q:"How many books did each of the original historical characters have?",o:["Six","Three","Ten","Four"],a:"Six"},
+{q:"What is the first book in each historical character's series called?",o:["Meet","Hello","Beginnings","Introducing"],a:"Meet"},
+{q:"What is the name of the relaunched historical doll line?",o:["BeForever","Time Travelers","Historic Girls","Classics"],a:"BeForever"},
+{q:"In what year is Felicity's story set?",o:["1774","1812","1854","1704"],a:"1774"},
+{q:"In what year is Kirsten's story set?",o:["1854","1774","1904","1824"],a:"1854"},
+{q:"In what year is Addy's story set?",o:["1864","1854","1874","1844"],a:"1864"},
+{q:"Which actress starred as Kit in the 2008 movie?",o:["Abigail Breslin","Dakota Fanning","Elle Fanning","AnnaSophia Robb"],a:"Abigail Breslin"},
+{q:"Which American Girl got a television movie in 2004?",o:["Samantha","Kit","Molly","Felicity"],a:"Samantha"},
+{q:"Which American Girl's story is set during the Harlem Renaissance?",o:["Claudie","Melody","Addy","Cécile"],a:"Claudie"},
+{q:"What is Nanea's dog named?",o:["Mele","Grace","Nutmeg","Lani"],a:"Mele"},
+{q:"What is Maryellen's dachshund named?",o:["Scooter","Grace","Rusty","Pepper"],a:"Scooter"},
+{q:"What does Molly's father do during World War II?",o:["He serves as an army doctor","He flies planes","He works in a factory","He is a journalist"],a:"He serves as an army doctor"},
+{q:"Which state does Addy's family escape from?",o:["North Carolina","Virginia","Georgia","Alabama"],a:"North Carolina"},
+{q:"Who is the Native American girl who becomes Kirsten's friend?",o:["Singing Bird","Speaking Rain","Morning Star","Little Fawn"],a:"Singing Bird"},
+{q:"Which Girl of the Year is a gymnast?",o:["McKenna","Saige","Isabelle","Kanani"],a:"McKenna"},
+{q:"Which Girl of the Year is from Hawaii?",o:["Kanani","Lea","Nanea","Joss"],a:"Kanani"},
+{q:"Which Girl of the Year is a dancer released in 2014?",o:["Isabelle","Marisol","McKenna","Grace"],a:"Isabelle"},
+{q:"Which Girl of the Year loves to bake and travels to Paris?",o:["Grace","Isabelle","Lea","Corinne"],a:"Grace"}
+],
+
+/* ---------- D: 4 points ---------- */
+D:[
+{q:"Which Girl of the Year is an artist from New Mexico?",o:["Saige","Marisol","Kanani","Lanie"],a:"Saige"},
+{q:"Which Girl of the Year travels to Brazil?",o:["Lea Clark","Grace Thomas","Kira Bailey","Corinne Tan"],a:"Lea Clark"},
+{q:"Which Girl of the Year is a country singer from Nashville?",o:["Tenney Grant","Z Yang","Blaire Wilson","Joss Kendrick"],a:"Tenney Grant"},
+{q:"Which Girl of the Year dreams of going to Mars?",o:["Luciana Vega","Kira Bailey","Corinne Tan","Saige Copeland"],a:"Luciana Vega"},
+{q:"Which Girl of the Year is a surfer who wears a hearing aid?",o:["Joss Kendrick","Kira Bailey","Blaire Wilson","Lea Clark"],a:"Joss Kendrick"},
+{q:"Which Girl of the Year travels to a wildlife sanctuary in Australia?",o:["Kira Bailey","Lea Clark","Joss Kendrick","Luciana Vega"],a:"Kira Bailey"},
+{q:"Which Girl of the Year was the first Chinese American one?",o:["Corinne Tan","Z Yang","Ivy Ling","Kanani Akina"],a:"Corinne Tan"},
+{q:"Which Girl of the Year's story is about standing up to bullying?",o:["Chrissa","Lanie","Mia","Marisol"],a:"Chrissa"},
+{q:"Which Girl of the Year is an ice skater?",o:["Mia","Chrissa","McKenna","Isabelle"],a:"Mia"},
+{q:"Which Girl of the Year lives on a farm and loves to cook?",o:["Blaire Wilson","Grace Thomas","Lanie Holland","Tenney Grant"],a:"Blaire Wilson"},
+{q:"Which Girl of the Year is a filmmaker who makes stop-motion videos?",o:["Z Yang","Tenney Grant","Corinne Tan","Luciana Vega"],a:"Z Yang"},
+{q:"Who was the first boy character released by American Girl?",o:["Logan Everett","Nicki Fleming","Ben Walker","Sam Kittredge"],a:"Logan Everett"},
+{q:"What is the school-themed line of smaller dolls called?",o:["Hopscotch Hill School","Innerstar Academy","Bitty Twins","Truly Me Academy"],a:"Hopscotch Hill School"},
+{q:"What does Nanea call her grandmother?",o:["Tutu","Nana","Lola","Oma"],a:"Tutu"},
+{q:"What is Kaya's name said to mean?",o:["She who arranges rocks","She who runs fast","Morning song","Little sister"],a:"She who arranges rocks"},
+{q:"Which state is American Girl's headquarters in?",o:["Wisconsin","Illinois","California","New York"],a:"Wisconsin"},
+{q:"What place inspired Pleasant Rowland to create the dolls?",o:["Colonial Williamsburg","Ellis Island","Mount Vernon","Plymouth Rock"],a:"Colonial Williamsburg"},
+{q:"What did Pleasant Rowland do before founding the company?",o:["She was a teacher and textbook writer","She was a doll maker","She was an actress","She was a lawyer"],a:"She was a teacher and textbook writer"},
+{q:"Which law about girls in school sports is part of Julie's story?",o:["Title IX","The Equal Rights Amendment","The Civil Rights Act","The Fair Play Act"],a:"Title IX"},
+{q:"What business does Kit's father lose in the Depression?",o:["His car dealership","His bank","His grocery store","His newspaper"],a:"His car dealership"},
+{q:"What is the name of Addy's older brother?",o:["Sam","Ben","Joseph","Isaac"],a:"Sam"},
+{q:"On what date does Nanea's story begin?",o:["December 7, 1941","June 6, 1944","September 1, 1939","May 8, 1945"],a:"December 7, 1941"},
+{q:"Which arcade game does Courtney love to play?",o:["Pac-Man","Space Invaders","Donkey Kong","Frogger"],a:"Pac-Man"},
+{q:"Which historical doll does Courtney own within her own story?",o:["Molly","Samantha","Kirsten","Felicity"],a:"Molly"},
+{q:"Which New York neighborhood does Rebecca's family live in?",o:["The Lower East Side","Harlem","Brooklyn Heights","The Bronx"],a:"The Lower East Side"},
+{q:"What is Marie-Grace's father's profession?",o:["A doctor","A shipbuilder","A merchant","A teacher"],a:"A doctor"},
+{q:"What does Caroline's family build and repair?",o:["Ships","Wagons","Houses","Furniture"],a:"Ships"},
+{q:"Who originally owned Felicity's horse Penny before Felicity rescued her?",o:["Jiggy Nye","Ben Davidson","Mr. Merriman","Elizabeth's father"],a:"Jiggy Nye"},
+{q:"Which two names are the sisters released with a 1999 story?",o:["Isabel and Nicki","Marie-Grace and Cécile","Callie and Marie","Ana and Clara"],a:"Isabel and Nicki"},
+{q:"Which magazine did the company begin publishing in 1992?",o:["American Girl magazine","Doll Life","Pleasant Times","Girl Talk"],a:"American Girl magazine"}
+],
+
+/* ---------- E: 5 points ---------- */
+E:[
+{q:"What are the names of Josefina's three older sisters?",o:["Ana, Francisca and Clara","Ana, Maria and Rosa","Clara, Elena and Sofia","Francisca, Lupe and Ana"],a:"Ana, Francisca and Clara"},
+{q:"Near which city is Josefina's family rancho?",o:["Santa Fe","Albuquerque","Taos","El Paso"],a:"Santa Fe"},
+{q:"Which historical doll was retired in 2009 and brought back in 2014?",o:["Samantha","Kirsten","Felicity","Molly"],a:"Samantha"},
+{q:"What are the names of Nellie O'Malley's two younger sisters?",o:["Bridget and Jenny","Mary and Kate","Anna and Ellen","Rose and Sarah"],a:"Bridget and Jenny"},
+{q:"What was the Truly Me line originally called?",o:["American Girl Today","My Own Doll","Girl Like Me","Design a Friend"],a:"American Girl Today"},
+{q:"Cécile Rey's family in New Orleans is described as what?",o:["A free family of color","Newly arrived from France","Plantation owners","Fur traders"],a:"A free family of color"},
+{q:"Which movement is central to Melody's story?",o:["The civil rights movement","The suffrage movement","The labor movement","The space race"],a:"The civil rights movement"},
+{q:"Which neighborhood is Claudie's story set in?",o:["Harlem","Greenwich Village","Brooklyn","The Bronx"],a:"Harlem"},
+{q:"Which region of the country is Kaya's tribe from?",o:["The Pacific Northwest","The Great Plains","The Southwest","The Great Lakes"],a:"The Pacific Northwest"},
+{q:"What is the name of Addy's mother?",o:["Ruth","Esther","Sarah","Hannah"],a:"Ruth"},
+{q:"What is the name of Addy's baby sister left behind at the start of her story?",o:["Esther","Sarah","Ruth","Mary"],a:"Esther"},
+{q:"Which Girl of the Year loves nature and studies the outdoors in her backyard?",o:["Lanie Holland","Saige Copeland","Blaire Wilson","Kira Bailey"],a:"Lanie Holland"},
+{q:"Which Girl of the Year is a Mexican American dancer released in 2005?",o:["Marisol Luna","Isabelle Palmer","Mia St. Clair","Jess McConnell"],a:"Marisol Luna"},
+{q:"Which Girl of the Year travels to Belize?",o:["Jess McConnell","Lea Clark","Kira Bailey","Kailey Hopkins"],a:"Jess McConnell"},
+{q:"Which Girl of the Year loves the ocean and tide pools?",o:["Kailey Hopkins","Joss Kendrick","Lea Clark","Nicki Fleming"],a:"Kailey Hopkins"},
+{q:"Which of these is a WellieWishers character?",o:["Willa","Nellie","Ruthie","Ivy"],a:"Willa"},
+{q:"In which year did the New York flagship store open?",o:["2003","1998","2008","2011"],a:"2003"},
+{q:"Which historical character was the first African American doll in the line?",o:["Addy","Melody","Claudie","Cécile"],a:"Addy"},
+{q:"Which historical character was the first Native American doll in the line?",o:["Kaya","Josefina","Nanea","Kirsten"],a:"Kaya"},
+{q:"What is the name of Samantha's uncle who marries Cornelia?",o:["Gard","Edward","Henry","William"],a:"Gard"},
+{q:"What is the name of Kit's older brother?",o:["Charlie","Sam","Will","Jack"],a:"Charlie"},
+{q:"What kind of home does Kit make her own bedroom in?",o:["The attic","The basement","A treehouse","The garage"],a:"The attic"},
+{q:"In what year is Claudie's story set?",o:["1922","1932","1912","1942"],a:"1922"},
+{q:"In what year is Rebecca's story set?",o:["1914","1904","1924","1934"],a:"1914"},
+{q:"In what year is Melody's story set?",o:["1964","1954","1974","1944"],a:"1964"},
+{q:"In what year is Maryellen's story set?",o:["1954","1944","1964","1934"],a:"1954"},
+{q:"In what year is Nanea's story set?",o:["1941","1944","1938","1945"],a:"1941"},
+{q:"In what year is Caroline's story set?",o:["1812","1824","1804","1832"],a:"1812"},
+{q:"Which historical character's stories were the first written by an author other than the founder?",o:["Addy","Samantha","Molly","Kirsten"],a:"Addy"},
+{q:"What is the name of Josefina's home region's ruling country at the time of her story?",o:["Mexico","Spain","The United States","France"],a:"Mexico"}
+]
+
+}},
+
+/* ============================================================
+   NINTENDO — the games and the consoles
+   ============================================================ */
+nintendo:{ label:'Nintendo', tagline:'Games and consoles', bank:{
+
+/* ---------- A: 1 point ---------- */
+A:[
+{q:"Which mustachioed plumber is Nintendo's mascot?",o:["Mario","Luigi","Wario","Link"],a:"Mario"},
+{q:"Who is Mario's younger brother?",o:["Luigi","Wario","Waluigi","Toad"],a:"Luigi"},
+{q:"What color is Luigi's hat?",o:["Green","Red","Blue","Yellow"],a:"Green"},
+{q:"Which princess does Mario usually rescue?",o:["Princess Peach","Princess Daisy","Princess Zelda","Rosalina"],a:"Princess Peach"},
+{q:"Who is the spiky turtle villain who kidnaps Peach?",o:["Bowser","Wario","Donkey Kong","King Boo"],a:"Bowser"},
+{q:"What kind of creature is Yoshi?",o:["A dinosaur","A turtle","A dragon","A frog"],a:"A dinosaur"},
+{q:"What does the Fire Flower let Mario do?",o:["Throw fireballs","Fly","Turn invisible","Grow huge"],a:"Throw fireballs"},
+{q:"What kingdom does Mario live in?",o:["The Mushroom Kingdom","The Sand Kingdom","Hyrule","Dream Land"],a:"The Mushroom Kingdom"},
+{q:"What is Mario's job?",o:["Plumber","Carpenter","Chef","Firefighter"],a:"Plumber"},
+{q:"Which Nintendo game is a racing game with Mario and friends?",o:["Mario Kart","Mario Party","Mario Golf","Super Mario Bros."],a:"Mario Kart"},
+{q:"What is the hero of The Legend of Zelda named?",o:["Link","Zelda","Ganon","Navi"],a:"Link"},
+{q:"What land is The Legend of Zelda set in?",o:["Hyrule","Hoenn","Popstar","Corneria"],a:"Hyrule"},
+{q:"Which round pink Nintendo character swallows his enemies?",o:["Kirby","Yoshi","Jigglypuff","Waddle Dee"],a:"Kirby"},
+{q:"Which giant ape has his own Nintendo series?",o:["Donkey Kong","Diddy Kong","Bowser","King K. Rool"],a:"Donkey Kong"},
+{q:"What was Nintendo's famous handheld released in 1989?",o:["The Game Boy","The Switch","The DS","The Wii"],a:"The Game Boy"},
+{q:"Which Nintendo console uses Joy-Con controllers?",o:["The Switch","The Wii","The GameCube","The Nintendo 64"],a:"The Switch"},
+{q:"Which Nintendo console came with a motion-sensing remote?",o:["The Wii","The GameCube","The Switch","The NES"],a:"The Wii"},
+{q:"What are the brown mushroom-shaped enemies in Mario games called?",o:["Goombas","Koopas","Boos","Shy Guys"],a:"Goombas"},
+{q:"Which Nintendo game has you living in a town with animal neighbors?",o:["Animal Crossing","Pikmin","Splatoon","Star Fox"],a:"Animal Crossing"},
+{q:"Which Nintendo game brings many characters together to fight?",o:["Super Smash Bros.","Mario Party","Wii Sports","Splatoon"],a:"Super Smash Bros."},
+{q:"Which country is Nintendo from?",o:["Japan","The United States","South Korea","China"],a:"Japan"},
+{q:"What letter appears on Mario's cap?",o:["M","N","S","B"],a:"M"},
+{q:"Which item makes Mario briefly invincible?",o:["The Super Star","The Fire Flower","The Super Mushroom","The Cape Feather"],a:"The Super Star"},
+{q:"What does a green 1-Up mushroom give Mario?",o:["An extra life","Fire power","Super speed","A shield"],a:"An extra life"},
+{q:"Which princess wears yellow and appears in Mario sports games?",o:["Daisy","Peach","Rosalina","Pauline"],a:"Daisy"},
+{q:"What do you collect throughout Mario levels?",o:["Coins","Gems","Stars only","Rings"],a:"Coins"},
+{q:"Which Nintendo character wears a green tunic and a pointed hat?",o:["Link","Kirby","Toad","Olimar"],a:"Link"},
+{q:"Who is the small mushroom character who helps Mario?",o:["Toad","Yoshi","Boo","Lakitu"],a:"Toad"},
+{q:"Which Nintendo game series is about racing on a track called Rainbow Road?",o:["Mario Kart","F-Zero","Star Fox","Excitebike"],a:"Mario Kart"},
+{q:"Which yellow-and-purple character is Mario's greedy rival?",o:["Wario","Waluigi","Bowser Jr.","Kamek"],a:"Wario"}
+],
+
+/* ---------- B: 2 points ---------- */
+B:[
+{q:"In which 1981 arcade game did Mario first appear?",o:["Donkey Kong","Super Mario Bros.","Mario Bros.","Popeye"],a:"Donkey Kong"},
+{q:"What was Mario originally called in his first game?",o:["Jumpman","Mr. Video","Plumber Joe","Marco"],a:"Jumpman"},
+{q:"Which designer created Mario, Zelda and Donkey Kong?",o:["Shigeru Miyamoto","Satoru Iwata","Masahiro Sakurai","Hideo Kojima"],a:"Shigeru Miyamoto"},
+{q:"In what year was Super Mario Bros. released?",o:["1985","1981","1990","1996"],a:"1985"},
+{q:"Which game introduced Yoshi?",o:["Super Mario World","Super Mario Bros. 3","Super Mario 64","Yoshi's Island"],a:"Super Mario World"},
+{q:"Who is Waluigi's usual partner?",o:["Wario","Bowser","Luigi","Bowser Jr."],a:"Wario"},
+{q:"What is the name of Bowser's son?",o:["Bowser Jr.","Baby Bowser Koopa","Kamek","Ludwig"],a:"Bowser Jr."},
+{q:"Who is the main villain of The Legend of Zelda?",o:["Ganondorf","Vaati","Zant","Bowser"],a:"Ganondorf"},
+{q:"What is the sacred golden triangle in Zelda called?",o:["The Triforce","The Trisphere","The Golden Seal","The Sacred Trio"],a:"The Triforce"},
+{q:"What legendary sword does Link wield?",o:["The Master Sword","The Falchion","Excalibur","The Blade of Ages"],a:"The Master Sword"},
+{q:"What is the name of Link's horse?",o:["Epona","Aeries","Sunny","Storm"],a:"Epona"},
+{q:"Which Zelda game came out on the Nintendo 64 in 1998?",o:["Ocarina of Time","Majora's Mask","The Wind Waker","A Link to the Past"],a:"Ocarina of Time"},
+{q:"Which Nintendo series stars the bounty hunter Samus Aran?",o:["Metroid","Star Fox","F-Zero","Kid Icarus"],a:"Metroid"},
+{q:"Who is Kirby's greedy rival king?",o:["King Dedede","King K. Rool","King Boo","Meta Knight"],a:"King Dedede"},
+{q:"Which pilot leads the team in Star Fox?",o:["Fox McCloud","Falco Lombardi","Slippy Toad","Peppy Hare"],a:"Fox McCloud"},
+{q:"What is the ship the Star Fox team flies?",o:["The Arwing","The Landmaster","The Great Fox","The Blue Falcon"],a:"The Arwing"},
+{q:"Which Nintendo racing series features Captain Falcon?",o:["F-Zero","Mario Kart","Excitebike","Wave Race"],a:"F-Zero"},
+{q:"Which console came after the NES?",o:["The Super Nintendo","The Nintendo 64","The GameCube","The Game Boy"],a:"The Super Nintendo"},
+{q:"In what year did the Nintendo Switch launch?",o:["2017","2012","2015","2020"],a:"2017"},
+{q:"What is the currency in Animal Crossing?",o:["Bells","Coins","Rupees","Nook Notes"],a:"Bells"},
+{q:"Which cheerful dog helps run things in Animal Crossing?",o:["Isabelle","Blathers","K.K. Slider","Tom Nook"],a:"Isabelle"},
+{q:"Which character runs the shop and loans in Animal Crossing?",o:["Tom Nook","Isabelle","Redd","Timmy only"],a:"Tom Nook"},
+{q:"What kind of creatures are the characters in Splatoon?",o:["Squid kids called Inklings","Frog people","Robot fish","Octopus knights"],a:"Squid kids called Inklings"},
+{q:"What is the main competitive mode in Splatoon?",o:["Turf War","Capture the Flag","Tower Rush","Ink Royale"],a:"Turf War"},
+{q:"Which Mario Kart item flies straight to the racer in first place?",o:["The spiny blue shell","The red shell","The banana","The bullet"],a:"The spiny blue shell"},
+{q:"Which Nintendo handheld had two screens?",o:["The Nintendo DS","The Game Boy Advance","The Switch Lite","The Game Boy Color"],a:"The Nintendo DS"},
+{q:"What does Luigi use to catch ghosts in Luigi's Mansion?",o:["A vacuum cleaner","A net","A flashlight only","A broom"],a:"A vacuum cleaner"},
+{q:"Which Nintendo game came with a balance board?",o:["Wii Fit","Wii Sports","Ring Fit Adventure","Just Dance"],a:"Wii Fit"},
+{q:"What are Nintendo's collectible figures that unlock game content called?",o:["amiibo","Miis","Skylanders","Tokens"],a:"amiibo"},
+{q:"Which game was bundled with the Wii console?",o:["Wii Sports","Wii Play","Wii Fit","Mario Kart Wii"],a:"Wii Sports"}
+],
+
+/* ---------- C: 3 points ---------- */
+C:[
+{q:"In what year was Nintendo founded?",o:["1889","1932","1955","1977"],a:"1889"},
+{q:"What did Nintendo originally make?",o:["Playing cards","Toy trains","Radios","Board games"],a:"Playing cards"},
+{q:"Which Japanese city is Nintendo's headquarters in?",o:["Kyoto","Tokyo","Osaka","Nagoya"],a:"Kyoto"},
+{q:"Which Nintendo president died in 2015 and was known as a programmer first?",o:["Satoru Iwata","Hiroshi Yamauchi","Shuntaro Furukawa","Reggie Fils-Aimé"],a:"Satoru Iwata"},
+{q:"Which Mario game launched alongside the Nintendo 64?",o:["Super Mario 64","Super Mario Sunshine","Super Mario World","Mario Kart 64"],a:"Super Mario 64"},
+{q:"Which Mario game gave him a water pack called FLUDD?",o:["Super Mario Sunshine","Super Mario Odyssey","Super Mario Galaxy","Super Mario 3D World"],a:"Super Mario Sunshine"},
+{q:"Which Mario game features a hat named Cappy?",o:["Super Mario Odyssey","Super Mario Galaxy","Super Mario Sunshine","Super Mario Maker"],a:"Super Mario Odyssey"},
+{q:"Which Mario game introduced Rosalina?",o:["Super Mario Galaxy","Super Mario Odyssey","Super Mario 3D World","New Super Mario Bros."],a:"Super Mario Galaxy"},
+{q:"What are the little star creatures in Super Mario Galaxy called?",o:["Lumas","Sprixies","Stardrops","Twinkles"],a:"Lumas"},
+{q:"In Super Mario Bros. 3, what does the leaf turn Mario into?",o:["Raccoon Mario","Frog Mario","Tanooki Mario","Hammer Mario"],a:"Raccoon Mario"},
+{q:"Which Zelda game turns Link into a wolf?",o:["Twilight Princess","The Wind Waker","Skyward Sword","Majora's Mask"],a:"Twilight Princess"},
+{q:"Which Zelda game has a cel-shaded look and lots of sailing?",o:["The Wind Waker","Twilight Princess","Ocarina of Time","Breath of the Wild"],a:"The Wind Waker"},
+{q:"Which console did Breath of the Wild launch alongside?",o:["The Switch","The Wii U only","The 3DS","The GameCube"],a:"The Switch"},
+{q:"What are the tiny hidden forest creatures in Breath of the Wild called?",o:["Koroks","Kikwis","Picori","Minish"],a:"Koroks"},
+{q:"Which Zelda game is set on Koholint Island?",o:["Link's Awakening","Oracle of Ages","A Link Between Worlds","Phantom Hourglass"],a:"Link's Awakening"},
+{q:"What kind of creature is Navi in Ocarina of Time?",o:["A fairy","A bird","A spirit wolf","A talking hat"],a:"A fairy"},
+{q:"Which Metroid game came out on the GameCube in 2002?",o:["Metroid Prime","Metroid Fusion","Super Metroid","Metroid Dread"],a:"Metroid Prime"},
+{q:"Which Metroid villain is a giant brain in a tank?",o:["Mother Brain","Ridley","Kraid","Dark Samus"],a:"Mother Brain"},
+{q:"Who created Kirby and later directed Super Smash Bros.?",o:["Masahiro Sakurai","Shigeru Miyamoto","Eiji Aonuma","Koji Kondo"],a:"Masahiro Sakurai"},
+{q:"What was Kirby's first game, released in 1992?",o:["Kirby's Dream Land","Kirby's Adventure","Kirby Super Star","Kirby 64"],a:"Kirby's Dream Land"},
+{q:"Which Star Fox character famously tells you to do a barrel roll?",o:["Peppy Hare","Slippy Toad","Falco Lombardi","General Pepper"],a:"Peppy Hare"},
+{q:"Who is Donkey Kong's small sidekick in a red cap?",o:["Diddy Kong","Dixie Kong","Cranky Kong","Funky Kong"],a:"Diddy Kong"},
+{q:"Which crocodile king is Donkey Kong's enemy?",o:["King K. Rool","King Dedede","King Boo","King Bob-omb"],a:"King K. Rool"},
+{q:"Which Nintendo series stars Captain Olimar and tiny plant creatures?",o:["Pikmin","Splatoon","Chibi-Robo","Star Fox"],a:"Pikmin"},
+{q:"Which Nintendo strategy series features Marth and Ike?",o:["Fire Emblem","Advance Wars","Xenoblade","Golden Sun"],a:"Fire Emblem"},
+{q:"Which game is the Smash Bros. character Ness from?",o:["EarthBound","Mother 3 only","Fire Emblem","Kid Icarus"],a:"EarthBound"},
+{q:"Which Nintendo console of 1995 used red 3D graphics and failed quickly?",o:["The Virtual Boy","The Game Boy Color","The 64DD","The Satellaview"],a:"The Virtual Boy"},
+{q:"In what year did the Nintendo DS come out?",o:["2004","2001","2006","2008"],a:"2004"},
+{q:"Which Nintendo console was released in 2012?",o:["The Wii U","The Wii","The Switch","The 3DS"],a:"The Wii U"},
+{q:"Which game was famously bundled with the original Game Boy?",o:["Tetris","Super Mario Land","Dr. Mario","Pokémon Red"],a:"Tetris"},
+{q:"Who voiced Mario in the games for nearly three decades?",o:["Charles Martinet","Chris Pratt","Bob Hoskins","Kevin Afghani"],a:"Charles Martinet"},
+{q:"Which Mario spinoff series is played on a board with minigames?",o:["Mario Party","Mario Kart","Mario Golf","Mario Tennis"],a:"Mario Party"}
+],
+
+/* ---------- D: 4 points ---------- */
+D:[
+{q:"Which console did the first Super Smash Bros. appear on?",o:["The Nintendo 64","The GameCube","The SNES","The Wii"],a:"The Nintendo 64"},
+{q:"Which owl runs the museum in Animal Crossing?",o:["Blathers","Brewster","Celeste","Wilbur"],a:"Blathers"},
+{q:"Which guitar-playing dog performs songs in Animal Crossing?",o:["K.K. Slider","Tom Nook","Rover","Mr. Resetti"],a:"K.K. Slider"},
+{q:"Which Animal Crossing game came out in 2020?",o:["New Horizons","New Leaf","City Folk","Wild World"],a:"New Horizons"},
+{q:"On which console did the first Splatoon appear?",o:["The Wii U","The Switch","The 3DS","The Wii"],a:"The Wii U"},
+{q:"What is the name of the idol duo in the first Splatoon?",o:["The Squid Sisters","Off the Hook","Deep Cut","The Ink Twins"],a:"The Squid Sisters"},
+{q:"In which Zelda game does a moon fall toward the world in three days?",o:["Majora's Mask","Twilight Princess","Skyward Sword","Oracle of Seasons"],a:"Majora's Mask"},
+{q:"Which Zelda game released in 2023 as a direct sequel?",o:["Tears of the Kingdom","Echoes of Wisdom","Skyward Sword HD","Age of Calamity"],a:"Tears of the Kingdom"},
+{q:"What lets Link glide down from heights in Breath of the Wild?",o:["The paraglider","The Deku Leaf","The hookshot","The roc's cape"],a:"The paraglider"},
+{q:"Where does Link wake up at the start of Breath of the Wild?",o:["The Great Plateau","Hateno Village","Kakariko Village","Lookout Landing"],a:"The Great Plateau"},
+{q:"On which console did the very first Mario Kart appear?",o:["The Super Nintendo","The Nintendo 64","The Game Boy Advance","The NES"],a:"The Super Nintendo"},
+{q:"Which console did Paper Mario debut on?",o:["The Nintendo 64","The GameCube","The SNES","The Wii"],a:"The Nintendo 64"},
+{q:"In which game does Mario fight illness as a doctor?",o:["Dr. Mario","Mario Paint","Mario Clash","Mario's Time Machine"],a:"Dr. Mario"},
+{q:"Which Nintendo boxing game stars Little Mac?",o:["Punch-Out!!","Ring King","Fighting Spirit","Knockout"],a:"Punch-Out!!"},
+{q:"Which NES light gun game featured a snickering dog?",o:["Duck Hunt","Hogan's Alley","Wild Gunman","Gumshoe"],a:"Duck Hunt"},
+{q:"Which planet is the original Metroid set on?",o:["Zebes","Tallon IV","SR388","Aether"],a:"Zebes"},
+{q:"Which dragon-like creature is Samus's recurring nemesis?",o:["Ridley","Kraid","Phantoon","Draygon"],a:"Ridley"},
+{q:"Which masked swordsman is Kirby's mysterious rival?",o:["Meta Knight","King Dedede","Marx","Magolor"],a:"Meta Knight"},
+{q:"Which Fire Emblem game came to the Switch in 2019?",o:["Three Houses","Awakening","Engage","Fates"],a:"Three Houses"},
+{q:"What were Nintendo's build-it-yourself cardboard kits called?",o:["Nintendo Labo","Nintendo Craft","Cardboard Studio","Toy-Con Works"],a:"Nintendo Labo"},
+{q:"Which 2019 Nintendo game came with a flexible ring controller?",o:["Ring Fit Adventure","Wii Fit U","Arms","Fitness Boxing"],a:"Ring Fit Adventure"},
+{q:"Who is the ghostly king who leads the enemies in Luigi's Mansion?",o:["King Boo","King Dedede","King K. Rool","Bowser"],a:"King Boo"},
+{q:"What was the Wii U's distinctive controller called?",o:["The GamePad","The Wii Remote Plus","The Classic Controller","The Pro Pad"],a:"The GamePad"},
+{q:"What are Nintendo's customizable cartoon avatars called?",o:["Miis","Avatars","Toons","Amii"],a:"Miis"},
+{q:"Which Zelda game introduced the sword spirit Fi?",o:["Skyward Sword","Twilight Princess","Spirit Tracks","Breath of the Wild"],a:"Skyward Sword"},
+{q:"Which Nintendo handheld showed 3D without special glasses?",o:["The Nintendo 3DS","The DS Lite","The Game Boy Advance SP","The Switch Lite"],a:"The Nintendo 3DS"},
+{q:"Which Mario game features a cat suit power-up?",o:["Super Mario 3D World","Super Mario Odyssey","Super Mario Galaxy 2","New Super Mario Bros. U"],a:"Super Mario 3D World"},
+{q:"Which studio made Donkey Kong Country for the SNES?",o:["Rare","HAL Laboratory","Retro Studios","Intelligent Systems"],a:"Rare"},
+{q:"Which composer wrote the famous Super Mario Bros. theme?",o:["Koji Kondo","Nobuo Uematsu","Hirokazu Tanaka","Kazumi Totaka"],a:"Koji Kondo"},
+{q:"Which chained metal enemy lunges at Mario from a post?",o:["The Chain Chomp","The Thwomp","The Whomp","The Banzai Bill"],a:"The Chain Chomp"},
+{q:"Which Smash Bros. game is on the Nintendo Switch?",o:["Ultimate","Brawl","Melee","For Wii U"],a:"Ultimate"},
+{q:"Which movie about Mario was released in theaters in 2023?",o:["The Super Mario Bros. Movie","Mario and the Golden Star","Super Mario Odyssey: The Film","Mario Kart: The Movie"],a:"The Super Mario Bros. Movie"}
+],
+
+/* ---------- E: 5 points ---------- */
+E:[
+{q:"What is the name of the robot accessory Nintendo sold with the NES?",o:["R.O.B.","N.E.S.T.","Robbie","Zapper Bot"],a:"R.O.B."},
+{q:"Which Nintendo console was code-named Revolution before release?",o:["The Wii","The Switch","The GameCube","The Wii U"],a:"The Wii"},
+{q:"Which Nintendo console was code-named NX before release?",o:["The Switch","The Wii U","The 3DS","The GameCube"],a:"The Switch"},
+{q:"Which studio developed GoldenEye 007 for the Nintendo 64?",o:["Rare","Retro Studios","HAL Laboratory","Camelot"],a:"Rare"},
+{q:"In what year did the first Legend of Zelda game come out in Japan?",o:["1986","1983","1990","1992"],a:"1986"},
+{q:"Which Zelda game first introduced the Master Sword?",o:["A Link to the Past","Ocarina of Time","The original Legend of Zelda","Link's Awakening"],a:"A Link to the Past"},
+{q:"Which notoriously difficult Mario sequel was originally released only in Japan?",o:["The Lost Levels","Super Mario Land 2","Mario Bros. Special","Super Mario Bros. 3"],a:"The Lost Levels"},
+{q:"What surprised players at the end of the original Metroid?",o:["Samus is a woman","Samus is a robot","The planet was Earth","Ridley was the hero"],a:"Samus is a woman"},
+{q:"What is the name of the Star Fox team's mothership?",o:["The Great Fox","The Arwing","The Landmaster","The Blue Falcon"],a:"The Great Fox"},
+{q:"Who is the villain of the Star Fox series?",o:["Andross","Wolf O'Donnell","General Pepper","Oikonny"],a:"Andross"},
+{q:"Which three Pikmin colors appeared in the very first Pikmin game?",o:["Red, yellow and blue","Red, purple and white","Blue, white and pink","Yellow, rock and winged"],a:"Red, yellow and blue"},
+{q:"Which character was the damsel in the original Donkey Kong arcade game?",o:["Pauline","Peach","Daisy","Rosalina"],a:"Pauline"},
+{q:"In which Mario game does Pauline return as a city mayor?",o:["Super Mario Odyssey","Super Mario 3D World","Super Mario Maker 2","Mario Kart 8"],a:"Super Mario Odyssey"},
+{q:"What is the metropolis in Super Mario Odyssey called?",o:["New Donk City","Delfino Plaza","Toad Town","Diamond City"],a:"New Donk City"},
+{q:"Which Nintendo system has sold more units than any other Nintendo system?",o:["The Nintendo DS","The Wii","The Game Boy","The NES"],a:"The Nintendo DS"},
+{q:"In what year did the Game Boy Advance launch?",o:["2001","1998","2004","2006"],a:"2001"},
+{q:"Which Zelda game launched on both the Wii U and the Switch?",o:["Breath of the Wild","Twilight Princess","Skyward Sword","Tears of the Kingdom"],a:"Breath of the Wild"},
+{q:"What is the blue shell in Mario Kart officially named?",o:["The Spiny Shell","The Storm Shell","The Homing Shell","The Blue Bomber"],a:"The Spiny Shell"},
+{q:"Roughly how many fighters are in Super Smash Bros. Ultimate?",o:["More than 80","About 25","About 50","More than 200"],a:"More than 80"},
+{q:"Which Nintendo series stars boys named Ness and Lucas?",o:["Mother","Fire Emblem","Golden Sun","Kid Icarus"],a:"Mother"},
+{q:"Which handheld Zelda pair released on the Game Boy Color as linked games?",o:["Oracle of Seasons and Oracle of Ages","Link's Awakening and Four Swords","Minish Cap and Phantom Hourglass","Spirit Tracks and Triforce Heroes"],a:"Oracle of Seasons and Oracle of Ages"},
+{q:"Which studio developed the Metroid Prime games?",o:["Retro Studios","Rare","Next Level Games","MercurySteam"],a:"Retro Studios"},
+{q:"Which fox-like character sells paintings, some of them forgeries, in Animal Crossing?",o:["Redd","Timmy","Kicks","Label"],a:"Redd"},
+{q:"Which Kirby game introduced Mouthful Mode on the Switch?",o:["Kirby and the Forgotten Land","Kirby Star Allies","Kirby's Return to Dream Land","Kirby Air Ride"],a:"Kirby and the Forgotten Land"},
+{q:"Which handheld device does Link carry in Breath of the Wild?",o:["The Sheikah Slate","The Purah Pad","The Wind Waker","The Gossip Stone"],a:"The Sheikah Slate"},
+{q:"Which Nintendo game series features giant robots called Skells and huge open worlds?",o:["Xenoblade Chronicles","Fire Emblem","Advance Wars","Custom Robo"],a:"Xenoblade Chronicles"},
+{q:"Which Wii launch title released alongside a GameCube version in 2006?",o:["Twilight Princess","Wii Sports","Super Mario Galaxy","Metroid Prime 3"],a:"Twilight Princess"},
+{q:"Which Mario power-up in Super Mario Bros. 3 lets him turn into a statue?",o:["The Tanooki Suit","The Frog Suit","The Hammer Suit","The Raccoon Leaf"],a:"The Tanooki Suit"},
+{q:"Which company developed the Super Smash Bros. games with Sakurai?",o:["HAL Laboratory","Rare","Retro Studios","Game Freak"],a:"HAL Laboratory"},
+{q:"Which Nintendo console did Super Mario Sunshine appear on?",o:["The GameCube","The Nintendo 64","The Wii","The Switch"],a:"The GameCube"}
+]
+
+}}
+
+};
+
+/* ============================================================
+   GAME
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const shuffle = a => a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(p=>p[1]);
+const TIER_KEYS = Object.keys(TIERS);
+// Each tier must divide evenly among the players, so everyone gets the same
+// number of A tickets, B tickets and so on — equal turns and equal points available.
+function ticketsPerTier(n){ let p = n; while(p < 3) p += n; return p; }
+let perTier = 3;
+
+let players = [], round = [], qi = 0, locked = false;
+let playerCount = 2, timeLimit = 10;
+const selected = new Set(['disney']);
+let timerId = null, timeLeft = 0, deadline = 0;
+
+const used = {};
+Object.keys(CATEGORIES).forEach(c=>{
+  used[c] = {};
+  TIER_KEYS.forEach(t=>{ used[c][t] = new Set(); });
+});
+const bankOf = c => CATEGORIES[c].bank;
+
+/* ---------- setup ---------- */
+function renderSetup(){
+  $('category').innerHTML = '';
+  Object.keys(CATEGORIES).forEach(key=>{
+    const b = document.createElement('button');
+    b.textContent = CATEGORIES[key].label;
+    b.setAttribute('aria-pressed', selected.has(key));
+    b.onclick = () => {
+      if(selected.has(key)){
+        if(selected.size === 1) return;   // always keep at least one
+        selected.delete(key);
+      } else selected.add(key);
+      renderSetup();
+    };
+    $('category').appendChild(b);
+  });
+
+  const chosen = [...selected];
+  $('eyebrow').textContent = chosen.length === 1
+    ? CATEGORIES[chosen[0]].tagline
+    : chosen.map(c=>CATEGORIES[c].label).join(' · ');
+
+  $('count').innerHTML = '';
+  [1,2,3,4].forEach(n=>{
+    const b = document.createElement('button');
+    b.textContent = n === 1 ? 'Just me' : n + ' players';
+    b.setAttribute('aria-pressed', n === playerCount);
+    b.onclick = () => { playerCount = n; renderSetup(); };
+    $('count').appendChild(b);
+  });
+
+  $('timing').innerHTML = '';
+  [[10,'10 seconds'],[20,'20 seconds'],[0,'No timer']].forEach(([val,label])=>{
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.setAttribute('aria-pressed', val === timeLimit);
+    b.onclick = () => { timeLimit = val; renderSetup(); };
+    $('timing').appendChild(b);
+  });
+
+  const existing = [...document.querySelectorAll('.names input')].map(i=>i.value);
+  $('names').innerHTML = '';
+  for(let i=0;i<playerCount;i++){
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.maxLength = 14;
+    input.placeholder = 'Player ' + (i+1);
+    input.value = existing[i] || '';
+    input.setAttribute('aria-label','Name of player ' + (i+1));
+    $('names').appendChild(input);
+  }
+
+  const total = [...selected].reduce((sum,c)=>
+    sum + TIER_KEYS.reduce((s,t)=>s+bankOf(c)[t].length,0), 0);
+  const what = selected.size === 1 ? CATEGORIES[[...selected][0]].label + ' questions' : 'questions';
+  $('tally').textContent = total + ' ' + what + ' in the book · '
+    + (ticketsPerTier(playerCount) * TIER_KEYS.length) + ' tickets this round';
+}
+
+function startGame(){
+  const inputs = [...document.querySelectorAll('.names input')];
+  players = inputs.map((inp,i)=>({name: inp.value.trim() || 'Player ' + (i+1), score:0, tickets:0}));
+  newRound();
+}
+
+function drawTier(tier){
+  const cats = [...selected];
+  const gather = all => {
+    const out = [];
+    cats.forEach(c=>{
+      bankOf(c)[tier].forEach((q,i)=>{
+        if(all || !used[c][tier].has(i)) out.push({c,i});
+      });
+    });
+    return out;
+  };
+  let fresh = gather(false);
+  if(fresh.length < perTier){
+    cats.forEach(c=>used[c][tier].clear());
+    fresh = gather(true);
+  }
+  const picks = shuffle(fresh).slice(0,perTier);
+  picks.forEach(p=>used[p.c][tier].add(p.i));
+  return picks.map(p=>({...bankOf(p.c)[tier][p.i], tier, cat:p.c}));
+}
+
+function newRound(){
+  perTier = ticketsPerTier(players.length);
+  round = [];
+  TIER_KEYS.forEach(t=>{ round = round.concat(drawTier(t)); });
+  qi = 0;
+  players.forEach(p=>{ p.score = 0; p.tickets = 0; });
+  $('strip').innerHTML = '<span class="label">Tickets punched</span>';
+  $('setup').classList.add('hidden');
+  $('end').classList.add('hidden');
+  $('game').classList.remove('hidden');
+  renderQuestion();
+}
+
+function currentPlayer(){ return players[qi % players.length]; }
+
+function renderScores(){
+  $('scores').innerHTML = '';
+  players.forEach(p=>{
+    const c = document.createElement('div');
+    c.className = 'chip' + (p === currentPlayer() ? ' active' : '');
+    c.textContent = p.name;
+    const s = document.createElement('span');
+    s.textContent = p.score;
+    c.appendChild(s);
+    $('scores').appendChild(c);
+  });
+}
+
+/* ---------- timer ---------- */
+function stopTimer(){ if(timerId){ cancelAnimationFrame(timerId); timerId = null; } }
+
+function tick(){
+  const remaining = Math.max(0, deadline - performance.now());
+  const span = timeLimit * 1000;
+  $('clockFill').style.width = (remaining / span) * 100 + '%';
+  $('clockFill').classList.toggle('hurry', remaining <= Math.min(3000, span * 0.35));
+  timeLeft = Math.ceil(remaining / 1000);
+  $('clockNum').textContent = timeLeft + 's';
+  if(remaining <= 0){ timerId = null; timeUp(); return; }
+  timerId = requestAnimationFrame(tick);
+}
+
+function startTimer(){
+  stopTimer();
+  if(!timeLimit){ $('clock').classList.add('hidden'); return; }
+  $('clock').classList.remove('hidden');
+  deadline = performance.now() + timeLimit * 1000;
+  tick();
+}
+
+/* ---------- questions ---------- */
+function renderQuestion(){
+  locked = false;
+  const item = round[qi];
+  const tier = TIERS[item.tier];
+  $('ticket').style.setProperty('--tier', tier.color);
+  $('tierLetter').textContent = item.tier;
+  $('tierWord').textContent = tier.word;
+  $('serial').textContent = 'No. 71-' + String(1000 + qi + 1);
+  $('ticketTag').textContent = selected.size > 1 ? CATEGORIES[item.cat].label : 'Admit One';
+  $('progress').textContent = 'Ticket ' + (qi+1) + ' of ' + round.length;
+  $('turn').innerHTML = players.length > 1 ? 'Up now: <b></b>' : '';
+  if(players.length > 1) $('turn').querySelector('b').textContent = currentPlayer().name;
+  $('question').textContent = item.q;
+  $('stampSlot').innerHTML = '';
+  $('next').classList.add('hidden');
+  renderScores();
+
+  $('answers').innerHTML = '';
+  shuffle(item.o).forEach((opt,i)=>{
+    const b = document.createElement('button');
+    b.className = 'answer';
+    const pip = document.createElement('span');
+    pip.className = 'pip';
+    pip.textContent = 'ABCD'[i];
+    const label = document.createElement('span');
+    label.textContent = opt;
+    b.append(pip, label);
+    b.onclick = () => answer(b, opt);
+    $('answers').appendChild(b);
+  });
+
+  startTimer();
+}
+
+function revealAnswers(chosenBtn){
+  const item = round[qi];
+  [...document.querySelectorAll('.answer')].forEach(b=>{
+    b.disabled = true;
+    const text = b.lastElementChild.textContent;
+    if(text === item.a) b.classList.add('correct');
+    else if(b === chosenBtn) b.classList.add('wrong');
+  });
+}
+
+function finish(right, stampText){
+  const item = round[qi];
+  const tier = TIERS[item.tier];
+  const player = currentPlayer();
+
+  const stamp = document.createElement('div');
+  stamp.className = 'stamp pop ' + (right ? 'punched' : 'missed');
+  stamp.textContent = stampText;
+  $('stampSlot').appendChild(stamp);
+
+  if(right){
+    player.score += tier.pts;
+    player.tickets += 1;
+    const mini = document.createElement('span');
+    mini.className = 'mini pop';
+    mini.style.background = tier.color;
+    mini.textContent = item.tier;
+    mini.title = player.name + ' earned ' + tier.pts + ' points';
+    $('strip').appendChild(mini);
+  }
+
+  renderScores();
+  $('next').textContent = qi + 1 < round.length ? 'Next ticket' : 'See the scores';
+  $('next').classList.remove('hidden');
+  $('next').focus();
+}
+
+function answer(btn, choice){
+  if(locked) return;
+  locked = true;
+  stopTimer();
+  const right = choice === round[qi].a;
+  revealAnswers(btn);
+  finish(right, right ? '+' + TIERS[round[qi].tier].pts + ' Punched' : 'Not punched');
+}
+
+function timeUp(){
+  if(locked) return;
+  locked = true;
+  revealAnswers(null);
+  finish(false, "Time's up");
+}
+
+function next(){
+  qi++;
+  if(qi < round.length) renderQuestion();
+  else showEnd();
+}
+
+/* ---------- results ---------- */
+function showEnd(){
+  stopTimer();
+  $('game').classList.add('hidden');
+  $('end').classList.remove('hidden');
+  const ranked = [...players].sort((a,b)=>b.score-a.score);
+  const top = ranked[0].score;
+  const winners = ranked.filter(p=>p.score === top);
+
+  if(players.length === 1){
+    const total = round.reduce((s,q)=>s+TIERS[q.tier].pts,0);
+    $('verdict').textContent = ranked[0].score + ' of ' + total + ' points';
+  } else if(winners.length > 1){
+    $('verdict').textContent = "It's a tie!";
+  } else {
+    $('verdict').textContent = winners[0].name + ' wins the ticket book!';
+  }
+
+  $('results').innerHTML = '';
+  ranked.forEach((p,i)=>{
+    const row = document.createElement('div');
+    row.className = 'result' + (p.score === top ? ' win' : '');
+    const rank = document.createElement('span');
+    rank.className = 'rank'; rank.textContent = i+1;
+    const who = document.createElement('span');
+    who.className = 'who'; who.textContent = p.name;
+    const pts = document.createElement('span');
+    pts.className = 'pts'; pts.textContent = p.score + ' pts · ' + p.tickets + ' tickets';
+    row.append(rank, who, pts);
+    $('results').appendChild(row);
+  });
+}
+
+/* ---------- wiring ---------- */
+$('start').onclick = startGame;
+$('next').onclick = next;
+$('again').onclick = newRound;
+$('newPlayers').onclick = () => {
+  $('end').classList.add('hidden');
+  $('setup').classList.remove('hidden');
+};
+renderSetup();
+
+/* Offline: cache the page and everything it needs on first visit. Registered
+   straight away rather than on load, so a short first visit is still enough to
+   fill the cache. A home screen icon added on iOS gets its own storage, so the
+   first launch from the icon has to happen with a connection; after that it
+   runs with the network off. */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/ticket-book-trivia/sw.js').catch(function(){});
+}
+</script>
+</body>
+</html>
+{% endraw %}
