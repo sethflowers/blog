@@ -1,0 +1,2985 @@
+---
+title: Magical Imagineer
+description: A colouring book that marks your work out of 100. Colour Cinderella, Pinocchio, Puss in Boots, Bambi, the Genie or the Cowardly Lion well enough and they step off the page as a figure in your own colours, ready to fight the Snow Queen, the Sea Witch and the rest.
+date: 2026-09-14
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#171326">
+<meta name="apple-mobile-web-app-title" content="Magical Imagineer">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/experiments/magical-imagineer/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/magical-imagineer/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/magical-imagineer/icon-192.png">
+<title>Magical Imagineer</title>
+<style>
+  :root{
+    --ink:#171326;
+    --velvet:#241a3d;
+    --velvet-2:#312350;
+    --parch:#fdf6e6;
+    --parch-dim:rgba(253,246,230,.62);
+    --parch-faint:rgba(253,246,230,.26);
+    --gold:#f2c14e;
+    --gold-hot:#ffe08a;
+    --rose:#e9698a;
+    --teal:#45c4b8;
+    --violet:#9d7ae8;
+    --bad:#e2564a;
+    --safe:#6fd08c;
+    --pad-t:env(safe-area-inset-top,0px);
+    --pad-b:env(safe-area-inset-bottom,0px);
+    --pad-l:env(safe-area-inset-left,0px);
+    --pad-r:env(safe-area-inset-right,0px);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{
+    width:100%;height:100%;overflow:hidden;background:var(--ink);
+    touch-action:none;overscroll-behavior:none;
+    font-family:"Avenir Next","Segoe UI",Helvetica,Arial,sans-serif;
+    color:var(--parch);
+    -webkit-user-select:none;user-select:none;
+    -webkit-text-size-adjust:100%;
+  }
+  body{position:fixed;inset:0;}
+
+  /* ---------- app + screens ---------- */
+  #app{position:absolute;inset:0;overflow:hidden;}
+  .screen{
+    position:absolute;inset:0;display:none;
+    flex-direction:column;
+    padding:calc(10px + var(--pad-t)) calc(12px + var(--pad-r)) calc(10px + var(--pad-b)) calc(12px + var(--pad-l));
+  }
+  .screen.on{display:flex;}
+  .screen.fade{animation:fade .28s ease both;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  .backdrop{
+    position:absolute;inset:0;z-index:-1;
+    background:
+      radial-gradient(120% 80% at 50% -10%, #3b2a63 0%, rgba(59,42,99,0) 60%),
+      radial-gradient(90% 60% at 100% 110%, #2a1c46 0%, rgba(42,28,70,0) 65%),
+      linear-gradient(180deg,#1d1733 0%, #171326 70%, #120f1f 100%);
+  }
+
+  /* ---------- type ---------- */
+  h1,h2,h3{font-weight:800;letter-spacing:.01em;line-height:1.08;}
+  .title-word{
+    font-size:clamp(30px,8.4vw,62px);
+    background:linear-gradient(180deg,var(--gold-hot),var(--gold) 55%,#c8912b);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 2px 0 rgba(0,0,0,.18);
+  }
+  .sub{color:var(--parch-dim);font-size:clamp(12px,3.4vw,16px);line-height:1.45;max-width:44ch;}
+  .eyebrow{
+    font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--gold);font-weight:800;
+  }
+  .muted{color:var(--parch-dim);}
+  .tiny{font-size:11px;}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    border:none;border-radius:999px;cursor:pointer;
+    font-family:inherit;font-weight:800;font-size:15px;letter-spacing:.01em;
+    padding:13px 22px;color:#2a1e12;
+    background:linear-gradient(180deg,var(--gold-hot),var(--gold));
+    box-shadow:0 5px 0 #9c6f18, 0 10px 22px rgba(0,0,0,.35);
+    transition:transform .07s ease, box-shadow .07s ease, filter .15s ease;
+    touch-action:manipulation;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 #9c6f18, 0 4px 12px rgba(0,0,0,.3);}
+  .btn.ghost{
+    background:rgba(253,246,230,.07);color:var(--parch);
+    box-shadow:inset 0 0 0 2px rgba(253,246,230,.22);
+  }
+  .btn.ghost:active{transform:translateY(2px);box-shadow:inset 0 0 0 2px rgba(253,246,230,.3);}
+  .btn.rose{background:linear-gradient(180deg,#ff8fa8,var(--rose));color:#3a0f1c;box-shadow:0 5px 0 #9b3050,0 10px 22px rgba(0,0,0,.35);}
+  .btn.small{padding:9px 15px;font-size:13px;}
+  .btn[disabled]{filter:grayscale(.7) brightness(.7);pointer-events:none;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;}
+
+  .iconbtn{
+    width:42px;height:42px;border-radius:14px;border:none;cursor:pointer;
+    background:rgba(253,246,230,.08);box-shadow:inset 0 0 0 2px rgba(253,246,230,.18);
+    color:var(--parch);font-size:18px;font-weight:800;font-family:inherit;
+    display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+  }
+  .iconbtn:active{background:rgba(253,246,230,.18);}
+
+  /* ---------- top bar ---------- */
+  .bar{display:flex;align-items:center;gap:10px;flex:0 0 auto;margin-bottom:10px;}
+  .bar h2{font-size:clamp(17px,4.6vw,24px);}
+  .bar .spacer{flex:1;}
+
+  .scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding-bottom:8px;}
+  .scroll::-webkit-scrollbar{width:0;height:0;}
+
+  /* ---------- title screen ---------- */
+  #s-title{align-items:center;justify-content:center;text-align:center;gap:14px;}
+  #s-title .stack{display:flex;flex-direction:column;align-items:center;gap:14px;max-width:560px;}
+  #titleArt{width:min(78vw,330px);height:min(34vh,240px);}
+  .credit{position:absolute;left:0;right:0;bottom:calc(8px + var(--pad-b));text-align:center;font-size:10px;color:var(--parch-faint);}
+  .credit a{color:var(--parch-faint);}
+
+  /* ---------- hub ---------- */
+  .cards{display:grid;gap:12px;grid-template-columns:1fr;}
+  @media(min-width:620px){.cards{grid-template-columns:1fr 1fr;}}
+  .card{
+    position:relative;display:flex;gap:14px;align-items:center;text-align:left;
+    padding:16px;border-radius:20px;cursor:pointer;border:none;width:100%;
+    background:linear-gradient(160deg,rgba(253,246,230,.09),rgba(253,246,230,.03));
+    box-shadow:inset 0 0 0 2px rgba(253,246,230,.13), 0 8px 20px rgba(0,0,0,.28);
+    color:var(--parch);font-family:inherit;
+    transition:transform .08s ease;
+  }
+  .card:active{transform:scale(.985);}
+  .card .glyph{
+    width:54px;height:54px;flex:0 0 auto;border-radius:16px;display:grid;place-items:center;
+    font-size:26px;background:rgba(0,0,0,.25);box-shadow:inset 0 0 0 2px rgba(253,246,230,.14);
+  }
+  .card h3{font-size:17px;margin-bottom:3px;}
+  .card p{font-size:12.5px;color:var(--parch-dim);line-height:1.4;}
+  .card.locked{filter:grayscale(.65) brightness(.72);}
+
+  /* ---------- character / figure grid ---------- */
+  .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));}
+  .tile{
+    position:relative;border:none;cursor:pointer;padding:10px 8px 12px;border-radius:18px;
+    background:linear-gradient(180deg,rgba(253,246,230,.08),rgba(253,246,230,.02));
+    box-shadow:inset 0 0 0 2px rgba(253,246,230,.12);
+    color:var(--parch);font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:6px;
+    transition:transform .08s ease, box-shadow .12s ease;
+  }
+  .tile:active{transform:scale(.97);}
+  .tile.sel{box-shadow:inset 0 0 0 2px var(--gold), 0 0 22px rgba(242,193,78,.3);}
+  .tile canvas{width:100%;height:128px;display:block;}
+  .tile .nm{font-size:12.5px;font-weight:800;text-align:center;line-height:1.2;}
+  .tile .rl{font-size:10.5px;color:var(--parch-dim);text-align:center;line-height:1.25;}
+  .stars{font-size:12px;letter-spacing:2px;color:var(--gold);height:14px;}
+  .stars .off{color:rgba(253,246,230,.2);}
+  .pill{
+    position:absolute;top:8px;right:8px;font-size:9.5px;font-weight:800;letter-spacing:.08em;
+    text-transform:uppercase;padding:3px 7px;border-radius:999px;
+    background:rgba(0,0,0,.42);color:var(--parch-dim);
+  }
+  .pill.good{background:var(--gold);color:#3a2a08;}
+  .pill.beat{background:var(--safe);color:#0e2c18;}
+  .pill.new{background:var(--rose);color:#3a0f1c;}
+
+  /* ---------- colouring screen ---------- */
+  #s-color{padding:0;}
+  #colorStage{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    padding:calc(6px + var(--pad-t)) calc(8px + var(--pad-r)) calc(6px + var(--pad-b)) calc(8px + var(--pad-l));
+  }
+  #paperWrap{flex:1;position:relative;min-height:0;display:flex;align-items:center;justify-content:center;}
+  #paper{
+    display:block;border-radius:14px;touch-action:none;
+    box-shadow:0 10px 34px rgba(0,0,0,.45), 0 0 0 2px rgba(253,246,230,.14);
+    background:#fdf6e6;
+  }
+  #peekPad{
+    position:absolute;right:6px;top:6px;width:74px;border-radius:12px;overflow:hidden;
+    background:rgba(0,0,0,.35);box-shadow:inset 0 0 0 2px rgba(253,246,230,.16);
+    display:none;
+  }
+  #peekPad.on{display:block;}
+  #peekPad canvas{width:100%;display:block;}
+
+  .toolbar{
+    flex:0 0 auto;display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap;
+    justify-content:center;
+  }
+  .tool{
+    width:44px;height:44px;border-radius:14px;border:none;cursor:pointer;
+    background:rgba(253,246,230,.08);box-shadow:inset 0 0 0 2px rgba(253,246,230,.16);
+    color:var(--parch);display:grid;place-items:center;flex:0 0 auto;
+  }
+  .tool.on{background:var(--gold);color:#33240a;box-shadow:inset 0 0 0 2px var(--gold-hot);}
+  .tool svg{width:22px;height:22px;}
+  .tool .lbl{font-size:9px;font-weight:800;letter-spacing:.04em;}
+
+  #palette{
+    flex:0 0 auto;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:7px;
+  }
+  .sw{
+    width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;flex:0 0 auto;
+    box-shadow:inset 0 0 0 2px rgba(0,0,0,.28), 0 2px 5px rgba(0,0,0,.35);
+    position:relative;
+  }
+  .sw.on{
+    box-shadow:inset 0 0 0 2px rgba(0,0,0,.3), 0 0 0 3px var(--parch), 0 3px 9px rgba(0,0,0,.4);
+    transform:scale(1.08);
+  }
+  .hint{
+    flex:0 0 auto;text-align:center;font-size:11.5px;color:var(--parch-dim);
+    margin-top:6px;min-height:15px;
+  }
+
+  /* ---------- result / score ---------- */
+  .sheet{
+    width:100%;max-width:520px;margin:0 auto;
+    background:linear-gradient(170deg,rgba(253,246,230,.1),rgba(253,246,230,.035));
+    box-shadow:inset 0 0 0 2px rgba(253,246,230,.14), 0 14px 34px rgba(0,0,0,.4);
+    border-radius:22px;padding:18px;
+  }
+  .bars{display:flex;flex-direction:column;gap:9px;margin:14px 0;}
+  .brow{display:grid;grid-template-columns:88px 1fr 48px;gap:9px;align-items:center;font-size:12px;}
+  .btrack{display:block;height:9px;border-radius:999px;background:rgba(0,0,0,.36);overflow:hidden;}
+  .bfill{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,var(--teal),var(--gold));transition:width .7s cubic-bezier(.2,.7,.3,1);}
+  .bnum{text-align:right;font-variant-numeric:tabular-nums;font-weight:800;}
+  .total{display:flex;align-items:baseline;gap:10px;justify-content:center;margin-top:4px;}
+  .total .n{font-size:clamp(40px,12vw,64px);font-weight:900;color:var(--gold);line-height:1;font-variant-numeric:tabular-nums;}
+  .bigstars{font-size:30px;letter-spacing:6px;text-align:center;color:var(--gold);margin:6px 0 2px;}
+  .bigstars .off{color:rgba(253,246,230,.18);}
+  .verdict{text-align:center;font-size:14.5px;font-weight:800;margin-top:6px;}
+  #figureCanvas{width:150px;height:190px;display:block;margin:0 auto;}
+
+  /* ---------- fight ---------- */
+  #s-fight{padding:0;}
+  /* width/height must be explicit: an absolutely positioned canvas with
+     width:auto takes its CSS size from its own bitmap, which turns the
+     resize-to-fit in the draw loop into a doubling feedback loop */
+  #arena{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  #fightUI{position:absolute;inset:0;pointer-events:none;}
+  .hpwrap{
+    position:absolute;top:calc(8px + var(--pad-t));width:40%;max-width:280px;
+    display:flex;flex-direction:column;gap:3px;
+  }
+  .hpwrap.l{left:calc(10px + var(--pad-l));align-items:flex-start;}
+  .hpwrap.r{right:calc(10px + var(--pad-r));align-items:flex-end;}
+  .hpname{font-size:11px;font-weight:800;letter-spacing:.06em;color:#fdf6e6;text-shadow:0 1px 4px #000,0 0 10px rgba(0,0,0,.8);}
+  .hptrack{width:100%;height:12px;border-radius:999px;background:rgba(0,0,0,.5);box-shadow:inset 0 0 0 2px rgba(253,246,230,.2);overflow:hidden;position:relative;}
+  .hpghost{position:absolute;inset:0;background:rgba(255,255,255,.35);transform-origin:left;transition:transform .45s ease .18s;}
+  .hpwrap.r .hpghost{transform-origin:right;}
+  .hpfill{position:absolute;inset:0;transform-origin:left;background:linear-gradient(90deg,#7ee08a,#3fb86f);transition:transform .12s ease;}
+  .hpwrap.r .hpfill{transform-origin:right;background:linear-gradient(90deg,#e2564a,#a8332a);}
+  .sparkwrap{width:70%;height:7px;border-radius:999px;background:rgba(0,0,0,.5);box-shadow:inset 0 0 0 2px rgba(253,246,230,.16);overflow:hidden;}
+  .sparkfill{height:100%;width:0;background:linear-gradient(90deg,var(--violet),var(--gold-hot));transition:width .12s linear;}
+  .sparkfill.full{animation:pulse .7s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.6)}}
+
+  .pad{position:absolute;bottom:calc(12px + var(--pad-b));pointer-events:auto;display:flex;gap:10px;}
+  .pad.l{left:calc(12px + var(--pad-l));}
+  .pad.r{right:calc(12px + var(--pad-r));}
+  .pbtn{
+    width:62px;height:62px;border-radius:50%;border:none;cursor:pointer;
+    /* dark fill plus a light rim, so the controls stay readable over the ice
+       stage as well as the dark ones */
+    background:rgba(23,19,38,.44);box-shadow:inset 0 0 0 2px rgba(253,246,230,.5), 0 4px 14px rgba(0,0,0,.4);
+    color:var(--parch);font-family:inherit;font-weight:800;font-size:11px;letter-spacing:.05em;
+    display:grid;place-items:center;line-height:1.1;text-align:center;
+    -webkit-user-select:none;user-select:none;
+  }
+  .pbtn.hit{background:rgba(253,246,230,.4);transform:scale(.94);}
+  .pbtn.atk{background:rgba(163,45,78,.66);box-shadow:inset 0 0 0 2px rgba(255,150,175,.55), 0 4px 14px rgba(0,0,0,.4);}
+  .pbtn.sp{background:rgba(82,56,142,.66);box-shadow:inset 0 0 0 2px rgba(190,160,255,.55), 0 4px 14px rgba(0,0,0,.4);}
+  .pbtn.sp.ready{background:linear-gradient(180deg,var(--gold-hot),var(--gold));color:#33240a;animation:pulse .9s ease-in-out infinite;}
+  .pbtn.big{width:72px;height:72px;font-size:12px;}
+  #fightTop{
+    position:absolute;left:0;right:0;top:calc(46px + var(--pad-t));text-align:center;
+    font-size:clamp(16px,5vw,26px);font-weight:900;letter-spacing:.06em;
+    text-shadow:0 2px 10px #000;pointer-events:none;opacity:0;
+  }
+  #fightTop.show{animation:popmsg 1.5s ease both;}
+  @keyframes popmsg{0%{opacity:0;transform:scale(.7)}18%{opacity:1;transform:scale(1.06)}30%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+  #fightBack{position:absolute;top:calc(8px + var(--pad-t));left:50%;transform:translateX(-50%);pointer-events:auto;}
+
+  /* ---------- modal ---------- */
+  #modal{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(10,8,18,.74);backdrop-filter:blur(3px);z-index:50;
+    padding:calc(16px + var(--pad-t)) 16px calc(16px + var(--pad-b));
+  }
+  #modal.on{display:flex;}
+  #modalBox{
+    width:100%;max-width:400px;border-radius:22px;padding:20px;text-align:center;
+    background:linear-gradient(170deg,#332553,#241a3d);
+    box-shadow:inset 0 0 0 2px rgba(253,246,230,.16), 0 20px 50px rgba(0,0,0,.5);
+  }
+  #modalBox h3{font-size:19px;margin-bottom:8px;}
+  #modalBox p{font-size:13.5px;color:var(--parch-dim);line-height:1.5;}
+  #modalBtns{display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap;}
+
+  .row{display:flex;align-items:center;gap:10px;}
+  .seg{display:inline-flex;border-radius:999px;overflow:hidden;box-shadow:inset 0 0 0 2px rgba(253,246,230,.18);}
+  .seg button{
+    border:none;cursor:pointer;font-family:inherit;font-weight:800;font-size:12.5px;
+    padding:9px 15px;background:transparent;color:var(--parch-dim);
+  }
+  .seg button.on{background:var(--gold);color:#33240a;}
+  .switch{display:flex;align-items:center;gap:9px;font-size:12.5px;cursor:pointer;}
+  .switch .track{width:44px;height:25px;border-radius:999px;background:rgba(0,0,0,.4);box-shadow:inset 0 0 0 2px rgba(253,246,230,.2);position:relative;transition:background .15s;}
+  .switch .knob{position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:var(--parch-dim);transition:left .15s ease, background .15s;}
+  .switch.on .track{background:rgba(242,193,78,.35);}
+  .switch.on .knob{left:22px;background:var(--gold);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="backdrop"></div>
+
+  <!-- ============ TITLE ============ -->
+  <section class="screen" id="s-title">
+    <div class="stack">
+      <canvas id="titleArt" width="660" height="480"></canvas>
+      <div class="eyebrow">an animation studio in your pocket</div>
+      <h1 class="title-word">Magical Imagineer</h1>
+      <p class="sub">The Inkblot King has drained the colour out of the storybook. Pick a page, colour it in, and if you do a good enough job that character steps off the page as a figure &mdash; painted in your colours, and ready to fight back.</p>
+      <div class="btn-row" style="justify-content:center">
+        <button class="btn" id="btnStart">Open the book</button>
+        <button class="btn ghost" id="btnHow">How to play</button>
+      </div>
+      <div class="row" style="gap:16px;margin-top:2px">
+        <label class="switch" id="swMute"><span class="track"><span class="knob"></span></span><span>Sound</span></label>
+      </div>
+    </div>
+    <div class="credit">Fairy-tale characters long out of copyright, drawn fresh for this game.</div>
+  </section>
+
+  <!-- ============ HUB ============ -->
+  <section class="screen" id="s-hub">
+    <div class="bar">
+      <button class="iconbtn" data-nav="title">&#8592;</button>
+      <h2>The Studio</h2>
+      <div class="spacer"></div>
+      <button class="iconbtn" id="btnSettings">&#9881;</button>
+    </div>
+    <div class="scroll">
+      <p class="sub" id="hubLine" style="margin-bottom:14px"></p>
+      <div class="cards">
+        <button class="card" data-nav="book">
+          <span class="glyph">&#127912;</span>
+          <span><h3>Colouring Book</h3><p>Six characters waiting for their colours. Get 55 or better and they join your shelf.</p></span>
+        </button>
+        <button class="card" data-nav="shelf">
+          <span class="glyph">&#127891;</span>
+          <span><h3>My Figures</h3><p id="hubFigures">Nothing on the shelf yet.</p></span>
+        </button>
+        <button class="card" id="cardFight" data-nav="map">
+          <span class="glyph">&#9876;</span>
+          <span><h3>The Ink Lands</h3><p id="hubFight">Colour one character first.</p></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BOOK (pick a character) ============ -->
+  <section class="screen" id="s-book">
+    <div class="bar">
+      <button class="iconbtn" data-nav="hub">&#8592;</button>
+      <h2>Colouring Book</h2>
+      <div class="spacer"></div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="story" class="on">Storybook</button>
+        <button data-mode="wild">Wild</button>
+      </div>
+    </div>
+    <p class="sub tiny" id="modeLine" style="margin-bottom:10px"></p>
+    <div class="scroll"><div class="grid" id="bookGrid"></div></div>
+  </section>
+
+  <!-- ============ COLOURING ============ -->
+  <section class="screen" id="s-color">
+    <div id="colorStage">
+      <div class="bar">
+        <button class="iconbtn" id="btnColorBack">&#8592;</button>
+        <h2 id="colorName">&nbsp;</h2>
+        <div class="spacer"></div>
+        <button class="iconbtn" id="btnPeek">&#128065;</button>
+        <button class="btn small" id="btnDone">Done</button>
+      </div>
+      <div id="paperWrap">
+        <canvas id="paper"></canvas>
+        <div id="peekPad"><canvas id="peekCanvas" width="320" height="420"></canvas></div>
+      </div>
+      <div class="toolbar" id="toolbar">
+        <button class="tool on" data-tool="fill" title="Fill a shape"><span class="lbl">FILL</span></button>
+        <button class="tool" data-tool="brush" title="Brush"><span class="lbl">BRUSH</span></button>
+        <button class="tool" data-tool="erase" title="Eraser"><span class="lbl">ERASE</span></button>
+        <button class="tool" id="btnSize" title="Brush size"><span class="lbl">M</span></button>
+        <button class="tool" id="btnUndo" title="Undo"><span class="lbl">UNDO</span></button>
+        <button class="tool" id="btnClear" title="Start again"><span class="lbl">CLEAR</span></button>
+        <button class="tool on" id="btnLines" title="Stay in the lines"><span class="lbl">LINES</span></button>
+      </div>
+      <div id="palette"></div>
+      <div class="hint" id="colorHint"></div>
+    </div>
+  </section>
+
+  <!-- ============ SCORE ============ -->
+  <section class="screen" id="s-score">
+    <div class="scroll">
+      <div class="sheet">
+        <div class="eyebrow" style="text-align:center" id="scoreEyebrow">the marks are in</div>
+        <canvas id="figureCanvas" width="300" height="380"></canvas>
+        <div class="bigstars" id="scoreStars"></div>
+        <div class="total"><span class="n" id="scoreNum">0</span><span class="muted">/ 100</span></div>
+        <div class="verdict" id="scoreVerdict"></div>
+        <div class="bars" id="scoreBars"></div>
+        <p class="sub tiny" id="scoreNote" style="text-align:center"></p>
+        <div class="btn-row" style="justify-content:center;margin-top:14px" id="scoreBtns"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SHELF ============ -->
+  <section class="screen" id="s-shelf">
+    <div class="bar">
+      <button class="iconbtn" data-nav="hub">&#8592;</button>
+      <h2>My Figures</h2>
+      <div class="spacer"></div>
+    </div>
+    <p class="sub tiny" id="shelfLine" style="margin-bottom:10px"></p>
+    <div class="scroll"><div class="grid" id="shelfGrid"></div></div>
+  </section>
+
+  <!-- ============ MAP ============ -->
+  <section class="screen" id="s-map">
+    <div class="bar">
+      <button class="iconbtn" data-nav="hub">&#8592;</button>
+      <h2>The Ink Lands</h2>
+      <div class="spacer"></div>
+      <button class="btn small ghost" id="btnPickFighter">Fighter</button>
+    </div>
+    <p class="sub tiny" id="mapLine" style="margin-bottom:10px"></p>
+    <div class="scroll"><div class="grid" id="mapGrid"></div></div>
+  </section>
+
+  <!-- ============ FIGHT ============ -->
+  <section class="screen" id="s-fight">
+    <canvas id="arena"></canvas>
+    <div id="fightUI">
+      <div class="hpwrap l">
+        <div class="hpname" id="pName">You</div>
+        <div class="hptrack"><div class="hpghost" id="pGhost"></div><div class="hpfill" id="pFill"></div></div>
+        <div class="sparkwrap"><div class="sparkfill" id="pSpark"></div></div>
+      </div>
+      <div class="hpwrap r">
+        <div class="hpname" id="eName">Villain</div>
+        <div class="hptrack"><div class="hpghost" id="eGhost"></div><div class="hpfill" id="eFill"></div></div>
+      </div>
+      <button class="iconbtn" id="fightBack" style="pointer-events:auto">&#8214;</button>
+      <div id="fightTop"></div>
+      <div class="pad l">
+        <button class="pbtn" data-act="left">&#9664;</button>
+        <button class="pbtn" data-act="right">&#9654;</button>
+      </div>
+      <div class="pad r">
+        <button class="pbtn" data-act="block">BLOCK</button>
+        <button class="pbtn" data-act="jump">JUMP</button>
+        <button class="pbtn sp" data-act="special" id="btnSpecial">SPARK</button>
+        <button class="pbtn atk big" data-act="attack">HIT</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULT ============ -->
+  <section class="screen" id="s-result">
+    <div class="scroll">
+      <div class="sheet" style="text-align:center">
+        <div class="eyebrow" id="resEyebrow"></div>
+        <h1 class="title-word" id="resTitle" style="font-size:clamp(26px,7vw,46px);margin:6px 0"></h1>
+        <p class="sub" id="resBody" style="margin:0 auto 14px"></p>
+        <div class="btn-row" style="justify-content:center" id="resBtns"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODAL ============ -->
+  <div id="modal"><div id="modalBox">
+    <h3 id="modalTitle"></h3>
+    <div id="modalBody"></div>
+    <div id="modalBtns"></div>
+  </div></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   Magical Imagineer
+   Colour a character, get marked on it, fight with what you made.
+   Everything is drawn at runtime; there is no art on disk.
+   ============================================================ */
+
+var TAU = Math.PI * 2, RAD = Math.PI / 180;
+var DW = 320, DH = 420;            // design box every character is drawn in
+var PAPER = '#fdf6e6', INK = '#241a3d';
+
+function clamp(v, a, b){ return v < a ? a : v > b ? b : v; }
+function lerp(a, b, t){ return a + (b - a) * t; }
+function rnd(a, b){ return a + Math.random() * (b - a); }
+function pick(a){ return a[(Math.random() * a.length) | 0]; }
+function sign(v){ return v < 0 ? -1 : v > 0 ? 1 : 0; }
+function approach(v, t, d){ return v < t ? Math.min(t, v + d) : Math.max(t, v - d); }
+function $(s){ return document.querySelector(s); }
+function $$(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); }
+
+/* ---------- colour ---------- */
+function hexRGB(h){
+  h = h.replace('#','');
+  if(h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  var n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbHex(r, g, b){
+  return '#' + ((1 << 24) + (Math.round(r) << 16) + (Math.round(g) << 8) + Math.round(b)).toString(16).slice(1);
+}
+function mixHex(a, b, t){
+  var A = hexRGB(a), B = hexRGB(b);
+  return rgbHex(lerp(A[0],B[0],t), lerp(A[1],B[1],t), lerp(A[2],B[2],t));
+}
+function shade(h, t){ return t < 0 ? mixHex(h, '#1a1426', -t) : mixHex(h, '#ffffff', t); }
+
+/* sRGB -> CIE Lab, so "how wrong is this colour" matches how wrong it looks.
+   The cube-root/linearise tables are built once; scoring calls this a lot. */
+var SRGB_LIN = new Float32Array(256);
+for(var _i = 0; _i < 256; _i++){
+  var _c = _i / 255;
+  SRGB_LIN[_i] = _c <= 0.04045 ? _c / 12.92 : Math.pow((_c + 0.055) / 1.055, 2.4);
+}
+function labf(t){ return t > 0.008856 ? Math.pow(t, 1/3) : (7.787 * t + 16/119); }
+function rgbLab(r, g, b){
+  var R = SRGB_LIN[r|0], G = SRGB_LIN[g|0], B = SRGB_LIN[b|0];
+  var x = labf((R*0.4124 + G*0.3576 + B*0.1805) / 0.95047);
+  var y = labf( R*0.2126 + G*0.7152 + B*0.0722);
+  var z = labf((R*0.0193 + G*0.1192 + B*0.9505) / 1.08883);
+  return [116*y - 16, 500*(x - y), 200*(y - z)];
+}
+function labDist(a, b){
+  var dl = a[0]-b[0], da = a[1]-b[1], db = a[2]-b[2];
+  return Math.sqrt(dl*dl + da*da + db*db);
+}
+
+/* ============================================================
+   Shape language. A region is a list of primitives unioned into
+   one Path2D; nobody has to hand-write path data.
+   ============================================================ */
+function roundRectPath(p, x, y, w, h, r){
+  if(w < 0){ x += w; w = -w; }
+  if(h < 0){ y += h; h = -h; }
+  r = Math.min(r || 0, w/2, h/2);
+  p.moveTo(x + r, y);
+  p.arcTo(x + w, y,     x + w, y + h, r);
+  p.arcTo(x + w, y + h, x,     y + h, r);
+  p.arcTo(x,     y + h, x,     y,     r);
+  p.arcTo(x,     y,     x + w, y,     r);
+  p.closePath();
+}
+function polyPath(p, pts){
+  p.moveTo(pts[0], pts[1]);
+  for(var i = 2; i < pts.length; i += 2) p.lineTo(pts[i], pts[i+1]);
+  p.closePath();
+}
+function capPath(p, x1, y1, x2, y2, r){
+  var a = Math.atan2(y2 - y1, x2 - x1);
+  p.arc(x1, y1, r, a + Math.PI/2, a - Math.PI/2);
+  p.arc(x2, y2, r, a - Math.PI/2, a + Math.PI/2);
+  p.closePath();
+}
+/* pointed oval: ears, fins, petals, leaves. Long axis is vertical before rotation. */
+function leafPath(p, cx, cy, rx, ry, deg){
+  var a = (deg || 0) * RAD, c = Math.cos(a), s = Math.sin(a);
+  function P(u, v){ return [cx + u*c - v*s, cy + u*s + v*c]; }
+  var t1 = P(0, -ry), t2 = P(0, ry), h1 = P(rx * 1.34, 0), h2 = P(-rx * 1.34, 0);
+  p.moveTo(t1[0], t1[1]);
+  p.quadraticCurveTo(h1[0], h1[1], t2[0], t2[1]);
+  p.quadraticCurveTo(h2[0], h2[1], t1[0], t1[1]);
+  p.closePath();
+}
+/* closed catmull-rom through the given points: organic bodies, hair, cloth */
+function blobPath(p, pts, tension){
+  var n = pts.length / 2;
+  if(n < 3){ polyPath(p, pts); return; }
+  var k = (tension == null ? 1 : tension) / 6;
+  function px(i){ return pts[(((i % n) + n) % n) * 2]; }
+  function py(i){ return pts[(((i % n) + n) % n) * 2 + 1]; }
+  p.moveTo(px(0), py(0));
+  for(var i = 0; i < n; i++){
+    p.bezierCurveTo(
+      px(i) + (px(i+1) - px(i-1)) * k, py(i) + (py(i+1) - py(i-1)) * k,
+      px(i+1) - (px(i+2) - px(i)) * k, py(i+1) - (py(i+2) - py(i)) * k,
+      px(i+1), py(i+1));
+  }
+  p.closePath();
+}
+function shapePath(s){
+  var p = new Path2D();
+  switch(s[0]){
+    case 'circ': p.arc(s[1], s[2], Math.max(0.01, s[3]), 0, TAU); p.closePath(); break;
+    case 'ell':  p.ellipse(s[1], s[2], Math.max(0.01, s[3]), Math.max(0.01, s[4]), (s[5]||0) * RAD, 0, TAU); p.closePath(); break;
+    case 'rr':   roundRectPath(p, s[1], s[2], s[3], s[4], s[5]); break;
+    case 'poly': polyPath(p, s[1]); break;
+    case 'cap':  capPath(p, s[1], s[2], s[3], s[4], s[5]); break;
+    case 'leaf': leafPath(p, s[1], s[2], s[3], s[4], s[5]); break;
+    case 'blob': blobPath(p, s[1], s[2]); break;
+  }
+  return p;
+}
+function buildPath(shapes){
+  var p = new Path2D();
+  for(var i = 0; i < shapes.length; i++) p.addPath(shapePath(shapes[i]));
+  return p;
+}
+
+/* ============================================================
+   Character prep + rendering
+   ============================================================ */
+var PART_ORDER = ['tail','armB','legB','torso','legF','armF','head','prop'];
+
+function prep(ch){
+  if(ch._ready) return ch;
+  ch.regions = ch.regions || [];
+  ch.details = ch.details || [];
+  var all = ch.regions.concat(ch.details), i;
+  for(i = 0; i < all.length; i++){
+    all[i].part = all[i].part || 'torso';
+    all[i]._path = buildPath(all[i].shapes);
+  }
+  ch.byPart = {};
+  for(i = 0; i < PART_ORDER.length; i++) ch.byPart[PART_ORDER[i]] = { r: [], d: [] };
+  for(i = 0; i < ch.regions.length; i++) ch.byPart[ch.regions[i].part].r.push(ch.regions[i]);
+  for(i = 0; i < ch.details.length; i++) ch.byPart[ch.details[i].part].d.push(ch.details[i]);
+  ch.pivots = ch.pivots || {};
+  for(i = 0; i < PART_ORDER.length; i++) if(!ch.pivots[PART_ORDER[i]]) ch.pivots[PART_ORDER[i]] = [DW/2, DH/2];
+  /* silhouette: everything at once, used for clipping, shadows and lock icons */
+  ch._silhouette = new Path2D();
+  for(i = 0; i < ch.regions.length; i++) ch._silhouette.addPath(ch.regions[i]._path);
+  ch._ready = true;
+  return ch;
+}
+
+function partXf(ctx, piv, t){
+  if(!t) return;
+  ctx.translate(piv[0] + (t.x || 0), piv[1] + (t.y || 0));
+  if(t.rot) ctx.rotate(t.rot);
+  if(t.sx != null || t.sy != null) ctx.scale(t.sx == null ? 1 : t.sx, t.sy == null ? 1 : t.sy);
+  ctx.translate(-piv[0], -piv[1]);
+}
+
+/* One renderer for the colouring page, the shelf, the arena and the icons.
+   colours: region id -> hex (missing = unpainted). opts.paint composites the
+   player's raw brushwork instead, clipped region by region so the draw order
+   still decides what covers what. */
+function drawCharacter(ctx, ch, colours, pose, opts){
+  prep(ch);
+  opts = opts || {};
+  var lw = opts.lw == null ? 3.4 : opts.lw;
+  var ink = opts.ink || INK;
+  var drain = opts.drain || 0;
+  var paint = opts.paint || null;
+  var blank = opts.blank ? (opts.blank === true ? PAPER : opts.blank) : null;
+
+  function colourOf(reg){
+    var c = colours && colours[reg.id];
+    if(!c) return blank || reg.target;
+    return c;
+  }
+  function out(c){
+    if(!drain) return c;
+    var r = hexRGB(c), g = r[0]*0.3 + r[1]*0.59 + r[2]*0.11;
+    return rgbHex(lerp(r[0], g*0.55 + 18, drain), lerp(r[1], g*0.55 + 18, drain), lerp(r[2], g*0.55 + 20, drain));
+  }
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  partXf(ctx, ch.pivots.torso, pose && pose.torso);
+
+  for(var pi = 0; pi < PART_ORDER.length; pi++){
+    var part = PART_ORDER[pi], bucket = ch.byPart[part];
+    if(!bucket || (!bucket.r.length && !bucket.d.length)) continue;
+    ctx.save();
+    if(part !== 'torso') partXf(ctx, ch.pivots[part], pose && pose[part]);
+    var i, reg;
+    /* fill and outline one region at a time: a region drawn later covers the
+       outline of the one underneath, which is what makes overlaps read right */
+    for(i = 0; i < bucket.r.length; i++){
+      reg = bucket.r[i];
+      if(paint){
+        ctx.save();
+        ctx.clip(reg._path);
+        ctx.fillStyle = PAPER; ctx.fill(reg._path);
+        ctx.drawImage(paint, 0, 0);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = out(colourOf(reg));
+        ctx.fill(reg._path);
+      }
+      if(lw > 0){
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = lw * (reg.lw || 1);
+        ctx.stroke(reg._path);
+      }
+    }
+    for(i = 0; i < bucket.d.length; i++){
+      reg = bucket.d[i];
+      ctx.fillStyle = out(reg.target);
+      ctx.fill(reg._path);
+      if(lw > 0 && !reg.noline){
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = lw * (reg.lw || 0.7);
+        ctx.stroke(reg._path);
+      }
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* flat white-out of the whole character, for hit flashes and lock silhouettes */
+function drawSilhouette(ctx, ch, pose, fill){
+  prep(ch);
+  ctx.save();
+  partXf(ctx, ch.pivots.torso, pose && pose.torso);
+  ctx.fillStyle = fill;
+  for(var pi = 0; pi < PART_ORDER.length; pi++){
+    var part = PART_ORDER[pi], bucket = ch.byPart[part];
+    if(!bucket) continue;
+    ctx.save();
+    if(part !== 'torso') partXf(ctx, ch.pivots[part], pose && pose[part]);
+    for(var i = 0; i < bucket.r.length; i++) ctx.fill(bucket.r[i]._path);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* ============================================================
+   The roster.
+
+   These are the fairy-tale and storybook characters the films were
+   adapted from, all of them long out of copyright: Perrault's cat,
+   Perrault's cinder girl, the genie of the Thousand and One Nights,
+   Baum's lion, Collodi's puppet, Salten's fawn. The drawings are this
+   game's own, not anybody else's.
+   ============================================================ */
+
+var PIV = {
+  torso:[160,250], head:[160,158], armB:[132,180], armF:[188,180],
+  legB:[146,264], legF:[176,264], tail:[160,252], prop:[206,196]
+};
+function pivots(o){
+  var p = {}, k;
+  for(k in PIV) p[k] = PIV[k];
+  for(k in (o||{})) p[k] = o[k];
+  return p;
+}
+/* Big, wide-set, glossy eyes do most of the work of making a face
+   appealing, so every character gets the same generous pair. */
+function eyePair(cx, dx, y, rw, rh, pr, tag){
+  return [
+    {id:'eyeW'+tag, part:'head', target:'#ffffff', lw:0.55, shapes:[['ell',cx-dx,y,rw,rh],['ell',cx+dx,y,rw,rh]]},
+    {id:'eyeI'+tag, part:'head', target:'#6b4a2a', noline:true, shapes:[
+      ['circ',cx-dx+pr*0.2,y+rh*0.14,pr*1.35],['circ',cx+dx+pr*0.2,y+rh*0.14,pr*1.35]]},
+    {id:'eyeP'+tag, part:'head', target:'#2a2036', noline:true, shapes:[
+      ['circ',cx-dx+pr*0.2,y+rh*0.14,pr*0.82],['circ',cx+dx+pr*0.2,y+rh*0.14,pr*0.82]]},
+    {id:'eyeG'+tag, part:'head', target:'#ffffff', noline:true, shapes:[
+      ['circ',cx-dx+pr*0.72,y-pr*0.5,pr*0.46],['circ',cx+dx+pr*0.72,y-pr*0.5,pr*0.46],
+      ['circ',cx-dx-pr*0.4,y+pr*0.62,pr*0.2],['circ',cx+dx-pr*0.4,y+pr*0.62,pr*0.2]]},
+    {id:'lash'+tag, part:'head', target:'#2a2036', noline:true, shapes:[
+      ['cap',cx-dx-rw*0.96,y-rh*0.5,cx-dx-rw*1.34,y-rh*0.86,2.4],
+      ['cap',cx+dx+rw*0.96,y-rh*0.5,cx+dx+rw*1.34,y-rh*0.86,2.4]]}
+  ];
+}
+function brows(cx, dx, y, w, tilt, col){
+  return {id:'brow'+y, part:'head', target:col||'#3a2c22', noline:true, shapes:[
+    ['cap', cx-dx-w, y+tilt, cx-dx+w, y-tilt, 3],
+    ['cap', cx+dx-w, y-tilt, cx+dx+w, y+tilt, 3]
+  ]};
+}
+function blush(cx, dx, y, rw, col){
+  return {id:'blush'+y, part:'head', target:col||'#f2a5a0', noline:true,
+          shapes:[['ell',cx-dx,y,rw,rw*0.62],['ell',cx+dx,y,rw,rw*0.62]]};
+}
+
+var HEROES = [
+/* ------------------------------------------------- Steamboat Willie (1928)
+   The 1928 short is in the US public domain, so this is that design and only
+   that design: pie-cut eyes, bare hands rather than the later white gloves,
+   the flat deckhand's cap, rubber-hose limbs. The name is the film's, not the
+   trademark. Nothing here is taken from any later, still-protected version. */
+{
+  id:'willie', name:'Steamboat Willie', sur:'the deckhand, 1928',
+  blurb:'Pilots a boat he is not allowed to pilot, whistling the whole way. Made of circles and cheek.',
+  special:'Steam Whistle', spark:'#e8e2d4',
+  pivots: pivots({ head:[160,148], tail:[150,258] }),
+  regions:[
+    {id:'wTail', name:'Tail', part:'tail', target:'#2a2430', shapes:[
+      ['cap',148,258,114,282,7],['cap',114,282,88,272,5.5],['cap',88,272,84,248,4.5]]},
+
+    {id:'wArmB', name:'Back arm', part:'armB', target:'#2a2430', shapes:[['cap',134,176,108,230,11]]},
+    {id:'wHandB', name:'Back hand', part:'armB', target:'#2a2430', shapes:[['circ',104,240,14]]},
+
+    {id:'wLegB', name:'Back leg', part:'legB', target:'#2a2430', shapes:[['cap',146,258,136,338,12]]},
+    {id:'wShoeB', name:'Back shoe', part:'legB', target:'#c9a24a', shapes:[['rr',104,342,62,40,19]]},
+
+    {id:'wBody', name:'Body', part:'torso', target:'#2a2430', shapes:[['rr',124,146,72,88,32]]},
+    {id:'wShorts', name:'Shorts', part:'torso', target:'#b03a2e', shapes:[['rr',118,210,84,56,24]]},
+
+    {id:'wLegF', name:'Front leg', part:'legF', target:'#2a2430', shapes:[['cap',176,258,188,338,12]]},
+    {id:'wShoeF', name:'Front shoe', part:'legF', target:'#c9a24a', shapes:[['rr',158,342,62,40,19]]},
+
+    {id:'wArmF', name:'Front arm', part:'armF', target:'#2a2430', shapes:[['cap',186,176,214,230,11]]},
+    {id:'wHandF', name:'Front hand', part:'armF', target:'#2a2430', shapes:[['circ',218,240,14]]},
+
+    {id:'wEars', name:'Ears', part:'head', target:'#2a2430', shapes:[['circ',110,44,31],['circ',210,44,31]]},
+    {id:'wHead', name:'Head', part:'head', target:'#2a2430', shapes:[['circ',160,94,49]]},
+    {id:'wFace', name:'Face', part:'head', target:'#f2ece0', shapes:[
+      ['blob',[160,64, 196,80, 202,116, 184,140, 160,146, 136,140, 118,116, 124,80]]]},
+    {id:'wSnout', name:'Snout', part:'head', target:'#f8f4ea', shapes:[['ell',160,124,29,21]]},
+    {id:'wCap', name:'Cap', part:'head', target:'#3a4a6b', shapes:[
+      ['rr',136,26,48,22,9],['rr',124,44,72,11,5]]}
+  ],
+  details:[
+    {id:'wBtn', part:'torso', target:'#f2ece0', shapes:[['circ',139,234,8],['circ',181,234,8]]},
+    /* pie-cut eyes: a black oval with a wedge taken out of it */
+    {id:'wPie', part:'head', target:'#2a2430', noline:true, shapes:[['ell',145,94,11,15],['ell',175,94,11,15]]},
+    {id:'wWedge', part:'head', target:'#f2ece0', noline:true, shapes:[
+      ['poly',[145,94, 137,79, 150,78]],['poly',[175,94, 167,78, 180,79]]]},
+    {id:'wNose', part:'head', target:'#2a2430', shapes:[['ell',160,116,12,9]]},
+    {id:'wMouth', part:'head', target:'#2a2430', noline:true, shapes:[
+      ['cap',142,130,160,138,3],['cap',160,138,178,130,3]]},
+    {id:'wBrow', part:'head', target:'#2a2430', noline:true, shapes:[
+      ['cap',132,70,150,76,3],['cap',170,76,188,70,3]]}
+  ]
+},
+/* ------------------------------------------------- Puss in Boots (Perrault) */
+{
+  id:'puss', name:'Puss in Boots', sur:'boots, hat, and a plan',
+  blurb:'A cat with no money, no title and no doubts. Talks his way into everything else.',
+  special:'Rapier Flourish', spark:'#c0392b',
+  pivots: pivots({ tail:[150,266] }),
+  regions:[
+    {id:'tail', name:'Tail', part:'tail', target:'#e09a4a', shapes:[
+      ['cap',150,266,116,300,11],['cap',116,300,88,312,9],['cap',88,312,66,298,7],['cap',66,298,62,274,5]]},
+
+    {id:'sleeveB', name:'Back sleeve', part:'armB', target:'#a8402e', shapes:[['cap',134,180,106,242,15]]},
+    {id:'pawB', name:'Back paw', part:'armB', target:'#f0c88a', shapes:[['circ',102,251,15]]},
+
+    {id:'legB', name:'Back trouser', part:'legB', target:'#5a3f2e', shapes:[['cap',146,258,137,348,15]]},
+    {id:'bootB', name:'Back boot', part:'legB', target:'#3a2b3e', shapes:[['rr',116,342,50,48,15]]},
+
+    {id:'coat', name:'Cloak', part:'torso', target:'#a8402e', shapes:[['rr',114,158,92,112,30]]},
+    {id:'shirt', name:'Shirt', part:'torso', target:'#f7f0dc', shapes:[['blob',[160,160, 181,173, 177,226, 160,237, 143,226, 139,173]]]},
+    {id:'belt', name:'Belt', part:'torso', target:'#3a2a1c', shapes:[['rr',112,244,96,22,10]]},
+
+    {id:'legF', name:'Front trouser', part:'legF', target:'#5a3f2e', shapes:[['cap',176,258,186,348,15]]},
+    {id:'bootF', name:'Front boot', part:'legF', target:'#3a2b3e', shapes:[['rr',165,342,50,48,15]]},
+
+    {id:'sleeveF', name:'Front sleeve', part:'armF', target:'#a8402e', shapes:[['cap',186,180,214,242,15]]},
+    {id:'pawF', name:'Front paw', part:'armF', target:'#f0c88a', shapes:[['circ',218,251,15]]},
+
+    {id:'ears', name:'Ears', part:'head', target:'#e09a4a', shapes:[['leaf',118,50,21,36,-16],['leaf',202,50,21,36,16]]},
+    {id:'earIn', name:'Inner ears', part:'head', target:'#f0a7b5', shapes:[['leaf',119,56,11,21,-16],['leaf',201,56,11,21,16]]},
+    {id:'face', name:'Fur', part:'head', target:'#e09a4a', shapes:[['circ',160,100,51]]},
+    {id:'muzzle', name:'Muzzle', part:'head', target:'#f8e8cc', shapes:[['ell',142,128,24,19],['ell',178,128,24,19]]},
+    {id:'hat', name:'Hat', part:'head', target:'#6b4226', shapes:[
+      ['ell',160,42,36,21],['rr',100,54,120,14,7]]}
+  ],
+  details:[
+    {id:'buckle', part:'torso', target:'#f2c14e', shapes:[['rr',148,246,26,18,5]]},
+    {id:'nose', part:'head', target:'#c4566e', shapes:[['poly',[150,111, 170,111, 160,122]]]},
+    {id:'mouth', part:'head', target:'#8c4a52', noline:true, shapes:[
+      ['cap',160,120,160,130,2.4],['cap',160,130,146,136,2.4],['cap',160,130,174,136,2.4]]},
+    {id:'whisk', part:'head', target:'#7b6f68', noline:true, shapes:[
+      ['cap',128,126,94,116,1.6],['cap',128,133,94,134,1.6],
+      ['cap',192,126,226,116,1.6],['cap',192,133,226,134,1.6]]},
+    {id:'feather', part:'head', target:'#c0392b', shapes:[['leaf',202,22,10,26,36]]},
+    blush(160, 40, 118, 12, '#e88a6a'),
+    brows(160,22,80,11,3,'#a8662a')
+  ].concat(eyePair(160, 22, 93, 15, 17, 7.4, 'p'))
+},
+
+/* ------------------------------------------------- Cinderella (Perrault) */
+{
+  id:'cinderella', name:'Cinderella', sur:'the girl from the ashes',
+  blurb:'Scrubbed the floor all morning, out-danced a palace all night, and left without saying who she was.',
+  special:'Midnight Chime', spark:'#a8cfe8',
+  pivots: pivots({ head:[160,150], armB:[128,182], armF:[192,182], prop:[224,232] }),
+  regions:[
+    {id:'shoeB', name:'Back slipper', part:'legB', target:'#dff0fa', shapes:[['ell',140,380,24,13]]},
+    {id:'sleeveB', name:'Back sleeve', part:'armB', target:'#a8cfe8', shapes:[['ell',124,190,23,21],['cap',122,200,100,250,12]]},
+    {id:'handB', name:'Back glove', part:'armB', target:'#f8f4ec', shapes:[['circ',97,258,13]]},
+
+    {id:'skirt', name:'Ball gown', part:'torso', target:'#a8cfe8', shapes:[
+      ['blob',[160,228, 204,256, 228,310, 234,362, 198,374, 160,378, 122,374, 86,362, 92,310, 116,256]]]},
+    {id:'sash', name:'Sash', part:'torso', target:'#7fb4d8', shapes:[['rr',118,222,84,20,10]]},
+    {id:'bodice', name:'Bodice', part:'torso', target:'#e6f2fa', shapes:[['blob',[160,150, 196,172, 196,228, 160,238, 124,228, 124,172]]]},
+    {id:'trim', name:'Gown trim', part:'torso', target:'#ffffff', shapes:[
+      ['blob',[160,364, 196,360, 226,350, 232,364, 196,374, 160,378, 122,374, 88,364, 94,350, 124,360]]]},
+
+    {id:'shoeF', name:'Front slipper', part:'legF', target:'#dff0fa', shapes:[['ell',182,382,24,13]]},
+
+    {id:'sleeveF', name:'Front sleeve', part:'armF', target:'#a8cfe8', shapes:[['ell',196,190,23,21],['cap',198,200,218,244,12]]},
+    {id:'handF', name:'Front glove', part:'armF', target:'#f8f4ec', shapes:[['circ',222,252,13]]},
+
+    {id:'hairBack', name:'Hair', part:'head', target:'#e8c46a', shapes:[
+      ['blob',[160,36, 212,58, 226,124, 218,188, 192,218, 178,192, 160,146, 142,192, 128,218, 102,188, 94,124, 108,58]]]},
+    {id:'face', name:'Face', part:'head', target:'#f4d3b0', shapes:[['ell',160,102,48,52]]},
+    {id:'bangs', name:'Fringe', part:'head', target:'#e8c46a', shapes:[
+      ['blob',[114,72, 160,44, 206,72, 202,98, 178,72, 160,84, 142,72, 118,98]]]},
+    {id:'crown', name:'Tiara', part:'head', target:'#f2c14e', shapes:[
+      ['poly',[126,58, 136,30, 149,48, 160,22, 171,48, 184,30, 194,58]],
+      ['rr',124,54,72,13,5]]}
+  ],
+  details:[
+    {id:'choker', part:'head', target:'#2b3a4e', shapes:[['rr',132,150,56,13,6]]},
+    {id:'lace', part:'torso', target:'#c9e2f0', noline:true, shapes:[['cap',136,176,184,176,2.4],['cap',140,190,180,190,2.4]]},
+    {id:'gem', part:'head', target:'#7fb4d8', shapes:[['circ',160,50,8]]},
+    {id:'mouth', part:'head', target:'#c4566e', shapes:[['ell',160,130,10,7]]},
+    blush(160, 36, 118, 13),
+    brows(160,22,78,11,3,'#c49a3a')
+  ].concat(eyePair(160, 22, 101, 15, 18, 7.6, 'm'))
+},
+
+/* ------------------------------------------------- The Genie (1001 Nights) */
+{
+  id:'genie', name:'The Genie', sur:'of the lamp',
+  blurb:'Four hundred years in a lamp the size of a teapot. Very glad to be out. Very loud about it.',
+  special:'Wish Burst', spark:'#45c4b8', float:true,
+  pivots: pivots({ head:[160,152], torso:[160,230], tail:[160,244], armB:[126,178], armF:[194,178], prop:[240,336] }),
+  regions:[
+    {id:'smoke', name:'Smoke tail', part:'tail', target:'#7ec8e3', shapes:[
+      ['cap',160,238,182,278,26],['cap',182,278,146,314,20],
+      ['cap',146,314,178,344,14],['cap',178,344,148,366,9],['cap',148,366,166,380,5]]},
+
+    {id:'armBs', name:'Back arm', part:'armB', target:'#5aa9d6', shapes:[['cap',128,178,98,224,18]]},
+    {id:'cuffB', name:'Back cuff', part:'armB', target:'#f2c14e', shapes:[['rr',80,220,36,17,8]]},
+    {id:'handB', name:'Back hand', part:'armB', target:'#5aa9d6', shapes:[['circ',80,248,16]]},
+
+    {id:'body', name:'Body', part:'torso', target:'#5aa9d6', shapes:[['ell',160,198,52,60]]},
+    {id:'vest', name:'Waistcoat', part:'torso', target:'#2f6f8f', shapes:[
+      ['blob',[160,148, 196,166, 200,222, 176,238, 160,214, 144,238, 120,222, 124,166]]]},
+    {id:'sashw', name:'Sash', part:'torso', target:'#c0392b', shapes:[['rr',114,232,92,21,10]]},
+
+    {id:'armFs', name:'Front arm', part:'armF', target:'#5aa9d6', shapes:[['cap',192,178,222,224,18]]},
+    {id:'cuffF', name:'Front cuff', part:'armF', target:'#f2c14e', shapes:[['rr',204,220,36,17,8]]},
+    {id:'handF', name:'Front hand', part:'armF', target:'#5aa9d6', shapes:[['circ',240,248,16]]},
+
+    {id:'earsw', name:'Ears', part:'head', target:'#5aa9d6', shapes:[['leaf',105,92,12,26,-28],['leaf',215,92,12,26,28]]},
+    {id:'facew', name:'Face', part:'head', target:'#6fbde6', shapes:[['ell',160,100,48,50]]},
+    {id:'flame', name:'Topknot', part:'head', target:'#2a2036', shapes:[
+      ['leaf',160,32,15,34,0],['cap',160,50,160,66,9]]},
+    {id:'band', name:'Headband', part:'head', target:'#f2c14e', shapes:[['rr',116,60,88,15,7]]},
+
+    {id:'lamp', name:'Lamp', part:'prop', target:'#e0a83c', shapes:[
+      ['ell',244,340,32,19],['poly',[268,332, 296,322, 294,338, 268,344]],
+      ['cap',232,324,244,318,5],['ell',244,318,12,7]]}
+  ],
+  details:[
+    {id:'gemw', part:'head', target:'#c0392b', shapes:[['circ',160,62,8]]},
+    {id:'mouthw', part:'head', target:'#22415a', noline:true, shapes:[['cap',142,126,160,136,3.4],['cap',160,136,178,126,3.4]]},
+    {id:'beard', part:'head', target:'#2a2036', shapes:[['blob',[160,152, 176,140, 172,122, 160,132, 148,122, 144,140]]]},
+    {id:'lampglint', part:'prop', target:'#ffe7a8', noline:true, shapes:[['ell',236,334,9,5]]},
+    brows(160,23,80,12,4,'#22415a')
+  ].concat(eyePair(160, 23, 99, 15, 17, 7.4, 'w'))
+},
+
+/* ------------------------------------------------- The Cowardly Lion (Baum) */
+{
+  id:'lion', name:'The Cowardly Lion', sur:'brave when it counts',
+  blurb:'Frightened of absolutely everything, and first through the door every single time.',
+  special:'Great Roar', spark:'#e08a2e',
+  pivots: pivots({ head:[160,156], tail:[150,250] }),
+  regions:[
+    {id:'tailr', name:'Tail', part:'tail', target:'#d9a45c', shapes:[['cap',148,248,102,262,9],['cap',102,262,84,222,8]]},
+    {id:'tuft', name:'Tail tuft', part:'tail', target:'#a9662b', shapes:[['leaf',84,202,15,24,0]]},
+
+    {id:'armBr', name:'Back arm', part:'armB', target:'#d9a45c', shapes:[['cap',134,182,110,246,17]]},
+    {id:'pawBr', name:'Back paw', part:'armB', target:'#f0d3a2', shapes:[['circ',106,256,17]]},
+
+    {id:'legBr', name:'Back leg', part:'legB', target:'#d9a45c', shapes:[['cap',146,256,138,346,18]]},
+    {id:'footBr', name:'Back foot', part:'legB', target:'#f0d3a2', shapes:[['rr',116,352,54,38,18]]},
+
+    {id:'bodyr', name:'Fur', part:'torso', target:'#d9a45c', shapes:[['rr',114,156,92,112,36]]},
+    {id:'bellyr', name:'Tummy', part:'torso', target:'#f5e0b8', shapes:[['ell',160,212,31,42]]},
+
+    {id:'legFr', name:'Front leg', part:'legF', target:'#d9a45c', shapes:[['cap',176,256,186,346,18]]},
+    {id:'footFr', name:'Front foot', part:'legF', target:'#f0d3a2', shapes:[['rr',160,352,54,38,18]]},
+
+    {id:'armFr', name:'Front arm', part:'armF', target:'#d9a45c', shapes:[['cap',186,182,212,246,17]]},
+    {id:'pawFr', name:'Front paw', part:'armF', target:'#f0d3a2', shapes:[['circ',216,256,17]]},
+
+    {id:'mane', name:'Mane', part:'head', target:'#c2701f', shapes:[
+      ['blob',[160,16, 198,26, 220,52, 234,92, 226,132, 198,160, 160,172, 122,160, 94,132, 86,92, 100,52, 122,26]]]},
+    {id:'earsr', name:'Ears', part:'head', target:'#d9a45c', shapes:[['circ',112,62,21],['circ',208,62,21]]},
+    {id:'earInr', name:'Inner ears', part:'head', target:'#e8a7a0', shapes:[['circ',113,64,12],['circ',207,64,12]]},
+    {id:'facer', name:'Face', part:'head', target:'#eec988', shapes:[['circ',160,102,49]]},
+    {id:'muzzler', name:'Muzzle', part:'head', target:'#f8ecd4', shapes:[['ell',141,132,24,20],['ell',179,132,24,20]]}
+  ],
+  details:[
+    {id:'noser', part:'head', target:'#a8474b', shapes:[['poly',[147,114, 173,114, 160,127]]]},
+    {id:'mouthr', part:'head', target:'#a8474b', noline:true, shapes:[['cap',160,125,160,136,2.4],['cap',160,136,144,142,2.4],['cap',160,136,176,142,2.4]]},
+    {id:'whiskr', part:'head', target:'#8a6a46', noline:true, shapes:[
+      ['cap',124,130,94,120,1.6],['cap',124,137,94,138,1.6],
+      ['cap',196,130,226,120,1.6],['cap',196,137,226,138,1.6]]},
+    {id:'bowr', part:'tail', target:'#e9698a', shapes:[['poly',[84,196, 66,182, 70,204]],['poly',[84,196, 102,182, 98,204]],['circ',84,196,6]]},
+    brows(160,23,84,11,3,'#a05a18')
+  ].concat(eyePair(160, 23, 97, 15, 17, 7.4, 'r'))
+},
+
+/* ------------------------------------------------- Pinocchio (Collodi) */
+{
+  id:'pinocchio', name:'Pinocchio', sur:'the puppet who wanted more',
+  blurb:'Carved out of a talking log. Means every promise he makes, right up until he does not.',
+  special:'Puppet Rush', spark:'#f2c14e',
+  pivots: pivots({ head:[160,150] }),
+  regions:[
+    {id:'armBt', name:'Back arm', part:'armB', target:'#d9a45c', shapes:[['cap',134,184,112,244,14]]},
+    {id:'handBt', name:'Back hand', part:'armB', target:'#c98a3c', shapes:[['circ',108,254,14]]},
+
+    {id:'legBt', name:'Back leg', part:'legB', target:'#d9a45c', shapes:[['cap',146,262,139,350,15]]},
+    {id:'shoeBt', name:'Back shoe', part:'legB', target:'#6b4226', shapes:[['rr',116,352,52,36,15]]},
+
+    {id:'shirtt', name:'Shirt', part:'torso', target:'#f2c14e', shapes:[['rr',118,154,84,98,24]]},
+    {id:'shortst', name:'Shorts', part:'torso', target:'#b03a2e', shapes:[['rr',116,232,88,44,18]]},
+    {id:'strapst', name:'Braces', part:'torso', target:'#3a6ea8', shapes:[
+      ['cap',138,156,132,240,7],['cap',182,156,188,240,7]]},
+
+    {id:'legFt', name:'Front leg', part:'legF', target:'#d9a45c', shapes:[['cap',176,262,185,350,15]]},
+    {id:'shoeFt', name:'Front shoe', part:'legF', target:'#6b4226', shapes:[['rr',164,352,52,36,15]]},
+
+    {id:'armFt', name:'Front arm', part:'armF', target:'#d9a45c', shapes:[['cap',186,184,210,244,14]]},
+    {id:'handFt', name:'Front hand', part:'armF', target:'#c98a3c', shapes:[['circ',214,254,14]]},
+
+    {id:'hairt', name:'Hair', part:'head', target:'#4a3a2a', shapes:[
+      ['blob',[160,40, 198,50, 208,78, 202,98, 176,72, 160,84, 144,72, 118,98, 112,78, 122,50]]]},
+    {id:'facet', name:'Face', part:'head', target:'#eec292', shapes:[['rr',114,56,92,92,28]]},
+    {id:'noset', name:'Nose', part:'head', target:'#d9a45c', shapes:[['cap',172,114,214,114,10],['ell',216,114,9,11]]},
+    {id:'hatt', name:'Cap', part:'head', target:'#f2c14e', shapes:[
+      ['blob',[160,14, 192,32, 200,54, 160,58, 120,54, 128,32]],['rr',112,50,96,13,6]]},
+    {id:'bowt', name:'Bow tie', part:'head', target:'#b03a2e', shapes:[
+      ['poly',[160,152, 132,140, 132,164]],['poly',[160,152, 188,140, 188,164]],['circ',160,152,8]]}
+  ],
+  details:[
+    {id:'jointt', part:'torso', target:'#b8843a', shapes:[['circ',130,182,8],['circ',190,182,8]]},
+    {id:'moutht', part:'head', target:'#8a4a3a', noline:true, shapes:[['cap',142,130,160,138,3.4],['cap',160,138,178,130,3.4]]},
+    {id:'feathert', part:'head', target:'#b03a2e', shapes:[['leaf',196,26,9,22,34]]},
+    blush(160, 42, 124, 12, '#e8907a'),
+    brows(160,22,76,10,3,'#4a3a2a')
+  ].concat(eyePair(160, 22, 92, 14, 16, 7, 't'))
+},
+
+/* ------------------------------------------------- Bambi (Salten) */
+{
+  id:'bambi', name:'Bambi', sur:'the young prince of the forest',
+  blurb:'New to his own legs and to the whole forest. Already asking what everything is called.',
+  special:'Thicket Dash', spark:'#9fd8ee',
+  pivots: pivots({ head:[160,152], tail:[152,248] }),
+  regions:[
+    {id:'tailn', name:'Tail', part:'tail', target:'#f2ece0', shapes:[['ell',132,246,17,14]]},
+
+    {id:'armBn', name:'Back foreleg', part:'armB', target:'#c98a4a', shapes:[['cap',136,184,116,244,11]]},
+    {id:'hoofBn', name:'Back forehoof', part:'armB', target:'#4a3226', shapes:[['rr',104,246,27,21,8]]},
+
+    {id:'legBn', name:'Back hind leg', part:'legB', target:'#c98a4a', shapes:[['cap',146,258,136,348,12]]},
+    {id:'hoofBn2', name:'Back hind hoof', part:'legB', target:'#4a3226', shapes:[['rr',120,350,34,26,9]]},
+
+    {id:'bodyn', name:'Coat', part:'torso', target:'#c98a4a', shapes:[['rr',120,158,80,108,34]]},
+    {id:'spots', name:'Spots', part:'torso', target:'#f8f0e0', shapes:[
+      ['ell',138,188,10,7],['ell',164,178,9,6],['ell',182,206,10,7],['ell',144,216,9,6],['ell',170,230,8,6]]},
+    {id:'chestn', name:'Chest', part:'torso', target:'#f8f0e0', shapes:[['ell',160,236,28,28]]},
+
+    {id:'legFn', name:'Front hind leg', part:'legF', target:'#c98a4a', shapes:[['cap',176,258,186,348,12]]},
+    {id:'hoofFn2', name:'Front hind hoof', part:'legF', target:'#4a3226', shapes:[['rr',168,350,34,26,9]]},
+
+    {id:'armFn', name:'Front foreleg', part:'armF', target:'#c98a4a', shapes:[['cap',184,184,206,244,11]]},
+    {id:'hoofFn', name:'Front forehoof', part:'armF', target:'#4a3226', shapes:[['rr',192,246,27,21,8]]},
+
+    {id:'antlers', name:'Antler buds', part:'head', target:'#a8763e', shapes:[
+      ['cap',136,72,130,48,6],['cap',184,72,190,48,6]]},
+    {id:'earsn', name:'Ears', part:'head', target:'#c98a4a', shapes:[['leaf',104,84,16,28,-58],['leaf',216,84,16,28,58]]},
+    {id:'earInn', name:'Inner ears', part:'head', target:'#f0b9b4', shapes:[['leaf',107,84,8,17,-58],['leaf',213,84,8,17,58]]},
+    {id:'facen', name:'Face', part:'head', target:'#d89a58', shapes:[['ell',160,100,44,46]]},
+    {id:'muzzlen', name:'Muzzle', part:'head', target:'#f8f0e0', shapes:[['ell',160,128,26,21]]}
+  ],
+  details:[
+    {id:'nosen', part:'head', target:'#3a2b22', shapes:[['ell',160,120,12,9]]},
+    {id:'mouthn', part:'head', target:'#3a2b22', noline:true, shapes:[['cap',160,124,160,132,2.2],['cap',160,132,149,136,2.2],['cap',160,132,171,136,2.2]]},
+    blush(160, 38, 118, 12, '#e8907a'),
+    brows(160,21,79,10,3,'#8a6034')
+  ].concat(eyePair(160, 21, 96, 15, 17, 7.6, 'n'))
+}
+];
+
+/* ---------------------------------------------------------- the villains ---
+   Grimm's little spinner, Baum's western witch, Andersen's sea witch and
+   snow queen — all far out of copyright, all drawn fresh here. The
+   Inkblot King is this game's own, since the premise is his fault.
+   They come pre-coloured: they already stole all the colour they need. */
+var VILLAINS = [
+{
+  id:'rumpel', name:'Rumpelstiltskin', scale:0.94, hp:150, power:0.85, ai:'jester',
+  taunt:'You never did guess it. Nobody ever guesses it.',
+  brief:'Hops about and throws spindles. Hold BLOCK when he flashes.',
+  sky:['#4a3a26','#241a1a'], ground:'#3a2c1c', accent:'#f2c14e',
+  pivots: pivots({ head:[160,150] }),
+  regions:[
+    {id:'jArmB', part:'armB', target:'#3f7a3a', shapes:[['cap',134,180,104,238,13]]},
+    {id:'jHandB', part:'armB', target:'#b8d98a', shapes:[['circ',100,248,14]]},
+    {id:'jLegB', part:'legB', target:'#7a4a9e', shapes:[['cap',146,258,132,346,14]]},
+    {id:'jShoeB', part:'legB', target:'#c0392b', shapes:[['blob',[110,350, 140,346, 146,364, 126,376, 102,372, 96,358]]]},
+    {id:'jTorso', part:'torso', target:'#3f7a3a', shapes:[['rr',116,150,88,112,28]]},
+    {id:'jDiam', part:'torso', target:'#f2c14e', shapes:[
+      ['poly',[140,166, 158,190, 140,214, 122,190]],['poly',[180,166, 198,190, 180,214, 162,190]],
+      ['poly',[160,200, 178,224, 160,248, 142,224]]]},
+    {id:'jRuff', part:'torso', target:'#c0392b', shapes:[
+      ['circ',128,152,17],['circ',150,146,17],['circ',172,146,17],['circ',194,152,17]]},
+    {id:'jLegF', part:'legF', target:'#7a4a9e', shapes:[['cap',176,258,192,346,14]]},
+    {id:'jShoeF', part:'legF', target:'#c0392b', shapes:[['blob',[178,350, 212,346, 224,362, 206,376, 182,374, 172,360]]]},
+    {id:'jArmF', part:'armF', target:'#3f7a3a', shapes:[['cap',186,180,216,238,13]]},
+    {id:'jHandF', part:'armF', target:'#b8d98a', shapes:[['circ',220,248,14]]},
+    {id:'jHat', part:'head', target:'#7a4a9e', shapes:[
+      ['blob',[160,66, 128,58, 92,22, 118,14, 148,44]],
+      ['blob',[160,66, 192,58, 228,22, 202,14, 172,44]],
+      ['blob',[160,68, 160,30, 176,10, 186,30, 178,62]]]},
+    {id:'jBells', part:'head', target:'#f2c14e', shapes:[['circ',100,16,11],['circ',220,16,11],['circ',182,10,10]]},
+    {id:'jFace', part:'head', target:'#b8d98a', shapes:[['ell',160,104,46,50]]},
+    {id:'jCollar', part:'head', target:'#f2c14e', shapes:[['rr',116,60,88,16,8]]}
+  ],
+  details:[
+    {id:'jEyeW', part:'head', target:'#f6f2ea', shapes:[['ell',138,100,15,13],['ell',182,100,15,13]]},
+    {id:'jEyeP', part:'head', target:'#2a2036', noline:true, shapes:[['circ',141,101,7],['circ',185,101,7]]},
+    {id:'jBrow', part:'head', target:'#2f5f2a', noline:true, shapes:[['cap',122,84,152,92,3.4],['cap',168,92,198,84,3.4]]},
+    {id:'jNose', part:'head', target:'#9dbf6a', shapes:[['cap',160,110,160,124,8],['ell',160,126,9,8]]},
+    {id:'jGrin', part:'head', target:'#2a2036', noline:true, shapes:[
+      ['blob',[160,148, 128,126, 160,132, 192,126]]]},
+    {id:'jTeeth', part:'head', target:'#f6f2ea', noline:true, shapes:[
+      ['poly',[140,131, 148,131, 144,141]],['poly',[156,133, 164,133, 160,144]],['poly',[172,131, 180,131, 176,141]]]}
+  ]
+},
+{
+  id:'westwitch', name:'The Wicked Witch of the West', scale:1.02, hp:210, power:1.0, ai:'witch',
+  taunt:'Who killed my sister? Was it you? Was it you?!',
+  brief:'Keeps her distance and throws fire. Vanishes in smoke when cornered.',
+  sky:['#1f3a2e','#12201c'], ground:'#1c3328', accent:'#7fe08a',
+  pivots: pivots({ head:[160,150], prop:[226,240] }),
+  regions:[
+    {id:'nArmB', part:'armB', target:'#2c2340', shapes:[['cap',132,180,102,240,16]]},
+    {id:'nHandB', part:'armB', target:'#8fbf72', shapes:[['circ',98,250,13]]},
+    {id:'nShoeB', part:'legB', target:'#3a2a1c', shapes:[['blob',[118,358, 146,354, 150,374, 124,382, 104,376, 104,362]]]},
+    {id:'nRobe', part:'torso', target:'#2c2340', shapes:[
+      ['blob',[160,146, 200,168, 218,250, 232,366, 160,380, 88,366, 102,250, 120,168]]]},
+    {id:'nApron', part:'torso', target:'#4a3a66', shapes:[['blob',[160,206, 188,222, 196,320, 160,332, 124,320, 132,222]]]},
+    {id:'nBelt', part:'torso', target:'#7fe08a', shapes:[['rr',118,212,84,16,8]]},
+    {id:'nShoeF', part:'legF', target:'#3a2a1c', shapes:[['blob',[172,358, 204,354, 216,370, 196,382, 172,380, 166,366]]]},
+    {id:'nArmF', part:'armF', target:'#2c2340', shapes:[['cap',188,180,220,238,16]]},
+    {id:'nHandF', part:'armF', target:'#8fbf72', shapes:[['circ',224,248,13]]},
+    {id:'nHair', part:'head', target:'#5e5470', shapes:[
+      ['blob',[160,58, 204,76, 216,140, 202,196, 176,182, 160,150, 144,182, 118,196, 104,140, 116,76]]]},
+    {id:'nFace', part:'head', target:'#8fbf72', shapes:[['ell',160,104,42,46]]},
+    {id:'nNose', part:'head', target:'#7bab60', shapes:[['cap',160,112,178,130,8],['ell',180,132,7,8]]},
+    {id:'nHat', part:'head', target:'#2c2340', shapes:[
+      ['blob',[160,62, 134,18, 106,-16, 186,10, 190,40]],['ell',160,64,66,16]]},
+    {id:'nBand', part:'head', target:'#7fe08a', shapes:[['rr',124,46,74,14,7]]},
+    {id:'nStaff', part:'prop', target:'#4a3a1c', shapes:[['cap',236,150,224,340,6]]},
+    {id:'nOrb', part:'prop', target:'#7fe08a', shapes:[['circ',238,138,16],['leaf',252,116,7,16,32],['leaf',222,116,7,16,-32]]}
+  ],
+  details:[
+    {id:'nEye', part:'head', target:'#f2f0a0', noline:true, shapes:[['ell',142,98,10,7],['ell',176,98,10,7]]},
+    {id:'nPup', part:'head', target:'#1a2418', noline:true, shapes:[['ell',144,98,3.4,7],['ell',178,98,3.4,7]]},
+    {id:'nBrow', part:'head', target:'#3a3448', noline:true, shapes:[['cap',128,84,154,92,3.2],['cap',166,92,192,84,3.2]]},
+    {id:'nMouth', part:'head', target:'#3a2438', noline:true, shapes:[['cap',142,140,160,134,3],['cap',160,134,176,140,3]]},
+    {id:'nWart', part:'head', target:'#6d9a55', noline:true, shapes:[['circ',186,124,4]]}
+  ]
+},
+{
+  id:'seawitch', name:'The Sea Witch', scale:1.22, hp:290, power:1.15, ai:'kraken',
+  taunt:'I only ever ask for your voice. This time I am taking the colours too.',
+  brief:'Slow, huge, and hits like a harbour wall. Watch the wind-up.',
+  sky:['#123044','#08161f'], ground:'#0e2736', accent:'#45c4b8',
+  pivots: pivots({ head:[160,164], torso:[160,250], legB:[132,268], legF:[188,268] }),
+  regions:[
+    {id:'gTentB', part:'legB', target:'#6b3a7a', shapes:[
+      ['cap',132,262,98,316,20],['cap',98,316,64,350,15],['cap',64,350,46,328,10],['cap',46,328,52,306,6]]},
+    {id:'gArmB', part:'armB', target:'#6b3a7a', shapes:[['cap',120,200,68,180,19],['cap',68,180,30,214,14]]},
+    {id:'gSuckB', part:'armB', target:'#e6b8d2', noline:true, shapes:[['circ',84,190,5],['circ',66,188,5],['circ',48,198,4.5]]},
+    {id:'gBody', part:'torso', target:'#7a4489', shapes:[['blob',[160,166, 214,200, 228,264, 206,306, 160,318, 114,306, 92,264, 106,200]]]},
+    {id:'gBelly', part:'torso', target:'#d9a7c8', shapes:[['ell',160,268,44,36]]},
+    {id:'gTentF', part:'legF', target:'#7a4489', shapes:[
+      ['cap',188,262,228,312,20],['cap',228,312,264,346,15],['cap',264,346,284,322,10],['cap',284,322,276,300,6]]},
+    {id:'gArmF', part:'armF', target:'#7a4489', shapes:[['cap',200,200,252,180,19],['cap',252,180,290,214,14]]},
+    {id:'gSuckF', part:'armF', target:'#e6b8d2', noline:true, shapes:[['circ',236,190,5],['circ',254,188,5],['circ',272,198,4.5]]},
+    {id:'gMantle', part:'head', target:'#7a4489', shapes:[['blob',[160,22, 216,52, 234,116, 214,166, 160,182, 106,166, 86,116, 104,52]]]},
+    {id:'gFin', part:'head', target:'#5a2a68', shapes:[['leaf',74,74,16,34,-66],['leaf',246,74,16,34,66]]},
+    {id:'gCrown', part:'head', target:'#f2c14e', shapes:[
+      ['poly',[112,50, 122,10, 136,38, 160,2, 184,38, 198,10, 208,50]],['rr',110,44,100,14,6]]},
+    {id:'gBeak', part:'head', target:'#2a2036', shapes:[['poly',[140,146, 180,146, 160,174]]]}
+  ],
+  details:[
+    {id:'gEyeW', part:'head', target:'#f6f2d8', shapes:[['ell',132,110,22,17],['ell',188,110,22,17]]},
+    {id:'gEyeP', part:'head', target:'#1a1426', noline:true, shapes:[['ell',134,110,6,15],['ell',190,110,6,15]]},
+    {id:'gGem', part:'head', target:'#45c4b8', noline:true, shapes:[['circ',160,26,8]]}
+  ]
+},
+{
+  id:'snowqueen', name:'The Snow Queen', scale:1.06, hp:330, power:1.3, ai:'frost',
+  taunt:'One splinter in the eye, one in the heart, and you will not miss the colour at all.',
+  brief:'Icicle volleys and a freezing dash. The floor is ice.',
+  sky:['#2b4d6e','#111f30'], ground:'#8fb6cf', accent:'#9fd8ee',
+  pivots: pivots({ head:[160,146] }),
+  regions:[
+    {id:'cArmB', part:'armB', target:'#5a86b0', shapes:[['cap',130,178,100,236,14]]},
+    {id:'cHandB', part:'armB', target:'#dff0fa', shapes:[['circ',96,246,13]]},
+    {id:'cGown', part:'torso', target:'#7fb4d8', shapes:[
+      ['blob',[160,142, 198,170, 212,252, 236,368, 160,382, 84,368, 108,252, 122,170]]]},
+    {id:'cIce', part:'torso', target:'#dff0fa', shapes:[
+      ['blob',[160,196, 186,222, 192,320, 160,340, 128,320, 134,222]]]},
+    {id:'cSash', part:'torso', target:'#9fd8ee', shapes:[['rr',120,206,80,15,7]]},
+    {id:'cSpikes', part:'torso', target:'#dff0fa', shapes:[
+      ['poly',[112,168, 96,124, 132,150]],['poly',[208,168, 224,124, 188,150]]]},
+    {id:'cArmF', part:'armF', target:'#5a86b0', shapes:[['cap',190,178,222,234,14]]},
+    {id:'cHandF', part:'armF', target:'#dff0fa', shapes:[['circ',226,244,13]]},
+    {id:'cCollar', part:'head', target:'#dff0fa', shapes:[
+      ['blob',[160,162, 214,132, 228,74, 246,126, 230,174, 160,188, 90,174, 74,126, 92,74, 106,132]]]},
+    {id:'cHair', part:'head', target:'#b9d9ec', shapes:[
+      ['blob',[160,32, 204,54, 214,120, 200,172, 176,158, 160,130, 144,158, 120,172, 106,120, 116,54]]]},
+    {id:'cFace', part:'head', target:'#e8f4fb', shapes:[['ell',160,100,44,48]]},
+    {id:'cCrown', part:'head', target:'#9fd8ee', shapes:[
+      ['poly',[124,48, 132,6, 148,40, 160,-2, 172,40, 188,6, 196,48]]]}
+  ],
+  details:[
+    {id:'cEyeW', part:'head', target:'#ffffff', shapes:[['ell',144,96,11,9],['ell',176,96,11,9]]},
+    {id:'cEyeP', part:'head', target:'#2b4d6e', noline:true, shapes:[['circ',145,97,5]]},
+    {id:'cEyeP2', part:'head', target:'#2b4d6e', noline:true, shapes:[['circ',177,97,5]]},
+    {id:'cBrow', part:'head', target:'#7fb4d8', noline:true, shapes:[['cap',130,80,156,88,3],['cap',164,88,190,80,3]]},
+    {id:'cMouth', part:'head', target:'#6b8fb0', noline:true, shapes:[['cap',148,124,172,124,3]]}
+  ]
+},
+{
+  id:'inkblot', name:'The Inkblot King', scale:1.3, hp:460, power:1.45, ai:'ink', boss:true,
+  taunt:'I drank the whole book. You were the last page.',
+  brief:'Two phases. Drains the colour out of you while it hits.',
+  sky:['#2e2250','#0b0814'], ground:'#241c3a', accent:'#9d7ae8',
+  pivots: pivots({ head:[160,150], torso:[160,256] }),
+  regions:[
+    {id:'iArmB', part:'armB', target:'#2a2142', shapes:[['cap',122,186,70,232,22],['cap',70,232,44,290,16]]},
+    {id:'iClawB', part:'armB', target:'#3a2f52', shapes:[['poly',[34,286, 54,292, 40,318]],['poly',[50,292, 66,300, 54,324]]]},
+    {id:'iBody', part:'torso', target:'#2f2549', shapes:[
+      ['blob',[160,150, 216,186, 238,262, 228,336, 188,372, 160,384, 132,372, 92,336, 82,262, 104,186]]]},
+    {id:'iDrip', part:'torso', target:'#3f3163', shapes:[
+      ['blob',[160,300, 206,318, 214,362, 188,388, 160,396, 132,388, 106,362, 114,318]],
+      ['circ',96,372,11],['circ',224,366,9],['circ',82,394,7]]},
+    {id:'iArmF', part:'armF', target:'#2f2549', shapes:[['cap',198,186,250,232,22],['cap',250,232,276,290,16]]},
+    {id:'iClawF', part:'armF', target:'#3a2f52', shapes:[['poly',[286,286, 266,292, 280,318]],['poly',[270,292, 254,300, 266,324]]]},
+    {id:'iHead', part:'head', target:'#2f2549', shapes:[
+      ['blob',[160,36, 214,62, 232,118, 212,166, 160,182, 108,166, 88,118, 106,62]]]},
+    {id:'iHorn', part:'head', target:'#1b1530', shapes:[
+      ['poly',[104,72, 74,18, 124,46]],['poly',[216,72, 246,18, 196,46]]]},
+    {id:'iCrown', part:'head', target:'#9d7ae8', shapes:[
+      ['poly',[116,54, 126,10, 142,42, 160,0, 178,42, 194,10, 204,54]],['rr',114,48,92,14,6]]}
+  ],
+  details:[
+    {id:'iEyeW', part:'head', target:'#f6f2ea', noline:true, shapes:[
+      ['blob',[126,110, 146,100, 160,114, 142,126, 124,122]],
+      ['blob',[194,110, 174,100, 160,114, 178,126, 196,122]]]},
+    {id:'iEyeP', part:'head', target:'#120e1f', noline:true, shapes:[['circ',139,113,6],['circ',181,113,6]]},
+    {id:'iGrin', part:'head', target:'#f6f2ea', noline:true, shapes:[
+      ['blob',[160,164, 126,140, 140,148, 152,140, 160,148, 168,140, 180,148, 194,140]]]},
+    {id:'iSpat', part:'torso', target:'#191330', noline:true, shapes:[['circ',134,232,9],['circ',186,252,7],['circ',156,286,8]]}
+  ]
+}
+];
+
+/* ============================================================
+   Poses. Nothing is keyframed by hand: every pose is a function of
+   time or of how far through a move we are, so one rig animates all
+   eleven characters.
+   ============================================================ */
+function poseIdle(t, ch){
+  var b = Math.sin(t * 2.2), s = Math.sin(t * 1.7);
+  if(ch && ch.float) return {
+    torso:{ y: b * 7 }, head:{ y: -b * 2.5, rot: -b * 0.05 },
+    armB:{ rot: 0.14 + b * 0.1 }, armF:{ rot: -0.14 - b * 0.1 },
+    tail:{ rot: s * 0.12 }, prop:{ y: -b * 5, rot: s * 0.08 }
+  };
+  return {
+    torso:{ y: b * 2.4, rot: b * 0.014 },
+    head:{ y: -b * 1.8, rot: -b * 0.035 },
+    armB:{ rot: 0.09 + b * 0.07 }, armF:{ rot: -0.09 - b * 0.07 },
+    legB:{ rot: 0 }, legF:{ rot: 0 },
+    tail:{ rot: Math.sin(t * 2.6) * 0.17 },
+    prop:{ y: b * 3, rot: b * 0.05 }
+  };
+}
+function poseRun(t, ch){
+  var p = t * 10.5, s = Math.sin(p), a = Math.abs(Math.sin(p));
+  if(ch && ch.float) return {
+    torso:{ y: Math.sin(t * 7) * 5, rot: 0.1 },
+    head:{ rot: -0.06 }, armB:{ rot: 0.5 }, armF:{ rot: -0.45 },
+    tail:{ rot: -0.2 + s * 0.18 }, prop:{ y: Math.sin(t*7) * 4 }
+  };
+  return {
+    torso:{ y: -a * 3.4, rot: 0.11 },
+    head:{ rot: -0.07 + s * 0.05, y: -a * 1.2 },
+    armB:{ rot: -s * 0.62 }, armF:{ rot: s * 0.62 },
+    legB:{ rot: s * 0.44 }, legF:{ rot: -s * 0.44 },
+    tail:{ rot: s * 0.3 }, prop:{ rot: s * 0.2 }
+  };
+}
+function poseAir(vy, ch){
+  var up = clamp(-vy / 620, -1, 1);
+  return {
+    torso:{ rot: up * 0.1, y: -2 },
+    head:{ rot: -up * 0.08 },
+    armB:{ rot: -0.85 - up * 0.45 }, armF:{ rot: -0.95 - up * 0.45 },
+    legB:{ rot: 0.46 - up * 0.3 }, legF:{ rot: -0.34 + up * 0.3 },
+    tail:{ rot: -0.34 }, prop:{ rot: -0.3 }
+  };
+}
+function poseBlock(t){
+  var j = Math.sin(t * 22) * 0.6;
+  return {
+    torso:{ y: 7 + j, sy: 0.95 }, head:{ y: 5 + j, rot: 0.06 },
+    armB:{ rot: -1.65 }, armF:{ rot: -1.95 },
+    legB:{ rot: 0.16 }, legF:{ rot: -0.16 }, tail:{ rot: 0.2 }, prop:{ rot: -1.4 }
+  };
+}
+/* wind-up, swing, recover — the swing is short and the wind-up is readable */
+function poseAttack(k){
+  var w;
+  if(k < 0.34){
+    w = k / 0.34;
+    return { torso:{ rot: -0.2*w, x: -7*w }, head:{ rot: 0.1*w },
+             armF:{ rot: 1.55*w }, armB:{ rot: -0.55*w },
+             legF:{ rot: -0.12*w }, legB:{ rot: 0.12*w }, tail:{ rot: -0.4*w }, prop:{ rot: 1.2*w } };
+  }
+  if(k < 0.56){
+    w = (k - 0.34) / 0.22;
+    return { torso:{ rot: lerp(-0.2,0.27,w), x: lerp(-7,15,w) }, head:{ rot: lerp(0.1,-0.15,w) },
+             armF:{ rot: lerp(1.55,-1.3,w) }, armB:{ rot: lerp(-0.55,0.62,w) },
+             legF:{ rot: lerp(-0.12,0.32,w) }, legB:{ rot: lerp(0.12,-0.26,w) },
+             tail:{ rot: lerp(-0.4,0.4,w) }, prop:{ rot: lerp(1.2,-1.1,w) } };
+  }
+  w = (k - 0.56) / 0.44;
+  return { torso:{ rot: lerp(0.27,0,w), x: lerp(15,0,w) }, head:{ rot: lerp(-0.15,0,w) },
+           armF:{ rot: lerp(-1.3,0,w) }, armB:{ rot: lerp(0.62,0,w) },
+           legF:{ rot: lerp(0.32,0,w) }, legB:{ rot: lerp(-0.26,0,w) },
+           tail:{ rot: lerp(0.4,0,w) }, prop:{ rot: lerp(-1.1,0,w) } };
+}
+function poseSpecial(k){
+  var w = k < 0.45 ? k / 0.45 : 1;
+  var rel = k < 0.45 ? 0 : (k - 0.45) / 0.55;
+  return {
+    torso:{ rot: -0.14 * w + 0.2 * rel, y: -6 * w + 4 * rel, sy: 1 + 0.05 * w },
+    head:{ rot: -0.2 * w + 0.14 * rel },
+    armB:{ rot: -2.5 * w + 1.2 * rel }, armF:{ rot: -2.7 * w + 1.3 * rel },
+    legB:{ rot: 0.2 * w }, legF:{ rot: -0.2 * w },
+    tail:{ rot: -0.5 * w }, prop:{ rot: -2.2 * w + 1.1 * rel }
+  };
+}
+function poseHurt(k){
+  var w = 1 - k;
+  return {
+    torso:{ rot: -0.26 * w, x: -12 * w, y: -3 * w },
+    head:{ rot: -0.34 * w, x: -5 * w },
+    armB:{ rot: -1.0 * w }, armF:{ rot: -0.7 * w },
+    legB:{ rot: -0.2 * w }, legF:{ rot: 0.3 * w }, tail:{ rot: -0.5 * w }, prop:{ rot: -0.8 * w }
+  };
+}
+function poseKO(k){
+  var w = Math.min(1, k);
+  return {
+    torso:{ rot: 0, y: 26 * w, sy: 1 - 0.1 * w },
+    head:{ rot: -0.5 * w, y: 6 * w },
+    armB:{ rot: -1.9 * w }, armF:{ rot: -2.1 * w },
+    legB:{ rot: -0.7 * w }, legF:{ rot: 0.8 * w }, tail:{ rot: 0.6 * w }, prop:{ rot: -1.6 * w }
+  };
+}
+function poseWin(t){
+  var b = Math.sin(t * 6);
+  return {
+    torso:{ y: -Math.abs(b) * 6, rot: b * 0.05 },
+    head:{ rot: -b * 0.09, y: -2 },
+    armB:{ rot: -2.3 - b * 0.2 }, armF:{ rot: -2.5 + b * 0.2 },
+    legB:{ rot: 0.2 }, legF:{ rot: -0.2 }, tail:{ rot: b * 0.5 }, prop:{ rot: -2.0 }
+  };
+}
+
+/* ============================================================
+   Save + sound
+   ============================================================ */
+var SAVE_KEY = 'magical-imagineer-save-v1';
+var save;
+function freshSave(){ return { v:1, art:{}, beaten:{}, fighter:null, mute:false, seen:false, wins:0 }; }
+function loadSave(){
+  try{
+    var raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return freshSave();
+    var s = JSON.parse(raw);
+    if(!s || s.v !== 1 || typeof s.art !== 'object') return freshSave();
+    s.art = s.art || {}; s.beaten = s.beaten || {};
+    return s;
+  }catch(e){ return freshSave(); }
+}
+function writeSave(){
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){}
+}
+function unlocked(id){ var a = save.art[id]; return !!(a && a.stars > 0); }
+function unlockedList(){
+  var out = [];
+  for(var i = 0; i < HEROES.length; i++) if(unlocked(HEROES[i].id)) out.push(HEROES[i]);
+  return out;
+}
+function heroById(id){ for(var i=0;i<HEROES.length;i++) if(HEROES[i].id===id) return HEROES[i]; return null; }
+function villainById(id){ for(var i=0;i<VILLAINS.length;i++) if(VILLAINS[i].id===id) return VILLAINS[i]; return null; }
+/* villains open one at a time, in order */
+function villainOpen(i){ return i === 0 || !!save.beaten[VILLAINS[i-1].id]; }
+
+/* stats a figure brings into the arena, straight off how well it was coloured */
+function statsFor(id){
+  var a = save.art[id];
+  if(!a) return null;
+  var st = a.stars, extra = (a.score - 55) / 45;             // 0 at the unlock line, 1 at 100
+  return {
+    hp:    Math.round(100 + (st - 1) * 20 + clamp(extra,0,1) * 18),
+    power: 1 + (st - 1) * 0.12 + clamp(extra,0,1) * 0.1,
+    spark: 1 + (st - 1) * 0.16 + clamp(extra,0,1) * 0.12,
+    stars: st, score: a.score
+  };
+}
+
+/* ---------- synthesised sound, no files ---------- */
+var AC = null, master = null;
+function audio(){
+  if(AC) return AC;
+  try{
+    var C = window.AudioContext || window.webkitAudioContext;
+    if(!C) return null;
+    AC = new C();
+    master = AC.createGain();
+    master.gain.value = save.mute ? 0 : 0.5;
+    master.connect(AC.destination);
+  }catch(e){ AC = null; }
+  return AC;
+}
+function setMute(m){
+  save.mute = !!m; writeSave();
+  if(master) master.gain.setTargetAtTime(m ? 0 : 0.5, AC.currentTime, 0.02);
+}
+function tone(freq, dur, type, vol, slideTo, delay){
+  var c = audio(); if(!c || save.mute) return;
+  var t0 = c.currentTime + (delay || 0);
+  var o = c.createOscillator(), g = c.createGain();
+  o.type = type || 'sine';
+  o.frequency.setValueAtTime(freq, t0);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol == null ? 0.22 : vol, t0 + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + dur + 0.03);
+}
+var noiseBuf = null;
+function noise(dur, vol, f0, f1, q){
+  var c = audio(); if(!c || save.mute) return;
+  if(!noiseBuf){
+    noiseBuf = c.createBuffer(1, c.sampleRate * 0.7, c.sampleRate);
+    var d = noiseBuf.getChannelData(0);
+    for(var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  var t0 = c.currentTime;
+  var s = c.createBufferSource(); s.buffer = noiseBuf;
+  var bp = c.createBiquadFilter(); bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(f0, t0);
+  if(f1) bp.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+  bp.Q.value = q == null ? 1.2 : q;
+  var g = c.createGain();
+  g.gain.setValueAtTime(vol == null ? 0.2 : vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  s.connect(bp); bp.connect(g); g.connect(master);
+  s.start(t0); s.stop(t0 + dur + 0.02);
+}
+var SFX = {
+  tap:      function(){ tone(660, 0.07, 'triangle', 0.14); },
+  back:     function(){ tone(380, 0.09, 'triangle', 0.12); },
+  bucket:   function(){ tone(300, 0.16, 'sine', 0.2, 760); noise(0.1, 0.08, 900, 2200); },
+  crayon:   function(v){ noise(0.06, 0.02 + clamp(v,0,1) * 0.05, 700 + v * 900, 500, 0.7); },
+  undo:     function(){ tone(520, 0.14, 'sine', 0.14, 240); },
+  clear:    function(){ noise(0.28, 0.16, 2400, 300, 0.6); },
+  unlock:   function(stars){
+    var n = [523.25, 659.25, 783.99, 1046.5];
+    for(var i = 0; i <= stars; i++) tone(n[i], 0.5, 'triangle', 0.2, null, i * 0.13);
+  },
+  fail:     function(){ tone(320, 0.3, 'sine', 0.16, 180); },
+  swing:    function(){ noise(0.13, 0.14, 1500, 400, 0.8); },
+  hit:      function(){ noise(0.13, 0.3, 320, 90, 1.4); tone(140, 0.11, 'square', 0.14, 70); },
+  blockHit: function(){ tone(880, 0.1, 'square', 0.12, 1400); noise(0.08, 0.1, 2600, 1800, 3); },
+  jump:     function(){ tone(420, 0.11, 'sine', 0.12, 760); },
+  special:  function(){
+    var n = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+    for(var i = 0; i < n.length; i++) tone(n[i], 0.7, 'triangle', 0.16, null, i * 0.05);
+    noise(0.5, 0.16, 400, 3000, 0.6);
+  },
+  cast:     function(){ tone(240, 0.24, 'sawtooth', 0.1, 620); },
+  ko:       function(){ tone(300, 0.7, 'sawtooth', 0.2, 70); noise(0.5, 0.16, 700, 120, 0.8); },
+  win:      function(){
+    var n = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98];
+    for(var i = 0; i < n.length; i++) tone(n[i], 0.6, 'triangle', 0.18, null, i * 0.1);
+  }
+};
+
+/* ============================================================
+   Screens, navigation, thumbnails
+   ============================================================ */
+var DPR = Math.min(2, window.devicePixelRatio || 1);
+function sizeCanvas(cv, w, h){
+  var pw = Math.max(1, Math.round(w * DPR)), ph = Math.max(1, Math.round(h * DPR));
+  if(cv.width !== pw || cv.height !== ph){ cv.width = pw; cv.height = ph; }
+  var c = cv.getContext('2d');
+  c.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return c;
+}
+/* one character, scaled to fit a box, optionally on a little plinth */
+function paintThumb(cv, ch, colours, opts){
+  opts = opts || {};
+  var W = opts.w || cv.clientWidth || 140, H = opts.h || cv.clientHeight || 128;
+  if(!W || !H) return;
+  var c = sizeCanvas(cv, W, H);
+  c.clearRect(0, 0, W, H);
+  prep(ch);
+  var s = Math.min(W / DW, H / DH) * (opts.zoom || 0.94) * (ch.scale && opts.useScale ? ch.scale : 1);
+  if(opts.pedestal){
+    c.save();
+    c.translate(W / 2, H - 8);
+    c.fillStyle = 'rgba(0,0,0,.35)';
+    c.beginPath(); c.ellipse(0, 0, W * 0.3, H * 0.045, 0, 0, TAU); c.fill();
+    var g = c.createLinearGradient(0, -14, 0, 4);
+    g.addColorStop(0, '#f2c14e'); g.addColorStop(1, '#9c6f18');
+    c.fillStyle = g;
+    var p = new Path2D(); roundRectPath(p, -W * 0.24, -13, W * 0.48, 15, 5); c.fill(p);
+    c.restore();
+  }
+  c.save();
+  c.translate(W / 2, H / 2 + (opts.dy || 0));
+  c.scale(s, s);
+  c.translate(-DW / 2, -DH / 2);
+  drawCharacter(c, ch, colours, opts.pose, {
+    lw: opts.lw == null ? 4.2 : opts.lw, blank: opts.blank, ink: opts.ink, drain: opts.drain
+  });
+  c.restore();
+}
+function starStr(n, of){
+  var s = '', i;
+  for(i = 0; i < (of || 3); i++) s += i < n ? '★' : '<span class="off">★</span>';
+  return s;
+}
+
+/* ---------- navigation ---------- */
+var SCREENS = {}, current = 'title', tickFn = null;
+function go(id, quiet){
+  if(!quiet) SFX.tap();
+  var prev = SCREENS[current];
+  if(prev && prev.exit) prev.exit();
+  tickFn = null;
+  var el = document.getElementById('s-' + current);
+  if(el) el.classList.remove('on', 'fade');
+  current = id;
+  el = document.getElementById('s-' + id);
+  el.classList.add('on');
+  void el.offsetWidth;
+  el.classList.add('fade');
+  var s = SCREENS[id];
+  if(s && s.enter) s.enter();
+}
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(tickFn) tickFn(ts / 1000);
+}
+
+/* ---------- modal ---------- */
+function modal(title, body, buttons){
+  $('#modalTitle').innerHTML = title;
+  $('#modalBody').innerHTML = body;
+  var wrap = $('#modalBtns');
+  wrap.innerHTML = '';
+  (buttons || [{ label:'Close' }]).forEach(function(b){
+    var el = document.createElement('button');
+    el.className = 'btn ' + (b.cls || 'ghost');
+    el.textContent = b.label;
+    el.onclick = function(){ SFX.tap(); closeModal(); if(b.fn) b.fn(); };
+    wrap.appendChild(el);
+  });
+  $('#modal').classList.add('on');
+}
+function closeModal(){ $('#modal').classList.remove('on'); }
+$('#modal').addEventListener('click', function(e){ if(e.target.id === 'modal') closeModal(); });
+
+/* ============================================================
+   Title
+   ============================================================ */
+SCREENS.title = {
+  enter: function(){
+    var cv = $('#titleArt'), cast = [HEROES[0], HEROES[1], HEROES[2]];
+    tickFn = function(t){
+      var W = cv.clientWidth || 330, H = cv.clientHeight || 240;
+      var c = sizeCanvas(cv, W, H);
+      c.clearRect(0, 0, W, H);
+      var s = (H / DH) * 0.92;
+      for(var i = 0; i < cast.length; i++){
+        var ch = cast[i], a = save.art[ch.id];
+        c.save();
+        c.translate(W * (0.22 + i * 0.28), H * 0.52 + Math.sin(t * 1.4 + i) * 3);
+        c.scale(s, s);
+        c.translate(-DW / 2, -DH / 2);
+        drawCharacter(c, ch, a ? a.colours : null, poseIdle(t + i * 1.3, ch),
+                      { lw: 4.4, blank: a ? null : '#efe6d6' });
+        c.restore();
+      }
+    };
+  }
+};
+$('#btnStart').onclick = function(){ audio(); go(save.seen ? 'hub' : 'book'); save.seen = true; writeSave(); };
+$('#btnHow').onclick = function(){
+  SFX.tap();
+  modal('How it works',
+    '<p style="text-align:left">1. Pick a character out of the colouring book and colour them in.<br><br>' +
+    '2. Press <b>Done</b> and your work is marked out of 100 &mdash; how much you covered, how close ' +
+    'your colours are to the storybook, and how well you stayed in the lines.<br><br>' +
+    '3. Score <b>55 or more</b> and the character steps off the page as a figure, painted in ' +
+    '<i>your</i> colours.<br><br>' +
+    '4. Take your figures into the Ink Lands and fight the five villains who drained the book. ' +
+    'The better you coloured, the harder your figure hits.</p>');
+};
+(function(){
+  var sw = $('#swMute');
+  function paint(){ sw.classList.toggle('on', !save.mute); }
+  sw.onclick = function(){ audio(); setMute(!save.mute); paint(); if(!save.mute) SFX.tap(); };
+  SCREENS.title.paintMute = paint;
+})();
+
+/* ============================================================
+   Hub
+   ============================================================ */
+SCREENS.hub = {
+  enter: function(){
+    var got = unlockedList().length, done = 0, i;
+    for(i = 0; i < VILLAINS.length; i++) if(save.beaten[VILLAINS[i].id]) done++;
+    $('#hubLine').textContent = got === 0
+      ? 'The book is grey and the Ink Lands are spreading. Start with any page you like.'
+      : (done >= VILLAINS.length
+          ? 'Every villain is beaten and the book has all its colour back. The studio is yours.'
+          : 'You have brought ' + got + ' of ' + HEROES.length + ' characters back, and beaten ' +
+            done + ' of ' + VILLAINS.length + ' villains.');
+    $('#hubFigures').textContent = got === 0
+      ? 'Nothing on the shelf yet.'
+      : got + (got === 1 ? ' figure' : ' figures') + ' on the shelf. Pick who fights next.';
+    $('#hubFight').textContent = got === 0
+      ? 'Colour one character first.'
+      : (done >= VILLAINS.length ? 'All five beaten. Go again any time.'
+                                 : 'Next up: ' + VILLAINS[done].name + '.');
+    $('#cardFight').classList.toggle('locked', got === 0);
+  }
+};
+$('#btnSettings').onclick = function(){
+  SFX.tap();
+  modal('Settings',
+    '<p>Sound is ' + (save.mute ? 'off' : 'on') + '.</p>',
+    [{ label: save.mute ? 'Turn sound on' : 'Turn sound off', fn: function(){
+        audio(); setMute(!save.mute); if(SCREENS.title.paintMute) SCREENS.title.paintMute(); } },
+     { label:'Erase everything', cls:'rose', fn: function(){
+        modal('Erase everything?', '<p>Every colouring, figure and win is deleted. There is no undo.</p>',
+          [{ label:'Keep it', fn:function(){} },
+           { label:'Erase', cls:'rose', fn:function(){
+              save = freshSave(); writeSave(); go('title'); } }]); } },
+     { label:'Close' }]);
+};
+
+/* ============================================================
+   Colouring book: pick a page
+   ============================================================ */
+var pickMode = 'story';
+SCREENS.book = {
+  enter: function(){
+    $('#modeLine').innerHTML = pickMode === 'story'
+      ? 'Storybook mode: match the colours the book says. Hold the eye to peek.'
+      : 'Wild mode: any colours you like. You are marked on covering everything, keeping it neat, and using a proper spread of colour.';
+    var g = $('#bookGrid');
+    g.innerHTML = '';
+    HEROES.forEach(function(ch){
+      var a = save.art[ch.id];
+      var t = document.createElement('button');
+      t.className = 'tile';
+      t.innerHTML =
+        '<canvas></canvas>' +
+        '<div class="nm">' + ch.name + '</div>' +
+        '<div class="rl">' + ch.sur + '</div>' +
+        '<div class="stars">' + (a ? starStr(a.stars) : '&nbsp;') + '</div>' +
+        (a ? '<span class="pill good">' + a.score + '</span>' : '<span class="pill new">blank</span>');
+      t.onclick = function(){ SFX.tap(); startColouring(ch); };
+      g.appendChild(t);
+      paintThumb(t.querySelector('canvas'), ch, a ? a.colours : null,
+                 { blank: a ? null : '#f7f0e2', lw: 3.6, h: 128 });
+    });
+  }
+};
+$$('#modeSeg button').forEach(function(b){
+  b.onclick = function(){
+    SFX.tap();
+    pickMode = b.getAttribute('data-mode');
+    $$('#modeSeg button').forEach(function(o){ o.classList.toggle('on', o === b); });
+    SCREENS.book.enter();
+  };
+});
+
+/* ============================================================
+   Shelf
+   ============================================================ */
+var shelfPickMode = false;
+SCREENS.shelf = {
+  enter: function(){
+    var any = unlockedList().length;
+    $('#shelfLine').textContent = any
+      ? 'Tap a figure to send it into the next fight. Colour a page again any time to beat your score.'
+      : 'The shelf is empty. Colour a page to 55 or better and whoever you coloured turns up here.';
+    var g = $('#shelfGrid');
+    g.innerHTML = '';
+    HEROES.forEach(function(ch){
+      var a = save.art[ch.id], on = !!a && a.stars > 0;
+      var t = document.createElement('button');
+      t.className = 'tile' + (on && save.fighter === ch.id ? ' sel' : '');
+      var st = on ? statsFor(ch.id) : null;
+      t.innerHTML =
+        '<canvas></canvas>' +
+        '<div class="nm">' + (on ? ch.name : '???') + '</div>' +
+        '<div class="rl">' + (on ? st.hp + ' health &middot; ' + Math.round(st.power * 100) + '% power'
+                                 : 'not coloured yet') + '</div>' +
+        '<div class="stars">' + (on ? starStr(a.stars) : '&nbsp;') + '</div>' +
+        (on && save.fighter === ch.id ? '<span class="pill good">fighting</span>' : '');
+      t.onclick = function(){
+        SFX.tap();
+        if(!on){ startColouring(ch); return; }
+        save.fighter = ch.id; writeSave();
+        if(shelfPickMode){ shelfPickMode = false; go('map'); return; }
+        SCREENS.shelf.enter();
+      };
+      g.appendChild(t);
+      paintThumb(t.querySelector('canvas'), ch, on ? a.colours : null, {
+        blank: on ? null : '#3a2f52', ink: on ? null : '#4a3e66', drain: on ? 0 : 1,
+        pedestal: on, dy: on ? -8 : 0, zoom: 0.88, lw: 3.6, h: 128,
+        pose: on ? poseIdle(ch.id.length * 1.7, ch) : null
+      });
+    });
+  }
+};
+
+/* ============================================================
+   Map: pick a villain
+   ============================================================ */
+SCREENS.map = {
+  enter: function(){
+    var f = save.fighter && save.art[save.fighter] ? heroById(save.fighter) : unlockedList()[0];
+    if(f){ save.fighter = f.id; writeSave(); }
+    $('#mapLine').innerHTML = f
+      ? 'Fighting as <b>' + f.name + '</b>. ' + VILLAINS.filter(function(v,i){ return villainOpen(i); }).length +
+        ' of ' + VILLAINS.length + ' villains are in reach.'
+      : 'You need a figure first.';
+    $('#btnPickFighter').textContent = f ? f.name : 'Fighter';
+    var g = $('#mapGrid');
+    g.innerHTML = '';
+    VILLAINS.forEach(function(v, i){
+      var open = villainOpen(i), beat = !!save.beaten[v.id];
+      var t = document.createElement('button');
+      t.className = 'tile';
+      t.innerHTML =
+        '<canvas></canvas>' +
+        '<div class="nm">' + (open ? v.name : '?????') + '</div>' +
+        '<div class="rl">' + (open ? v.brief : 'Beat ' + VILLAINS[i-1].name + ' first') + '</div>' +
+        '<div class="stars">&nbsp;</div>' +
+        (beat ? '<span class="pill beat">beaten</span>' : open ? '' : '<span class="pill">locked</span>');
+      t.onclick = function(){
+        SFX.tap();
+        if(!open){ return; }
+        if(!f){ modal('No figure yet', '<p>Colour a character to 55 or better and they will turn up on your shelf, ready to fight.</p>', [{label:'Open the book', cls:'', fn:function(){ go('book'); }}, {label:'Close'}]); return; }
+        startFight(v, f);
+      };
+      g.appendChild(t);
+      paintThumb(t.querySelector('canvas'), v, null, {
+        blank: open ? null : '#3a2f52', ink: open ? null : '#4a3e66',
+        drain: open ? 0 : 1, zoom: 0.86, lw: 3.4, h: 128,
+        pose: poseIdle(i * 2.1 + 0.4, v)
+      });
+    });
+  }
+};
+$('#btnPickFighter').onclick = function(){ SFX.tap(); shelfPickMode = true; go('shelf', true); };
+
+$$('[data-nav]').forEach(function(b){ b.onclick = function(){ go(b.getAttribute('data-nav')); }; });
+
+/* ============================================================
+   The colouring page.
+
+   One paint canvas in design space holds everything the player does,
+   bucket fills and brush strokes alike. Rendering clips it region by
+   region in draw order, so what covers what stays correct and the
+   score can read the same pixels back later.
+   ============================================================ */
+var CRAYONS = [
+  '#ffffff','#f6efe2','#f2d6a8','#f0cdaa','#e8be86','#c98a3c','#8a5a2b','#4a3a1c',
+  '#ffe08a','#f2c14e','#e08a2e','#d1542e','#b03a2e','#7a1f1f','#f2a5a0','#e9698a',
+  '#c4568e','#8e5ab8','#5a3f8c','#3a2a66','#7fb4d8','#3a6ea8','#1f4a7a','#9fd8ee',
+  '#45c4b8','#2f8f6f','#7fe08a','#3f7a3a','#b9b2a8','#6b6a72','#3a3648','#1b1626'
+];
+var colState = null;
+
+function startColouring(ch){
+  prep(ch);
+  var prior = save.art[ch.id];
+  colState = {
+    ch: ch,
+    mode: pickMode,
+    tool: 'fill',
+    colour: '#f2c14e',
+    size: 1,               // 0 small, 1 medium, 2 fat
+    lines: true,
+    recent: [],
+    undo: [],
+    dirty: true,
+    down: false,
+    lastX: 0, lastY: 0,
+    strokeStarted: false,
+    peek: false,
+    view: { x:0, y:0, s:1 }
+  };
+  /* the player's paint, and a map of which region owns each pixel */
+  var p = document.createElement('canvas'); p.width = DW; p.height = DH;
+  colState.paint = p;
+  colState.pctx = p.getContext('2d');
+  colState.mask = buildMask(ch);
+  if(prior && prior.colours) seedPaint(colState, prior.colours);
+  buildPalette();
+  $('#colorName').textContent = ch.name;
+  $('#colorHint').textContent = colState.tool === 'fill'
+    ? 'Tap a shape to fill it in.' : 'Drag to colour.';
+  $('#btnLines').classList.toggle('on', colState.lines);
+  paintPeek();
+  go('color');
+}
+
+/* region index + 1 in the red channel, topmost region wins */
+function buildMask(ch){
+  if(ch._mask) return ch._mask;
+  var m = document.createElement('canvas'); m.width = DW; m.height = DH;
+  var c = m.getContext('2d');
+  var idx = {}, i;
+  for(i = 0; i < ch.regions.length; i++) idx[ch.regions[i].id] = i + 1;
+  c.save();
+  for(var pi = 0; pi < PART_ORDER.length; pi++){
+    var bucket = ch.byPart[PART_ORDER[pi]];
+    if(!bucket) continue;
+    for(i = 0; i < bucket.r.length; i++){
+      var reg = bucket.r[i];
+      c.fillStyle = 'rgb(' + idx[reg.id] + ',0,0)';
+      c.fill(reg._path);
+    }
+  }
+  c.restore();
+  ch._mask = { canvas: m, data: c.getImageData(0, 0, DW, DH).data, index: idx };
+  /* area of every region as the mask sees it, for weighting the score */
+  var area = {}, d = ch._mask.data, total = 0;
+  for(i = 0; i < d.length; i += 4){
+    var v = d[i];
+    if(v){ area[v] = (area[v] || 0) + 1; total++; }
+  }
+  ch._mask.area = area; ch._mask.total = total;
+  return ch._mask;
+}
+/* re-open a previous attempt with its colours already down */
+function seedPaint(st, colours){
+  var ctx = st.pctx;
+  for(var pi = 0; pi < PART_ORDER.length; pi++){
+    var bucket = st.ch.byPart[PART_ORDER[pi]];
+    if(!bucket) continue;
+    for(var i = 0; i < bucket.r.length; i++){
+      var reg = bucket.r[i];
+      if(!colours[reg.id]) continue;
+      ctx.fillStyle = colours[reg.id];
+      ctx.fill(reg._path);
+    }
+  }
+}
+
+function buildPalette(){
+  var wrap = $('#palette');
+  wrap.innerHTML = '';
+  CRAYONS.forEach(function(hex){
+    var b = document.createElement('button');
+    b.className = 'sw' + (hex === colState.colour ? ' on' : '');
+    b.style.background = hex;
+    b.onclick = function(){
+      colState.colour = hex;
+      if(colState.tool === 'erase') setTool('fill');
+      $$('#palette .sw').forEach(function(o){ o.classList.toggle('on', o === b); });
+      tone(520 + CRAYONS.indexOf(hex) * 9, 0.05, 'sine', 0.08);
+    };
+    wrap.appendChild(b);
+  });
+}
+function setTool(t){
+  colState.tool = t;
+  $$('#toolbar [data-tool]').forEach(function(b){
+    b.classList.toggle('on', b.getAttribute('data-tool') === t);
+  });
+  $('#colorHint').textContent =
+    t === 'fill'  ? 'Tap a shape to fill it in.' :
+    t === 'brush' ? 'Drag to colour. ' + (colState.lines ? 'The lines are holding you in.' : 'Nothing is holding you in — careful.') :
+                    'Drag to rub colour out.';
+}
+$$('#toolbar [data-tool]').forEach(function(b){
+  b.onclick = function(){ SFX.tap(); setTool(b.getAttribute('data-tool')); };
+});
+$('#btnSize').onclick = function(){
+  SFX.tap();
+  colState.size = (colState.size + 1) % 3;
+  $('#btnSize').querySelector('.lbl').textContent = ['S','M','L'][colState.size];
+};
+$('#btnLines').onclick = function(){
+  SFX.tap();
+  colState.lines = !colState.lines;
+  $('#btnLines').classList.toggle('on', colState.lines);
+  $('#colorHint').textContent = colState.lines
+    ? 'The lines will hold your brush in. Neatness is free.'
+    : 'Lines off — you can colour outside, and it counts against neatness.';
+};
+$('#btnUndo').onclick = function(){
+  if(!colState.undo.length){ SFX.back(); return; }
+  SFX.undo();
+  var img = colState.undo.pop();
+  colState.pctx.clearRect(0, 0, DW, DH);
+  colState.pctx.drawImage(img, 0, 0);
+  colState.dirty = true;
+};
+$('#btnClear').onclick = function(){
+  SFX.tap();
+  modal('Start this page again?', '<p>Every colour you have put down on this page is wiped.</p>',
+    [{ label:'Keep going', fn:function(){} },
+     { label:'Wipe it', cls:'rose', fn:function(){
+        pushUndo();
+        colState.pctx.clearRect(0, 0, DW, DH);
+        colState.dirty = true; SFX.clear(); } }]);
+};
+$('#btnColorBack').onclick = function(){ SFX.back(); go('book', true); };
+function pushUndo(){
+  var c = document.createElement('canvas'); c.width = DW; c.height = DH;
+  c.getContext('2d').drawImage(colState.paint, 0, 0);
+  colState.undo.push(c);
+  if(colState.undo.length > 12) colState.undo.shift();
+}
+
+/* ---------- peek at the storybook ---------- */
+function paintPeek(){
+  var cv = $('#peekCanvas'), c = cv.getContext('2d');
+  c.setTransform(1,0,0,1,0,0);
+  c.clearRect(0,0,DW,DH);
+  c.fillStyle = PAPER; c.fillRect(0,0,DW,DH);
+  drawCharacter(c, colState.ch, null, null, { lw: 3.4 });
+}
+(function(){
+  var b = $('#btnPeek');
+  function on(e){ e.preventDefault(); if(!colState) return; $('#peekPad').classList.add('on'); }
+  function off(){ $('#peekPad').classList.remove('on'); }
+  b.addEventListener('pointerdown', on);
+  b.addEventListener('pointerup', off);
+  b.addEventListener('pointerleave', off);
+  b.addEventListener('pointercancel', off);
+})();
+
+/* ---------- pointer -> design space ---------- */
+function paperXY(e){
+  var cv = $('#paper'), r = cv.getBoundingClientRect();
+  return {
+    x: (e.clientX - r.left) / r.width * DW,
+    y: (e.clientY - r.top) / r.height * DH
+  };
+}
+function regionAt(x, y){
+  var ch = colState.ch, m = colState.mask;
+  var xi = clamp(Math.round(x), 0, DW - 1), yi = clamp(Math.round(y), 0, DH - 1);
+  var v = m.data[(yi * DW + xi) * 4];
+  return v ? ch.regions[v - 1] : null;
+}
+function brushR(){ return [6, 12, 22][colState.size]; }
+
+function strokeTo(x, y){
+  var ctx = colState.pctx, r = brushR();
+  ctx.save();
+  if(colState.lines){
+    ctx.beginPath();
+    ctx.rect(0, 0, DW, DH);
+    ctx.clip(colState.ch._silhouette);
+  }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = r * 2;
+  if(colState.tool === 'erase'){
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    ctx.strokeStyle = colState.colour;
+  }
+  ctx.beginPath();
+  ctx.moveTo(colState.lastX, colState.lastY);
+  ctx.lineTo(x, y);
+  ctx.stroke();
+  ctx.restore();
+  colState.lastX = x; colState.lastY = y;
+  colState.dirty = true;
+}
+
+(function(){
+  var cv = $('#paper');
+  cv.addEventListener('pointerdown', function(e){
+    if(!colState) return;
+    e.preventDefault();
+    cv.setPointerCapture(e.pointerId);
+    var p = paperXY(e);
+    if(colState.tool === 'fill'){
+      var reg = regionAt(p.x, p.y);
+      if(!reg){ SFX.back(); $('#colorHint').textContent = 'That is the paper. Tap the character.'; return; }
+      pushUndo();
+      colState.pctx.save();
+      colState.pctx.fillStyle = colState.colour;
+      colState.pctx.fill(reg._path);
+      colState.pctx.restore();
+      colState.dirty = true;
+      colState.flash = { path: reg._path, t: 0.35 };
+      SFX.bucket();
+      $('#colorHint').textContent = reg.name || '';
+      return;
+    }
+    pushUndo();
+    colState.down = true;
+    colState.lastX = p.x; colState.lastY = p.y;
+    strokeTo(p.x + 0.01, p.y + 0.01);
+  });
+  cv.addEventListener('pointermove', function(e){
+    if(!colState || !colState.down) return;
+    e.preventDefault();
+    var p = paperXY(e);
+    var d = Math.hypot(p.x - colState.lastX, p.y - colState.lastY);
+    strokeTo(p.x, p.y);
+    if(d > 4 && Math.random() < 0.35) SFX.crayon(clamp(d / 40, 0, 1));
+  });
+  function up(e){ if(colState) colState.down = false; }
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+  cv.addEventListener('pointerleave', up);
+})();
+
+SCREENS.color = {
+  enter: function(){
+    if(!colState) { go('book', true); return; }
+    colState.dirty = true;
+    tickFn = function(t){
+      var wrap = $('#paperWrap'), cv = $('#paper');
+      var aw = wrap.clientWidth, ah = wrap.clientHeight;
+      if(!aw || !ah) return;
+      var s = Math.min(aw / DW, ah / DH) * 0.98;
+      var w = Math.round(DW * s), h = Math.round(DH * s);
+      if(cv.style.width !== w + 'px'){ cv.style.width = w + 'px'; cv.style.height = h + 'px'; colState.dirty = true; }
+      if(colState.flash){
+        colState.flash.t -= 1/60;
+        if(colState.flash.t <= 0) colState.flash = null;
+        colState.dirty = true;
+      }
+      if(!colState.dirty) return;
+      colState.dirty = false;
+      var c = sizeCanvas(cv, w, h);
+      c.clearRect(0, 0, w, h);
+      c.save();
+      c.scale(w / DW, h / DH);
+      c.fillStyle = PAPER; c.fillRect(0, 0, DW, DH);
+      drawCharacter(c, colState.ch, null, null, { lw: 3.2, paint: colState.paint });
+      if(colState.flash){
+        c.save();
+        c.globalAlpha = clamp(colState.flash.t / 0.35, 0, 1) * 0.55;
+        c.strokeStyle = '#ffffff'; c.lineWidth = 6;
+        c.stroke(colState.flash.path);
+        c.restore();
+      }
+      c.restore();
+    };
+  }
+};
+$('#btnDone').onclick = function(){ SFX.tap(); finishColouring(); };
+
+/* ============================================================
+   Marking the work.
+
+   Everything is read back off the same two canvases the player was
+   drawing on: their paint, and the region mask. Nothing is guessed
+   from what tool they used.
+   ============================================================ */
+function neighbourPairs(ch){
+  var m = ch._mask;
+  if(m.pairs) return m.pairs;
+  var d = m.data, seen = {}, pairs = [];
+  function add(a, b){
+    if(!a || !b || a === b) return;
+    var k = a < b ? a + ':' + b : b + ':' + a;
+    if(seen[k]) return;
+    seen[k] = 1; pairs.push([a, b]);
+  }
+  for(var y = 1; y < DH; y += 2){
+    for(var x = 1; x < DW; x += 2){
+      var i = (y * DW + x) * 4;
+      add(d[i], d[i - 8]);
+      add(d[i], d[i - DW * 8]);
+    }
+  }
+  m.pairs = pairs;
+  return pairs;
+}
+
+function scoreColouring(st){
+  var ch = st.ch, m = st.mask, n = ch.regions.length;
+  var pd = st.pctx.getImageData(0, 0, DW, DH).data, md = m.data;
+  var count = new Float64Array(n + 1), painted = new Float64Array(n + 1);
+  var buckets = [], i, x, y;
+  for(i = 0; i <= n; i++) buckets.push({});
+  var outside = 0, inside = 0;
+  var step = 2;
+
+  for(y = 0; y < DH; y += step){
+    for(x = 0; x < DW; x += step){
+      var i4 = (y * DW + x) * 4;
+      var rid = md[i4], a = pd[i4 + 3];
+      if(!rid){ if(a > 40) outside++; continue; }
+      inside++; count[rid]++;
+      if(a > 40){
+        painted[rid]++;
+        var r = pd[i4], g = pd[i4 + 1], b = pd[i4 + 2];
+        var key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+        var bk = buckets[rid], e = bk[key];
+        if(e){ e.n++; e.r += r; e.g += g; e.b += b; } else bk[key] = { n:1, r:r, g:g, b:b };
+      }
+    }
+  }
+
+  /* the colour each region ended up being, as the eye would call it */
+  var chosen = {}, chosenLab = {}, covW = 0, covS = 0, matchW = 0, matchS = 0;
+  for(i = 1; i <= n; i++){
+    var reg = ch.regions[i - 1];
+    var cov = count[i] > 0 ? painted[i] / count[i] : 0;
+    /* area^0.6: a tiny eyebrow still counts, but cannot sink the page */
+    var w = Math.pow(Math.max(1, count[i]), 0.6);
+    covW += w; covS += w * clamp(cov / 0.92, 0, 1);
+    var best = null, bk = buckets[i], k;
+    for(k in bk) if(!best || bk[k].n > best.n) best = bk[k];
+    if(best && cov > 0.12){
+      var hex = rgbHex(best.r / best.n, best.g / best.n, best.b / best.n);
+      chosen[reg.id] = hex;
+      chosenLab[reg.id] = rgbLab(best.r / best.n, best.g / best.n, best.b / best.n);
+      var tl = reg._lab || (reg._lab = (function(t){ var c = hexRGB(t); return rgbLab(c[0], c[1], c[2]); })(reg.target));
+      var dist = labDist(chosenLab[reg.id], tl);
+      var mm = clamp(1 - Math.max(0, dist - 10) / 74, 0, 1);
+      matchW += w; matchS += w * Math.pow(mm, 0.85) * clamp(cov / 0.5, 0, 1);
+    } else {
+      matchW += w;    /* unpainted scores nothing for matching either */
+    }
+  }
+  var coverage = covW ? covS / covW : 0;
+  var match = matchW ? matchS / matchW : 0;
+  var neat = 1 - clamp(outside / Math.max(1, inside * 0.3), 0, 1);
+
+  /* wild mode swaps matching for using colour well */
+  var pairs = neighbourPairs(ch), distinct = [], contrastS = 0, contrastN = 0;
+  for(i = 0; i < pairs.length; i++){
+    var A = ch.regions[pairs[i][0] - 1], B = ch.regions[pairs[i][1] - 1];
+    if(!A || !B) continue;
+    var la = chosenLab[A.id], lb = chosenLab[B.id];
+    if(!la || !lb) continue;
+    contrastN++; contrastS += clamp(labDist(la, lb) / 46, 0, 1);
+  }
+  for(var id in chosenLab){
+    var fresh = true;
+    for(i = 0; i < distinct.length; i++) if(labDist(distinct[i], chosenLab[id]) < 19){ fresh = false; break; }
+    if(fresh) distinct.push(chosenLab[id]);
+  }
+  var variety = clamp((distinct.length - 1) / 4, 0, 1);
+  var contrast = contrastN ? contrastS / contrastN : 0;
+
+  var parts, total;
+  if(st.mode === 'wild'){
+    parts = [
+      { key:'Covered',  v: coverage, max: 50 },
+      { key:'Neatness', v: neat,     max: 20 },
+      { key:'Variety',  v: variety,  max: 12 },
+      { key:'Contrast', v: contrast, max: 18 }
+    ];
+  } else {
+    parts = [
+      { key:'Covered',  v: coverage, max: 40 },
+      { key:'Colours',  v: match,    max: 45 },
+      { key:'Neatness', v: neat,     max: 15 }
+    ];
+  }
+  total = 0;
+  for(i = 0; i < parts.length; i++){ parts[i].pts = Math.round(parts[i].v * parts[i].max); total += parts[i].pts; }
+  total = clamp(Math.round(total), 0, 100);
+  var stars = total >= 85 ? 3 : total >= 70 ? 2 : total >= 55 ? 1 : 0;
+
+  /* the figure keeps the colours it was actually given; anything left
+     blank stays the colour of the paper */
+  var colours = {};
+  for(i = 0; i < ch.regions.length; i++){
+    var rg = ch.regions[i];
+    colours[rg.id] = chosen[rg.id] || '#efe7d6';
+  }
+  return { total: total, stars: stars, parts: parts, colours: colours, mode: st.mode, coverage: coverage };
+}
+
+var lastResult = null;
+function finishColouring(){
+  var st = colState;
+  var res = scoreColouring(st);
+  lastResult = { ch: st.ch, res: res };
+  var prev = save.art[st.ch.id];
+  var improved = !prev || res.total > prev.score;
+  if(res.stars > 0 && improved){
+    save.art[st.ch.id] = { score: res.total, stars: res.stars, mode: res.mode, colours: res.colours };
+    if(!save.fighter) save.fighter = st.ch.id;
+    writeSave();
+  } else if(res.stars > 0 && !improved){
+    lastResult.kept = prev.score;
+  }
+  lastResult.improved = improved;
+  go('score');
+}
+
+SCREENS.score = {
+  enter: function(){
+    var ch = lastResult.ch, res = lastResult.res;
+    var pass = res.stars > 0;
+    $('#scoreEyebrow').textContent = res.mode === 'wild' ? 'wild mode · the marks are in' : 'storybook mode · the marks are in';
+    $('#scoreStars').innerHTML = starStr(res.stars);
+    $('#scoreVerdict').innerHTML = pass
+      ? (res.stars === 3 ? 'Gold. That is gallery work.'
+        : res.stars === 2 ? 'Silver. Really nicely done.'
+        : 'Bronze. ' + ch.name + ' is off the page.')
+      : 'Not quite off the page yet — you need 55.';
+    $('#scoreNote').innerHTML = !pass
+      ? weakest(res) + ' Your work is still on the page, so you can carry on from where you left off.'
+      : (lastResult.improved
+          ? 'On your shelf with ' + statsFor(ch.id).hp + ' health and ' +
+            Math.round(statsFor(ch.id).power * 100) + '% power.'
+          : 'Your best on this page is still ' + lastResult.kept + ', so that is the one on the shelf.');
+
+    var bars = $('#scoreBars');
+    bars.innerHTML = '';
+    res.parts.forEach(function(p){
+      var row = document.createElement('div');
+      row.className = 'brow';
+      row.innerHTML = '<span class="muted">' + p.key + '</span>' +
+                      '<span class="btrack"><span class="bfill"></span></span>' +
+                      '<span class="bnum">0</span>';
+      bars.appendChild(row);
+    });
+
+    paintThumb($('#figureCanvas'), ch, res.colours, { pedestal: pass, dy: -6, zoom: 0.9, lw: 4.2, w: 150, h: 190, pose: poseIdle(0.4, ch) });
+
+    var btns = $('#scoreBtns');
+    btns.innerHTML = '';
+    function add(label, cls, fn){
+      var b = document.createElement('button');
+      b.className = 'btn ' + cls; b.textContent = label;
+      b.onclick = function(){ SFX.tap(); fn(); };
+      btns.appendChild(b);
+    }
+    if(pass){
+      add('To the shelf', '', function(){ go('shelf', true); });
+      add('Colour another', 'ghost', function(){ go('book', true); });
+      add('Keep working', 'ghost', function(){ go('color', true); });
+    } else {
+      add('Keep working', '', function(){ go('color', true); });
+      add('Pick another page', 'ghost', function(){ go('book', true); });
+    }
+
+    /* count the marks up rather than dumping them on screen */
+    var shown = 0, target = res.total, t0 = 0;
+    setTimeout(function(){
+      $$('#scoreBars .bfill').forEach(function(f, i){
+        f.style.width = Math.round(res.parts[i].v * 100) + '%';
+      });
+    }, 60);
+    tickFn = function(t){
+      if(!t0) t0 = t;
+      var k = clamp((t - t0) / 1.1, 0, 1);
+      k = 1 - Math.pow(1 - k, 3);
+      var v = Math.round(target * k);
+      if(v !== shown){
+        shown = v;
+        $('#scoreNum').textContent = v;
+        $$('#scoreBars .bnum').forEach(function(nEl, i){
+          nEl.textContent = Math.round(res.parts[i].pts * k);
+        });
+      }
+      if(k >= 1 && !lastResult.rang){
+        lastResult.rang = true;
+        if(res.stars > 0) SFX.unlock(res.stars); else SFX.fail();
+      }
+    };
+  }
+};
+function weakest(res){
+  var w = null;
+  res.parts.forEach(function(p){ if(!w || p.v < w.v) w = p; });
+  return w.key === 'Covered'  ? 'There are still bits with no colour on them.'
+       : w.key === 'Colours'  ? 'Some colours are a long way from the storybook — hold the eye to peek.'
+       : w.key === 'Neatness' ? 'A lot of colour ended up on the paper instead of the character.'
+       : w.key === 'Variety'  ? 'Try a few more different colours.'
+       :                        'Neighbouring bits are too close in colour to tell apart.';
+}
+
+/* ============================================================
+   The fight.
+
+   World units: y = 0 is the floor and up is negative. A character is
+   about 240 units tall, so one screen holds roughly three of them.
+   ============================================================ */
+var ARENA = 1180, CHAR_H = 240;
+var GRAV = 2050, JUMP_V = 780, WALK = 205;
+
+var AI_KIND = {
+  jester: { speed:180, prefer:250, melee:120, aggr:0.55, atk:0.80, rate:1.9, proj:'pin',    hop:true,   n:2 },
+  witch:  { speed:140, prefer:360, melee:120, aggr:0.25, atk:1.00, rate:1.5, proj:'hex',    blink:true, n:1 },
+  kraken: { speed:100, prefer:230, melee:150, aggr:0.70, atk:1.30, rate:3.0, proj:'wave',   heavy:true, n:2 },
+  frost:  { speed:160, prefer:330, melee:130, aggr:0.40, atk:0.90, rate:1.5, proj:'icicle', dash:true,  n:3 },
+  ink:    { speed:150, prefer:250, melee:140, aggr:0.65, atk:0.95, rate:1.6, proj:'blot',   boss:true,  n:2 }
+};
+var fight = null;
+/* keys holds what is being held down (move, block). One-shot actions are
+   buffered instead: a tap where the press and the release land inside the
+   same frame would otherwise be thrown away, and a press during a move you
+   cannot cancel should still come out when the move ends. */
+var keys = {}, press = {};
+function setDown(a){ if(!keys[a]) press[a] = Date.now(); keys[a] = true; }
+function setUp(a){ keys[a] = false; }
+function takePress(a){
+  var t = press[a];
+  if(t && Date.now() - t < 240){ press[a] = 0; return true; }
+  return false;
+}
+
+function makeFighter(ch, colours, opts){
+  prep(ch);
+  opts = opts || {};
+  return {
+    ch: ch, colours: colours || null,
+    x: opts.x || 0, y: 0, vx: 0, vy: 0, face: opts.face || 1,
+    scale: (CHAR_H / DH) * (ch.scale || 1),
+    hp: opts.hp, max: opts.hp,
+    power: opts.power || 1,
+    state: 'idle', st: 0, t: Math.random() * 5,
+    inv: 0, flash: 0, swung: false, spark: 0, sparkRate: opts.sparkRate || 1,
+    atkDur: opts.atkDur || 0.5, hit0: opts.hit0 || 0.34, hit1: opts.hit1 || 0.52,
+    reach: opts.reach || 110, dmg: opts.dmg || 9,
+    ai: opts.ai || null, aiT: 0.7, mood:'far', blink: 0, drain: 0, ko: 0
+  };
+}
+function halfW(e){ return 44 * (e.ch.scale || 1); }
+function topY(e){ return e.y - CHAR_H * (e.ch.scale || 1) * 0.94; }
+
+function startFight(v, hero){
+  var st = statsFor(hero.id);
+  var kind = AI_KIND[v.ai];
+  var p = makeFighter(hero, save.art[hero.id].colours, {
+    x: ARENA * 0.34, face: 1, hp: st.hp, power: st.power, sparkRate: st.spark,
+    atkDur: 0.44, hit0: 0.32, hit1: 0.52, reach: 128, dmg: 9
+  });
+  var e = makeFighter(v, null, {
+    x: ARENA * 0.66, face: -1, hp: Math.round(v.hp), power: v.power,
+    atkDur: kind.atk, hit0: 0.42, hit1: 0.60, reach: kind.melee * 0.92,
+    dmg: 8 * v.power, ai: kind
+  });
+  fight = {
+    v: v, hero: hero, p: p, e: e, kind: kind,
+    proj: [], fx: [], shake: 0, time: 0, over: 0, result: null,
+    cam: ARENA / 2, msg: '', phase: 1, slip: v.ai === 'frost',
+    bg: buildBG(v)
+  };
+  $('#pName').textContent = hero.name;
+  $('#eName').textContent = v.name;
+  showMsg(v.name.toUpperCase());
+  setTimeout(function(){ if(fight) showMsg('FIGHT!'); }, 1300);
+  go('fight');
+}
+function showMsg(s){
+  var el = $('#fightTop');
+  el.textContent = s;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
+
+/* ---------- backdrop: three parallax bands built from the villain's palette ---------- */
+function buildBG(v){
+  var seed = 0; for(var i = 0; i < v.id.length; i++) seed = (seed * 31 + v.id.charCodeAt(i)) | 0;
+  function rng(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+  var layers = [];
+  for(var L = 0; L < 3; L++){
+    var items = [], n = 7 + L * 4;
+    for(var k = 0; k < n; k++){
+      items.push({
+        x: rng() * (ARENA + 900) - 450,
+        w: 60 + rng() * (170 - L * 34),
+        h: (240 - L * 58) * (0.5 + rng() * 0.8),
+        r: rng()
+      });
+    }
+    layers.push(items);
+  }
+  return { layers: layers, stars: (function(){
+    var s = [];
+    for(var i = 0; i < 46; i++) s.push({ x: rng(), y: rng() * 0.6, r: 0.5 + rng() * 1.6, tw: rng() * 6 });
+    return s;
+  })() };
+}
+
+/* ---------- input ---------- */
+var KEYMAP = {
+  ArrowLeft:'left', a:'left', A:'left',
+  ArrowRight:'right', d:'right', D:'right',
+  ArrowUp:'jump', w:'jump', W:'jump', ' ':'jump',
+  z:'attack', Z:'attack', j:'attack', J:'attack',
+  x:'special', X:'special', k:'special', K:'special',
+  c:'block', C:'block', l:'block', L:'block', Shift:'block', ArrowDown:'block', s:'block', S:'block'
+};
+window.addEventListener('keydown', function(e){
+  var a = KEYMAP[e.key];
+  if(a && current === 'fight'){ setDown(a); e.preventDefault(); }
+});
+window.addEventListener('keyup', function(e){
+  var a = KEYMAP[e.key];
+  if(a){ setUp(a); }
+});
+$$('#fightUI [data-act]').forEach(function(b){
+  var act = b.getAttribute('data-act');
+  function on(ev){ ev.preventDefault(); setDown(act); b.classList.add('hit'); try{ b.setPointerCapture(ev.pointerId); }catch(err){} }
+  function off(ev){ setUp(act); b.classList.remove('hit'); }
+  b.addEventListener('pointerdown', on);
+  b.addEventListener('pointerup', off);
+  b.addEventListener('pointercancel', off);
+  b.addEventListener('pointerleave', off);
+});
+$('#fightBack').onclick = function(){
+  SFX.back();
+  modal('Leave the fight?', '<p>The villain stays exactly as fresh as when you found them.</p>',
+    [{ label:'Keep fighting', fn:function(){} },
+     { label:'Leave', cls:'rose', fn:function(){ fight = null; go('map', true); } }]);
+};
+
+/* ---------- combat helpers ---------- */
+function spawnFX(f, x, y, colour, n, spd){
+  for(var i = 0; i < n; i++){
+    var a = Math.random() * TAU, s = spd * (0.4 + Math.random() * 0.9);
+    f.fx.push({ x:x, y:y, vx:Math.cos(a)*s, vy:Math.sin(a)*s - 60, life:0.45 + Math.random()*0.4,
+                t:0, r:3 + Math.random()*6, c:colour });
+  }
+}
+function damage(f, target, from, amount, kb){
+  if(target.inv > 0 || target.state === 'ko') return;
+  var blocking = (target === f.p) && keys.block && target.state === 'block';
+  var dealt = amount;
+  if(blocking){
+    dealt = amount * 0.18;
+    SFX.blockHit();
+    spawnFX(f, target.x + target.face * 40, topY(target) + 90, '#ffe08a', 7, 180);
+    target.vx += (target.x < from.x ? -1 : 1) * 90;
+  } else {
+    SFX.hit();
+    target.state = 'hurt'; target.st = 0;
+    target.inv = 0.42;
+    target.flash = 0.18;
+    target.vx = (target.x < from.x ? -1 : 1) * (kb || 210);
+    if(target.y >= 0 && (kb || 210) > 260) target.vy = -260;
+    spawnFX(f, target.x, topY(target) + 100, '#ffffff', 10, 230);
+    f.shake = Math.min(16, f.shake + 7);
+  }
+  target.hp = Math.max(0, target.hp - dealt);
+  var pl = f.p;
+  pl.spark = Math.min(100, pl.spark + (target === pl ? 7 : 9) * pl.sparkRate);
+  if(target.hp <= 0 && target.state !== 'ko'){
+    target.state = 'ko'; target.st = 0; target.vx = (target.x < from.x ? -1 : 1) * 160;
+    SFX.ko();
+    f.over = 1.6;
+    f.result = (target === f.p) ? 'lose' : 'win';
+    showMsg(f.result === 'win' ? 'DOWN!' : 'YOU FELL');
+  }
+}
+function shoot(f, from, kind, tx, ty){
+  var dx = tx - from.x, dy = ty - (topY(from) + 80);
+  var d = Math.max(1, Math.hypot(dx, dy));
+  var spd = kind === 'icicle' ? 560 : kind === 'wave' ? 420 : kind === 'blot' ? 330 : 430;
+  var p = {
+    x: from.x + from.face * 60, y: topY(from) + 80,
+    vx: dx / d * spd, vy: dy / d * spd,
+    kind: kind, dmg: 7 * from.power, r: kind === 'wave' ? 30 : 15,
+    life: 3.2, t: 0, own: from, grav: (kind === 'pin' ? 520 : 0), spin: 0
+  };
+  if(kind === 'wave'){ p.y = -26; p.vy = 0; p.vx = from.face * 430; p.dmg = 10 * from.power; }
+  if(kind === 'blot'){ p.home = 0.9; }
+  f.proj.push(p);
+  SFX.cast();
+}
+function playerSpecial(f){
+  var p = f.p;
+  p.state = 'special'; p.st = 0; p.spark = 0;
+  SFX.special();
+  f.shake = 10;
+  var pal = [];
+  for(var id in p.colours) pal.push(p.colours[id]);
+  f.proj.push({
+    x: p.x + p.face * 70, y: topY(p) + 100, vx: p.face * 500, vy: 0,
+    kind:'wave2', dmg: 30 * p.power, r: 46, life: 1.9, t: 0, own: p, grav: 0, pal: pal, spin: 0
+  });
+  for(var i = 0; i < 26; i++){
+    spawnFX(f, p.x + p.face * 60, topY(p) + 100, pal.length ? pick(pal) : '#f2c14e', 1, 340);
+  }
+}
+
+/* ---------- villain brains ---------- */
+function thinkAI(f, e, dt){
+  var k = f.kind, p = f.p;
+  if(e.state === 'ko' || e.state === 'hurt' || e.state === 'attack' || e.state === 'special') return;
+  var d = p.x - e.x, ad = Math.abs(d);
+  e.face = d < 0 ? -1 : 1;
+  e.aiT -= dt;
+  var boss2 = k.boss && f.phase === 2;
+  var speed = k.speed * (boss2 ? 1.28 : 1);
+
+  if(k.blink && ad < 150 && e.aiT < 0.6 && e.blink <= 0){
+    e.blink = 0.5;
+    e.x = clamp(p.x - sign(d) * 330, 70, ARENA - 70);
+    spawnFX(f, e.x, topY(e) + 110, '#7fe08a', 14, 260);
+    SFX.cast();
+    e.aiT = 0.5;
+    return;
+  }
+  /* 'close' means walk in and swing; 'far' means hold the ranged distance */
+  var want = e.mood === 'close' ? k.melee * 0.7 : k.prefer;
+  if(ad > want + 34) e.vx = approach(e.vx, sign(d) * speed, 1500 * dt);
+  else if(ad < want - 60) e.vx = approach(e.vx, -sign(d) * speed * 0.7, 1500 * dt);
+  else e.vx = approach(e.vx, 0, 1500 * dt);
+
+  if(k.hop && e.y >= 0 && Math.random() < dt * 1.5){ e.vy = -JUMP_V * 0.72; }
+
+  if(e.aiT <= 0){
+    if(ad < k.melee + 40){
+      e.state = 'attack'; e.st = 0; e.swung = false;
+      e.mood = 'far';
+      e.aiT = (0.5 + Math.random() * 0.45) * (boss2 ? 0.72 : 1);
+    } else if(e.mood === 'close'){
+      e.aiT = 0.1;                         /* still walking in */
+    } else {
+      var n = (k.n || 1) + (boss2 ? 1 : 0);
+      for(var i = 0; i < n; i++){
+        (function(i){
+          setTimeout(function(){
+            if(!fight || fight.e !== e || e.state === 'ko') return;
+            shoot(f, e, k.proj, p.x + (Math.random() - 0.5) * 90, topY(p) + 90 + (Math.random() - 0.5) * 60);
+          }, i * 150);
+        })(i);
+      }
+      if(k.dash && Math.random() < 0.35){ e.vx = sign(d) * 620; e.dashT = 0.45; }
+      e.mood = Math.random() < k.aggr * (boss2 ? 1.3 : 1) ? 'close' : 'far';
+      e.aiT = k.rate * (boss2 ? 0.68 : 1) * (0.75 + Math.random() * 0.6);
+    }
+  }
+}
+
+/* ---------- step ---------- */
+function stepFighter(f, e, dt, isPlayer){
+  e.t += dt;
+  e.st += dt;
+  e.inv = Math.max(0, e.inv - dt);
+  e.flash = Math.max(0, e.flash - dt);
+  e.blink = Math.max(0, e.blink - dt);
+  if(e.dashT != null){ e.dashT -= dt; if(e.dashT <= 0) e.dashT = null; }
+
+  if(e.state === 'ko'){
+    e.ko = Math.min(1, e.ko + dt * 3.4);
+    e.vx *= Math.pow(0.02, dt);
+  } else if(e.state === 'hurt'){
+    if(e.st > 0.34) { e.state = 'idle'; e.st = 0; }
+  } else if(e.state === 'attack'){
+    var k = e.st / e.atkDur;
+    if(!e.swung && k >= e.hit0 * 0.5 && k < e.hit0) { e.swung = 'sound'; SFX.swing(); }
+    if(k >= e.hit0 && k <= e.hit1 && e.swung !== true){
+      var tgt = isPlayer ? f.e : f.p;
+      var hx = e.x + e.face * e.reach, hy = topY(e) + CHAR_H * 0.45;
+      if(Math.abs(tgt.x - hx) < halfW(tgt) + 76 && Math.abs((topY(tgt) + CHAR_H * 0.5) - hy) < 140){
+        e.swung = true;
+        damage(f, tgt, e, e.dmg * e.power * (isPlayer ? 1 : 1), isPlayer ? 250 : 260);
+      }
+    }
+    if(e.st >= e.atkDur){ e.state = 'idle'; e.st = 0; e.swung = false; }
+  } else if(e.state === 'special'){
+    if(e.st >= 1.0){ e.state = 'idle'; e.st = 0; }
+  } else if(isPlayer){
+    var blocking = !!keys.block && e.y >= 0;
+    if(blocking){ e.state = 'block'; e.vx = approach(e.vx, 0, 2600 * dt); }
+    else {
+      var dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+      var accel = f.slip ? 1300 : 2600;
+      if(dir){ e.vx = approach(e.vx, dir * WALK, accel * dt); e.face = dir; }
+      else e.vx = approach(e.vx, 0, (f.slip ? 700 : 2400) * dt);
+      e.state = e.y < -1 ? 'air' : (Math.abs(e.vx) > 30 ? 'run' : 'idle');
+      if(e.y >= 0 && takePress('jump')){ e.vy = -JUMP_V; SFX.jump(); }
+      if(takePress('attack')){ e.state = 'attack'; e.st = 0; e.swung = false; }
+      if(e.spark >= 100 && takePress('special')) playerSpecial(f);
+    }
+  }
+
+  if(!isPlayer && e.state !== 'ko') thinkAI(f, e, dt);
+
+  /* physics */
+  e.vy += GRAV * dt;
+  e.x += e.vx * dt;
+  e.y += e.vy * dt;
+  if(e.y > 0){ e.y = 0; e.vy = 0; }
+  if(e.y >= 0 && e.state !== 'ko' && (!isPlayer || e.state === 'attack' || e.state === 'special'))
+    e.vx = approach(e.vx, 0, (isPlayer ? 1500 : 900) * dt);
+  e.x = clamp(e.x, 60, ARENA - 60);
+}
+
+function stepFight(dt){
+  var f = fight, p = f.p, e = f.e, i;
+  f.time += dt;
+  f.shake = Math.max(0, f.shake - dt * 34);
+
+  if(f.kind.boss && f.phase === 1 && e.hp < e.max * 0.5){
+    f.phase = 2;
+    showMsg('IT IS SPREADING');
+    f.shake = 20;
+    spawnFX(f, e.x, topY(e) + 110, '#1d1730', 34, 320);
+  }
+  p.drain = f.kind.boss ? clamp(1 - p.hp / p.max, 0, 1) * 0.85 : 0;
+
+  stepFighter(f, p, dt, true);
+  stepFighter(f, e, dt, false);
+  /* keep them from standing inside each other */
+  var gap = halfW(p) + halfW(e) - Math.abs(p.x - e.x);
+  if(gap > 0 && p.state !== 'ko' && e.state !== 'ko'){
+    var s = sign(p.x - e.x) || 1;
+    p.x += s * gap * 0.5; e.x -= s * gap * 0.5;
+  }
+
+  for(i = f.proj.length - 1; i >= 0; i--){
+    var q = f.proj[i];
+    q.t += dt; q.life -= dt; q.spin += dt * 9;
+    if(q.home){
+      var tx = p.x - q.x, ty = (topY(p) + 110) - q.y, td = Math.max(1, Math.hypot(tx, ty));
+      q.vx += tx / td * 260 * dt; q.vy += ty / td * 260 * dt;
+    }
+    q.vy += (q.grav || 0) * dt;
+    q.x += q.vx * dt; q.y += q.vy * dt;
+    var tgt = q.own === p ? e : p;
+    var cx = tgt.x, cy = topY(tgt) + CHAR_H * (tgt.ch.scale || 1) * 0.45;
+    if(q.life > 0 && Math.abs(q.x - cx) < halfW(tgt) + q.r && Math.abs(q.y - cy) < 110 + q.r){
+      damage(f, tgt, q.own, q.dmg, q.kind === 'wave2' ? 420 : 190);
+      spawnFX(f, q.x, q.y, q.pal ? pick(q.pal) : '#ffffff', 12, 240);
+      if(q.kind !== 'wave2'){ f.proj.splice(i, 1); continue; }
+    }
+    if(q.life <= 0 || q.y > 90 || q.x < -120 || q.x > ARENA + 120) f.proj.splice(i, 1);
+  }
+  for(i = f.fx.length - 1; i >= 0; i--){
+    var x = f.fx[i];
+    x.t += dt; x.vy += 520 * dt;
+    x.x += x.vx * dt; x.y += x.vy * dt;
+    if(x.t >= x.life) f.fx.splice(i, 1);
+  }
+
+  if(f.over > 0){
+    f.over -= dt;
+    if(f.over <= 0){ endFight(f.result); return; }
+  }
+  var mid = (p.x + e.x) / 2;
+  f.cam = lerp(f.cam, mid, Math.min(1, dt * 4));
+}
+
+function endFight(res){
+  var f = fight, v = f.v;
+  if(res === 'win'){
+    if(!save.beaten[v.id]){ save.beaten[v.id] = true; save.wins = (save.wins || 0) + 1; }
+    writeSave();
+    SFX.win();
+  }
+  var idx = VILLAINS.indexOf(v), next = VILLAINS[idx + 1];
+  var all = VILLAINS.every(function(x){ return save.beaten[x.id]; });
+  $('#resEyebrow').textContent = res === 'win' ? v.name + ' is beaten' : v.name + ' is still standing';
+  $('#resTitle').textContent = res === 'win' ? (all ? 'The book is whole' : 'Colour restored') : 'Down you go';
+  $('#resBody').textContent = res === 'win'
+    ? (all ? 'Every villain is beaten and every page has its colour back. Nothing left in the Ink Lands but you.'
+           : (next ? 'That page has its colour back. ' + next.name + ' has noticed.'
+                   : 'That page has its colour back.'))
+    : '“' + v.taunt + '” Colour another page — a better score means a harder hitter.';
+  var btns = $('#resBtns');
+  btns.innerHTML = '';
+  function add(label, cls, fn){
+    var b = document.createElement('button');
+    b.className = 'btn ' + cls; b.textContent = label;
+    b.onclick = function(){ SFX.tap(); fn(); };
+    btns.appendChild(b);
+  }
+  if(res === 'win'){
+    if(next && villainOpen(VILLAINS.indexOf(next))) add('Next villain', '', function(){ startFight(next, f.hero); });
+    add('Back to the map', 'ghost', function(){ go('map', true); });
+    add('Colouring book', 'ghost', function(){ go('book', true); });
+  } else {
+    add('Try again', '', function(){ startFight(v, f.hero); });
+    add('Different figure', 'ghost', function(){ shelfPickMode = true; go('shelf', true); });
+    add('Colour a page', 'ghost', function(){ go('book', true); });
+  }
+  fight = null;
+  go('result', true);
+}
+
+/* ---------- drawing the arena ---------- */
+var FEET = 392;
+function poseOf(e){
+  switch(e.state){
+    case 'run':     return poseRun(e.t, e.ch);
+    case 'air':     return poseAir(e.vy, e.ch);
+    case 'attack':  return poseAttack(clamp(e.st / e.atkDur, 0, 1));
+    case 'block':   return poseBlock(e.t);
+    case 'hurt':    return poseHurt(clamp(e.st / 0.34, 0, 1));
+    case 'ko':      return poseKO(e.ko);
+    case 'special': return poseSpecial(clamp(e.st / 1.0, 0, 1));
+    default:        return poseIdle(e.t, e.ch);
+  }
+}
+function drawFighter(c, e, f){
+  var s = e.scale;
+  c.save();
+  c.translate(e.x, e.y);
+  c.fillStyle = 'rgba(0,0,0,.32)';
+  c.beginPath();
+  var lift = clamp(1 + e.y / 260, 0.35, 1);
+  c.ellipse(0, 2, 52 * s * DH / CHAR_H * lift, 11 * lift, 0, 0, TAU);
+  c.fill();
+  if(e.inv > 0 && e.state !== 'ko' && Math.floor(e.inv * 22) % 2 === 0) c.globalAlpha = 0.45;
+  if(e.state === 'ko') c.rotate(-e.ko * 1.25);
+  c.scale(e.face * s, s);
+  c.translate(-DW / 2, -FEET);
+  var pose = poseOf(e);
+  /* a villain winding up flashes in its own colour: that is the tell */
+  var tell = 0;
+  if(e.ai && e.state === 'attack'){
+    var k = e.st / e.atkDur;
+    if(k < e.hit0) tell = 0.35 + 0.45 * Math.sin(k / e.hit0 * Math.PI);
+  }
+  drawCharacter(c, e.ch, e.colours, pose, { lw: 4.2, drain: e.drain });
+  if(tell > 0){
+    c.save(); c.globalAlpha = tell * 0.6;
+    drawSilhouette(c, e.ch, pose, e.ch.accent || '#ffffff');
+    c.restore();
+  }
+  if(e.flash > 0){
+    c.save(); c.globalAlpha = clamp(e.flash / 0.18, 0, 1) * 0.85;
+    drawSilhouette(c, e.ch, pose, '#ffffff');
+    c.restore();
+  }
+  if(e.state === 'attack'){
+    var kk = e.st / e.atkDur;
+    if(kk > e.hit0 && kk < e.hit1 + 0.08){
+      c.save();
+      c.globalAlpha = 0.5 * (1 - (kk - e.hit0) / (e.hit1 + 0.08 - e.hit0));
+      c.strokeStyle = '#ffffff'; c.lineWidth = 14; c.lineCap = 'round';
+      c.beginPath();
+      c.arc(DW / 2 + 40, FEET - 210, 130, -0.9, 0.55);
+      c.stroke();
+      c.restore();
+    }
+  }
+  c.restore();
+}
+function drawProj(c, q, t){
+  c.save();
+  c.translate(q.x, q.y);
+  c.rotate(q.spin);
+  if(q.kind === 'wave2'){
+    var pal = q.pal && q.pal.length ? q.pal : ['#f2c14e'];
+    for(var i = 0; i < 7; i++){
+      c.globalAlpha = 0.22 + 0.1 * Math.sin(t * 9 + i);
+      c.fillStyle = pal[i % pal.length];
+      c.beginPath();
+      c.ellipse(-i * 16 * sign(q.vx), Math.sin(t * 7 + i) * 10, q.r - i * 3, q.r * 1.5 - i * 4, 0, 0, TAU);
+      c.fill();
+    }
+    c.globalAlpha = 1;
+    c.fillStyle = '#ffffff';
+    c.beginPath(); c.ellipse(0, 0, q.r * 0.4, q.r * 0.9, 0, 0, TAU); c.fill();
+  } else if(q.kind === 'pin'){
+    c.fillStyle = '#e9698a'; c.strokeStyle = INK; c.lineWidth = 3;
+    var p = new Path2D(); roundRectPath(p, -7, -20, 14, 40, 7);
+    c.fill(p); c.stroke(p);
+    c.fillStyle = '#f2c14e';
+    c.beginPath(); c.arc(0, -20, 8, 0, TAU); c.fill(); c.stroke();
+  } else if(q.kind === 'icicle'){
+    c.rotate(Math.atan2(q.vy, q.vx) - q.spin);
+    c.fillStyle = '#dff0fa'; c.strokeStyle = '#5a86b0'; c.lineWidth = 3;
+    var ic = new Path2D(); polyPath(ic, [26,0, -14,-11, -20,0, -14,11]);
+    c.fill(ic); c.stroke(ic);
+  } else if(q.kind === 'wave'){
+    c.fillStyle = 'rgba(69,196,184,.72)'; c.strokeStyle = '#45c4b8'; c.lineWidth = 3;
+    var w = new Path2D();
+    blobPath(w, [0,-52, 26,-24, 30,0, -30,0, -26,-24]);
+    c.fill(w); c.stroke(w);
+  } else {
+    var col = q.kind === 'hex' ? '#7fe08a' : '#1d1730';
+    c.fillStyle = col; c.strokeStyle = q.kind === 'hex' ? '#2f8f6f' : '#9d7ae8'; c.lineWidth = 3;
+    var b = new Path2D();
+    blobPath(b, [0,-16, 13,-9, 17,6, 4,17, -11,13, -17,-2, -11,-13]);
+    c.fill(b); c.stroke(b);
+  }
+  c.restore();
+}
+function drawFight(c, vw, vh, t){
+  var f = fight, bg = f.bg, v = f.v, i;
+  /* sky */
+  var g = c.createLinearGradient(0, 0, 0, vh);
+  g.addColorStop(0, v.sky[0]); g.addColorStop(1, v.sky[1]);
+  c.fillStyle = g; c.fillRect(0, 0, vw, vh);
+  for(i = 0; i < bg.stars.length; i++){
+    var s = bg.stars[i];
+    c.globalAlpha = 0.25 + 0.55 * Math.abs(Math.sin(t * 0.8 + s.tw));
+    c.fillStyle = '#fdf6e6';
+    c.beginPath(); c.arc(s.x * vw, s.y * vh, s.r, 0, TAU); c.fill();
+  }
+  c.globalAlpha = 1;
+  /* a little glow where the ground meets the sky, so the horizon is not a seam */
+  var hg = c.createRadialGradient(vw / 2, vh * 0.78, 0, vw / 2, vh * 0.78, vw * 0.9);
+  hg.addColorStop(0, mixHex(v.accent, v.sky[1], 0.62));
+  hg.addColorStop(1, 'rgba(0,0,0,0)');
+  c.globalAlpha = 0.4; c.fillStyle = hg; c.fillRect(0, 0, vw, vh); c.globalAlpha = 1;
+
+  /* about 480 world units across the screen, so the fighters read big on a
+     phone held upright and still fit side by side at fighting distance */
+  var S = Math.min(vw / 480, vh / 470);
+  var groundY = vh * 0.78;
+  var shakeX = f.shake ? (Math.random() - 0.5) * f.shake : 0;
+  var shakeY = f.shake ? (Math.random() - 0.5) * f.shake : 0;
+
+  c.save();
+  c.translate(vw / 2 + shakeX, groundY + shakeY);
+  c.scale(S, S);
+  c.translate(-f.cam, 0);
+
+  /* three parallax bands */
+  var rates = [0.22, 0.46, 0.74];
+  var tints = bg.tints || (bg.tints = [
+    mixHex(v.sky[1], '#05040a', 0.3), mixHex(v.sky[1], '#05040a', 0.52), mixHex(v.sky[1], '#05040a', 0.7)]);
+  for(var L = 0; L < 3; L++){
+    var off = f.cam * (1 - rates[L]);
+    c.fillStyle = tints[L];
+    for(i = 0; i < bg.layers[L].length; i++){
+      var it = bg.layers[L][i];
+      var x = it.x + off;
+      var p = new Path2D();
+      if(it.r < 0.4) roundRectPath(p, x, -it.h, it.w, it.h + 40, 10);
+      else if(it.r < 0.72) polyPath(p, [x, 0, x + it.w / 2, -it.h, x + it.w, 0]);
+      else blobPath(p, [x + it.w/2, -it.h, x + it.w, -it.h*0.45, x + it.w, 10, x, 10, x, -it.h*0.45]);
+      c.fill(p);
+    }
+  }
+  /* floor */
+  c.fillStyle = v.ground;
+  c.fillRect(f.cam - 1400, 0, 2800, 640);
+  c.fillStyle = 'rgba(255,255,255,.07)';
+  c.fillRect(f.cam - 1400, 0, 2800, 7);
+  c.fillStyle = 'rgba(0,0,0,.18)';
+  for(i = -14; i < 15; i++){
+    var gx = Math.floor(f.cam / 90) * 90 + i * 90;
+    c.fillRect(gx, 14, 46, 5);
+  }
+  /* the ink creeps up the floor in phase two */
+  if(f.phase === 2){
+    c.fillStyle = 'rgba(20,14,34,.58)';
+    c.fillRect(f.cam - 1400, 0, 2800, 640);
+    c.fillStyle = 'rgba(157,122,232,.18)';
+    for(i = 0; i < 8; i++){
+      c.beginPath();
+      c.ellipse(f.cam - 600 + i * 170 + Math.sin(t + i) * 26, 10, 90, 16, 0, 0, TAU);
+      c.fill();
+    }
+  }
+
+  for(i = 0; i < f.fx.length; i++){
+    var x2 = f.fx[i];
+    c.globalAlpha = clamp(1 - x2.t / x2.life, 0, 1);
+    c.fillStyle = x2.c;
+    c.beginPath(); c.arc(x2.x, x2.y, x2.r * (1 - x2.t / x2.life * 0.5), 0, TAU); c.fill();
+  }
+  c.globalAlpha = 1;
+
+  if(f.p.x < f.e.x){ drawFighter(c, f.e, f); drawFighter(c, f.p, f); }
+  else { drawFighter(c, f.p, f); drawFighter(c, f.e, f); }
+  for(i = 0; i < f.proj.length; i++) drawProj(c, f.proj[i], t);
+  c.restore();
+}
+
+SCREENS.fight = {
+  enter: function(){
+    var cv = $('#arena');
+    var pf = $('#pFill'), ef = $('#eFill'), pg = $('#pGhost'), eg = $('#eGhost'), sp = $('#pSpark');
+    var bs = $('#btnSpecial');
+    var last = 0;
+    tickFn = function(t){
+      if(!fight){ return; }
+      var dt = last ? Math.min(0.05, t - last) : 0.016;
+      last = t;
+      stepFight(dt);
+      if(!fight) return;
+      var vw = cv.clientWidth || window.innerWidth, vh = cv.clientHeight || window.innerHeight;
+      var c = sizeCanvas(cv, vw, vh);
+      drawFight(c, vw, vh, t);
+      pf.style.transform = 'scaleX(' + (fight.p.hp / fight.p.max) + ')';
+      ef.style.transform = 'scaleX(' + (fight.e.hp / fight.e.max) + ')';
+      pg.style.transform = 'scaleX(' + (fight.p.hp / fight.p.max) + ')';
+      eg.style.transform = 'scaleX(' + (fight.e.hp / fight.e.max) + ')';
+      sp.style.width = fight.p.spark + '%';
+      var full = fight.p.spark >= 100;
+      sp.classList.toggle('full', full);
+      bs.classList.toggle('ready', full);
+    };
+  },
+  exit: function(){ keys = {}; press = {}; }
+};
+
+/* ============================================================
+   Boot
+   ============================================================ */
+save = loadSave();
+if(SCREENS.title.paintMute) SCREENS.title.paintMute();
+for(var _h = 0; _h < HEROES.length; _h++) prep(HEROES[_h]);
+for(var _v = 0; _v < VILLAINS.length; _v++) prep(VILLAINS[_v]);
+$('#s-title').classList.add('on');
+SCREENS.title.enter();
+requestAnimationFrame(loop);
+
+window.addEventListener('resize', function(){
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  if(colState) colState.dirty = true;
+  var s = SCREENS[current];
+  if(s && s.enter && current !== 'fight' && current !== 'color' && current !== 'score') s.enter();
+});
+document.addEventListener('gesturestart', function(e){ e.preventDefault(); });
+
+/* Offline: cache the page and its icons on the first visit, so the game runs
+   with the network off once it has been opened once. */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/magical-imagineer/sw.js').catch(function(){});
+}
+
+})();
+</script>
+</body>
+</html>
+{% endraw %}
