@@ -1,0 +1,15 @@
+{
+  "name": "Ticket Book Trivia",
+  "short_name": "Ticket Book",
+  "description": "A pass-and-play trivia game. Pick a category, punch a book of tickets worth one to five points each.",
+  "start_url": "/experiments/ticket-book-trivia/",
+  "scope": "/experiments/ticket-book-trivia/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#170A2E",
+  "theme_color": "#170A2E",
+  "icons": [
+    { "src": "/experiments/ticket-book-trivia/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/experiments/ticket-book-trivia/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
