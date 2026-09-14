@@ -129,6 +129,14 @@ Tools:
   clipped to the character silhouette, so a four-year-old cannot paint the background; region
   boundaries are still crossable, so the match score still means something.
 - **Eraser**, **undo** (a ring of up to 12 `paint` snapshots), **clear**.
+- **Zoom**, because the small shapes are unhittable with a thumb at 1:1. Pinch with two fingers,
+  wheel or trackpad on a desktop, or a button that cycles 1x / 2x / 3x. The zoom is applied
+  *inside* the canvas rather than as a CSS transform on it, so the page is re-rasterised at the new
+  scale and the line art stays crisp instead of becoming a magnified bitmap. The brush radius is
+  divided by the zoom so it stays the same size under your finger and fine work is possible.
+  One finger draws, two pinch: the second finger down cancels and undoes any stroke the first one
+  started, and the fill tool commits on *release* rather than press, so a pinch that begins one
+  finger at a time cannot dump paint under the first finger.
 - A 28-swatch crayon palette plus the last six colours used.
 - **Peek** — hold to see the storybook reference. Free; the difficulty is in the doing.
 
@@ -137,8 +145,8 @@ Two modes, chosen before you start:
 - **Storybook** — match the reference.
 - **Wild** — your own colours; the match term is replaced by a palette term.
 
-**Check:** fill, brush, undo and clear all survive a rotate and a resize, and the paint never
-drifts out of register with the lines.
+**Check:** fill, brush, undo and clear all survive a rotate and a resize, the paint never drifts
+out of register with the lines, and a fill tapped at 3x lands on the same region it would at 1x.
 
 ## 4. Scoring
 
@@ -155,6 +163,11 @@ Sample `paint` and `mask` together on a 3px grid in design space.
 - **Neatness** (15 pts Storybook, 20 Wild) — paint landing outside the silhouette, scaled against
   the character's area. Perfect when the stay-in-the-lines helper is on, which is the point of it.
 
+Alongside the colours, a scored page records **which regions were really filled** (coverage above a
+half), and only those are seeded back when the page is reopened. A figure stores a colour for every
+region so that it renders solid, and seeding the untouched ones with that stand-in paper colour
+handed back free coverage marks for reopening a page and pressing Done.
+
 Total 0-100 → stars: **55 = ★**, **70 = ★★**, **85 = ★★★**. Below 55 the figure does not unlock
 and you are invited to keep going on the same canvas rather than starting over. Re-colouring a
 character later keeps whichever attempt scored best.
@@ -165,8 +178,13 @@ says what it is worth in a fight.
 ## 5. The collection
 
 A shelf of unlocked figures, each rendered from the saved palette in an idle pose on a pedestal,
-with its stars, best score and fight stats. Tap to make it the active fighter. Locked slots show
-the silhouette in grey with a "colour me" prompt.
+with its stars, best score and fight stats. Locked slots show the silhouette in grey, and tapping
+one opens that page in the colouring book.
+
+Tapping an unlocked figure opens a **figure sheet**: the figure large on its pedestal, its stars,
+its blurb, and what the score bought it — best score, health, power — over three buttons: *Into
+battle*, *Colour again*, *Close*. The shelf's top bar also carries a direct **Ink Lands** button.
+Both exist because selecting-in-place was a dead end; see section 12.
 
 Stars carry into the fight:
 
@@ -187,6 +205,11 @@ you coloured.
 
 - **Player**: move, jump, light attack, block (hold), and a **special** once the sparkle meter is
   full. The special is a wave of your own palette that sweeps the arena.
+- **Facing** is automatic: the player squares up to the villain every frame except during a move,
+  which locks facing for its duration. Turning only on directional input meant that once a villain
+  hopped over you, your swings went the wrong way with nothing on screen explaining why.
+- **Touch layout**: move buttons bottom-left, the four actions as a 2x2 block bottom-right, which
+  is what makes them fit at all — see section 12.
 - **Input**: held actions (move, block) and one-shot actions (attack, jump, special) are tracked
   separately. A one-shot is buffered for 240ms from the moment it is pressed, so a fast tap whose
   press and release land inside a single frame still comes out, and a press during a move you
@@ -218,7 +241,7 @@ fight holds 60fps on a phone.
 ## 7. Save data
 
 One `localStorage` key, `magical-imagineer-save-v1`, holding for each character its best score,
-stars, mode and the region → colour map it was scored with, plus which villains are beaten, the
+stars, mode, the region → colour map it was scored with, the list of regions genuinely filled, plus which villains are beaten, the
 active fighter, and the mute flag. Corrupt or missing data falls back to a fresh save rather than
 throwing. A reset button in the settings sheet, behind a confirm.
 
@@ -269,3 +292,26 @@ Worth writing down, because none of them were visible from reading the code:
 - **The Snow Queen's ice floor and the Inkblot King's stage** were both close enough to the
   foreground to lose it — the touch controls vanished against the ice, and the boss vanished
   against his own ink. The controls now have a dark fill with a light rim so they read on both.
+
+---
+
+## 12. Fixed after playing it on a phone
+
+- **Tapping a figure on the shelf did nothing at all.** It only set that figure as the active
+  fighter, and `finishColouring` already auto-selects your first unlock — so tapping the only
+  figure you own re-selected what was already selected and re-rendered identical markup. No screen
+  change, no state change, no error, nothing to notice. The shelf even said *"tap a figure to send
+  it into the next fight"*, promising navigation that was never wired up; the only route to a fight
+  was back out to the hub. A tap now opens the figure sheet, and the shelf has its own Ink Lands
+  button. Locked villains on the map were the same silent tap, and now say why.
+- **Reopening a page paid out free marks** — 82 became 91 for touching nothing. Fixed by recording
+  which regions were really filled (section 4).
+- **The touch controls overlapped on every phone.** Four action buttons in a row came to 288px;
+  with the 134px move pad and the insets, that is 446px of controls on a 390px screen. They are a
+  2x2 block now — 363px total on a 375px screen — with a further step down below 360px, and the
+  colouring chrome shrinks under 400px so the page keeps the room.
+- **No pinch to zoom.** `touch-action: none` is what lets the game own its gestures, but it also
+  kills the browser's own pinch, and nothing replaced it — so the small shapes were effectively
+  unfillable with a thumb. Implemented properly in section 3.
+- **Swings went the wrong way** once a villain crossed over you. Facing is automatic now.
+- Villains announce what they do as the fight starts, not only on the map screen.

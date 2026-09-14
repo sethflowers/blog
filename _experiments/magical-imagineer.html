@@ -166,6 +166,15 @@ layout: null
   .tile .rl{font-size:10.5px;color:var(--parch-dim);text-align:center;line-height:1.25;}
   .stars{font-size:12px;letter-spacing:2px;color:var(--gold);height:14px;}
   .stars .off{color:rgba(253,246,230,.2);}
+  .figstats{display:flex;gap:8px;justify-content:center;margin-top:12px;}
+  .figstats span{
+    flex:1;display:flex;flex-direction:column;gap:3px;align-items:center;
+    padding:9px 4px;border-radius:13px;background:rgba(0,0,0,.28);
+    font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--parch-dim);
+    line-height:1.1;
+  }
+  .figstats b{font-size:18px;color:var(--gold);letter-spacing:0;text-transform:none;}
+
   .pill{
     position:absolute;top:8px;right:8px;font-size:9.5px;font-weight:800;letter-spacing:.08em;
     text-transform:uppercase;padding:3px 7px;border-radius:999px;
@@ -270,7 +279,10 @@ layout: null
 
   .pad{position:absolute;bottom:calc(12px + var(--pad-b));pointer-events:auto;display:flex;gap:10px;}
   .pad.l{left:calc(12px + var(--pad-l));}
-  .pad.r{right:calc(12px + var(--pad-r));}
+  /* Two rows of two. As one row the four action buttons came to 288px, which
+     with the move pad and the insets overflowed every phone and left them
+     sitting on top of each other. */
+  .pad.r{right:calc(12px + var(--pad-r));flex-wrap:wrap;width:146px;justify-content:flex-end;}
   .pbtn{
     width:62px;height:62px;border-radius:50%;border:none;cursor:pointer;
     /* dark fill plus a light rim, so the controls stay readable over the ice
@@ -293,6 +305,28 @@ layout: null
   #fightTop.show{animation:popmsg 1.5s ease both;}
   @keyframes popmsg{0%{opacity:0;transform:scale(.7)}18%{opacity:1;transform:scale(1.06)}30%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
   #fightBack{position:absolute;top:calc(8px + var(--pad-t));left:50%;transform:translateX(-50%);pointer-events:auto;}
+  #fightHint{
+    position:absolute;left:0;right:0;top:calc(88px + var(--pad-t));text-align:center;
+    font-size:12.5px;font-weight:700;line-height:1.4;color:var(--parch);
+    text-shadow:0 1px 6px #000, 0 0 14px rgba(0,0,0,.9);
+    pointer-events:none;padding:0 26px;opacity:0;
+  }
+  #fightHint.show{animation:fadehint 5.5s ease both;}
+  @keyframes fadehint{0%{opacity:0}10%{opacity:1}72%{opacity:1}100%{opacity:0}}
+  /* narrow phones: shrink the chrome so the page being coloured keeps the room */
+  @media(max-width:400px){
+    .toolbar{gap:6px;}
+    .tool{width:38px;height:38px;border-radius:12px;}
+    .tool .lbl{font-size:8px;}
+    #palette{gap:5px;}
+    .sw{width:27px;height:27px;}
+  }
+  @media(max-width:360px){
+    .pbtn{width:56px;height:56px;font-size:10px;}
+    .pbtn.big{width:64px;height:64px;font-size:11px;}
+    .pad.r{width:132px;}
+    .pad{gap:8px;}
+  }
 
   /* ---------- modal ---------- */
   #modal{
@@ -407,6 +441,7 @@ layout: null
         <button class="tool" data-tool="brush" title="Brush"><span class="lbl">BRUSH</span></button>
         <button class="tool" data-tool="erase" title="Eraser"><span class="lbl">ERASE</span></button>
         <button class="tool" id="btnSize" title="Brush size"><span class="lbl">M</span></button>
+        <button class="tool" id="btnZoom" title="Zoom in"><span class="lbl">1&#215;</span></button>
         <button class="tool" id="btnUndo" title="Undo"><span class="lbl">UNDO</span></button>
         <button class="tool" id="btnClear" title="Start again"><span class="lbl">CLEAR</span></button>
         <button class="tool on" id="btnLines" title="Stay in the lines"><span class="lbl">LINES</span></button>
@@ -438,6 +473,7 @@ layout: null
       <button class="iconbtn" data-nav="hub">&#8592;</button>
       <h2>My Figures</h2>
       <div class="spacer"></div>
+      <button class="btn small" id="btnShelfFight">Ink Lands</button>
     </div>
     <p class="sub tiny" id="shelfLine" style="margin-bottom:10px"></p>
     <div class="scroll"><div class="grid" id="shelfGrid"></div></div>
@@ -470,6 +506,7 @@ layout: null
       </div>
       <button class="iconbtn" id="fightBack" style="pointer-events:auto">&#8214;</button>
       <div id="fightTop"></div>
+      <div id="fightHint"></div>
       <div class="pad l">
         <button class="pbtn" data-act="left">&#9664;</button>
         <button class="pbtn" data-act="right">&#9654;</button>
@@ -1736,12 +1773,40 @@ $$('#modeSeg button').forEach(function(b){
    Shelf
    ============================================================ */
 var shelfPickMode = false;
+
+/* Tapping a figure has to answer "what did my score buy me?" and offer the
+   way out to a fight. Selecting it in place was a dead end: the first figure
+   you unlock is already the chosen fighter, so re-selecting it changed
+   nothing on screen and there was no route to the Ink Lands from here. */
+function figureSheet(ch){
+  var a = save.art[ch.id];
+  if(!a || !a.stars){ startColouring(ch); return; }
+  var st = statsFor(ch.id);
+  modal(ch.name,
+    '<canvas id="figSheet"></canvas>' +
+    '<div class="bigstars" style="font-size:24px;margin:2px 0 8px">' + starStr(a.stars) + '</div>' +
+    '<p>' + ch.blurb + '</p>' +
+    '<div class="figstats">' +
+      '<span><b>' + a.score + '</b>best score</span>' +
+      '<span><b>' + st.hp + '</b>health</span>' +
+      '<span><b>' + Math.round(st.power * 100) + '%</b>power</span>' +
+    '</div>',
+    [{ label:'Into battle', cls:'', fn: function(){
+        save.fighter = ch.id; writeSave(); go('map'); } },
+     { label:'Colour again', fn: function(){ startColouring(ch); } },
+     { label:'Close' }]);
+  var cv = $('#figSheet');
+  cv.style.cssText = 'width:150px;height:172px;display:block;margin:0 auto';
+  paintThumb(cv, ch, a.colours, {
+    pedestal: true, dy: -6, zoom: 0.9, lw: 4.2, w: 150, h: 172, pose: poseIdle(0.4, ch) });
+}
 SCREENS.shelf = {
   enter: function(){
     var any = unlockedList().length;
     $('#shelfLine').textContent = any
-      ? 'Tap a figure to send it into the next fight. Colour a page again any time to beat your score.'
+      ? 'Tap a figure to see what your score bought it, and to send it into a fight.'
       : 'The shelf is empty. Colour a page to 55 or better and whoever you coloured turns up here.';
+    $('#btnShelfFight').style.display = any ? '' : 'none';
     var g = $('#shelfGrid');
     g.innerHTML = '';
     HEROES.forEach(function(ch){
@@ -1759,9 +1824,12 @@ SCREENS.shelf = {
       t.onclick = function(){
         SFX.tap();
         if(!on){ startColouring(ch); return; }
-        save.fighter = ch.id; writeSave();
-        if(shelfPickMode){ shelfPickMode = false; go('map'); return; }
-        SCREENS.shelf.enter();
+        /* arrived here from the map's Fighter button: pick and go straight back */
+        if(shelfPickMode){
+          save.fighter = ch.id; writeSave();
+          shelfPickMode = false; go('map'); return;
+        }
+        figureSheet(ch);
       };
       g.appendChild(t);
       paintThumb(t.querySelector('canvas'), ch, on ? a.colours : null, {
@@ -1799,7 +1867,10 @@ SCREENS.map = {
         (beat ? '<span class="pill beat">beaten</span>' : open ? '' : '<span class="pill">locked</span>');
       t.onclick = function(){
         SFX.tap();
-        if(!open){ return; }
+        if(!open){
+          $('#mapLine').textContent = 'Still out of reach. Beat ' + VILLAINS[i-1].name + ' and this one opens up.';
+          return;
+        }
         if(!f){ modal('No figure yet', '<p>Colour a character to 55 or better and they will turn up on your shelf, ready to fight.</p>', [{label:'Open the book', cls:'', fn:function(){ go('book'); }}, {label:'Close'}]); return; }
         startFight(v, f);
       };
@@ -1813,6 +1884,11 @@ SCREENS.map = {
   }
 };
 $('#btnPickFighter').onclick = function(){ SFX.tap(); shelfPickMode = true; go('shelf', true); };
+$('#btnShelfFight').onclick = function(){
+  SFX.tap();
+  if(!unlockedList().length) return;
+  go('map', true);
+};
 
 $$('[data-nav]').forEach(function(b){ b.onclick = function(){ go(b.getAttribute('data-nav')); }; });
 
@@ -1849,18 +1925,19 @@ function startColouring(ch){
     lastX: 0, lastY: 0,
     strokeStarted: false,
     peek: false,
-    view: { x:0, y:0, s:1 }
+    tap: null,
+    view: { cx: DW / 2, cy: DH / 2, s: 1 }
   };
   /* the player's paint, and a map of which region owns each pixel */
   var p = document.createElement('canvas'); p.width = DW; p.height = DH;
   colState.paint = p;
   colState.pctx = p.getContext('2d');
   colState.mask = buildMask(ch);
-  if(prior && prior.colours) seedPaint(colState, prior.colours);
+  if(prior && prior.colours) seedPaint(colState, prior.colours, prior.painted);
   buildPalette();
   $('#colorName').textContent = ch.name;
-  $('#colorHint').textContent = colState.tool === 'fill'
-    ? 'Tap a shape to fill it in.' : 'Drag to colour.';
+  updateZoom();
+  $('#colorHint').textContent = 'Tap a shape to fill it in. Pinch to zoom in on the fiddly bits.';
   $('#btnLines').classList.toggle('on', colState.lines);
   paintPeek();
   go('color');
@@ -1894,15 +1971,24 @@ function buildMask(ch){
   ch._mask.area = area; ch._mask.total = total;
   return ch._mask;
 }
-/* re-open a previous attempt with its colours already down */
-function seedPaint(st, colours){
-  var ctx = st.pctx;
+/* Re-open a previous attempt with its colours already down. Only the regions
+   that were genuinely painted come back: a figure stores a colour for every
+   region so it renders solid, and seeding the never-touched ones with that
+   stand-in paper colour would hand back free coverage marks for reopening a
+   page and pressing Done. */
+function seedPaint(st, colours, painted){
+  var ctx = st.pctx, allow = null, j;
+  if(painted && painted.length){
+    allow = {};
+    for(j = 0; j < painted.length; j++) allow[painted[j]] = 1;
+  }
   for(var pi = 0; pi < PART_ORDER.length; pi++){
     var bucket = st.ch.byPart[PART_ORDER[pi]];
     if(!bucket) continue;
     for(var i = 0; i < bucket.r.length; i++){
       var reg = bucket.r[i];
       if(!colours[reg.id]) continue;
+      if(allow && !allow[reg.id]) continue;
       ctx.fillStyle = colours[reg.id];
       ctx.fill(reg._path);
     }
@@ -1931,7 +2017,7 @@ function setTool(t){
     b.classList.toggle('on', b.getAttribute('data-tool') === t);
   });
   $('#colorHint').textContent =
-    t === 'fill'  ? 'Tap a shape to fill it in.' :
+    t === 'fill'  ? 'Tap a shape to fill it in. Pinch to zoom in on the fiddly bits.' :
     t === 'brush' ? 'Drag to colour. ' + (colState.lines ? 'The lines are holding you in.' : 'Nothing is holding you in — careful.') :
                     'Drag to rub colour out.';
 }
@@ -1994,13 +2080,42 @@ function paintPeek(){
   b.addEventListener('pointercancel', off);
 })();
 
-/* ---------- pointer -> design space ---------- */
-function paperXY(e){
-  var cv = $('#paper'), r = cv.getBoundingClientRect();
+/* ---------- the view, and pointer -> design space ----------
+   Zoom is applied inside the canvas rather than as a CSS transform on it, so
+   the drawing is re-rasterised at the new scale and small shapes stay crisp
+   and tappable instead of turning into a blown-up bitmap. */
+var ZOOM_MAX = 6;
+function clampView(v){
+  v.s = clamp(v.s, 1, ZOOM_MAX);
+  var hw = DW / (2 * v.s), hh = DH / (2 * v.s);
+  v.cx = clamp(v.cx, hw, DW - hw);
+  v.cy = clamp(v.cy, hh, DH - hh);
+  return v;
+}
+function paperScale(r){ return (r.width / DW) * colState.view.s; }
+function toDesign(clientX, clientY, r){
+  var v = colState.view, k = paperScale(r);
   return {
-    x: (e.clientX - r.left) / r.width * DW,
-    y: (e.clientY - r.top) / r.height * DH
+    x: (clientX - r.left - r.width / 2) / k + v.cx,
+    y: (clientY - r.top - r.height / 2) / k + v.cy
   };
+}
+function paperXY(e){ return toDesign(e.clientX, e.clientY, $('#paper').getBoundingClientRect()); }
+/* keep the design point `ax,ay` sitting under the screen point `px,py` */
+function anchorView(ax, ay, px, py, r){
+  var v = colState.view, k = paperScale(r);
+  v.cx = ax - (px - r.left - r.width / 2) / k;
+  v.cy = ay - (py - r.top - r.height / 2) / k;
+  clampView(v);
+  colState.dirty = true;
+  updateZoom();
+}
+function updateZoom(){
+  var el = $('#btnZoom');
+  if(!el || !colState) return;
+  var s = colState.view.s;
+  el.querySelector('.lbl').textContent = (s < 1.05 ? '1' : (Math.round(s * 10) / 10)) + '\u00d7';
+  el.classList.toggle('on', s > 1.05);
 }
 function regionAt(x, y){
   var ch = colState.ch, m = colState.mask;
@@ -2008,7 +2123,7 @@ function regionAt(x, y){
   var v = m.data[(yi * DW + xi) * 4];
   return v ? ch.regions[v - 1] : null;
 }
-function brushR(){ return [6, 12, 22][colState.size]; }
+function brushR(){ return [6, 12, 22][colState.size] / colState.view.s; }
 
 function strokeTo(x, y){
   var ctx = colState.pctx, r = brushR();
@@ -2036,23 +2151,65 @@ function strokeTo(x, y){
 
 (function(){
   var cv = $('#paper');
+  var ptr = {}, gest = null;
+  function live(){ var n = 0, k; for(k in ptr) n++; return n; }
+  function two(){ var a = [], k; for(k in ptr){ a.push(ptr[k]); if(a.length === 2) break; } return a; }
+
+  function doFill(p){
+    var reg = regionAt(p.x, p.y);
+    if(!reg){ SFX.back(); $('#colorHint').textContent = 'That is the paper. Tap the character.'; return; }
+    pushUndo();
+    colState.pctx.save();
+    colState.pctx.fillStyle = colState.colour;
+    colState.pctx.fill(reg._path);
+    colState.pctx.restore();
+    colState.dirty = true;
+    colState.flash = { path: reg._path, t: 0.35 };
+    SFX.bucket();
+    $('#colorHint').textContent = reg.name || '';
+  }
+  function undoLast(){
+    if(!colState.undo.length) return;
+    var img = colState.undo.pop();
+    colState.pctx.clearRect(0, 0, DW, DH);
+    colState.pctx.drawImage(img, 0, 0);
+    colState.dirty = true;
+  }
+  function beginPinch(){
+    var a = two(), r = cv.getBoundingClientRect();
+    if(a.length < 2) return;
+    var mid = toDesign((a[0].x + a[1].x) / 2, (a[0].y + a[1].y) / 2, r);
+    gest = {
+      d0: Math.max(1, Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y)),
+      s0: colState.view.s, ax: mid.x, ay: mid.y
+    };
+    colState.tap = null;
+  }
+  function movePinch(){
+    var a = two(), r = cv.getBoundingClientRect();
+    if(a.length < 2 || !gest) return;
+    var d = Math.max(1, Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y));
+    colState.view.s = clamp(gest.s0 * (d / gest.d0), 1, ZOOM_MAX);
+    anchorView(gest.ax, gest.ay, (a[0].x + a[1].x) / 2, (a[0].y + a[1].y) / 2, r);
+  }
+
   cv.addEventListener('pointerdown', function(e){
     if(!colState) return;
     e.preventDefault();
-    cv.setPointerCapture(e.pointerId);
+    try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+    ptr[e.pointerId] = { x: e.clientX, y: e.clientY };
+    if(live() === 2){
+      // a second finger means this was a pinch, not a stroke: take back the dab
+      if(colState.down){ colState.down = false; undoLast(); }
+      beginPinch();
+      return;
+    }
+    if(live() > 2) return;
     var p = paperXY(e);
     if(colState.tool === 'fill'){
-      var reg = regionAt(p.x, p.y);
-      if(!reg){ SFX.back(); $('#colorHint').textContent = 'That is the paper. Tap the character.'; return; }
-      pushUndo();
-      colState.pctx.save();
-      colState.pctx.fillStyle = colState.colour;
-      colState.pctx.fill(reg._path);
-      colState.pctx.restore();
-      colState.dirty = true;
-      colState.flash = { path: reg._path, t: 0.35 };
-      SFX.bucket();
-      $('#colorHint').textContent = reg.name || '';
+      // fill on release, so a pinch that starts one finger at a time does not
+      // dump paint into whatever was under the first finger
+      colState.tap = p;
       return;
     }
     pushUndo();
@@ -2060,19 +2217,54 @@ function strokeTo(x, y){
     colState.lastX = p.x; colState.lastY = p.y;
     strokeTo(p.x + 0.01, p.y + 0.01);
   });
+
   cv.addEventListener('pointermove', function(e){
-    if(!colState || !colState.down) return;
+    if(!colState || !ptr[e.pointerId]) return;
     e.preventDefault();
+    ptr[e.pointerId].x = e.clientX; ptr[e.pointerId].y = e.clientY;
+    if(gest){ movePinch(); return; }
     var p = paperXY(e);
+    if(colState.tap && Math.hypot(p.x - colState.tap.x, p.y - colState.tap.y) > 12) colState.tap = null;
+    if(!colState.down) return;
     var d = Math.hypot(p.x - colState.lastX, p.y - colState.lastY);
     strokeTo(p.x, p.y);
     if(d > 4 && Math.random() < 0.35) SFX.crayon(clamp(d / 40, 0, 1));
   });
-  function up(e){ if(colState) colState.down = false; }
+
+  function up(e){
+    if(!colState) return;
+    delete ptr[e.pointerId];
+    if(live() < 2) gest = null;
+    if(live() === 0){
+      colState.down = false;
+      if(colState.tap){ doFill(colState.tap); colState.tap = null; }
+    }
+  }
   cv.addEventListener('pointerup', up);
   cv.addEventListener('pointercancel', up);
-  cv.addEventListener('pointerleave', up);
+
+  // trackpad and mouse wheel zoom, anchored at the cursor
+  cv.addEventListener('wheel', function(e){
+    if(!colState) return;
+    e.preventDefault();
+    var r = cv.getBoundingClientRect();
+    var a = toDesign(e.clientX, e.clientY, r);
+    colState.view.s = clamp(colState.view.s * (e.deltaY < 0 ? 1.16 : 1 / 1.16), 1, ZOOM_MAX);
+    anchorView(a.x, a.y, e.clientX, e.clientY, r);
+  }, { passive: false });
 })();
+
+$('#btnZoom').onclick = function(){
+  SFX.tap();
+  var v = colState.view;
+  v.s = v.s < 1.6 ? 2 : v.s < 2.6 ? 3 : 1;
+  clampView(v);
+  colState.dirty = true;
+  updateZoom();
+  $('#colorHint').textContent = v.s > 1.05
+    ? 'Zoomed in. Drag with two fingers to move about.'
+    : 'Back to the whole page.';
+};
 
 SCREENS.color = {
   enter: function(){
@@ -2094,10 +2286,14 @@ SCREENS.color = {
       colState.dirty = false;
       var c = sizeCanvas(cv, w, h);
       c.clearRect(0, 0, w, h);
+      c.fillStyle = PAPER; c.fillRect(0, 0, w, h);
       c.save();
-      c.scale(w / DW, h / DH);
+      var vw = colState.view, k = (w / DW) * vw.s;
+      c.translate(w / 2, h / 2);
+      c.scale(k, k);
+      c.translate(-vw.cx, -vw.cy);
       c.fillStyle = PAPER; c.fillRect(0, 0, DW, DH);
-      drawCharacter(c, colState.ch, null, null, { lw: 3.2, paint: colState.paint });
+      drawCharacter(c, colState.ch, null, null, { lw: 3.2 / vw.s, paint: colState.paint });
       if(colState.flash){
         c.save();
         c.globalAlpha = clamp(colState.flash.t / 0.35, 0, 1) * 0.55;
@@ -2165,7 +2361,7 @@ function scoreColouring(st){
   }
 
   /* the colour each region ended up being, as the eye would call it */
-  var chosen = {}, chosenLab = {}, covW = 0, covS = 0, matchW = 0, matchS = 0;
+  var chosen = {}, chosenLab = {}, solid = {}, covW = 0, covS = 0, matchW = 0, matchS = 0;
   for(i = 1; i <= n; i++){
     var reg = ch.regions[i - 1];
     var cov = count[i] > 0 ? painted[i] / count[i] : 0;
@@ -2177,6 +2373,9 @@ function scoreColouring(st){
     if(best && cov > 0.12){
       var hex = rgbHex(best.r / best.n, best.g / best.n, best.b / best.n);
       chosen[reg.id] = hex;
+      /* only a region you really filled comes back seeded next time, so a
+         page of barely-there dabs cannot be laundered into a solid one */
+      if(cov > 0.5) solid[reg.id] = 1;
       chosenLab[reg.id] = rgbLab(best.r / best.n, best.g / best.n, best.b / best.n);
       var tl = reg._lab || (reg._lab = (function(t){ var c = hexRGB(t); return rgbLab(c[0], c[1], c[2]); })(reg.target));
       var dist = labDist(chosenLab[reg.id], tl);
@@ -2228,13 +2427,16 @@ function scoreColouring(st){
   var stars = total >= 85 ? 3 : total >= 70 ? 2 : total >= 55 ? 1 : 0;
 
   /* the figure keeps the colours it was actually given; anything left
-     blank stays the colour of the paper */
-  var colours = {};
+     blank stays the colour of the paper. `painted` records which of those
+     were real, so reopening the page does not hand back the blanks. */
+  var colours = {}, paintedIds = [];
   for(i = 0; i < ch.regions.length; i++){
     var rg = ch.regions[i];
     colours[rg.id] = chosen[rg.id] || '#efe7d6';
+    if(solid[rg.id]) paintedIds.push(rg.id);
   }
-  return { total: total, stars: stars, parts: parts, colours: colours, mode: st.mode, coverage: coverage };
+  return { total: total, stars: stars, parts: parts, colours: colours,
+           painted: paintedIds, mode: st.mode, coverage: coverage };
 }
 
 var lastResult = null;
@@ -2245,7 +2447,8 @@ function finishColouring(){
   var prev = save.art[st.ch.id];
   var improved = !prev || res.total > prev.score;
   if(res.stars > 0 && improved){
-    save.art[st.ch.id] = { score: res.total, stars: res.stars, mode: res.mode, colours: res.colours };
+    save.art[st.ch.id] = { score: res.total, stars: res.stars, mode: res.mode,
+                           colours: res.colours, painted: res.painted };
     if(!save.fighter) save.fighter = st.ch.id;
     writeSave();
   } else if(res.stars > 0 && !improved){
@@ -2410,6 +2613,9 @@ function startFight(v, hero){
   $('#eName').textContent = v.name;
   showMsg(v.name.toUpperCase());
   setTimeout(function(){ if(fight) showMsg('FIGHT!'); }, 1300);
+  var hint = $('#fightHint');
+  hint.textContent = v.brief;
+  hint.classList.remove('show'); void hint.offsetWidth; hint.classList.add('show');
   go('fight');
 }
 function showMsg(s){
@@ -2623,12 +2829,17 @@ function stepFighter(f, e, dt, isPlayer){
   } else if(e.state === 'special'){
     if(e.st >= 1.0){ e.state = 'idle'; e.st = 0; }
   } else if(isPlayer){
+    /* Always square up to the villain. Facing used to change only when a
+       direction was held, so once they hopped over you your swings went the
+       wrong way with nothing on screen explaining why. Facing is locked for
+       the duration of a move, because this branch is skipped while one runs. */
+    if(f.e && f.e.state !== 'ko') e.face = f.e.x < e.x ? -1 : 1;
     var blocking = !!keys.block && e.y >= 0;
     if(blocking){ e.state = 'block'; e.vx = approach(e.vx, 0, 2600 * dt); }
     else {
       var dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
       var accel = f.slip ? 1300 : 2600;
-      if(dir){ e.vx = approach(e.vx, dir * WALK, accel * dt); e.face = dir; }
+      if(dir){ e.vx = approach(e.vx, dir * WALK, accel * dt); }
       else e.vx = approach(e.vx, 0, (f.slip ? 700 : 2400) * dt);
       e.state = e.y < -1 ? 'air' : (Math.abs(e.vx) > 30 ? 'run' : 'idle');
       if(e.y >= 0 && takePress('jump')){ e.vy = -JUMP_V; SFX.jump(); }
