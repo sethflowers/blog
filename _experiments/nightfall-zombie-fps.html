@@ -452,15 +452,16 @@ function face(tone){
     g.addColorStop(0,'rgba(50,40,50,0.45)'); g.addColorStop(1,'rgba(0,0,0,0)');
     x.fillStyle=g; x.fillRect(0,0,S,S);
   });
-  // torn mouth with teeth
-  x.fillStyle='rgba(28,8,10,0.95)';
-  x.beginPath(); x.moveTo(cx-S*0.085,mouthY);
-  for(var i=1;i<8;i++) x.lineTo(cx-S*0.085+i*S*0.024, mouthY+rand(-S*0.012,S*0.02));
-  x.lineTo(cx+S*0.085,mouthY);
-  for(var j=7;j>0;j--) x.lineTo(cx-S*0.085+j*S*0.024, mouthY+rand(S*0.018,S*0.04));
-  x.closePath(); x.fill();
-  x.fillStyle='rgba(205,196,170,0.9)';
-  for(var t=0;t<7;t++){ x.fillRect(cx-S*0.07+t*S*0.021, mouthY-S*0.004, S*0.012, rand(S*0.008,S*0.016)); }
+  // bruised bags under the eyes
+  [-1,1].forEach(function(s){
+    var g=x.createRadialGradient(cx+s*dx,eyeY+S*0.04,2,cx+s*dx,eyeY+S*0.04,S*0.06);
+    g.addColorStop(0,'rgba(60,30,50,0.5)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    x.fillStyle=g; x.fillRect(0,0,S,S);
+  });
+  // lips drawn back and dark: the geometry supplies the open mouth
+  var lg=x.createRadialGradient(cx,mouthY-S*0.04,2,cx,mouthY-S*0.04,S*0.09);
+  lg.addColorStop(0,'rgba(40,12,16,0.85)'); lg.addColorStop(1,'rgba(40,12,16,0)');
+  x.fillStyle=lg; x.fillRect(0,0,S,S);
   // blood running from the mouth
   x.fillStyle='rgba(120,16,20,0.7)';
   for(var r=0;r<4;r++){
@@ -1204,8 +1205,9 @@ for(var st=0; st<SKIN_TONES; st++){
   skinNorm.push(tex(heightToNormal(sc,2.6),1));
   faceTex.push(tex(face(st),1,true));
 }
-var shirtTex=[tex(cloth('#2a2f36'),1,true), tex(cloth('#3a2b24'),1,true), tex(cloth('#4a4a3c'),1,true), tex(cloth('#5a2f2a'),1,true)];
-var pantsTex=[tex(cloth('#1e2128',true),1,true), tex(cloth('#2b2620',true),1,true)];
+// neutral cloth: each zombie tints it, so shirts read as colours rather than black
+var shirtTex=[tex(cloth('#a8a8a4'),1,true), tex(cloth('#9c968e'),1,true), tex(cloth('#b4b0a6'),1,true)];
+var pantsTex=[tex(cloth('#8c8e94',true),1,true), tex(cloth('#94908a',true),1,true)];
 
 /* ============================================================
    WORLD
@@ -2539,24 +2541,440 @@ function clearFx(){
 var zombies=[];
 var zombieHitboxes=[];
 
-var GEO={
-  torso:    new THREE.CylinderGeometry(0.21,0.165,0.62,14,1),
-  hip:      new THREE.CylinderGeometry(0.165,0.185,0.24,14,1),
-  neck:     new THREE.CylinderGeometry(0.052,0.066,0.13,10),
-  head:     new THREE.SphereGeometry(0.13,20,16),
-  hair:     new THREE.SphereGeometry(0.137,20,10,0,Math.PI*2,0,Math.PI*0.52),
-  jaw:      new THREE.SphereGeometry(0.075,12,9),
-  shoulder: new THREE.SphereGeometry(0.078,12,9),
-  upperArm: new THREE.CylinderGeometry(0.062,0.05,0.50,10),
-  foreArm:  new THREE.CylinderGeometry(0.05,0.038,0.44,10),
-  hand:     new THREE.SphereGeometry(0.055,10,8),
-  thigh:    new THREE.CylinderGeometry(0.088,0.068,0.50,10),
-  shin:     new THREE.CylinderGeometry(0.066,0.05,0.48,10),
-  shoe:     new THREE.BoxGeometry(0.12,0.08,0.27),
-  eye:      new THREE.SphereGeometry(0.017,10,8),
-  pupil:    new THREE.SphereGeometry(0.0065,8,6),
-  socket:   new THREE.SphereGeometry(0.027,10,8)
-};
+// a hand hanging off the wrist, fingers curled forward into a claw
+function clawHand(side){
+  var parts=[];
+  var palm=new THREE.SphereGeometry(1,12,9); palm.scale(0.038,0.05,0.018); palm.translate(0,-0.05,0); parts.push(palm);
+  for(var f=0;f<4;f++){
+    var fx=(f-1.5)*0.017, len=[0.036,0.042,0.04,0.032][f];
+    var a=new THREE.CylinderGeometry(0.0085,0.009,len,6); a.translate(0,-len/2,0);
+    a.rotateX(0.5); a.translate(fx,-0.092,0.004); parts.push(a);
+    var tipY=-0.092-Math.cos(0.5)*len, tipZ=0.004+Math.sin(0.5)*len;
+    var b=new THREE.CylinderGeometry(0.0065,0.0085,len*0.85,6); b.translate(0,-len*0.42,0);
+    b.rotateX(1.25); b.translate(fx,tipY,tipZ); parts.push(b);
+    var k=new THREE.SphereGeometry(0.0095,6,5); k.translate(fx,tipY,tipZ); parts.push(k);
+  }
+  var t=new THREE.CylinderGeometry(0.009,0.011,0.045,6); t.translate(0,-0.022,0);
+  t.rotateZ(side*0.7); t.rotateX(0.5); t.translate(side*0.03,-0.035,0.01); parts.push(t);
+  return mergeGeos(parts);
+}
+function shoeGeo(){
+  var s=new THREE.Shape();
+  s.moveTo(-0.055,0); s.lineTo(0.15,0); s.quadraticCurveTo(0.2,0.0,0.195,0.035);
+  s.quadraticCurveTo(0.17,0.06,0.08,0.075); s.lineTo(0.0,0.1); s.lineTo(-0.06,0.1);
+  s.quadraticCurveTo(-0.075,0.05,-0.055,0);
+  var g=new THREE.ExtrudeGeometry(s,{depth:0.085, bevelEnabled:true, bevelThickness:0.012, bevelSize:0.01, bevelSegments:2, curveSegments:6});
+  g.translate(0,-0.08,-0.0425); g.rotateY(-Math.PI/2);
+  return g;
+}
+
+/* ============================================================
+   SCULPTED ZOMBIES
+   The body is one smooth surface: a signed distance field built
+   from tapered capsules melted together, turned into triangles
+   with surface nets, then skinned to a skeleton so knees and
+   elbows bend without seams. The head is sculpted the same way
+   at a finer grain. Crevices are darkened from the field itself
+   (ambient occlusion), and blood is painted into the vertices.
+   ============================================================ */
+function smin(a,b,k){ var h=Math.max(k-Math.abs(a-b),0)/k; return Math.min(a,b)-h*h*k*0.25; }
+function smax(a,b,k){ return -smin(-a,-b,k); }
+// tapered capsule from a to b, radius r1 to r2; zs squashes it front to back
+function sdCap(x,y,z, a, b, r1, r2, zs){
+  zs=zs||1;
+  var px=x-a[0], py=y-a[1], pz=(z-a[2])/zs;
+  var bx=b[0]-a[0], by=b[1]-a[1], bz=(b[2]-a[2])/zs;
+  var t=(px*bx+py*by+pz*bz)/(bx*bx+by*by+bz*bz||1e-9);
+  t=t<0?0:t>1?1:t;
+  var dx=px-bx*t, dy=py-by*t, dz=pz-bz*t;
+  return (Math.sqrt(dx*dx+dy*dy+dz*dz)-(r1+(r2-r1)*t))*Math.min(1,zs);
+}
+function sdEll(x,y,z, c, r){
+  var px=(x-c[0])/r[0], py=(y-c[1])/r[1], pz=(z-c[2])/r[2];
+  var k0=Math.sqrt(px*px+py*py+pz*pz);
+  var qx=px/r[0], qy=py/r[1], qz=pz/r[2];
+  var k1=Math.sqrt(qx*qx+qy*qy+qz*qz)||1e-9;
+  return k0*(k0-1)/k1;
+}
+// cheap 3D value noise for tears, dirt and blood
+function vnoise(x,y,z){
+  function h(i,j,k){ var n=Math.sin(i*127.1+j*311.7+k*74.7)*43758.5453; return n-Math.floor(n); }
+  var ix=Math.floor(x), iy=Math.floor(y), iz=Math.floor(z), fx=x-ix, fy=y-iy, fz=z-iz;
+  fx=fx*fx*(3-2*fx); fy=fy*fy*(3-2*fy); fz=fz*fz*(3-2*fz);
+  function l(a,b,t){ return a+(b-a)*t; }
+  return l(l(l(h(ix,iy,iz),h(ix+1,iy,iz),fx), l(h(ix,iy+1,iz),h(ix+1,iy+1,iz),fx), fy),
+           l(l(h(ix,iy,iz+1),h(ix+1,iy,iz+1),fx), l(h(ix,iy+1,iz+1),h(ix+1,iy+1,iz+1),fx), fy), fz);
+}
+function fbm3(x,y,z){ return vnoise(x,y,z)*0.55+vnoise(x*2.1,y*2.1,z*2.1)*0.3+vnoise(x*4.3,y*4.3,z*4.3)*0.15; }
+
+// Naive surface nets: one vertex per cell the surface passes through,
+// one quad per grid edge it crosses. Shares vertices, needs no tables.
+function surfaceNets(sdf, lo, hi, cell){
+  var nx=Math.ceil((hi[0]-lo[0])/cell)+1, ny=Math.ceil((hi[1]-lo[1])/cell)+1, nz=Math.ceil((hi[2]-lo[2])/cell)+1;
+  var V=new Float32Array(nx*ny*nz);
+  for(var k=0;k<nz;k++) for(var j=0;j<ny;j++) for(var i=0;i<nx;i++)
+    V[i+nx*(j+ny*k)]=sdf(lo[0]+i*cell, lo[1]+j*cell, lo[2]+k*cell);
+  var cx=nx-1, cy=ny-1, cz=nz-1;
+  var cellV=new Int32Array(cx*cy*cz).fill(-1);
+  var pos=[];
+  var C=[[0,0,0],[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[0,1,1],[1,1,1]];
+  var E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+  var vals=new Float32Array(8);
+  for(k=0;k<cz;k++) for(j=0;j<cy;j++) for(i=0;i<cx;i++){
+    var neg=0;
+    for(var c=0;c<8;c++){ var v=V[(i+C[c][0])+nx*((j+C[c][1])+ny*(k+C[c][2]))]; vals[c]=v; if(v<0) neg++; }
+    if(neg===0||neg===8) continue;
+    var sx=0,sy=0,sz=0,n=0;
+    for(var e=0;e<12;e++){
+      var a=E[e][0], b=E[e][1], va=vals[a], vb=vals[b];
+      if((va<0)===(vb<0)) continue;
+      var t=va/(va-vb);
+      sx+=C[a][0]+(C[b][0]-C[a][0])*t; sy+=C[a][1]+(C[b][1]-C[a][1])*t; sz+=C[a][2]+(C[b][2]-C[a][2])*t; n++;
+    }
+    cellV[i+cx*(j+cy*k)]=pos.length/3;
+    pos.push(lo[0]+(i+sx/n)*cell, lo[1]+(j+sy/n)*cell, lo[2]+(k+sz/n)*cell);
+  }
+  var idx=[];
+  function cv(i,j,k){ return cellV[i+cx*(j+cy*k)]; }
+  function quad(a,b,c,d, axis, outward){
+    if(a<0||b<0||c<0||d<0) return;
+    // orient by checking the face normal against the crossing direction
+    var ax=pos[a*3],ay=pos[a*3+1],az=pos[a*3+2];
+    var ux=pos[b*3]-ax, uy=pos[b*3+1]-ay, uz=pos[b*3+2]-az;
+    var wx=pos[c*3]-ax, wy=pos[c*3+1]-ay, wz=pos[c*3+2]-az;
+    var nn=[uy*wz-uz*wy, uz*wx-ux*wz, ux*wy-uy*wx][axis];
+    if((nn>0)!==outward){ var tmp=b; b=d; d=tmp; }
+    idx.push(a,b,c, a,c,d);
+  }
+  for(k=0;k<nz;k++) for(j=0;j<ny;j++) for(i=0;i<nx;i++){
+    var v0=V[i+nx*(j+ny*k)], in0=v0<0;
+    if(i<cx && j>0 && k>0 && j<cy && k<cz){
+      var v1=V[(i+1)+nx*(j+ny*k)];
+      if(in0!==(v1<0)) quad(cv(i,j-1,k-1),cv(i,j,k-1),cv(i,j,k),cv(i,j-1,k),0,in0);
+    }
+    if(j<cy && i>0 && k>0 && i<cx && k<cz){
+      var v2=V[i+nx*((j+1)+ny*k)];
+      if(in0!==(v2<0)) quad(cv(i-1,j,k-1),cv(i-1,j,k),cv(i,j,k),cv(i,j,k-1),1,in0);
+    }
+    if(k<cz && i>0 && j>0 && i<cx && j<cy){
+      var v3=V[i+nx*(j+ny*(k+1))];
+      if(in0!==(v3<0)) quad(cv(i-1,j-1,k),cv(i,j-1,k),cv(i,j,k),cv(i-1,j,k),2,in0);
+    }
+  }
+  // smooth normals straight from the field
+  var nor=new Float32Array(pos.length), h=cell*0.5;
+  for(var p=0;p<pos.length;p+=3){
+    var x=pos[p], y=pos[p+1], z=pos[p+2];
+    var gx=sdf(x+h,y,z)-sdf(x-h,y,z), gy=sdf(x,y+h,z)-sdf(x,y-h,z), gz=sdf(x,y,z+h)-sdf(x,y,z-h);
+    var l=Math.sqrt(gx*gx+gy*gy+gz*gz)||1;
+    nor[p]=gx/l; nor[p+1]=gy/l; nor[p+2]=gz/l;
+  }
+  return {pos:new Float32Array(pos), nor:nor, idx:idx};
+}
+// darken creases: how far is the field from the surface a short way out along the normal?
+function bakeAO(sdf, pos, nor, d1, d2){
+  var ao=new Float32Array(pos.length/3);
+  for(var i=0;i<ao.length;i++){
+    var x=pos[i*3],y=pos[i*3+1],z=pos[i*3+2], nx=nor[i*3],ny=nor[i*3+1],nz=nor[i*3+2];
+    var a=Math.min(1,Math.max(0,sdf(x+nx*d1,y+ny*d1,z+nz*d1)/d1));
+    var b=Math.min(1,Math.max(0,sdf(x+nx*d2,y+ny*d2,z+nz*d2)/d2));
+    ao[i]=Math.pow(a*0.5+b*0.5,1.2);
+  }
+  return ao;
+}
+
+/* ---------- the skeleton ----------
+   Local offsets for every bone. Arms bind slightly spread (an A-pose)
+   so the field does not melt them into the ribs. */
+var ARM_SPREAD=0.36, LEG_SPREAD=0.05;
+var BONES=[
+  // name,      parent,  x,      y,     z,     bind rot z
+  ['hips',      -1,      0,      0.96,  0,     0],
+  ['spine',      0,      0,      0.04,  0,     0],
+  ['neck',       1,      0,      0.5,   0,     0],
+  ['head',       2,      0,      0.085, 0.012, 0],
+  ['shoulderL',  1,     -0.19,   0.43,  0,    -ARM_SPREAD],
+  ['elbowL',     4,      0,     -0.3,   0,     0],
+  ['wristL',     5,      0,     -0.28,  0,     0],
+  ['shoulderR',  1,      0.19,   0.43,  0,     ARM_SPREAD],
+  ['elbowR',     7,      0,     -0.3,   0,     0],
+  ['wristR',     8,      0,     -0.28,  0,     0],
+  ['hipL',       0,     -0.095, -0.06,  0,    -LEG_SPREAD],
+  ['kneeL',     10,      0,     -0.44,  0,     0],
+  ['ankleL',    11,      0,     -0.4,   0,     0],
+  ['hipR',       0,      0.095, -0.06,  0,     LEG_SPREAD],
+  ['kneeR',     13,      0,     -0.44,  0,     0],
+  ['ankleR',    14,      0,     -0.4,   0,     0]
+];
+var B_IDX={}; BONES.forEach(function(b,i){ B_IDX[b[0]]=i; });
+function makeBones(){
+  var bones=BONES.map(function(b){ var o=new THREE.Bone(); o.name=b[0]; o.position.set(b[2],b[3],b[4]); o.rotation.z=b[5]; return o; });
+  BONES.forEach(function(b,i){ if(b[1]>=0) bones[b[1]].add(bones[i]); });
+  return bones;
+}
+// bind-pose world positions of every joint, for building the body around them
+var BIND=(function(){
+  var bones=makeBones(); bones[0].updateMatrixWorld(true);
+  var out={};
+  bones.forEach(function(b){ var v=new THREE.Vector3().setFromMatrixPosition(b.matrixWorld); out[b.name]=[v.x,v.y,v.z]; });
+  return out;
+})();
+
+/* ---------- the body field ----------
+   Each piece is a capsule tied to the bone that moves it. 'fat'
+   swells the belly and limbs a little so the crowd varies. */
+function bodyParts(fat){
+  var J=BIND, f=fat;
+  function mid(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+  return [
+    // bone,    a,                    b,                      r1,         r2,         zs,   k
+    ['hips',  [0,0.86,0.0],          [0,1.0,0.0],            0.125+f*0.01,0.13+f*0.02, 0.78, 0.05],
+    ['hips',  [-0.065,0.9,-0.05],    [0.065,0.9,-0.05],      0.075,      0.075,      1,    0.05],   // seat
+    ['spine', [0,1.02,0.01],         [0,1.2,0.02+f*0.02],    0.13+f*0.025,0.14+f*0.03,0.74, 0.07],  // belly
+    ['spine', [0,1.22,0.0],          [0,1.38,-0.01],         0.15,       0.15,       0.66, 0.07],   // ribcage
+    ['spine', [-0.15,1.425,-0.01],   [0.15,1.425,-0.01],     0.065,      0.065,      1,    0.06],   // shoulder line
+    ['neck',  [0,1.44,-0.01],        [0,1.62,0.01],          0.058,      0.046,      1,    0.04],
+    ['shoulderL', J.shoulderL,       mid(J.shoulderL,J.elbowL,1), 0.056+f*0.006, 0.041, 1, 0.03],
+    ['elbowL',    J.elbowL,          mid(J.elbowL,J.wristL,0.97), 0.042, 0.029,  1,    0.02],
+    ['shoulderR', J.shoulderR,       mid(J.shoulderR,J.elbowR,1), 0.056+f*0.006, 0.041, 1, 0.03],
+    ['elbowR',    J.elbowR,          mid(J.elbowR,J.wristR,0.97), 0.042, 0.029,  1,    0.02],
+    ['hipL',  mid(J.hipL,J.kneeL,-0.05), J.kneeL,            0.085+f*0.01,0.054,      1,    0.05],
+    ['kneeL', J.kneeL,               mid(J.kneeL,J.ankleL,1.04), 0.054,  0.036,      1,    0.025],
+    ['hipR',  mid(J.hipR,J.kneeR,-0.05), J.kneeR,            0.085+f*0.01,0.054,      1,    0.05],
+    ['kneeR', J.kneeR,               mid(J.kneeR,J.ankleR,1.04), 0.054,  0.036,      1,    0.025]
+  ];
+}
+function bodySDF(parts){
+  return function(x,y,z){
+    var d=1e9;
+    for(var i=0;i<parts.length;i++){
+      var P=parts[i];
+      var di=sdCap(x,y,z,P[1],P[2],P[3],P[4],P[5]);
+      d=i===0?di:smin(d,di,P[6]);
+    }
+    return d;
+  };
+}
+
+/* which bones may share a vertex: its own, its parent and its children */
+var BONE_NEIGH=BONES.map(function(b,i){
+  var n=[i]; if(b[1]>=0) n.push(b[1]);
+  BONES.forEach(function(c,j){ if(c[1]===i) n.push(j); });
+  return n;
+});
+
+// one body: geometry with skin weights, clothing groups and baked shading
+// opts: fat, sleeve (0 none, 1 short, 2 long), tear (shirt holes), shorts
+var REG_SKIN=0, REG_SHIRT=1, REG_PANTS=2;
+function buildBody(opts){
+  var parts=bodyParts(opts.fat);
+  var sdf=bodySDF(parts);
+  var M=surfaceNets(sdf, [-0.48,0.0,-0.22], [0.48,1.68,0.24], 0.019);
+  var n=M.pos.length/3;
+  var skinIdx=new Uint16Array(n*4), skinW=new Float32Array(n*4), region=new Uint8Array(n);
+  var col=new Float32Array(n*3);
+  var ao=bakeAO(sdf, M.pos, M.nor, 0.025, 0.06);
+  var seed=Math.random()*100;
+  for(var v=0;v<n;v++){
+    var x=M.pos[v*3], y=M.pos[v*3+1], z=M.pos[v*3+2];
+    // distance to each part, best per bone
+    var best=new Float32Array(BONES.length).fill(1e9), bi=-1, bd=1e9;
+    for(var p=0;p<parts.length;p++){
+      var P=parts[p], b=B_IDX[P[0]];
+      var d=sdCap(x,y,z,P[1],P[2],P[3],P[4],P[5]);
+      if(d<best[b]) best[b]=d;
+      if(d<bd){ bd=d; bi=b; }
+    }
+    // blend only across the joint the vertex sits by
+    var cand=BONE_NEIGH[bi], ws=[];
+    for(var c=0;c<cand.length;c++){
+      var bb=cand[c], dd=best[bb]-bd;
+      if(dd<0.06) ws.push([bb, Math.exp(-dd/0.018)]);
+    }
+    ws.sort(function(a,b){ return b[1]-a[1]; });
+    var tot=0; for(c=0;c<ws.length&&c<4;c++) tot+=ws[c][1];
+    for(c=0;c<4;c++){
+      if(c<ws.length){ skinIdx[v*4+c]=ws[c][0]; skinW[v*4+c]=ws[c][1]/tot; }
+    }
+    // clothing
+    var bname=BONES[bi][0], r=REG_SKIN;
+    var ragged=(fbm3(x*14+seed,y*14,z*14)-0.5)*0.06;
+    if(bname==='hips' || bname==='hipL' || bname==='hipR') r=REG_PANTS;
+    if((bname==='kneeL'||bname==='kneeR') && !opts.shorts){
+      var ank=bname==='kneeL'?BIND.ankleL:BIND.ankleR;
+      r = y>ank[1]+0.07+ragged ? REG_PANTS : REG_SKIN;
+    }
+    if(bname==='hips' && y>1.0+ragged) r=REG_SHIRT;
+    if(bname==='spine') r = y<0.99+ragged ? REG_PANTS : REG_SHIRT;
+    if(bname==='shoulderL'||bname==='shoulderR'){
+      var sh=bname==='shoulderL'?BIND.shoulderL:BIND.shoulderR;
+      var along=Math.hypot(x-sh[0],y-sh[1],z-sh[2]);
+      if(opts.sleeve===2 || along<(opts.sleeve===1?0.13:0.03)+ragged) r=REG_SHIRT;
+    }
+    if((bname==='elbowL'||bname==='elbowR') && opts.sleeve===2){
+      var el=bname==='elbowL'?BIND.elbowL:BIND.elbowR;
+      if(Math.hypot(x-el[0],y-el[1],z-el[2])<0.2+ragged) r=REG_SHIRT;
+    }
+    // tears and holes through the shirt
+    if(r===REG_SHIRT && fbm3(x*9+seed*3,y*9,z*9)>0.72-opts.tear*0.1) r=REG_SKIN;
+    if(r===REG_PANTS && fbm3(x*8+seed*5,y*8,z*8)>0.76) r=REG_SKIN;
+    region[v]=r;
+    // shading: crease darkening, grime, blood soaked in from wounds
+    var a=0.35+0.65*ao[v];
+    var dirt=0.85+0.3*fbm3(x*6+seed,y*6,z*6);
+    var blood=Math.max(0, fbm3(x*7+seed*7,y*5,z*7)-0.6)*3.2;
+    if(y>1.25 && z>0.05) blood+=Math.max(0,(1.45-y))*0.6*Math.max(0, fbm3(x*20,y*4,z*20)-0.45)*4;  // dribbled down the chest
+    blood=Math.min(1,blood);
+    col[v*3]  =a*dirt*(1-blood*0.25);
+    col[v*3+1]=a*dirt*(1-blood*0.85);
+    col[v*3+2]=a*dirt*(1-blood*0.85);
+  }
+  // triangles by clothing: a triangle wears what most of its corners wear
+  var groups=[[],[],[]];
+  for(var t=0;t<M.idx.length;t+=3){
+    var A=region[M.idx[t]], Bq=region[M.idx[t+1]], Cq=region[M.idx[t+2]];
+    var rr = (A===Bq||A===Cq) ? A : (Bq===Cq ? Bq : A);
+    groups[rr].push(M.idx[t],M.idx[t+1],M.idx[t+2]);
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(M.pos,3));
+  g.setAttribute('normal', new THREE.BufferAttribute(M.nor,3));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n*2),2));
+  g.setAttribute('color', new THREE.BufferAttribute(col,3));
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIdx,4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinW,4));
+  var all=groups[0].concat(groups[1],groups[2]);
+  g.setIndex(all);
+  g.addGroup(0, groups[0].length, 0);
+  g.addGroup(groups[0].length, groups[1].length, 1);
+  g.addGroup(groups[0].length+groups[1].length, groups[2].length, 2);
+  g.computeBoundingSphere();
+  return g;
+}
+
+/* ---------- the head ----------
+   Origin is the top of the neck. A cranium and a face block melted
+   together, a heavy brow, cheekbones, a nose, deep sockets, ears and
+   a jaw that has dropped open. */
+function headSDF(v){
+  return function(x,y,z){
+    var d=sdEll(x,y,z,[0,0.126,-0.008],[0.073,0.088,0.086]);                      // cranium
+    d=smin(d, sdEll(x,y,z,[0,0.098,0.036],[0.063,0.07,0.06]), 0.03);               // face
+    d=smin(d, sdCap(x,y,z,[-0.042,0.137,0.08],[0.042,0.137,0.08],0.013,0.013,1), 0.018);   // brow
+    d=smin(d, sdEll(x,y,z,[-0.047,0.104,0.066],[0.02,0.014,0.02]), 0.012);         // cheekbones
+    d=smin(d, sdEll(x,y,z,[0.047,0.104,0.066],[0.02,0.014,0.02]), 0.012);
+    if(v.rotNose){
+      d=smax(d, -sdEll(x,y,z,[0,0.104,0.1],[0.012,0.016,0.02]), 0.006);
+    } else {
+      d=smin(d, sdCap(x,y,z,[0,0.13,0.094],[0,0.101,0.113+v.nose],0.007,0.0115,1), 0.008);   // nose bridge to tip
+      d=smin(d, sdEll(x,y,z,[0,0.097,0.106+v.nose*0.6],[0.017,0.009,0.011]), 0.006);         // nostrils
+    }
+    // jaw, dropped open; chin sits low and forward
+    d=smin(d, sdCap(x,y,z,[-0.052,0.085,0.0],[-0.03,0.04-v.gape,0.065],0.017,0.016,1), 0.02);
+    d=smin(d, sdCap(x,y,z,[0.052,0.085,0.0],[0.03,0.04-v.gape,0.065],0.017,0.016,1), 0.02);
+    d=smin(d, sdEll(x,y,z,[0,0.036-v.gape,0.073],[0.032,0.019,0.02]), 0.02);
+    // the mouth: a dark gap between lip and jaw
+    d=smax(d, -sdEll(x,y,z,[0,0.067-v.gape*0.5,0.088],[0.03,0.012+v.gape*0.45,0.035]), 0.006);
+    // sockets and hollow cheeks
+    d=smax(d, -sdEll(x,y,z,[-0.029,0.121,0.083],[0.017,0.013,0.014]), 0.008);
+    d=smax(d, -sdEll(x,y,z,[0.029,0.121,0.083],[0.017,0.013,0.014]), 0.008);
+    d=smax(d, -sdEll(x,y,z,[-0.056,0.075,0.055],[0.014,0.02,0.02]), 0.012);
+    d=smax(d, -sdEll(x,y,z,[0.056,0.075,0.055],[0.014,0.02,0.02]), 0.012);
+    // ears
+    if(v.earL) d=smin(d, sdEll(x,y,z,[-0.076,0.115,0.0],[0.011,0.027,0.018]), 0.006);
+    if(v.earR) d=smin(d, sdEll(x,y,z,[0.076,0.115,0.0],[0.011,0.027,0.018]), 0.006);
+    // neck stump, hidden inside the body's neck
+    d=smin(d, sdCap(x,y,z,[0,-0.03,-0.005],[0,0.06,0.0],0.044,0.045,1), 0.02);
+    return d;
+  };
+}
+function buildHead(v, cell){
+  var sdf=headSDF(v);
+  var M=surfaceNets(sdf, [-0.1,-0.04,-0.11], [0.1,0.24,0.14], cell);
+  var n=M.pos.length/3, col=new Float32Array(n*3);
+  var ao=bakeAO(sdf, M.pos, M.nor, 0.008, 0.02);
+  for(var i=0;i<n;i++){
+    var x=M.pos[i*3], y=M.pos[i*3+1], z=M.pos[i*3+2];
+    var a=0.25+0.75*ao[i];
+    // sockets bruised dark
+    var so=Math.min(Math.hypot(x+0.029,y-0.121,(z-0.083)*0.8), Math.hypot(x-0.029,y-0.121,(z-0.083)*0.8));
+    a*=0.45+0.55*Math.min(1,Math.max(0,(so-0.012)/0.02));
+    // inside the mouth is black-red; blood runs down the chin
+    var mo=Math.hypot(x/1.6,(y-(0.067-v.gape*0.5))/1.3,(z-0.09)/2);
+    var inMouth=Math.max(0,1-mo/0.016);
+    var blood=0;
+    if(z>0.04 && y<0.07 && y>-0.0) blood=Math.max(0, fbm3(x*60,y*12,z*60)-0.42)*2.2*(1-Math.abs(x)/0.05);
+    blood=Math.min(1,Math.max(blood, inMouth));
+    var dirt=0.85+0.3*fbm3(x*25+v.seed,y*25,z*25);
+    col[i*3]  =a*dirt*(1-inMouth*0.7)*(1-blood*0.2);
+    col[i*3+1]=a*dirt*(1-inMouth*0.85)*(1-blood*0.85);
+    col[i*3+2]=a*dirt*(1-inMouth*0.85)*(1-blood*0.85);
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(M.pos,3));
+  g.setAttribute('normal', new THREE.BufferAttribute(M.nor,3));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n*2),2));
+  g.setAttribute('color', new THREE.BufferAttribute(col,3));
+  g.setIndex(M.idx);
+  g.computeBoundingSphere();
+  return g;
+}
+function teethRow(n, w, depth){
+  var parts=[];
+  for(var i=0;i<n;i++){
+    var t=i/(n-1)-0.5;
+    var b=new THREE.BoxGeometry(0.0072,rand(0.008,0.013),0.005);
+    b.rotateY(-t*2.2);
+    b.translate(t*w, rand(-0.0015,0.0015), -t*t*depth);
+    parts.push(b);
+  }
+  return mergeGeos(parts);
+}
+
+/* Body and head shapes are built once, in a handful of variants. */
+var BODY_VARIANTS=null, HEAD_VARIANTS=null;
+function zombieShapes(){
+  if(BODY_VARIANTS) return;
+  BODY_VARIANTS=[
+    buildBody({fat:0,   sleeve:1, tear:1, shorts:false}),
+    buildBody({fat:0.6, sleeve:0, tear:2, shorts:false}),
+    buildBody({fat:0.2, sleeve:2, tear:0, shorts:false}),
+    buildBody({fat:0.9, sleeve:1, tear:3, shorts:true})
+  ];
+  HEAD_VARIANTS=[
+    {rotNose:false, nose:0.004, gape:0.012, earL:true, earR:true, seed:1},
+    {rotNose:true,  nose:0,     gape:0.02,  earL:true, earR:false, seed:2},
+    {rotNose:false, nose:0.0,   gape:0.006, earL:false,earR:true, seed:3}
+  ].map(function(v){ return {v:v, geo:buildHead(v,0.0056), far:buildHead(v,0.011)}; });
+}
+
+/* ---------- materials: textures projected from three sides ----------
+   The sculpted meshes have no UVs, so colour comes in along x, y and z
+   and blends by the normal. The position used is the bind pose, so
+   the texture rides along with the skin as it bends. */
+var RIM_COLOR=new THREE.Color(0.05,0.07,0.1);
+function zombieMat(params, opts){
+  var m=new THREE.MeshStandardMaterial(params);
+  m.vertexColors=true;
+  if(opts.skinned) m.skinning=true;
+  var triS=opts.scale||4, rim=!!opts.rim;
+  m.onBeforeCompile=function(sh){
+    sh.uniforms.rimColor={value:RIM_COLOR};
+    sh.vertexShader='varying vec3 vBP;\nvarying vec3 vBN;\n'+sh.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\n  vBP=position; vBN=normal;');
+    sh.fragmentShader='uniform vec3 rimColor;\nvarying vec3 vBP;\nvarying vec3 vBN;\n'+sh.fragmentShader
+      .replace('#include <map_fragment>',[
+        '#ifdef USE_MAP',
+        '  vec3 tw=pow(abs(normalize(vBN)),vec3(4.0)); tw/=(tw.x+tw.y+tw.z);',
+        '  vec4 tx=texture2D(map,vBP.zy*'+triS.toFixed(2)+')*tw.x+texture2D(map,vBP.xz*'+triS.toFixed(2)+')*tw.y+texture2D(map,vBP.xy*'+triS.toFixed(2)+')*tw.z;',
+        '  diffuseColor*=mapTexelToLinear(tx);',
+        '#endif'].join('\n'))
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n'+
+        (rim?'  totalEmissiveRadiance += rimColor * pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.5);':''));
+  };
+  m.customProgramCacheKey=function(){ return 'zombie'+triS+(rim?'r':'')+(opts.skinned?'s':'')+(m.vertexColors?'v':''); };
+  return m;
+}
 
 /* ============================================================
    SILLY HEADS
@@ -2749,53 +3167,50 @@ function bossesForWave(n){
   return list;
 }
 
-function limbPivot(geo, mat, length, sx, sz){
-  // group whose origin is the joint; mesh hangs below it
-  var g=new THREE.Group();
+function zmesh(parent, geo, mat, x,y,z, shadow){
   var m=new THREE.Mesh(geo, mat);
-  m.position.y=-length/2;
-  if(sx) m.scale.set(sx,1,sz||sx);
-  m.castShadow=true;
-  g.add(m);
-  return g;
+  m.position.set(x||0,y||0,z||0);
+  m.castShadow=shadow!==false;
+  parent.add(m); return m;
+}
+var ZPARTS=null;
+function zparts(){
+  if(ZPARTS) return ZPARTS;
+  ZPARTS={
+    handL:clawHand(1), handR:clawHand(-1), shoe:shoeGeo(),
+    eye:new THREE.SphereGeometry(0.0095,12,9), iris:new THREE.SphereGeometry(0.0045,8,6),
+    teethU:teethRow(8,0.04,0.035), teethL:teethRow(7,0.036,0.035)
+  };
+  return ZPARTS;
 }
 
-// The stock head, rebuilt as a group so it can be swapped out wholesale.
-// Origin is the top of the neck; the skull sits 0.13 above it.
+// The stock head. Origin is the top of the neck.
 function buildNormalHead(bm){
-  var g=new THREE.Group();
-  var head=new THREE.Mesh(GEO.head, bm.faceMat);
-  head.position.set(0,0.13,0.02); head.scale.set(1,1.16,1.06);
-  head.castShadow=true; head.userData.part='head'; g.add(head);
-
-  if(Math.random()<0.65){
-    var hair=new THREE.Mesh(GEO.hair, bm.hairMat);
-    hair.position.set(0,0.142,0.008); hair.scale.set(1.02,1.16,1.06); hair.rotation.x=-0.12;
-    hair.userData.part='head'; g.add(hair);
-  }
-
-  var jaw=new THREE.Group(); jaw.position.set(0,0.08,0.02);
-  var jawMesh=new THREE.Mesh(GEO.jaw, bm.skinMat);
-  jawMesh.position.set(0,-0.04,0.05); jawMesh.scale.set(1,0.55,0.95); jawMesh.userData.part='head';
-  jaw.add(jawMesh); g.add(jaw);
-
-  [-0.048,0.048].forEach(function(ex){
-    var so=new THREE.Mesh(GEO.socket, bm.socketMat); so.position.set(ex,0.155,0.128); so.userData.part='head'; g.add(so);
-    var ey=new THREE.Mesh(GEO.eye, bm.eyeMat);       ey.position.set(ex,0.155,0.141); ey.userData.part='head'; g.add(ey);
-    var pu=new THREE.Mesh(GEO.pupil, bm.pupilMat);   pu.position.set(ex*1.04,0.154,0.155); pu.userData.part='head'; g.add(pu);
+  zombieShapes();
+  var P=zparts(), H=bm.headShape, v=H.v, g=new THREE.Group();
+  // full detail up close, a quarter of the triangles past six metres
+  var lod=new THREE.LOD();
+  var near=new THREE.Mesh(H.geo, bm.headMat), far=new THREE.Mesh(H.far, bm.headMat);
+  near.castShadow=far.castShadow=true;
+  lod.addLevel(near,0); lod.addLevel(far,6);
+  g.add(lod);
+  [-1,1].forEach(function(s){
+    zmesh(g, P.eye, bm.eyeMat, s*0.029,0.119,0.076, false);
+    zmesh(g, P.iris, bm.pupilMat, s*0.029+rand(-0.002,0.002),0.118,0.0835, false);
   });
-
-  // the stock head reuses the zombie's own materials, so it owns none of its own
-  return {group:g, jaw:jaw, mats:[]};
+  var mouthY=0.067-v.gape*0.5, open=0.012+v.gape*0.45;
+  zmesh(g, P.teethU, bm.teethMat, 0, mouthY+open-0.004, 0.096, false);
+  zmesh(g, P.teethL, bm.teethMat, 0, mouthY-open+0.004, 0.09, false);
+  g.traverse(function(o){ if(o.isMesh) o.userData.part='head'; });
+  return {group:g, jaw:new THREE.Group(), mats:[]};
 }
 
 function attachHead(z, kind){
   var built = kind==='normal' ? buildNormalHead(z.baseMats) : buildFunnyHead(kind);
   if(!built) built = buildNormalHead(z.baseMats);
-  built.group.position.set(0,1.63,0);
   built.group.scale.setScalar(cheats.bigHead?2.5:1);
   built.group.traverse(function(o){ if(o.isMesh) o.userData.zombie=true; });
-  z.group.add(built.group);
+  z.parts.headAnchor.add(built.group);
   z.parts.head=built.group;
   z.parts.jaw=built.jaw;
   z.headMats=built.mats;
@@ -2806,7 +3221,7 @@ function attachHead(z, kind){
 
 function reheadZombie(z){
   if(z.headKind==='tv') tvHeadCount=Math.max(0, tvHeadCount-1);
-  z.group.remove(z.parts.head);
+  z.parts.headAnchor.remove(z.parts.head);
   var owned=z.headMats||[];
   owned.forEach(function(m){ m.dispose(); });
   z.mats=z.mats.filter(function(m){ return owned.indexOf(m)<0; });
@@ -2817,73 +3232,60 @@ function reheadAll(){
   for(var i=0;i<zombies.length;i++) if(!zombies[i].dead) reheadZombie(zombies[i]);
 }
 
+var SHIRT_COLS=[[0.6,0.08,0.55],[0.0,0.0,0.72],[0.6,0.4,0.42],[0.02,0.5,0.38],[0.55,0.25,0.38],[0.08,0.15,0.5],[0.95,0.3,0.35],[0.3,0.12,0.35]];
 function makeZombie(opts){
   opts=opts||{};
+  zombieShapes();
   var B = opts.boss ? BOSSES[opts.boss] : null;
   var runner = B ? B.runner : !!opts.runner;
+  var P=zparts();
   var g=new THREE.Group();
   var tone=Math.floor(Math.random()*SKIN_TONES);
-  var skinCol=new THREE.Color().setHSL(rand(0.16,0.26), rand(0.04,0.14), rand(0.44,0.62));
+  var skinCol=new THREE.Color().setHSL(rand(0.16,0.26), rand(0.06,0.18), rand(0.4,0.58));
   if(B) skinCol.setHSL(B.tint[0], B.tint[1], B.tint[2]);
-  var skinMat=new THREE.MeshStandardMaterial({ map:skinTex[tone], normalMap:skinNorm[tone], roughness:0.78, metalness:0 });
-  var faceMat=new THREE.MeshStandardMaterial({ map:faceTex[tone], normalMap:skinNorm[tone], roughness:0.74, metalness:0 });
-  skinMat.color=skinCol; faceMat.color=skinCol.clone();
-  var shirtMat=new THREE.MeshStandardMaterial({ map:shirtTex[Math.floor(Math.random()*shirtTex.length)], roughness:0.96, metalness:0 });
-  shirtMat.color=new THREE.Color().setHSL(Math.random(), rand(0.03,0.16), rand(0.32,0.6));
-  var pantsMat=new THREE.MeshStandardMaterial({ map:pantsTex[Math.floor(Math.random()*pantsTex.length)], roughness:0.97, metalness:0 });
-  pantsMat.color=new THREE.Color().setHSL(rand(0.55,0.68), rand(0.02,0.12), rand(0.35,0.55));
+  var skinMat=zombieMat({ map:skinTex[tone], roughness:0.58, metalness:0 }, {skinned:true, rim:true, scale:5});
+  var headMat=zombieMat({ map:skinTex[tone], roughness:0.55, metalness:0 }, {rim:true, scale:9});
+  skinMat.color=skinCol; headMat.color=skinCol.clone();
+  var sc=SHIRT_COLS[Math.floor(Math.random()*SHIRT_COLS.length)];
+  var shirtMat=zombieMat({ map:shirtTex[Math.floor(Math.random()*shirtTex.length)], roughness:0.95, metalness:0 }, {skinned:true, scale:3});
+  shirtMat.color=new THREE.Color().setHSL(sc[0], sc[1], sc[2]*rand(0.85,1.1));
+  var pantsMat=zombieMat({ map:pantsTex[Math.floor(Math.random()*pantsTex.length)], roughness:0.97, metalness:0 }, {skinned:true, scale:3});
+  pantsMat.color=new THREE.Color().setHSL(rand(0.55,0.68), rand(0.05,0.2), rand(0.32,0.5));
   // Untextured materials: this three.js build treats hex colours as linear, so
   // convert from sRGB or dark browns and blacks come out as pale greys.
-  var shoeMat=new THREE.MeshStandardMaterial({ color:0x17141a, roughness:0.9, metalness:0.05 });
-  var hairMat=new THREE.MeshStandardMaterial({ color:new THREE.Color().setHSL(rand(0.05,0.1), rand(0.1,0.35), rand(0.05,0.18)), roughness:0.95 });
-  var socketMat=new THREE.MeshStandardMaterial({ color:0x120c0e, roughness:1 });
+  var shoeMat=new THREE.MeshStandardMaterial({ color:0x17141a, roughness:0.75, metalness:0.05 });
+  var clawMat=zombieMat({ map:skinTex[tone], roughness:0.6, metalness:0 }, {rim:true, scale:9});
+  clawMat.vertexColors=false;                // the hands are plain meshes with no baked shading
+  clawMat.color=skinCol.clone().multiplyScalar(0.55);
   var eyeMat=new THREE.MeshStandardMaterial({
-    color: runner?0xa08a74:0x958d78, roughness:0.55, metalness:0,
-    emissive: B?0xff2a10 : (runner?0x3a0c06:0x0f0d0a), emissiveIntensity: B?2.2:0.6
+    color: runner?0x4a3430:0x4a4840, roughness:0.12, metalness:0,
+    emissive: B?0xff2a10 : (runner?0x2a0804:0x101210), emissiveIntensity: B?2.2:0.6
   });
-  var pupilMat=new THREE.MeshStandardMaterial({ color:0x1a1412, roughness:0.4 });
-  [shoeMat,hairMat,socketMat,eyeMat,pupilMat].forEach(function(m){ m.color.convertSRGBToLinear(); });
+  // milky, cataract eyes with a faint glow; red pinpricks for runners and bosses
+  var pupilMat=new THREE.MeshStandardMaterial({ color: B?0xff3a10:(runner?0x8a1a0a:0x9a9e94), roughness:0.1,
+    emissive: B?0xff2a10:(runner?0xb01808:0x1e2622), emissiveIntensity: B?2.5:1 });
+  var teethMat=new THREE.MeshStandardMaterial({ color:0x6a5c44, roughness:0.45 });
+  [shoeMat,eyeMat,pupilMat,teethMat].forEach(function(m){ m.color.convertSRGBToLinear(); });
 
-  var belly=rand(0.7,0.95);
+  /* ---- skeleton and skinned body ---- */
+  var bones=makeBones();
+  var body=new THREE.SkinnedMesh(BODY_VARIANTS[Math.floor(Math.random()*BODY_VARIANTS.length)], [skinMat, shirtMat, pantsMat]);
+  body.add(bones[0]);
+  g.add(body);
+  g.updateMatrixWorld(true);
+  body.bind(new THREE.Skeleton(bones));
+  body.castShadow=true;
+  body.frustumCulled=false;
+  body.raycast=function(){};                 // the hitbox below takes the shots
+  var b=function(n){ return bones[B_IDX[n]]; };
+  [['wristL',P.handL],['wristR',P.handR]].forEach(function(h){ zmesh(b(h[0]), h[1], clawMat, 0,0.01,0); });
+  ['ankleL','ankleR'].forEach(function(n){ zmesh(b(n), P.shoe, shoeMat, 0,0.02,0); });
 
-  // torso and hips: flattened cylinders read as a chest rather than a crate
-  var torso=new THREE.Mesh(GEO.torso, shirtMat);
-  torso.position.y=1.30; torso.scale.set(1.15,1,belly); torso.castShadow=true; g.add(torso);
-  var hip=new THREE.Mesh(GEO.hip, pantsMat);
-  hip.position.y=0.90; hip.scale.set(1.12,1,belly+0.05); hip.castShadow=true; g.add(hip);
-  [-0.27,0.27].forEach(function(sx){
-    var sh=new THREE.Mesh(GEO.shoulder, shirtMat); sh.position.set(sx,1.585,0); sh.castShadow=true; g.add(sh);
-  });
+  var lostArm = Math.random()<0.08 ? (Math.random()<0.5?'L':'R') : null;
+  if(lostArm) b('wrist'+lostArm).scale.setScalar(0.001);   // hand gone
 
-  // neck. The head itself is a separate group bolted on below, so it can be
-  // swapped for a banana, a burger or a television without rebuilding the body.
-  var neck=new THREE.Mesh(GEO.neck, skinMat); neck.position.set(0,1.645,0.01); neck.castShadow=true; neck.userData.part='head'; g.add(neck);
-
-  // arms: tapered upper arm, forearm, hand
-  var armL=limbPivot(GEO.upperArm, skinMat, 0.50); armL.position.set(-0.29,1.575,0);
-  var armR=limbPivot(GEO.upperArm, skinMat, 0.50); armR.position.set( 0.29,1.575,0);
-  var foreL=limbPivot(GEO.foreArm, skinMat, 0.44); foreL.position.y=-0.50; armL.add(foreL);
-  var foreR=limbPivot(GEO.foreArm, skinMat, 0.44); foreR.position.y=-0.50; armR.add(foreR);
-  var lostArm = Math.random()<0.12 ? (Math.random()<0.5?foreL:foreR) : null;
-  [foreL,foreR].forEach(function(f){
-    if(f===lostArm){ f.children[0].scale.set(1,0.35,1); f.children[0].position.y=-0.08; return; }
-    var h=new THREE.Mesh(GEO.hand, skinMat); h.position.set(0,-0.46,0.01); h.scale.set(0.8,1.25,0.55); h.castShadow=true; f.add(h);
-  });
-  g.add(armL); g.add(armR);
-
-  // legs: thigh and shin in trousers, shoe
-  var legL=limbPivot(GEO.thigh, pantsMat, 0.50); legL.position.set(-0.13,0.82,0);
-  var legR=limbPivot(GEO.thigh, pantsMat, 0.50); legR.position.set( 0.13,0.82,0);
-  var calfL=limbPivot(GEO.shin, pantsMat, 0.48); calfL.position.y=-0.50; legL.add(calfL);
-  var calfR=limbPivot(GEO.shin, pantsMat, 0.48); calfR.position.y=-0.50; legR.add(calfR);
-  [calfL,calfR].forEach(function(c){
-    var shoe=new THREE.Mesh(GEO.shoe, shoeMat); shoe.position.set(0,-0.50,0.05); shoe.castShadow=true; c.add(shoe);
-  });
-  g.add(legL); g.add(legR);
-
-  // a broad invisible capsule-ish hitbox so shots register reliably
-  var hb=new THREE.Mesh(new THREE.BoxGeometry(0.72,1.5,0.55),
-        new THREE.MeshBasicMaterial({visible:false}));
+  // a broad invisible box so shots register reliably
+  var hb=new THREE.Mesh(new THREE.BoxGeometry(0.72,1.5,0.55), new THREE.MeshBasicMaterial({visible:false}));
   hb.position.y=1.15; g.add(hb);
 
   g.traverse(function(o){ if(o.isMesh) o.userData.zombie=true; });
@@ -2892,11 +3294,16 @@ function makeZombie(opts){
   g.scale.setScalar(scale);
 
   var z={
-    group:g, parts:{armL:armL,armR:armR,foreL:foreL,foreR:foreR,legL:legL,legR:legR,torso:torso,head:null,jaw:null},
-    baseMats:{skinMat:skinMat, faceMat:faceMat, hairMat:hairMat, socketMat:socketMat, eyeMat:eyeMat, pupilMat:pupilMat},
+    group:g, body:body,
+    parts:{hips:b('hips'), spine:b('spine'), neck:b('neck'), headAnchor:b('head'),
+           armL:b('shoulderL'), armR:b('shoulderR'), foreL:b('elbowL'), foreR:b('elbowR'), handL:b('wristL'), handR:b('wristR'),
+           legL:b('hipL'), legR:b('hipR'), calfL:b('kneeL'), calfR:b('kneeR'), footL:b('ankleL'), footR:b('ankleR'),
+           torso:b('spine'), head:null, jaw:null},
+    baseMats:{skinMat:skinMat, faceMat:headMat, headMat:headMat, eyeMat:eyeMat, pupilMat:pupilMat, teethMat:teethMat,
+              headShape:HEAD_VARIANTS[Math.floor(Math.random()*HEAD_VARIANTS.length)]},
     headMats:[], headKind:'normal',
-    mats:[skinMat,faceMat,shirtMat,pantsMat,shoeMat,hairMat,socketMat,eyeMat,pupilMat],
-    fleshMats:[skinMat,faceMat],
+    mats:[skinMat,headMat,shirtMat,pantsMat,shoeMat,clawMat,eyeMat,pupilMat,teethMat],
+    fleshMats:[skinMat,headMat,clawMat],
     hp: B ? B.hp + B.hpPerWave*state.wave : state.zHP,
     maxHp: B ? B.hp + B.hpPerWave*state.wave : state.zHP,
     speed: B ? B.speed : (runner? rand(3.4,4.1) : rand(1.05,1.75)) + state.wave*0.045,
@@ -2904,19 +3311,92 @@ function makeZombie(opts){
     boss: B, bossKey: opts.boss||null, scale: scale,
     stepIdx: 0, special: 0, lungeT: 0, slamT: 0, fly: null,
     phase: Math.random()*6.28,
-    lean: rand(0.1,0.28),
+    lean: rand(0.12,0.32),
+    limp: Math.random()<0.3 ? (Math.random()<0.5?1:2) : 0,
+    armDown: lostArm ? (lostArm==='L'?1:2) : (Math.random()<0.25 ? (Math.random()<0.5?1:2) : 0),
+    headTilt: rand(-0.3,0.3), seed: Math.random()*10,
+    flinch: 0, fallDir: 1,
     attackCd: 0,
     dead:false, deadT:0, hitFlash:0,
     growlCd: rand(1,6)
   };
   attachHead(z, pickHeadKind());
+  poseZombie(z, 0);
   zombies.push(z);
   scene.add(g);
   return z;
 }
 
+/* ---------- animation ----------
+   A shamble: the thigh swings and the knee folds as the leg comes
+   through, the hips bob and roll, the spine counter-twists, arms
+   reach and sway, the head lolls. Limps, a dead arm and the lean
+   differ per zombie so a crowd never marches in step. */
+function poseZombie(z, wdt){
+  var P=z.parts, ph=z.phase, s=Math.sin(ph), c=Math.cos(ph), run=z.runner;
+  var amp = run ? 0.85 : 0.42;
+  var kL = z.limp===1 ? 0.35 : 1, kR = z.limp===2 ? 0.35 : 1;
+  z.flinch = Math.max(0, (z.flinch||0) - wdt*2.2);
+  var fl = z.flinch;
+
+  P.legL.rotation.x = -s*amp*kL - (run?0.25:0.06);
+  P.legR.rotation.x =  s*amp*kR - (run?0.25:0.06);
+  P.legL.rotation.z = -0.03; P.legR.rotation.z = 0.03;
+  P.calfL.rotation.x = (0.1 + Math.max(0, c)*(run?1.6:0.75))*kL + (z.limp===1?0.25:0);
+  P.calfR.rotation.x = (0.1 + Math.max(0,-c)*(run?1.6:0.75))*kR + (z.limp===2?0.25:0);
+  P.footL.rotation.x = -(P.legL.rotation.x + P.calfL.rotation.x)*0.8;
+  P.footR.rotation.x = -(P.legR.rotation.x + P.calfR.rotation.x)*0.8;
+
+  P.hips.position.y = 0.96 - Math.abs(s)*(run?0.06:0.035) - (z.limp ? Math.max(0, z.limp===1?s:-s)*0.04 : 0);
+  P.hips.rotation.y = s*(run?0.16:0.1);
+  P.hips.rotation.z = s*0.05 + (z.limp===1?0.06:z.limp===2?-0.06:0);
+
+  P.spine.rotation.x = z.lean + (run?0.32:0) + Math.sin(ph*2)*0.035 - fl*0.9;
+  P.spine.rotation.y = -s*(run?0.3:0.14);
+  P.spine.rotation.z = -s*0.06 - P.hips.rotation.z*0.6;
+  P.neck.rotation.x  = 0.3 - z.lean*0.6 - (run?0.15:0) + Math.sin(ph*0.5)*0.05 - fl*0.8;
+  P.neck.rotation.z  = Math.sin(ph*0.37+z.seed)*0.12 + z.headTilt*0.5;
+  P.head.rotation.x  = -0.2 + fl*0.4;
+  P.head.rotation.z  = Math.sin(ph*0.33+z.seed)*0.15 + z.headTilt*0.5;
+  if(P.jaw) P.jaw.rotation.x = 0.12 + Math.max(0, Math.sin(ph*0.8+z.seed))*0.38;
+
+  function reach(sh, el, wr, sign, down){
+    if(run){
+      sh.rotation.x = -0.35 + sign*s*1.1; sh.rotation.z = -sign*0.12*(sh===P.armL?1:-1);
+      el.rotation.x = -1.3; wr.rotation.x = 0.2;
+    } else if(down){
+      sh.rotation.x = 0.08 + sign*s*0.3; sh.rotation.z = sh===P.armL ? -0.08 : 0.08;
+      el.rotation.x = -0.15; wr.rotation.x = 0.1;
+    } else {
+      sh.rotation.x = -1.25 + sign*c*0.13 + fl*0.6;
+      sh.rotation.z = (sh===P.armL ? 0.2 : -0.2) + sign*s*0.06;
+      el.rotation.x = -0.35 + sign*s*0.14;
+      wr.rotation.x = 0.35 + Math.sin(ph*1.3+z.seed)*0.15;
+    }
+  }
+  reach(P.armL, P.foreL, P.handL,  1, z.armDown===1);
+  reach(P.armR, P.foreR, P.handR, -1, z.armDown===2);
+}
+// legs fold, spine slumps, arms go slack
+function crumpleZombie(z, b){
+  var P=z.parts, e=1-(1-b)*(1-b);
+  P.legL.rotation.x += (-0.9 - P.legL.rotation.x)*e;
+  P.legR.rotation.x += (-0.6 - P.legR.rotation.x)*e;
+  P.calfL.rotation.x += (1.5 - P.calfL.rotation.x)*e;
+  P.calfR.rotation.x += (1.1 - P.calfR.rotation.x)*e;
+  P.hips.position.y += (0.62 - P.hips.position.y)*e;
+  P.spine.rotation.x += (0.55*z.fallDir - P.spine.rotation.x)*e;
+  P.neck.rotation.x += (0.6 - P.neck.rotation.x)*e;
+  P.armL.rotation.x += (-0.4 - P.armL.rotation.x)*e;
+  P.armR.rotation.x += (-0.2 - P.armR.rotation.x)*e;
+  P.foreL.rotation.x += (-0.3 - P.foreL.rotation.x)*e;
+  P.foreR.rotation.x += (-0.6 - P.foreR.rotation.x)*e;
+  if(P.jaw) P.jaw.rotation.x += (0.5 - P.jaw.rotation.x)*e;
+}
+
 function killZombie(z){
   z.dead=true; z.deadT=0;
+  z.fallDir = Math.random()<0.7 ? 1 : -1;     // usually knocked back, sometimes pitches forward
   state.kills++;
   ui.kills.textContent='KILLS '+state.kills;
   bloodPool(z.group.position.x, z.group.position.z);
@@ -3531,6 +4011,7 @@ function damageZombie(z, dmg, head, point, normal){
   if(!z || z.dead) return;
   if(cheats.oneShot) dmg=1e9;
   z.hp-=dmg; z.hitFlash=0.09;
+  z.flinch=Math.min(0.6, (z.flinch||0) + (z.boss ? 0.08 : head ? 0.45 : 0.28));
   burst(point, normal, head?9:5, 'blood');
   hitMark(head);
   sfx.hit(head);
@@ -4075,9 +4556,11 @@ function update(dt){
 
       var fallDur = z.boss ? z.boss.fall : 0.7;
       var fadeAt  = 3.4 + (z.boss ? z.boss.fall : 0);
-      var fall=Math.min(1, z.deadT/fallDur);
-      g.rotation.x = -Math.PI/2 * (1-Math.pow(1-fall,3));
-      g.position.y = -0.15*fall;
+      // knees go first, then the body topples
+      crumpleZombie(z, Math.min(1, z.deadT/0.3));
+      var fall=Math.min(1, Math.max(0, z.deadT-0.18)/fallDur);
+      g.rotation.x = -z.fallDir*Math.PI/2 * (1-Math.pow(1-fall,3));
+      g.position.y = -0.12*fall;
       if(z.deadT>fadeAt){
         var fade=Math.max(0, 1-(z.deadT-fadeAt)/1.4);
         for(var mi=0;mi<z.mats.length;mi++){
@@ -4143,20 +4626,7 @@ function update(dt){
     var rate = z.runner? 11 : 5.2;
     if(z.boss) rate /= Math.sqrt(z.scale);       // big legs swing slower
     z.phase += wdt*rate;
-    var sPh=Math.sin(z.phase), cPh=Math.cos(z.phase);
-    var amp = z.runner? 0.95 : 0.55;
-    z.parts.legL.rotation.x =  sPh*amp;
-    z.parts.legR.rotation.x = -sPh*amp;
-    z.parts.armL.rotation.x = -1.25 + cPh*(z.runner?0.5:0.14);
-    z.parts.armR.rotation.x = -1.25 - cPh*(z.runner?0.5:0.14);
-    z.parts.armL.rotation.z =  0.22 + sPh*0.08;
-    z.parts.armR.rotation.z = -0.22 - sPh*0.08;
-    z.parts.foreL.rotation.x = -0.55 + sPh*0.16;
-    z.parts.foreR.rotation.x = -0.55 - sPh*0.16;
-    g.rotation.z = Math.sin(z.phase*0.5)*(z.runner?0.05:0.11);
-    z.parts.torso.rotation.x = z.lean + Math.sin(z.phase*0.5)*0.04;
-    z.parts.head.rotation.z  = Math.sin(z.phase*0.33)*0.18;
-    z.parts.jaw.rotation.x   = 0.12 + Math.max(0, Math.sin(z.phase*0.8))*0.3;
+    poseZombie(z, wdt);
 
     // PARTY MODE: the rank and file stop shambling and start dancing
     if(cheats.party && !z.boss){
@@ -4486,6 +4956,7 @@ document.getElementById('againBtn').addEventListener('click', beginPlay);
 document.getElementById('startBtn').addEventListener('touchend', function(e){ e.preventDefault(); beginPlay(); });
 document.getElementById('againBtn').addEventListener('touchend', function(e){ e.preventDefault(); beginPlay(); });
 
+zombieShapes();          // sculpt the zombies while the loading screen is up
 initWeapons();
 buildMenu();
 setParty(cheats.party);
