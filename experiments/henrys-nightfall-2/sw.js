@@ -3,7 +3,7 @@
    has been opened once. Cached files are served immediately and refreshed in
    the background, so an update shows up the next time the game is opened. */
 // Not prefixed 'henrys-nightfall-': the first game's worker clears caches with that prefix.
-var CACHE = 'nightfall-two-v1';
+var CACHE = 'nightfall-two-v2';
 var BASE = '/experiments/henrys-nightfall-2/';
 var ASSETS = [
   BASE,
