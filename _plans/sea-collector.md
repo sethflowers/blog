@@ -1,0 +1,42 @@
+# Sea Collector
+
+A third-person scuba game for `_experiments/`. You are a diver with a little bubble house on the
+seabed. Swim out, collect shells, avoid sharks and other sea creatures, and get home before your
+air runs out. Shells buy clothes and better scuba gear.
+
+Same shape as the other experiments: one self-contained HTML file, Three.js r128 served from
+`experiments/sea-collector/`, a manifest, a service worker and icons so it installs and runs offline.
+
+## The loop
+
+- **Air** drains every second (faster when boosting with the scooter or deep in the trench). At
+  zero you lose a heart every two seconds. Air refills at home, and giant clams give 30 seconds.
+- **Shells** go in your bag. They only count once you swim back through your front door, which
+  banks them. Bag size is limited until you buy bigger bags.
+- **Blacking out** (no hearts left) sends you home with a friendly sea turtle, but the bag spills
+  and the shells you were carrying are lost. Banked shells are never lost.
+
+## The sea
+
+| Zone | Where | Shells | Dangers |
+| --- | --- | --- | --- |
+| Home Reef | around the house | sand dollars, scallops | a few jellyfish; sharks won't come near the house |
+| Sandy Flats | the middle | scallops, spirals | jellyfish, urchins, a roaming shark |
+| Kelp Forest | west | spirals, conches | eels in rocks, urchins |
+| Shark Shoals | east | conches | three sharks |
+| Shipwreck Bay | north | pearls, conches | a shark, eels, jellyfish |
+| The Deep Trench | south, very dark | golden shells, pearls | big sharks, anglerfish, glowing jellyfish |
+
+## Shop
+
+At home, walk up to the **Wardrobe** for wetsuits, masks, fin colours and hats (cosmetic), or the
+**Gear Locker** for tanks, fins (speed), bags, tough suits (hearts), a flashlight, a shell finder
+for the map, a shark shield and a sea scooter. The **Shell Jar** shows your savings and the **Bed**
+saves the game. Everything is kept in `localStorage` under `sea-collector-v1`.
+
+## Notes
+
+- One analytic `heightAt(x, z)` drives the terrain mesh and every placement and collision.
+- Kelp, sea grass, coral and rocks are merged into one mesh each; one material hook adds
+  caustics and a swaying vertex shader. Fish are one instanced mesh.
+- The camera is a spring arm that stops short of the house, the wreck and rocks.
