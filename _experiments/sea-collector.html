@@ -559,7 +559,8 @@ function seaMaterial(opts, sway, noCaustic){
       .replace('#include <color_fragment>', '#include <color_fragment>\n'+(noCaustic?'':
         'float c1=texture2D(uCaust, vWPos.xz*0.075+vec2(uTime*0.021,uTime*0.013)).r;\n'+
         'float c2=texture2D(uCaust, vWPos.xz*0.061-vec2(uTime*0.017,-uTime*0.019)).r;\n'+
-        'diffuseColor.rgb*=1.0+min(c1,c2)*1.6*smoothstep(-26.0,8.0,vWPos.y);'));
+        'diffuseColor.rgb*=1.0+min(c1,c2)*1.6*smoothstep(-26.0,8.0,vWPos.y);\n'+
+        'diffuseColor.rgb*=vec3(0.84,0.96,1.0);'));
   };
   return m;
 }
@@ -569,7 +570,7 @@ function seaMaterial(opts, sway, noCaustic){
 function Merger(){ this.pos=[]; this.nor=[]; this.col=[]; this.sw=[]; }
 Merger.prototype.add=function(geo, matrix, color, swayBase, swayH, phase){
   var g=geo.index?geo.toNonIndexed():geo;
-  var p=g.attributes.position, n=g.attributes.normal, v=new THREE.Vector3(), nm=new THREE.Matrix3().getNormalMatrix(matrix);
+  var p=g.attributes.position, n=g.attributes.normal, ca=g.attributes.color, v=new THREE.Vector3(), nm=new THREE.Matrix3().getNormalMatrix(matrix);
   for(var i=0;i<p.count;i++){
     v.fromBufferAttribute(p,i).applyMatrix4(matrix);
     this.pos.push(v.x,v.y,v.z);
@@ -577,7 +578,7 @@ Merger.prototype.add=function(geo, matrix, color, swayBase, swayH, phase){
     this.sw.push(hf, phase||0);
     v.fromBufferAttribute(n,i).applyMatrix3(nm).normalize();
     this.nor.push(v.x,v.y,v.z);
-    this.col.push(color.r,color.g,color.b);
+    if(color) this.col.push(color.r,color.g,color.b); else this.col.push(ca.getX(i),ca.getY(i),ca.getZ(i));
   }
   if(g!==geo) g.dispose();
 };
@@ -726,6 +727,42 @@ var dotTex=canvasTex(32,32,function(g,w,h){
 var snow=new THREE.Points(snowGeo, new THREE.PointsMaterial({size:0.14, map:dotTex, transparent:true, opacity:0.55, depthWrite:false, color:0xdff8ff}));
 snow.frustumCulled=false; sea.add(snow);
 var snowOrigin=new THREE.Vector3();
+
+/* ---------- the water all around: light above, dark below ---------- */
+var waterDome=new THREE.Mesh(new THREE.SphereGeometry(300,32,16), new THREE.ShaderMaterial({
+  uniforms:{uTop:{value:new THREE.Color()}, uMid:{value:new THREE.Color()}, uBot:{value:new THREE.Color()}, uSun:{value:1}},
+  vertexShader:'varying vec3 vDir; void main(){ vDir=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader:'uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBot; uniform float uSun; varying vec3 vDir;'+
+    'void main(){ vec3 d=normalize(vDir); float y=d.y;'+
+    ' vec3 c= y>0.0 ? mix(uMid,uTop,pow(y,0.55)) : mix(uMid,uBot,pow(-y,0.6));'+
+    ' c+=vec3(0.75,0.95,1.0)*pow(max(y,0.0),10.0)*0.45*uSun;'+
+    ' gl_FragColor=vec4(c,1.0); }',
+  side:THREE.BackSide, depthWrite:false, depthTest:false, fog:false
+}));
+waterDome.renderOrder=-10; waterDome.frustumCulled=false; sea.add(waterDome);
+var DOME_TOP=new THREE.Color('#9fe4f5');
+
+/* Soft round shadows under the diver and the sharks, so they sit in the scene. */
+var blobTex=canvasTex(64,64,function(g){
+  var gr=g.createRadialGradient(32,32,0,32,32,32);
+  gr.addColorStop(0,'rgba(0,0,0,0.85)'); gr.addColorStop(0.5,'rgba(0,0,0,0.4)'); gr.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=gr; g.fillRect(0,0,64,64);
+});
+var blobGeo=new THREE.PlaneGeometry(1,1); blobGeo.rotateX(-PI/2);
+function makeBlob(){
+  var m=new THREE.Mesh(blobGeo, new THREE.MeshBasicMaterial({map:blobTex, transparent:true, depthWrite:false, color:0x002030,
+    polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}));
+  m.renderOrder=1; m.visible=false; sea.add(m); return m;
+}
+function placeBlob(m, x, y, z, w, l, yaw, light){
+  var fl=heightAt(x,z), hgt=y-fl;
+  m.position.set(x, fl+0.05, z); m.rotation.y=yaw;
+  var spread=1+hgt*0.08;
+  m.scale.set(w*spread, 1, l*spread);
+  m.material.opacity=clamp(1-hgt/16,0,1)*0.55*light;
+  m.visible=m.material.opacity>0.02;
+}
+var diverBlob=makeBlob();
 
 /* ============================================================
    PLANTS, CORAL AND ROCKS
@@ -1095,7 +1132,16 @@ var SCHOOL_DEF=[
   {zone:'shoals', c:['#ff5f8f','#ffb0c8']}, {zone:'wreck', c:['#57e0b0','#b8ffe0']},
   {zone:'flats', c:['#a46bff','#e0c8ff']}
 ];
-var fishMesh=new THREE.InstancedMesh(fishGeo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.5}), SCHOOL_DEF.length*FISH_PER);
+var fishMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.35, metalness:0.15});
+fishMat.onBeforeCompile=function(sh){
+  sh.uniforms.uTime=uTime;
+  sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\nuniform float uTime;')
+    .replace('#include <begin_vertex>','#include <begin_vertex>\n'+
+      'float fph=instanceMatrix[3].x*1.7+instanceMatrix[3].z*1.3;\n'+
+      'float tailW=smoothstep(0.05,-0.5,position.z);\n'+
+      'transformed.x+=sin(uTime*13.0+fph)*0.09*tailW - sin(uTime*13.0+fph)*0.02*(1.0-tailW);');
+};
+var fishMesh=new THREE.InstancedMesh(fishGeo, fishMat, SCHOOL_DEF.length*FISH_PER);
 fishMesh.frustumCulled=false; sea.add(fishMesh);
 (function(){
   var k=0, c=new THREE.Color();
@@ -1138,31 +1184,134 @@ function updateFish(dt,t){
 /* ============================================================
    SHARKS
    ============================================================ */
+/* A shark is one sculpted mesh: a lofted body with a flat belly, a pointed
+   snout and a slim tail stock, plus real fin outlines extruded with a little
+   thickness. A vertex shader sends a wave down the body so the whole shark
+   swims rather than wagging a stiff tail. Only the jaw and eyes are separate. */
+var SHARK_SNOUT=2.3, SHARK_LEN=4.6;
+function sharkProfile(t){
+  var front=Math.pow(Math.sin(Math.min(t/0.34,1)*PI/2),0.62);
+  var back=1-smooth(0.38,1,t)*0.84;
+  var h=0.66*front*back;
+  return {h:h, w:h*lerp(1.08,0.62,t), yc:0.07*(1-smooth(0,0.25,t))-0.04*smooth(0.5,1,t)};
+}
+function sharkZ(t){ return SHARK_SNOUT-t*SHARK_LEN; }
+var SHARK_TOP=col('#43586a'), SHARK_SIDE=col('#8394a2'), SHARK_BELLY=col('#f2f4f3'), SHARK_FIN=col('#4a5e6f');
+var sharkGeo=(function(){
+  var RING=28, SEG=48, pos=[], cols=[], idx=[], i, j, c=new THREE.Color();
+  for(i=0;i<=SEG;i++){
+    var t=i/SEG, z=sharkZ(t), p=sharkProfile(Math.max(t,0.006));
+    for(j=0;j<=RING;j++){
+      var a=j/RING*TAU, ca=Math.cos(a), sa=Math.sin(a);
+      // Rounder back, flatter belly.
+      var y=p.yc+(sa>0?p.h*Math.pow(sa,0.9):p.h*0.74*sa);
+      pos.push(p.w*ca, y, z);
+      // Countershading with a soft, slightly wavy line along the flank and some mottling on top.
+      var line=sa+Math.sin(t*22)*0.04+(vnoise(t*30,j*0.7)-0.5)*0.12;
+      c.copy(SHARK_BELLY).lerp(SHARK_SIDE, smooth(-0.32,-0.05,line)).lerp(SHARK_TOP, smooth(0.05,0.6,line));
+      var k=0.93+vnoise(t*40+j,j*1.3)*0.12;
+      cols.push(c.r*k,c.g*k,c.b*k);
+    }
+  }
+  for(i=0;i<SEG;i++) for(j=0;j<RING;j++){
+    var a0=i*(RING+1)+j, b0=a0+RING+1;
+    idx.push(a0,b0,a0+1, a0+1,b0,b0+1);
+  }
+  var g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols,3));
+  g.setIndex(idx); g.computeVertexNormals();
+  // Weld the normals along the seam so there is no crease down the side.
+  var n=g.attributes.normal;
+  for(i=0;i<=SEG;i++){ var s0=i*(RING+1), s1=s0+RING;
+    var nx=n.getX(s0)+n.getX(s1), ny=n.getY(s0)+n.getY(s1), nz=n.getZ(s0)+n.getZ(s1), L=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;
+    n.setXYZ(s0,nx/L,ny/L,nz/L); n.setXYZ(s1,nx/L,ny/L,nz/L); }
+  var m=new Merger();
+  m.add(g, new THREE.Matrix4(), null);
+  function fin(draw, thick){
+    var s=new THREE.Shape(); draw(s);
+    var e=new THREE.ExtrudeGeometry(s,{depth:thick, bevelEnabled:true, bevelThickness:thick*0.5, bevelSize:thick*0.5, bevelSegments:1, curveSegments:10});
+    e.translate(0,0,-thick/2); e.rotateY(PI/2); return e;   // outline x runs toward the tail, y is the span
+  }
+  var dorsal=fin(function(s){ s.moveTo(-0.05,-0.2); s.lineTo(0,0); s.quadraticCurveTo(0.22,0.78,0.8,1.08); s.quadraticCurveTo(0.6,0.5,1.0,0.04); s.lineTo(1.05,-0.2); s.lineTo(-0.05,-0.2); }, 0.06);
+  var pec=fin(function(s){ s.moveTo(0,-0.1); s.quadraticCurveTo(0.1,0.6,0.8,1.12); s.quadraticCurveTo(0.52,0.52,0.72,-0.1); s.lineTo(0,-0.1); }, 0.05);
+  var caudal=fin(function(s){ s.moveTo(-0.1,0.16); s.quadraticCurveTo(0.42,0.46,1.08,1.3); s.quadraticCurveTo(0.68,0.62,0.6,0.02);
+    s.quadraticCurveTo(0.7,-0.32,0.9,-0.8); s.quadraticCurveTo(0.34,-0.42,-0.1,-0.14); s.lineTo(-0.1,0.16); }, 0.05);
+  function at(t){ return sharkProfile(t); }
+  var p=at(0.36); m.add(dorsal, mtx(0, p.yc+p.h*0.86, sharkZ(0.33), 0,0,0, 1.1,0.95,1.1), SHARK_FIN);
+  p=at(0.76);     m.add(dorsal, mtx(0, p.yc+p.h*0.8, sharkZ(0.75), 0,0,0, 0.32,0.3,0.32), SHARK_FIN);
+  p=at(0.79);     m.add(dorsal, mtx(0, p.yc-p.h*0.62, sharkZ(0.78), PI,0,0, 0.3,0.26,0.3), SHARK_SIDE);
+  p=at(0.3);
+  [1,-1].forEach(function(sd){
+    m.add(pec, mtx(sd*p.w*0.72, p.yc-p.h*0.52, sharkZ(0.27), 0,0,-sd*(PI/2+0.42), 1,1.05,1), SHARK_FIN);
+    var q=at(0.6); m.add(pec, mtx(sd*q.w*0.6, q.yc-q.h*0.62, sharkZ(0.59), 0,0,-sd*(PI/2+0.6), 0.36,0.36,0.36), SHARK_SIDE);
+    // Five gill slits.
+    var slit=new THREE.BoxGeometry(0.018,1,0.03), dark=col('#2e3a44');
+    for(var k=0;k<5;k++){ var tt=0.215+k*0.022, r=at(tt);
+      m.add(slit, mtx(sd*r.w*0.985, r.yc+r.h*0.02, sharkZ(tt), 0.18,0,sd*0.12, 1,r.h*0.62,1), dark); }
+  });
+  p=at(1); m.add(caudal, mtx(0, p.yc+0.02, sharkZ(1)+0.12, 0,0,0, 1.15,1.15,1.15), SHARK_FIN);
+  return m.mesh(null).geometry;
+})();
+function sharkMaterial(){
+  var u={uPhase:{value:0}, uAmp:{value:0.22}};
+  var m=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.4, metalness:0.05});
+  m.customProgramCacheKey=function(){ return 'shark'; };
+  var bend='float bw=smoothstep(0.9,-3.6,position.z); bw*=bw;\n'+
+    'float bphase=uPhase-position.z*1.25;\n';
+  m.onBeforeCompile=function(sh){
+    sh.uniforms.uPhase=u.uPhase; sh.uniforms.uAmp=u.uAmp; sh.uniforms.uTime=uTime; sh.uniforms.uCaust={value:causticTex};
+    sh.vertexShader=sh.vertexShader
+      .replace('#include <common>','#include <common>\nuniform float uPhase;\nuniform float uAmp;\nvarying vec3 vWPos;')
+      .replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\n{'+bend+
+        'float sl=-cos(bphase)*1.25*uAmp*bw; float th=atan(sl); float cs=cos(th), sn=sin(th);\n'+
+        'objectNormal=vec3(objectNormal.x*cs+objectNormal.z*sn, objectNormal.y, -objectNormal.x*sn+objectNormal.z*cs);}')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\n{'+bend+
+        'transformed.x+=sin(bphase)*uAmp*bw;\n'+
+        'transformed.x+=sin(uPhase+0.5)*uAmp*0.1*smoothstep(0.4,2.3,position.z);}\n'+
+        'vWPos=(modelMatrix*vec4(transformed,1.0)).xyz;');
+    sh.fragmentShader=sh.fragmentShader
+      .replace('#include <common>','#include <common>\nuniform float uTime;\nuniform sampler2D uCaust;\nvarying vec3 vWPos;')
+      .replace('#include <color_fragment>','#include <color_fragment>\n'+
+        'float c1=texture2D(uCaust, vWPos.xz*0.075+vec2(uTime*0.021,uTime*0.013)).r;\n'+
+        'float c2=texture2D(uCaust, vWPos.xz*0.061-vec2(uTime*0.017,-uTime*0.019)).r;\n'+
+        'diffuseColor.rgb*=1.0+min(c1,c2)*1.2*smoothstep(-26.0,8.0,vWPos.y)*smoothstep(-0.2,0.6,vNormal.y);')
+      .replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n'+
+        'float rim=pow(1.0-abs(dot(normalize(vViewPosition), normal)),3.0);\n'+
+        'totalEmissiveRadiance+=vec3(0.10,0.24,0.32)*rim*0.55;');
+  };
+  m.userData.u=u;
+  return m;
+}
+var sharkEyeMat=new THREE.MeshStandardMaterial({color:0x07090c, roughness:0.08, metalness:0.3});
+var sharkMouthMat=new THREE.MeshStandardMaterial({color:col('#5a1c22'), roughness:0.8, side:THREE.DoubleSide});
+var sharkToothMat=new THREE.MeshStandardMaterial({color:col('#fffbea'), roughness:0.3});
+var sharkJawSkin=new THREE.MeshStandardMaterial({color:SHARK_BELLY, roughness:0.45});
+function teethRow(r, n, up){
+  var g=new THREE.Group(), tg=new THREE.ConeGeometry(0.022,0.07,4);
+  for(var i=0;i<n;i++){ var a=-1.25+i*(2.5/(n-1)), th=new THREE.Mesh(tg, sharkToothMat);
+    th.position.set(Math.sin(a)*r, 0, Math.cos(a)*r*0.9); th.rotation.x=up?0:PI; g.add(th); }
+  return g;
+}
 function sharkModel(scale){
-  var g=new THREE.Group(), body=new THREE.Group(); g.add(body);
-  var bg=new THREE.SphereGeometry(1,20,12); bg.scale(0.62,0.62,2.3);
-  var cols=[], p=bg.attributes.position, top=col('#6f7f8c'), bot=col('#eef2f4'), c=new THREE.Color();
-  for(var i=0;i<p.count;i++){ c.copy(bot).lerp(top, smooth(-0.25,0.15,p.getY(i))); cols.push(c.r,c.g,c.b); }
-  bg.setAttribute('color', new THREE.Float32BufferAttribute(cols,3));
-  var skin=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.55});
-  var fin=new THREE.MeshStandardMaterial({color:top, roughness:0.6, side:THREE.DoubleSide});
-  body.add(new THREE.Mesh(bg, skin));
-  function tri(a,b,cc){ var t=new THREE.BufferGeometry(); t.setAttribute('position', new THREE.Float32BufferAttribute([].concat(a,b,cc),3)); t.computeVertexNormals(); return t; }
-  var dorsal=new THREE.Mesh(tri([0,0.4,0.6],[0,1.5,-0.5],[0,0.45,-0.8]), fin); body.add(dorsal);
-  var pecL=new THREE.Mesh(tri([0.4,-0.25,0.6],[1.5,-0.7,-0.2],[0.45,-0.25,-0.1]), fin); body.add(pecL);
-  var pecR=new THREE.Mesh(tri([-0.4,-0.25,0.6],[-1.5,-0.7,-0.2],[-0.45,-0.25,-0.1]), fin); body.add(pecR);
-  var tail=new THREE.Group(); tail.position.z=-2.0; body.add(tail);
-  var tailG=new THREE.SphereGeometry(1,10,6); tailG.scale(0.3,0.32,0.9); tailG.translate(0,0,-0.6);
-  tail.add(new THREE.Mesh(tailG, new THREE.MeshStandardMaterial({color:top, roughness:0.55})));
-  tail.add(new THREE.Mesh(tri([0,0.1,-1.1],[0,1.5,-2.0],[0,0.1,-1.6]), fin));
-  tail.add(new THREE.Mesh(tri([0,-0.05,-1.1],[0,-0.95,-1.8],[0,-0.05,-1.5]), fin));
-  var eyeM=new THREE.MeshBasicMaterial({color:0x101010});
-  var e1=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,6), eyeM); e1.position.set(0.36,0.14,1.6); body.add(e1);
-  var e2=e1.clone(); e2.position.x=-0.36; body.add(e2);
-  var mouth=new THREE.Mesh(new THREE.TorusGeometry(0.25,0.04,4,12,PI), new THREE.MeshBasicMaterial({color:0x401818}));
-  mouth.rotation.set(PI/2,0,PI); mouth.position.set(0,-0.3,1.6); body.add(mouth);
+  var g=new THREE.Group();
+  var mat=sharkMaterial();
+  var body=new THREE.Mesh(sharkGeo, mat); g.add(body);
+  [1,-1].forEach(function(sd){
+    var e=new THREE.Mesh(new THREE.SphereGeometry(0.055,10,8), sharkEyeMat); e.position.set(sd*0.468,0.19,1.62); g.add(e);
+  });
+  // Mouth: a dark palate and upper teeth under the snout, and a lower jaw that drops open.
+  var m=sharkProfile(0.14), my=m.yc-m.h*0.7;
+  var palate=new THREE.Mesh(new THREE.CircleGeometry(0.34,16,0,PI), sharkMouthMat);
+  palate.rotation.set(PI/2,0,PI); palate.position.set(0,my+0.02,1.38); palate.scale.set(1,0.75,1); g.add(palate);
+  var up=teethRow(0.31,9,false); up.position.set(0,my,1.4); up.scale.set(1,1,0.72); g.add(up);
+  var jaw=new THREE.Group(); jaw.position.set(0,my-0.01,1.18); g.add(jaw);
+  var jg=new THREE.SphereGeometry(1,16,8,0,TAU,PI/2,PI/2); jg.scale(0.33,0.12,0.38); jg.translate(0,0,0.2);
+  jaw.add(new THREE.Mesh(jg, sharkJawSkin));
+  var tongue=new THREE.Mesh(new THREE.CircleGeometry(0.3,16), sharkMouthMat); tongue.rotation.x=-PI/2; tongue.position.set(0,0.002,0.2); tongue.scale.set(1,1.15,1); jaw.add(tongue);
+  var low=teethRow(0.29,9,true); low.position.set(0,0.02,0.2); low.scale.set(1,1,0.8); jaw.add(low);
   g.scale.setScalar(scale||1);
-  g.userData.tail=tail;
+  g.userData.u=mat.userData.u; g.userData.jaw=jaw;
   return g;
 }
 var sharks=[];
@@ -1170,7 +1319,8 @@ function addShark(x,z,r,scale,speed){
   var g=sharkModel(scale); sea.add(g);
   var y=heightAt(x,z)+6;
   sharks.push({g:g, home:new THREE.Vector3(x,y,z), r:r, pos:new THREE.Vector3(x,y,z), dir:new THREE.Vector3(1,0,0),
-    wp:new THREE.Vector3(x,y,z), state:'patrol', t:0, cool:3, speed:speed||1, ph:rr(0,TAU), scale:scale||1});
+    wp:new THREE.Vector3(x,y,z), state:'patrol', t:0, cool:3, speed:speed||1, ph:rr(0,TAU), scale:scale||1,
+    swim:rr(0,TAU), yaw:0, roll:0, pitch:0, jaw:0.1, blob:makeBlob()});
 }
 addShark(105,-10,45,1.15,1); addShark(110,50,40,1,1); addShark(85,-50,35,1,1);
 addShark(40,40,40,0.9,0.95); addShark(10,-120,30,1.1,1);
@@ -1191,8 +1341,19 @@ function addJelly(zone){
   var hue=pick(zone==='trench'?['#62e6ff','#b47cff','#7cff9e']:['#ff8fd0','#c79bff','#8fd8ff','#ffb27a']);
   var mat=new THREE.MeshStandardMaterial({color:col(hue), emissive:col(hue), emissiveIntensity:zone==='trench'?1.1:0.45,
     transparent:true, opacity:0.62, roughness:0.2, side:THREE.DoubleSide, depthWrite:false});
+  // The bell glows brightest round its edges, like a real jelly catching the light.
+  var bellMat=mat.clone();
+  bellMat.customProgramCacheKey=function(){ return 'jellybell'; };
+  bellMat.onBeforeCompile=function(sh){
+    sh.fragmentShader=sh.fragmentShader.replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\n'+
+      'float jr=pow(1.0-abs(dot(normalize(vViewPosition), normal)),2.0);\n'+
+      'totalEmissiveRadiance+=emissive*jr*1.8;\n'+
+      'diffuseColor.a=clamp(diffuseColor.a*(0.4+jr*1.3),0.0,1.0);');
+  };
   var g=new THREE.Group();
-  var bell=new THREE.Mesh(bellGeo, mat); g.add(bell);
+  var bell=new THREE.Mesh(bellGeo, bellMat); g.add(bell);
+  var core=new THREE.Mesh(new THREE.SphereGeometry(0.3,12,6,0,TAU,0,PI/2), new THREE.MeshBasicMaterial({color:col(hue), transparent:true, opacity:0.5, depthWrite:false}));
+  core.position.y=0.05; core.scale.y=0.7; bell.add(core);
   var tent=new THREE.Mesh(tentGeo, mat); g.add(tent);
   var y=p[1]+rr(3,9);
   g.position.set(p[0],y,p[2]); sea.add(g);
@@ -2110,6 +2271,7 @@ function updateSea(dt, t){
   diver.armL.b.rotation.x=diver.armR.b.rotation.x=lerp(-0.6,-0.2,player.swim);
   diver.head.rotation.x=-player.swim*1.0;
   diver.root.visible=player.inv<=0 || Math.floor(t*14)%2===0;
+  placeBlob(diverBlob, player.pos.x, player.pos.y, player.pos.z, lerp(1.1,1.0,player.swim), lerp(1.1,2.4,player.swim), player.yaw, depthLight(player.pos.y));
 
   // Torch follows the camera's gaze.
   var L=depthLight(player.pos.y);
@@ -2254,9 +2416,19 @@ function updateSharks(dt,t){
     s.pos.x=clamp(s.pos.x,-HALF+8,HALF-8); s.pos.z=clamp(s.pos.z,-HALF+8,HALF-8);
     if(nearHouse(s.pos.x,s.pos.z,14)){ _v2.set(s.pos.x-HOUSE.x,0,s.pos.z-HOUSE.z).normalize(); s.pos.addScaledVector(_v2, 8*dt); }
     s.g.position.copy(s.pos);
+    // Swim with the whole body, bank into turns, and open the jaw when close.
+    var yaw=Math.atan2(s.dir.x,s.dir.z), yr=angDiff(s.yaw,yaw)/Math.max(dt,0.001);
+    s.yaw=yaw;
+    s.roll=lerp(s.roll, clamp(-yr*0.5,-0.7,0.7), Math.min(1,dt*3));
+    s.pitch=lerp(s.pitch, -Math.asin(clamp(s.dir.y,-1,1)), Math.min(1,dt*4));
     s.g.rotation.order='YXZ';
-    s.g.rotation.set(-Math.asin(clamp(s.dir.y,-1,1)), Math.atan2(s.dir.x,s.dir.z), 0);
-    s.g.userData.tail.rotation.y=Math.sin(t*(speed>6?9:4)+s.ph)*0.45;
+    s.g.rotation.set(s.pitch, yaw, s.roll);
+    var u=s.g.userData.u;
+    s.swim+=dt*(speed>6?8.5:4.2);
+    u.uPhase.value=s.swim; u.uAmp.value=lerp(u.uAmp.value, speed>6?0.3:0.2, Math.min(1,dt*2));
+    s.jaw=lerp(s.jaw, (s.state==='chase'&&dist<8)?0.62:0.08+Math.sin(t*0.7+s.ph)*0.04, Math.min(1,dt*6));
+    s.g.userData.jaw.rotation.x=s.jaw;
+    placeBlob(s.blob, s.pos.x, s.pos.y, s.pos.z, 1.7*s.scale, 5.2*s.scale, yaw, depthLight(s.pos.y));
   });
   if(player.shieldCD>0) player.shieldCD-=dt;
 }
@@ -2340,6 +2512,12 @@ function updateScenery(dt,t){
   hemi.intensity=0.95*L; sun.intensity=1.15*L; amb.intensity=0.18+0.2*L;
   sea.fog.color.copy(DEEP_FOG).lerp(SHALLOW_FOG, L);
   sea.background.copy(sea.fog.color);
+  var dm=waterDome.material.uniforms;
+  dm.uMid.value.copy(sea.fog.color);
+  dm.uTop.value.copy(sea.fog.color).lerp(DOME_TOP, 0.55*L);
+  dm.uBot.value.copy(sea.fog.color).multiplyScalar(0.32);
+  dm.uSun.value=L;
+  waterDome.position.copy(camera.position);
   sea.fog.density=lerp(0.034, 0.019, L);
   rays.forEach(function(r){
     var dx=r.position.x-player.pos.x, dz=r.position.z-player.pos.z;
