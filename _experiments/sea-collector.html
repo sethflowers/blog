@@ -1,6 +1,6 @@
 ---
 title: Sea Collector
-description: A scuba-diving adventure. Swim out from your underwater house, collect shells, dodge sharks, jellyfish and eels, and get home before your air runs out. Spend your shells on new clothes and better scuba gear.
+description: A scuba-diving adventure. Swim out from your underwater house, collect shells, dodge sharks, jellyfish, eels and the odd sand monster, and get home before your air runs out. Spend your shells on new clothes and better scuba gear.
 date: 2026-10-06
 layout: null
 ---
@@ -186,7 +186,7 @@ layout: null
   <div id="shellsdeco">🐚 🐠 🦈 🐙 🐚</div>
   <h1>Sea Collector</h1>
   <p>You are a scuba diver with a little house at the bottom of the sea. Swim out, collect shells, and bring them home before your air runs out.</p>
-  <p>Watch out for sharks, jellyfish, eels and spiky urchins. Spend your shells at home on new clothes and better scuba gear, then dive deeper.</p>
+  <p>Watch out for sharks, jellyfish, eels and spiky urchins — and the monsters that climb out of the sand every once in a while. Spend your shells at home on new clothes and better scuba gear, then dive deeper.</p>
   <button class="big" id="playBtn">Dive in!</button>
   <div class="keys" id="keysDesk">
     <b>W A S D</b> swim &nbsp; <b>Mouse</b> look &nbsp; <b>Space</b> up &nbsp; <b>C</b> down<br>
@@ -464,7 +464,11 @@ var sfx={
   deposit:function(n){ for(var i=0;i<Math.min(n,10);i++) tone(700+i*60,0.1,'triangle',0.12,0,i*0.07); },
   shark:function(){ tone(82,0.35,'sawtooth',0.12,78); tone(87,0.35,'sawtooth',0.12,82,0.4); },
   clam:function(){ for(var i=0;i<10;i++) tone(250+Math.random()*700,0.1,'sine',0.07,1500,i*0.04); },
-  blackout:function(){ tone(400,1.2,'sine',0.15,80); }
+  blackout:function(){ tone(400,1.2,'sine',0.15,80); },
+  monster:function(){ tone(55,1.4,'sawtooth',0.16,40); tone(70,1.2,'square',0.06,45,0.2); tone(140,0.6,'sawtooth',0.08,60,0.9); },
+  spike:function(){ for(var i=0;i<3;i++) tone(900-i*120,0.18,'triangle',0.08,300,i*0.05); },
+  charge:function(){ tone(180,1.45,'sawtooth',0.05,1100); },
+  laser:function(){ tone(1500,0.5,'square',0.07,250); tone(760,0.5,'sawtooth',0.06,180); }
 };
 
 /* ============================================================
@@ -1457,6 +1461,130 @@ function addAngler(x,z){
 addAngler(-90,125); addAngler(20,132); addAngler(110,122);
 
 /* ============================================================
+   MONSTERS — every so often one climbs out of the sand, hunts you
+   for a while, then burrows back down. Each has a power and a weakness.
+   The Spike Serpent shoots spikes off its back but hates the dark.
+   The Eye Walker shoots a laser out of its top eye but is very slow.
+   ============================================================ */
+function part3(geo, mat, parent, x,y,z, rx,ry,rz, sx,sy,sz){
+  var m=new THREE.Mesh(geo, mat); m.position.set(x,y,z); m.rotation.set(rx||0,ry||0,rz||0);
+  m.scale.set(sx||1, sy===undefined?(sx||1):sy, sz===undefined?(sx||1):sz); parent.add(m); return m;
+}
+var monSphere=new THREE.SphereGeometry(1,20,14);
+var monCone=new THREE.ConeGeometry(1,1,8);
+
+// The serpent is a chain of spiky segments that follow the path its head swam.
+var SERP_N=30, SERP_STEP=4, SERP_PT=0.2;
+var serpent=(function(){
+  var g=new THREE.Group(); g.visible=false; sea.add(g);
+  var mat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.5});
+  var segGeo=(function(){ var m=new Merger(), spike=new THREE.ConeGeometry(0.15,0.55,5);
+    var bc=col('#9b4f8c'), sc=col('#ef5fa7');
+    m.add(new THREE.SphereGeometry(0.62,12,9), mtx(0,0,0, 0,0,0, 1,0.85,1.3), bc);
+    m.add(spike, mtx(0,0.62,0), sc);
+    for(var sd=-1;sd<=1;sd+=2){ m.add(spike, mtx(sd*0.58,0.18,0, 0,0,-sd*1.15), sc); m.add(spike, mtx(sd*0.48,-0.34,0, 0,0,-sd*2.2, 0.8), sc); }
+    return m.mesh(null).geometry; })();
+  var segs=[];
+  for(var i=0;i<SERP_N;i++){
+    var k=i<3?0.9+i*0.06:lerp(1.05,0.32,(i-3)/(SERP_N-4));
+    var s=new THREE.Mesh(segGeo, mat); s.scale.setScalar(k); g.add(s); segs.push(s);
+  }
+  // The head: one big round eye on each side, a smile and a spiky crown with a tall horn.
+  var skin=new THREE.MeshStandardMaterial({color:col('#a85b98'), roughness:0.5});
+  var spikeM=new THREE.MeshStandardMaterial({color:col('#ef5fa7'), roughness:0.4});
+  var white=new THREE.MeshStandardMaterial({color:col('#fff8fc'), roughness:0.2});
+  var ink=new THREE.MeshStandardMaterial({color:col('#3a0a2c'), roughness:0.2});
+  var head=new THREE.Group(); g.add(head);
+  part3(monSphere, skin, head, 0,0,0, 0,0,0, 0.8,0.72,0.95);
+  part3(monSphere, skin, head, 0,-0.12,0.7, 0,0,0, 0.55,0.42,0.6);
+  for(var sd=-1;sd<=1;sd+=2){
+    part3(monSphere, white, head, sd*0.5,0.22,0.3, 0,0,0, 0.26);
+    part3(monSphere, ink, head, sd*0.68,0.24,0.38, 0,0,0, 0.13);
+    part3(monCone, spikeM, head, sd*0.62,0.35,-0.35, 0,0,-sd*1.0, 0.13,0.5,0.13);
+    part3(monCone, spikeM, head, sd*0.42,0.62,-0.1, 0,0,-sd*0.55, 0.12,0.45,0.12);
+  }
+  var smile=new THREE.Mesh(new THREE.TorusGeometry(0.26,0.035,6,14,PI*0.75), ink);
+  smile.position.set(0,-0.08,1.24); smile.rotation.z=-PI/2-PI*0.375; head.add(smile);
+  part3(monCone, spikeM, head, 0,1.05,-0.05, 0,0,0, 0.24,1.0,0.24);
+  part3(monCone, spikeM, head, 0,0.75,0.35, 0.5,0,0, 0.13,0.45,0.13);
+  part3(monCone, spikeM, head, 0,0.72,-0.45, -0.5,0,0, 0.13,0.45,0.13);
+  var trail=[]; for(i=0;i<SERP_N*SERP_STEP+SERP_STEP+2;i++) trail.push(new THREE.Vector3());
+  return {kind:'serpent', g:g, head:head, segs:segs, mat:mat, trail:trail, pos:new THREE.Vector3(), dir:new THREE.Vector3(),
+    hole:new THREE.Vector3(), name:'Spike Serpent'};
+})();
+
+var spikeGeo=new THREE.ConeGeometry(0.11,0.7,5); spikeGeo.rotateX(PI/2);
+var spikeMat=new THREE.MeshStandardMaterial({color:col('#ef5fa7'), emissive:col('#4a0b2a'), roughness:0.4});
+var spikes=[];
+
+// The Eye Walker stands high on four long legs, with little claws dangling at the back.
+var WALK_H=2.7;
+var walker=(function(){
+  var g=new THREE.Group(), rig=new THREE.Group(); g.add(rig); rig.position.y=WALK_H; g.scale.setScalar(1.35); g.visible=false; sea.add(g);
+  var skin=new THREE.MeshStandardMaterial({color:col('#a9c1ea'), roughness:0.75});
+  var ink=new THREE.MeshStandardMaterial({color:col('#1b2a6b'), roughness:0.3});
+  var white=new THREE.MeshStandardMaterial({color:col('#f6f8ff'), roughness:0.25});
+  var horn=new THREE.MeshStandardMaterial({color:col('#efe6cf'), roughness:0.5});
+  function top(x,z){ return 0.8*Math.sqrt(Math.max(0,1-x*x-(z/2.2)*(z/2.2))); }
+  part3(monSphere, skin, rig, 0,0,0, 0,0,0, 1,0.8,2.2);
+  // Three big eyes down its back.
+  [0.8,-0.15,-1.1].forEach(function(z){ var y=top(0,z);
+    part3(monSphere, white, rig, 0,y,z, 0,0,0, 0.3,0.12,0.42);
+    part3(monSphere, ink, rig, 0,y+0.06,z-0.1, 0,0,0, 0.19,0.08,0.26); });
+  // A cluster of little eyes at the front.
+  [[-0.38,1.25],[-0.12,1.2],[0.14,1.22],[0.4,1.28],[-0.45,1.52],[-0.2,1.48],[0.06,1.5],[0.32,1.55],[-0.3,1.75],[0.0,1.78],[0.26,1.8]].forEach(function(p){
+    var y=top(p[0],p[1])+0.02;
+    part3(monSphere, white, rig, p[0],y,p[1], 0,0,0, 0.1);
+    part3(monSphere, ink, rig, p[0],y+0.03,p[1]+0.06, 0,0,0, 0.055); });
+  // Horns.
+  for(var sd=-1;sd<=1;sd+=2){
+    part3(monCone, horn, rig, sd*0.5,0.55,1.45, -0.3,0,-sd*0.55, 0.12,0.75,0.12);
+    part3(monCone, horn, rig, sd*0.78,0.3,0.95, -0.2,0,-sd*0.95, 0.11,0.65,0.11);
+  }
+  // The stalk and its laser eye.
+  part3(new THREE.CylinderGeometry(0.11,0.15,1.5,8), skin, rig, 0,1.15,1.72);
+  var eye=new THREE.Group(); eye.position.set(0,1.95,1.72); rig.add(eye);
+  part3(monSphere, white, eye, 0,0,0, 0,0,0, 0.48);
+  part3(monSphere, ink, eye, 0,0,0.4, 0,0,0, 0.17,0.17,0.1);
+  part3(new THREE.SphereGeometry(1,16,8,0,TAU,0,PI*0.42), skin, eye, 0,0,0, 0.45,0,0, 0.52);
+  var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkTex, color:0xff3b3b, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
+  glow.position.set(0,0,0.55); glow.scale.setScalar(0.01); eye.add(glow);
+  // Side fins, each with a toothy mouth.
+  var tooth=new THREE.ConeGeometry(0.045,0.14,4);
+  for(sd=-1;sd<=1;sd+=2){
+    var fin=new THREE.Group(); fin.position.set(sd*1.0,0.05,0.1); fin.rotation.z=sd*0.25; rig.add(fin);
+    part3(monSphere, skin, fin, sd*0.75,0,0, 0,0,0, 0.85,0.1,0.5);
+    part3(monSphere, ink, fin, sd*0.8,0.07,0.05, 0,0,0, 0.5,0.04,0.12);
+    for(var ti=0;ti<6;ti++) part3(tooth, white, fin, sd*(0.45+ti*0.13),0.09,0.12, PI,0,0);
+  }
+  // Four long legs, mirrored on each side.
+  var upperG=new THREE.CylinderGeometry(0.16,0.13,1.8,8); upperG.rotateZ(-PI/2); upperG.translate(0.9,0,0);
+  var lowerG=new THREE.CylinderGeometry(0.13,0.03,3.5,8); lowerG.translate(0,-1.75,0);
+  var legs=[];
+  for(sd=-1;sd<=1;sd+=2){
+    var side=new THREE.Group(); side.scale.x=sd; rig.add(side);
+    [[0.75,sd>0?0:PI],[-0.65,sd>0?PI:0]].forEach(function(L){
+      var hip=new THREE.Group(); hip.position.set(0.8,-0.1,L[0]); side.add(hip);
+      hip.add(new THREE.Mesh(upperG, skin));
+      var knee=new THREE.Group(); knee.position.x=1.8; knee.rotation.z=-0.35; hip.add(knee);
+      knee.add(new THREE.Mesh(lowerG, skin));
+      legs.push({hip:hip, ph:L[1]});
+    });
+  }
+  // Little claws dangling off the back end.
+  var claws=[];
+  [-0.65,-0.25,0.25,0.65].forEach(function(x){
+    var c=new THREE.Group(); c.position.set(x,-0.35,-1.85); rig.add(c);
+    part3(monCone, horn, c, 0,-0.5,-0.25, -2.65,0,0, 0.1,1.1,0.1);
+    claws.push(c);
+  });
+  return {kind:'walker', g:g, rig:rig, eye:eye, glow:glow, legs:legs, claws:claws, pos:new THREE.Vector3(), name:'Eye Walker'};
+})();
+var beamGeo=new THREE.CylinderGeometry(1,1,1,8,1,true); beamGeo.rotateX(PI/2); beamGeo.translate(0,0,0.5);
+var beam=new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:0xff3030, transparent:true, opacity:0.8, blending:THREE.AdditiveBlending, depthWrite:false}));
+beam.visible=false; beam.frustumCulled=false; sea.add(beam);
+
+/* ============================================================
    THE DIVER
    ============================================================ */
 var RAINBOW=['#ff4d4d','#ff9a3c','#ffe23d','#4fd36a','#3aa2ff','#a46bff'];
@@ -1949,6 +2077,7 @@ function transition(fn){
 }
 function enterHouse(fromBlackout, instant){
   var go=function(){
+    removeMonster(); spikes.forEach(function(s){ sea.remove(s.m); }); spikes.length=0;
     scene=home; setIndoors(true);
     zoneTimer=0; ui.zone.style.opacity=0; ui.minimap.classList.add('hidden');
     home.add(diver.root);
@@ -2130,6 +2259,7 @@ function drawMap(){
   clams.forEach(function(c){ if(!c.ready) return; var p=toMap(c.pos.x,c.pos.z); g.fillStyle='#7fe7ff'; g.beginPath(); g.arc(p[0],p[1],5,0,TAU); g.fill(); });
   sharks.forEach(function(s){ var p=toMap(s.pos.x,s.pos.z); g.fillStyle=s.state==='chase'?'#ff3030':'#ff8f8f'; g.beginPath(); g.arc(p[0],p[1],s.state==='chase'?8:6,0,TAU); g.fill(); });
   anglers.forEach(function(s){ var p=toMap(s.pos.x,s.pos.z); g.fillStyle='#c08aff'; g.beginPath(); g.arc(p[0],p[1],6,0,TAU); g.fill(); });
+  if(MON.cur){ var mp=toMap(MON.cur.pos.x,MON.cur.pos.z); g.font='24px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(MON.cur.kind==='serpent'?'🐉':'👁️', mp[0], mp[1]); }
   var hp=toMap(DOOR.x,DOOR.z), hx=hp[0]-R, hy=hp[1]-R, hd=Math.sqrt(hx*hx+hy*hy);
   if(hd>R-16){ hp[0]=R+hx/hd*(R-16); hp[1]=R+hy/hd*(R-16); }
   g.font='26px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('🏠', hp[0], hp[1]);
@@ -2454,6 +2584,193 @@ function updateAnglers(dt,t){
     a.tail.rotation.y=Math.sin(t*5)*0.4;
   });
 }
+/* Monsters come out every once in a while when you're away from home. */
+var MON={timer:rr(40,70), next:rnd()<0.5?'serpent':'walker', cur:null};
+var _eyeW=new THREE.Vector3(), _aim=new THREE.Vector3(), _ld=new THREE.Vector3();
+function inDark(){ return player.zone==='trench' || depthLight(player.pos.y)<0.6; }
+function spawnMonster(){
+  var kind=MON.next, x=0, z=0, ok=false;
+  for(var i=0;i<30 && !ok;i++){
+    // Somewhere in front of you, so you see it climb out.
+    var a=camYaw+rr(-0.9,0.9), r=rr(24,34);
+    x=player.pos.x-Math.sin(a)*r; z=player.pos.z-Math.cos(a)*r;
+    ok=Math.abs(x)<HALF-28 && Math.abs(z)<HALF-28 && !nearHouse(x,z,45) && heightAt(x,z)<6 && (kind!=='serpent' || z<86);
+  }
+  if(!ok){
+    if(kind==='serpent'){ MON.next='walker'; }
+    MON.timer=4; return;
+  }
+  var fl=heightAt(x,z), m;
+  if(kind==='serpent'){
+    m=serpent; m.hole.set(x,fl,z); m.pos.set(x,fl-1,z); m.dir.set(0,1,0);
+    // The body starts straight down in the sand, so it slides out of a hole.
+    for(i=0;i<m.trail.length;i++) m.trail[i].set(x, fl-1-i*SERP_PT, z);
+    m.shoot=3; m.backT=0; m.darkT=0; m.darkSaid=false; m.wig=rr(0,TAU); m.life=50;
+    showMsg('🐉 A SPIKE SERPENT is coming out of the sand!<br><span style="font-size:17px">It shoots spikes — but it hates the dark!</span>',3.5);
+  }else{
+    m=walker; m.pos.set(x,fl,z); m.yaw=Math.atan2(player.pos.x-x, player.pos.z-z); m.lift=-6.5; m.speed=0; m.walk=0;
+    m.laser='idle'; m.lt=2.5; m.life=55;
+    showMsg('👁️ An EYE WALKER is climbing out of the sand!<br><span style="font-size:17px">Its top eye shoots lasers — but it is very slow!</span>',3.5);
+  }
+  m.state='rise'; m.t=0; m.g.visible=true;
+  MON.cur=m; MON.next=kind==='serpent'?'walker':'serpent';
+  sfx.monster();
+}
+function removeMonster(){
+  var m=MON.cur; if(!m) return;
+  m.g.visible=false; beam.visible=false;
+  if(m.blob) m.blob.visible=false;
+  MON.cur=null; MON.timer=rr(70,120);
+}
+function fireSpike(from, to){
+  var m=new THREE.Mesh(spikeGeo, spikeMat); m.position.copy(from); m.lookAt(to); sea.add(m);
+  spikes.push({m:m, v:_v.copy(to).sub(from).normalize().multiplyScalar(15).clone(), life:3});
+}
+function updateSpikes(dt){
+  for(var i=spikes.length-1;i>=0;i--){
+    var s=spikes[i]; s.life-=dt; s.m.position.addScaledVector(s.v, dt);
+    var p=s.m.position, hit=p.distanceToSquared(player.pos)<0.85 && hurt(1, p, 6);
+    if(hit || s.life<=0 || p.y<heightAt(p.x,p.z)){ sea.remove(s.m); spikes.splice(i,1); }
+  }
+}
+function updateMonsters(dt,t){
+  var out=(scene===sea && state==='play');
+  updateSpikes(dt);
+  if(!MON.cur){
+    if(out && player.zone!=='home'){ MON.timer-=dt; if(MON.timer<=0) spawnMonster(); }
+    return;
+  }
+  // Home is safe: monsters won't come near the house.
+  var hunting=out && !nearHouse(player.pos.x,player.pos.z,30);
+  if(MON.cur.kind==='serpent') updateSerpent(MON.cur, dt, t, hunting); else updateWalker(MON.cur, dt, t, hunting);
+}
+function updateSerpent(m, dt, t, hunting){
+  var head=m.pos, toP=_d.copy(player.pos).sub(head), dist=toP.length(), dark=inDark(), speed=5.2;
+  m.t+=dt;
+  if(m.state==='rise'){
+    steer(m.dir, _v2.set(0,1,0), 3, dt); speed=4;
+    if(rnd()<0.7) emitBubble(m.hole.x, m.hole.y+0.3, m.hole.z, 1);
+    if(head.y>m.hole.y+5){ m.state='hunt'; m.t=0; }
+  }else if(m.state==='hunt'){
+    m.life-=dt;
+    if(dark && hunting){
+      // Its weakness: it can't stand the dark, so it gives up and swims off.
+      m.darkT+=dt;
+      if(!m.darkSaid){ m.darkSaid=true; showMsg('🌑 The Spike Serpent hates the dark!<br><span style="font-size:17px">It can\'t find you down here.</span>',2.8); }
+      _v2.copy(toP).negate(); _v2.y=1.5; _v2.normalize();
+      if(m.darkT>5) m.life=0;
+    }else if(hunting){
+      _v2.copy(toP).normalize();
+      if(m.backT>0){ m.backT-=dt; _v2.negate(); _v2.y+=0.6; _v2.normalize(); }
+    }else{ _v2.copy(m.dir); m.life=Math.min(m.life,1); }
+    // Wind from side to side like a real serpent.
+    var w=Math.sin(t*2.1+m.wig)*0.75, px=-_v2.z, pz=_v2.x;
+    _v2.x+=px*w; _v2.z+=pz*w; _v2.normalize();
+    steer(m.dir, _v2, 1.7, dt);
+    if(head.z>86 && m.dir.z>0){ m.dir.z-=dt*4; m.dir.normalize(); }
+    // Spikes off its back, with a pink flash just before.
+    if(hunting && !dark && dist<30){
+      m.shoot-=dt;
+      if(m.shoot<=0){
+        m.shoot=2.6; sfx.spike();
+        [6,12,18].forEach(function(k){
+          _v.copy(m.segs[k].position); _v.y+=0.6;
+          _aim.copy(player.pos).addScaledVector(player.vel,0.25); _aim.x+=rr(-0.7,0.7); _aim.y+=rr(-0.5,0.5); _aim.z+=rr(-0.7,0.7);
+          fireSpike(_v, _aim);
+        });
+      }
+    }
+    var glow=(hunting && !dark && dist<30 && m.shoot<0.6)?(0.5+0.5*Math.sin(t*30))*0.6:0;
+    m.mat.emissive.setRGB(glow, glow*0.15, glow*0.45);
+    if(hunting && dist<1.9 && hurt(1, head, 9)) m.backT=2;
+    if(m.life<=0){ m.state='sink'; m.t=0; m.mat.emissive.setRGB(0,0,0); }
+  }else{
+    // Burrow back down into the sand.
+    steer(m.dir, _v2.set(m.dir.x, -1.6, m.dir.z).normalize(), 2.2, dt); speed=5;
+    var hf=heightAt(head.x,head.z);
+    if(head.y<hf+1 && head.y>hf-1 && rnd()<0.7) emitBubble(head.x, hf+0.3, head.z, 1);
+    var tail=m.trail[SERP_N*SERP_STEP];
+    if(m.t>1.5 && tail.y<heightAt(tail.x,tail.z)-0.8){ removeMonster(); return; }
+  }
+  head.addScaledVector(m.dir, speed*dt);
+  if(m.state==='hunt'){
+    var fl=heightAt(head.x,head.z)+1.3;
+    if(head.y<fl){ head.y=fl; if(m.dir.y<0) m.dir.y*=-0.5; }
+    if(head.y>SURF-3) head.y=SURF-3;
+    head.x=clamp(head.x,-HALF+12,HALF-12); head.z=clamp(head.z,-HALF+12,HALF-12);
+    if(nearHouse(head.x,head.z,22)){ _v2.set(head.x-HOUSE.x,0,head.z-HOUSE.z).normalize(); head.addScaledVector(_v2, 8*dt); }
+  }
+  // The body follows the path the head swam.
+  var tr=m.trail, last=tr[0], d=head.distanceTo(last);
+  while(d>=SERP_PT){ var np=tr.pop(); np.copy(last).lerp(head, SERP_PT/d); tr.unshift(np); last=np; d=head.distanceTo(last); }
+  m.head.position.copy(head);
+  m.head.lookAt(_v.copy(head).add(m.dir));
+  for(var i=0;i<SERP_N;i++){
+    var s=m.segs[i]; s.position.copy(tr[(i+1)*SERP_STEP]); s.lookAt(tr[i*SERP_STEP]);
+  }
+}
+function updateWalker(m, dt, t, hunting){
+  m.t+=dt;
+  var toP=_d.copy(player.pos).sub(m.pos), dist=toP.length();
+  m.glow.scale.setScalar(0.01); beam.visible=false;
+  if(m.state==='rise'){
+    m.lift=Math.min(0, m.lift+dt*2.2);
+    if(rnd()<0.8) emitBubble(m.pos.x+rr(-2,2), m.pos.y+0.3, m.pos.z+rr(-2,2), 0.6);
+    if(m.lift>=0){ m.state='hunt'; m.t=0; }
+  }else if(m.state==='hunt'){
+    m.life-=dt;
+    if(!hunting) m.life=Math.min(m.life,0.5);
+    // Its weakness: it is very, very slow.
+    var want=Math.atan2(toP.x,toP.z), turn=0.6*dt;
+    m.yaw+=clamp(angDiff(m.yaw,want), -turn, turn);
+    m.speed=lerp(m.speed, (hunting && dist>8 && m.laser!=='fire')?1.3:0, Math.min(1,dt*2));
+    m.pos.x+=Math.sin(m.yaw)*m.speed*dt; m.pos.z+=Math.cos(m.yaw)*m.speed*dt;
+    m.pos.x=clamp(m.pos.x,-HALF+14,HALF-14); m.pos.z=clamp(m.pos.z,-HALF+14,HALF-14);
+    if(nearHouse(m.pos.x,m.pos.z,26)){ _v2.set(m.pos.x-HOUSE.x,0,m.pos.z-HOUSE.z).normalize(); m.pos.addScaledVector(_v2, 3*dt); }
+    // Its power: a laser out of the top eye. It glows red while charging and stops aiming just before it fires.
+    m.g.updateMatrixWorld(true);
+    m.eye.getWorldPosition(_eyeW);
+    m.lt-=dt;
+    if(m.laser==='idle'){
+      _aim.copy(player.pos);
+      if(hunting && dist<40 && m.lt<=0){ m.laser='charge'; m.lt=1.5; sfx.charge(); }
+    }else if(m.laser==='charge'){
+      if(m.lt>0.45) _aim.copy(player.pos);
+      m.glow.scale.setScalar(lerp(2.6,0.3,m.lt/1.5));
+      showBeam(_eyeW, _aim, 0.03, 0.35);
+      if(m.lt<=0){ m.laser='fire'; m.lt=0.5; sfx.laser(); }
+    }else{
+      m.glow.scale.setScalar(3);
+      showBeam(_eyeW, _aim, 0.24+Math.sin(t*60)*0.05, 0.9);
+      // Did it hit the diver?
+      _v.copy(player.pos).sub(_eyeW);
+      var along=clamp(_v.dot(_ld), 0, 42);
+      _v.addScaledVector(_ld, -along);
+      if(hunting && _v.lengthSq()<1.1) hurt(1, _eyeW, 8);
+      if(m.lt<=0){ m.laser='idle'; m.lt=2.8; }
+    }
+    if(m.laser!=='fire') m.eye.lookAt(_aim);
+    if(m.life<=0 && m.laser!=='fire'){ m.state='sink'; m.t=0; }
+  }else{
+    m.speed=0; m.lift-=dt*1.8;
+    if(rnd()<0.8) emitBubble(m.pos.x+rr(-2,2), m.pos.y+0.3, m.pos.z+rr(-2,2), 0.6);
+    if(m.lift<-7){ removeMonster(); return; }
+  }
+  m.pos.y=lerp(m.pos.y, heightAt(m.pos.x,m.pos.z), Math.min(1,dt*3));
+  m.g.position.set(m.pos.x, m.pos.y+m.lift+Math.sin(m.walk*2)*0.06, m.pos.z);
+  m.g.rotation.y=m.yaw;
+  // Plod along on its long legs.
+  m.walk+=dt*(0.5+m.speed*2.2);
+  m.legs.forEach(function(L){ var p=m.walk+L.ph; L.hip.rotation.set(0, Math.sin(p)*0.35, 0.5+Math.max(0,Math.cos(p))*0.18); });
+  m.claws.forEach(function(c,i){ c.rotation.x=Math.sin(t*3+i)*0.25; });
+  if(!m.blob) m.blob=makeBlob();
+  placeBlob(m.blob, m.pos.x, m.pos.y+(m.state==='hunt'?1.5:-5), m.pos.z, 3.2, 5.5, m.yaw, depthLight(m.pos.y));
+}
+function showBeam(from, to, r, op){
+  _ld.copy(to).sub(from).normalize();
+  beam.position.copy(from); beam.lookAt(_v.copy(from).add(_ld));
+  beam.scale.set(r, r, 42); beam.material.opacity=op; beam.visible=true;
+}
 function updateEels(dt,t){
   eels.forEach(function(e){
     e.t-=dt;
@@ -2576,7 +2893,7 @@ function frame(now){
     if(scene===sea) updateSea(dt,t); else updateHome(dt,t);
   }else if(state==='shop'){ updateShopCam(dt,t); }
   if(scene===sea){
-    updateScenery(dt,t); updateFish(dt,t); updateSharks(dt,t); updateAnglers(dt,t);
+    updateScenery(dt,t); updateFish(dt,t); updateSharks(dt,t); updateAnglers(dt,t); updateMonsters(dt,t);
     updateEels(dt,t); updateJellies(dt,t); updateClams(dt,t); updateShells(dt,t);
   }else{
     // Keep the sea ticking quietly so it has moved on when you come out.
