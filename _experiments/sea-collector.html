@@ -179,20 +179,21 @@ layout: null
 <div id="stick"><div id="knob"></div></div>
 <div id="tbtns" class="hidden">
   <div class="tb" id="bLight">🔦</div><div class="tb" id="bUp">⬆️</div><div class="tb" id="bAct">✋</div>
-  <div class="tb" id="bBoost">⚡</div><div class="tb" id="bDown">⬇️</div>
+  <div class="tb" id="bBoost">⚡</div><div class="tb" id="bDown">⬇️</div><div class="tb" id="bNet">🕸️</div>
 </div>
 
 <div class="screen" id="start">
   <div id="shellsdeco">🐚 🐠 🦈 🐙 🐚</div>
   <h1>Sea Collector</h1>
   <p>You are a scuba diver with a little house at the bottom of the sea. Swim out, collect shells, and bring them home before your air runs out.</p>
-  <p>Watch out for sharks, jellyfish, eels and spiky urchins — and the monsters that climb out of the sand every once in a while. Spend your shells at home on new clothes and better scuba gear, then dive deeper.</p>
+  <p>Watch out for sharks, jellyfish, eels and spiky urchins — and the monsters that climb out of the sand every once in a while. Catch them with your net gun 🕸️, give a dolphin a shell to make a friend 🐬, and spend your shells at home on new clothes and better scuba gear, then dive deeper.</p>
   <button class="big" id="playBtn">Dive in!</button>
   <div class="keys" id="keysDesk">
     <b>W A S D</b> swim &nbsp; <b>Mouse</b> look &nbsp; <b>Space</b> up &nbsp; <b>C</b> down<br>
-    <b>Shift</b> sea scooter &nbsp; <b>F</b> flashlight &nbsp; <b>E</b> use &nbsp; <b>Esc</b> pause
+    <b>Shift</b> sea scooter &nbsp; <b>F</b> flashlight &nbsp; <b>E</b> use &nbsp; <b>Esc</b> pause<br>
+    <b>Click</b> or <b>R</b> net gun &nbsp; <b>E</b> or <b>Click</b> knife a netted creature
   </div>
-  <div class="keys hidden" id="keysTouch">Left thumb swims, right thumb looks. Buttons go up, down, boost and use.</div>
+  <div class="keys hidden" id="keysTouch">Left thumb swims, right thumb looks. Buttons go up, down, boost, net gun 🕸️ and use.</div>
 </div>
 
 <div class="screen hidden" id="pause">
@@ -308,7 +309,7 @@ function freshSave(){
     bank:0, total:0,
     owned:{suit_black:1, mask_clear:1, fin_black:1, hat_none:1},
     wear:{suit:'suit_black', mask:'mask_clear', fin:'fin_black', hat:'hat_none'},
-    gear:{tank:0, fins:0, bag:0, tough:0, light:0, finder:0, shield:0, scooter:0},
+    gear:{tank:0, fins:0, bag:0, tough:0, light:0, finder:0, shield:0, scooter:0, net:0}, friends:0,
     seenTip:false
   };
 }
@@ -403,7 +404,10 @@ var GEAR=[
     {name:'Shark Shield', price:60, v:1, d:'Zaps a shark that bites you, then recharges'}]},
   {id:'scooter', name:'Sea Scooter', icon:'🚀', levels:[
     {name:'No Scooter', price:0, v:0, d:''},
-    {name:'Sea Scooter', price:120, v:1, d:'Hold Shift or ⚡ to zoom (uses more air)'}]}
+    {name:'Sea Scooter', price:120, v:1, d:'Hold Shift or ⚡ to zoom (uses more air)'}]},
+  {id:'net', name:'Net Gun', icon:'🕸️', levels:[
+    {name:'Net Gun', price:0, v:6, d:'Click, R or 🕸️ to fire. Nets hold a creature for 6 seconds'},
+    {name:'Big Net Gun', price:45, v:10, d:'Nets hold for 10 seconds'}]}
 ];
 function gearDef(id){ for(var i=0;i<GEAR.length;i++) if(GEAR[i].id===id) return GEAR[i]; }
 function gearVal(id){ var g=gearDef(id); return g.levels[Math.min(save.gear[id], g.levels.length-1)].v; }
@@ -468,6 +472,11 @@ var sfx={
   monster:function(){ tone(55,1.4,'sawtooth',0.16,40); tone(70,1.2,'square',0.06,45,0.2); tone(140,0.6,'sawtooth',0.08,60,0.9); },
   spike:function(){ for(var i=0;i<3;i++) tone(900-i*120,0.18,'triangle',0.08,300,i*0.05); },
   charge:function(){ tone(180,1.45,'sawtooth',0.05,1100); },
+  net:function(){ tone(260,0.25,'triangle',0.12,520); for(var i=0;i<4;i++) tone(500+Math.random()*400,0.06,'sine',0.05,1100,0.05+i*0.04); },
+  netHit:function(){ tone(330,0.12,'triangle',0.14); tone(247,0.25,'triangle',0.12,0,0.1); },
+  slash:function(){ tone(2200,0.12,'sawtooth',0.05,500); },
+  win:function(){ [523,659,784,1046].forEach(function(f,i){ tone(f,0.2,'triangle',0.16,0,i*0.09); }); },
+  dolphin:function(){ for(var i=0;i<5;i++) tone(1800+Math.random()*900,0.07,'sine',0.08,2600+Math.random()*900,i*0.08); },
   laser:function(){ tone(1500,0.5,'square',0.07,250); tone(760,0.5,'sawtooth',0.06,180); }
 };
 
@@ -1578,10 +1587,10 @@ var walker=(function(){
     part3(monCone, horn, c, 0,-0.5,-0.25, -2.65,0,0, 0.1,1.1,0.1);
     claws.push(c);
   });
-  return {kind:'walker', g:g, rig:rig, eye:eye, glow:glow, legs:legs, claws:claws, pos:new THREE.Vector3(), name:'Eye Walker'};
+  return {kind:'walker', g:g, rig:rig, eye:eye, glow:glow, legs:legs, claws:claws, pos:new THREE.Vector3(), center:new THREE.Vector3(), name:'Eye Walker'};
 })();
 var beamGeo=new THREE.CylinderGeometry(1,1,1,8,1,true); beamGeo.rotateX(PI/2); beamGeo.translate(0,0,0.5);
-var beam=new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:0xff3030, transparent:true, opacity:0.8, blending:THREE.AdditiveBlending, depthWrite:false}));
+var beam=new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:0xff2020, transparent:true, opacity:0.8, depthWrite:false, toneMapped:false}));
 beam.visible=false; beam.frustumCulled=false; sea.add(beam);
 
 /* ============================================================
@@ -1731,6 +1740,65 @@ function hatModel(id){
 }
 
 var diver=makeDiver();
+
+/* A net gun in the right hand and a knife in the left. Only carried out in the sea. */
+
+(function(){
+  var orange=new THREE.MeshStandardMaterial({color:col('#ff9a3c'), roughness:0.5});
+  var dark=new THREE.MeshStandardMaterial({color:col('#24282e'), roughness:0.5});
+  var steel=new THREE.MeshStandardMaterial({color:col('#dfe6ea'), roughness:0.15, metalness:0.8});
+  var gun=new THREE.Group(); gun.position.set(0,-0.34,0.03); diver.armR.b.add(gun);
+  part3(new THREE.BoxGeometry(0.1,0.3,0.12), orange, gun, 0,-0.08,0);
+  part3(new THREE.CylinderGeometry(0.07,0.05,0.12,10), dark, gun, 0,-0.28,0);
+  part3(new THREE.BoxGeometry(0.05,0.05,0.12), dark, gun, 0,0.02,0.1);
+  var knife=new THREE.Group(); knife.position.set(0,-0.33,0.02); diver.armL.b.add(knife);
+  part3(new THREE.CylinderGeometry(0.03,0.03,0.12,8), dark, knife, 0,-0.02,0);
+  part3(new THREE.BoxGeometry(0.1,0.02,0.03), dark, knife, 0,-0.09,0);
+  part3(new THREE.BoxGeometry(0.05,0.24,0.012), steel, knife, 0,-0.22,0);
+  part3(new THREE.ConeGeometry(0.025,0.06,4), steel, knife, 0,-0.37,0, PI,0,0, 1,1,0.25);
+  diver.gun=gun; diver.knife=knife;
+})();
+
+/* Nets: one flies out of the gun, and a wrapped one sits round anything it catches. */
+var netGeo=new THREE.IcosahedronGeometry(1,1);
+var netMat=new THREE.MeshBasicMaterial({color:0xfff0c8, wireframe:true, transparent:true, opacity:0.9});
+var netBallMat=new THREE.MeshStandardMaterial({color:col('#ff9a3c'), roughness:0.5});
+var shots=[];
+function netMesh(){
+  var g=new THREE.Group(); g.add(new THREE.Mesh(netGeo, netMat));
+  for(var i=0;i<4;i++){ var a=i/4*TAU; part3(monSphere, netBallMat, g, Math.cos(a), 0, Math.sin(a), 0,0,0, 0.08); }
+  sea.add(g); return g;
+}
+
+/* Dolphins. Give one a shell and it becomes your friend. Friends follow you
+   and chase off sharks, anglerfish and monsters that come after you. */
+function dolphinModel(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.scale.setScalar(1.25);
+  var skin=new THREE.MeshStandardMaterial({color:col('#7d97ad'), roughness:0.35});
+  var belly=new THREE.MeshStandardMaterial({color:col('#e6eef2'), roughness:0.4});
+  var ink=new THREE.MeshStandardMaterial({color:col('#14181c'), roughness:0.1});
+  part3(monSphere, skin, body, 0,0,0, 0,0,0, 0.42,0.4,1.25);
+  part3(monSphere, belly, body, 0,-0.12,0.1, 0,0,0, 0.36,0.3,1.08);
+  part3(monSphere, skin, body, 0,0.06,0.78, 0,0,0, 0.34,0.32,0.5);
+  part3(monSphere, skin, body, 0,-0.06,1.3, 0,0,0, 0.12,0.1,0.36);
+  for(var sd=-1;sd<=1;sd+=2){
+    part3(monSphere, ink, body, sd*0.27,0.08,0.98, 0,0,0, 0.05);
+    part3(monSphere, skin, body, sd*0.4,-0.2,0.45, 0.3,sd*0.5,sd*0.5, 0.32,0.04,0.13);
+  }
+  part3(monCone, skin, body, 0,0.48,-0.15, -0.55,0,0, 0.06,0.48,0.24);
+  var tail=new THREE.Group(); tail.position.z=-1.05; body.add(tail);
+  part3(monSphere, skin, tail, 0,0,-0.3, 0,0,0, 0.16,0.18,0.5);
+  part3(monSphere, skin, tail, 0,0,-0.78, 0,0,0, 0.6,0.04,0.2);
+  sea.add(g);
+  return {g:g, tail:tail};
+}
+var dolphins=[];
+[[-32,-40],[34,-36],[24,62]].forEach(function(h,i){
+  var d=dolphinModel(), y=heightAt(h[0],h[1])+6;
+  d.home=new THREE.Vector3(h[0],y,h[1]); d.pos=d.home.clone(); d.wp=d.home.clone(); d.dir=new THREE.Vector3(1,0,0);
+  d.t=0; d.cool=0; d.mode='wander'; d.slot=i; d.ph=rr(0,TAU); d.friend=i<(save.friends||0); d.speed=4; d.blob=makeBlob();
+  dolphins.push(d);
+});
 function applyOutfit(){
   var sm=suitMaterial(save.wear.suit);
   diver.suitParts.forEach(function(m){ m.material=sm; });
@@ -1923,7 +1991,7 @@ function updateJar(){
    ============================================================ */
 var ui={};
 ['hud','airbar','airtxt','hearts','bagchip','bankchip','minimap','depth','zone','prompt','msg','floaters','menuBtn','lookZone','stickZone',
- 'stick','knob','tbtns','bLight','bUp','bAct','bBoost','bDown','start','playBtn','keysDesk','keysTouch','pause','resumeBtn','resetBtn',
+ 'stick','knob','tbtns','bLight','bUp','bAct','bBoost','bDown','bNet','start','playBtn','keysDesk','keysTouch','pause','resumeBtn','resetBtn',
  'fade','shop','shoptitle','shopbank','shopclose','shoptabs','shopitems','hurt','lowair'].forEach(function(id){ ui[id]=document.getElementById(id); });
 var mapCtx=ui.minimap.getContext('2d');
 var isTouch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
@@ -1966,6 +2034,7 @@ window.addEventListener('keydown', function(e){
   var k=e.key.toLowerCase(); keys[k]=true;
   if(state==='play'){
     if(k==='e') interact();
+    if(k==='r') fireNet();
     if(k==='f') toggleTorch();
     if(k==='escape'||k==='p') pauseGame();
   }else if(state==='shop' && (k==='escape'||k==='e')) closeShop();
@@ -1981,6 +2050,11 @@ function keyMove(){
 }
 // Mouse look with pointer lock on desktop.
 canvas.addEventListener('click', function(){ if(state==='play' && !isTouch && canvas.requestPointerLock) canvas.requestPointerLock(); });
+// With the mouse captured, a click uses the knife on a netted creature next to you, or fires the net gun.
+document.addEventListener('mousedown', function(e){
+  if(e.button!==0 || document.pointerLockElement!==canvas || state!=='play' || scene!==sea) return;
+  if(!slash()) fireNet();
+});
 document.addEventListener('mousemove', function(e){
   if(document.pointerLockElement===canvas){ look.dx+=e.movementX; look.dy+=e.movementY; }
 });
@@ -2034,6 +2108,7 @@ holdBtn(ui.bUp, function(){ held.up=true; }, function(){ held.up=false; });
 holdBtn(ui.bDown, function(){ held.down=true; }, function(){ held.down=false; });
 holdBtn(ui.bBoost, function(){ held.boost=true; }, function(){ held.boost=false; });
 holdBtn(ui.bAct, function(){ interact(); });
+holdBtn(ui.bNet, function(){ fireNet(); });
 holdBtn(ui.bLight, function(){ toggleTorch(); });
 ui.menuBtn.addEventListener('click', function(){ if(state==='play') pauseGame(); });
 
@@ -2078,6 +2153,7 @@ function transition(fn){
 function enterHouse(fromBlackout, instant){
   var go=function(){
     removeMonster(); spikes.forEach(function(s){ sea.remove(s.m); }); spikes.length=0;
+    shots.forEach(function(s){ sea.remove(s.g); }); shots.length=0; diver.gun.visible=diver.knife.visible=false;
     scene=home; setIndoors(true);
     zoneTimer=0; ui.zone.style.opacity=0; ui.minimap.classList.add('hidden');
     home.add(diver.root);
@@ -2104,7 +2180,7 @@ function exitHouse(){
     ui.minimap.classList.remove('hidden');
     sea.add(diver.root);
     player.pos.set(DOOR.x, DOOR.y+0.5, DOOR.z+4.5); camArm=2; player.vel.set(0,0,2); player.yaw=0; camYaw=PI; camPitch=-0.1;
-    player.zone='home'; showZone('home'); player.exitGrace=1.5;
+    player.zone='home'; showZone('home'); player.exitGrace=1.5; placeFriends();
     sfx.door();
     if(!save.seenTip){
       save.seenTip=true; writeSave();
@@ -2147,6 +2223,8 @@ function interact(){
   if(state!=='play') return;
   if(scene===home && nearStation){ nearStation.act(); return; }
   if(scene===sea){
+    if(slash()) return;
+    var wild=nearWildDolphin(); if(wild){ makeFriend(wild); return; }
     var dx=player.pos.x-DOOR.x, dy=player.pos.y-DOOR.y, dz=player.pos.z-DOOR.z;
     if(dx*dx+dy*dy+dz*dz<36) enterHouse(false);
   }
@@ -2257,8 +2335,9 @@ function drawMap(){
     shells.forEach(function(s){ if(!s.alive) return; var p=toMap(s.pos.x,s.pos.z); g.beginPath(); g.arc(p[0],p[1],s.kind==='golden'||s.kind==='pearl'?5:3.5,0,TAU); g.fill(); });
   }
   clams.forEach(function(c){ if(!c.ready) return; var p=toMap(c.pos.x,c.pos.z); g.fillStyle='#7fe7ff'; g.beginPath(); g.arc(p[0],p[1],5,0,TAU); g.fill(); });
-  sharks.forEach(function(s){ var p=toMap(s.pos.x,s.pos.z); g.fillStyle=s.state==='chase'?'#ff3030':'#ff8f8f'; g.beginPath(); g.arc(p[0],p[1],s.state==='chase'?8:6,0,TAU); g.fill(); });
-  anglers.forEach(function(s){ var p=toMap(s.pos.x,s.pos.z); g.fillStyle='#c08aff'; g.beginPath(); g.arc(p[0],p[1],6,0,TAU); g.fill(); });
+  sharks.forEach(function(s){ if(s.dead) return; var p=toMap(s.pos.x,s.pos.z); g.fillStyle=s.state==='chase'?'#ff3030':'#ff8f8f'; g.beginPath(); g.arc(p[0],p[1],s.state==='chase'?8:6,0,TAU); g.fill(); });
+  dolphins.forEach(function(d){ var p=toMap(d.pos.x,d.pos.z); g.fillStyle=d.friend?'#9dffb0':'#d6f4ff'; g.beginPath(); g.arc(p[0],p[1],5,0,TAU); g.fill(); });
+  anglers.forEach(function(s){ if(s.dead) return; var p=toMap(s.pos.x,s.pos.z); g.fillStyle='#c08aff'; g.beginPath(); g.arc(p[0],p[1],6,0,TAU); g.fill(); });
   if(MON.cur){ var mp=toMap(MON.cur.pos.x,MON.cur.pos.z); g.font='24px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(MON.cur.kind==='serpent'?'🐉':'👁️', mp[0], mp[1]); }
   var hp=toMap(DOOR.x,DOOR.z), hx=hp[0]-R, hy=hp[1]-R, hd=Math.sqrt(hx*hx+hy*hy);
   if(hd>R-16){ hp[0]=R+hx/hd*(R-16); hp[1]=R+hy/hd*(R-16); }
@@ -2364,6 +2443,13 @@ function updateSea(dt, t){
   ui.prompt.classList.toggle('hidden', !homing);
   ui.bAct.classList.add('dim');
   if(homing) ui.prompt.textContent='🏠 Swim into the door to go home';
+  else{
+    var act=isTouch?'✋':'E';
+    if(nearestNetted()){ ui.prompt.textContent='🔪 Press '+(isTouch?'✋':'E or click')+' to use your knife!'; ui.prompt.classList.remove('hidden'); ui.bAct.classList.remove('dim'); }
+    else if(nearWildDolphin()){ ui.prompt.textContent=player.bag>0?('🐬 Press '+act+' to give a shell and make a friend'):'🐬 Bring a shell to make friends'; ui.prompt.classList.remove('hidden'); ui.bAct.classList.remove('dim'); }
+  }
+  ui.bAct.textContent=nearestNetted()?'🔪':'✋';
+  ui.bNet.classList.toggle('dim', netReload>0);
 
   // Zones and the dark.
   var z=zoneAt(player.pos.x,player.pos.z);
@@ -2509,6 +2595,19 @@ function updateSharks(dt,t){
   var hunting=(scene===sea && state==='play');
   var safe=nearHouse(player.pos.x,player.pos.z,26);
   sharks.forEach(function(s){
+    if(s.dead){ if(!respawnCheck(s, dt)) return; s.state='patrol'; }
+    if(s.netT>0){
+      // Tangled in a net: it sinks a little and thrashes.
+      s.netT-=dt;
+      s.pos.y=Math.max(heightAt(s.pos.x,s.pos.z)+1.2*s.scale, s.pos.y-dt*0.8);
+      s.g.position.copy(s.pos); s.g.rotation.z=Math.sin(t*9)*0.2;
+      s.swim+=dt*12; s.g.userData.u.uPhase.value=s.swim; s.g.userData.u.uAmp.value=0.12;
+      s.g.userData.jaw.rotation.x=0.3+Math.sin(t*7)*0.2;
+      showNet(s, s.pos, 2.1*s.scale, t);
+      placeBlob(s.blob, s.pos.x, s.pos.y, s.pos.z, 1.7*s.scale, 5.2*s.scale, s.yaw, depthLight(s.pos.y));
+      if(s.netT<=0){ freeNet(s); s.state='flee'; s.t=0; s.cool=6; }
+      return;
+    }
     s.cool-=dt; s.t+=dt;
     var toP=_d.copy(player.pos).sub(s.pos), dist=toP.length();
     var speed=4.5;
@@ -2565,6 +2664,13 @@ function updateSharks(dt,t){
 function updateAnglers(dt,t){
   var hunting=(scene===sea && state==='play');
   anglers.forEach(function(a){
+    if(a.dead){ if(!respawnCheck(a, dt)) return; a.state='patrol'; }
+    if(a.netT>0){
+      a.netT-=dt; a.g.rotation.z=Math.sin(t*9)*0.2; a.tail.rotation.y=Math.sin(t*14)*0.5;
+      showNet(a, a.pos, 1.9, t);
+      if(a.netT<=0){ freeNet(a); a.g.rotation.z=0; a.state='flee'; a.t=0; a.cool=5; }
+      return;
+    }
     a.cool-=dt; a.t+=dt;
     var toP=_d.copy(player.pos).sub(a.pos), dist=toP.length(), speed=2.5;
     if(a.state==='patrol'){
@@ -2612,12 +2718,13 @@ function spawnMonster(){
     m.laser='idle'; m.lt=2.5; m.life=55;
     showMsg('👁️ An EYE WALKER is climbing out of the sand!<br><span style="font-size:17px">Its top eye shoots lasers — but it is very slow!</span>',3.5);
   }
-  m.state='rise'; m.t=0; m.g.visible=true;
+  m.state='rise'; m.t=0; m.g.visible=true; m.netT=0; m.hp=undefined;
   MON.cur=m; MON.next=kind==='serpent'?'walker':'serpent';
   sfx.monster();
 }
 function removeMonster(){
   var m=MON.cur; if(!m) return;
+  freeNet(m); m.netT=0;
   m.g.visible=false; beam.visible=false;
   if(m.blob) m.blob.visible=false;
   MON.cur=null; MON.timer=rr(70,120);
@@ -2646,6 +2753,13 @@ function updateMonsters(dt,t){
 }
 function updateSerpent(m, dt, t, hunting){
   var head=m.pos, toP=_d.copy(player.pos).sub(head), dist=toP.length(), dark=inDark(), speed=5.2;
+  if(m.netT>0){
+    m.netT-=dt; m.mat.emissive.setRGB(0,0,0);
+    m.head.position.set(head.x+Math.sin(t*11)*0.08, head.y, head.z);
+    showNet(m, head, 1.9, t);
+    if(m.netT<=0){ freeNet(m); m.backT=1.5; m.shoot=2.5; }
+    return;
+  }
   m.t+=dt;
   if(m.state==='rise'){
     steer(m.dir, _v2.set(0,1,0), 3, dt); speed=4;
@@ -2713,6 +2827,13 @@ function updateWalker(m, dt, t, hunting){
   m.t+=dt;
   var toP=_d.copy(player.pos).sub(m.pos), dist=toP.length();
   m.glow.scale.setScalar(0.01); beam.visible=false;
+  if(m.netT>0){
+    m.netT-=dt; m.laser='idle'; m.lt=1.5; m.speed=0;
+    m.legs.forEach(function(L,i){ L.hip.rotation.set(0, Math.sin(t*10+i)*0.08, 0.5); });
+    showNet(m, m.center, 3.6, t);
+    if(m.netT<=0) freeNet(m);
+    return;
+  }
   if(m.state==='rise'){
     m.lift=Math.min(0, m.lift+dt*2.2);
     if(rnd()<0.8) emitBubble(m.pos.x+rr(-2,2), m.pos.y+0.3, m.pos.z+rr(-2,2), 0.6);
@@ -2759,6 +2880,7 @@ function updateWalker(m, dt, t, hunting){
   m.pos.y=lerp(m.pos.y, heightAt(m.pos.x,m.pos.z), Math.min(1,dt*3));
   m.g.position.set(m.pos.x, m.pos.y+m.lift+Math.sin(m.walk*2)*0.06, m.pos.z);
   m.g.rotation.y=m.yaw;
+  m.center.set(m.g.position.x, m.g.position.y+WALK_H*1.35, m.g.position.z);
   // Plod along on its long legs.
   m.walk+=dt*(0.5+m.speed*2.2);
   m.legs.forEach(function(L){ var p=m.walk+L.ph; L.hip.rotation.set(0, Math.sin(p)*0.35, 0.5+Math.max(0,Math.cos(p))*0.18); });
@@ -2770,6 +2892,182 @@ function showBeam(from, to, r, op){
   _ld.copy(to).sub(from).normalize();
   beam.position.copy(from); beam.lookAt(_v.copy(from).add(_ld));
   beam.scale.set(r, r, 42); beam.material.opacity=op; beam.visible=true;
+}
+/* ============================================================
+   NET GUN, KNIFE AND DOLPHIN FRIENDS
+   ============================================================ */
+var netReload=0, slashT=0, aimT=0, protectMsgT=0;
+var _c=new THREE.Vector3();
+// Everything you can catch in a net: {o: the creature, c: where it is, r: how big it is}.
+function targets(){
+  var list=[];
+  sharks.forEach(function(s){ if(!s.dead) list.push({o:s, kind:'shark', c:s.pos, r:1.5*s.scale}); });
+  anglers.forEach(function(a){ if(!a.dead) list.push({o:a, kind:'angler', c:a.pos, r:1.5}); });
+  var m=MON.cur;
+  if(m && m.state==='hunt'){
+    if(m.kind==='serpent'){
+      list.push({o:m, kind:'monster', c:m.pos, r:1.3});
+      for(var i=3;i<SERP_N;i+=4) list.push({o:m, kind:'monster', c:m.segs[i].position, r:0.9});
+    }else list.push({o:m, kind:'monster', c:m.center, r:3});
+  }
+  return list;
+}
+function fireNet(){
+  if(state!=='play' || scene!==sea) return;
+  if(netReload>0) return;
+  netReload=1.2; aimT=0.45; sfx.net();
+  var g=netMesh(); g.scale.setScalar(0.2);
+  _c.copy(player.pos); _c.y+=0.5; _c.addScaledVector(_fwd, 0.9);
+  g.position.copy(_c);
+  shots.push({g:g, v:_fwd.clone().multiplyScalar(24).add(_tmp.copy(player.vel).multiplyScalar(0.5)), life:1.2});
+}
+function netted(o){ return o.netT>0; }
+function nearestNetted(){
+  var best=null, bd=1e9;
+  targets().forEach(function(T){
+    if(!netted(T.o)) return;
+    var d=T.c.distanceTo(player.pos)-T.r;
+    if(d<2.2 && d<bd){ bd=d; best=T; }
+  });
+  return best;
+}
+function maxHp(kind){ return kind==='shark'?3:(kind==='angler'?2:5); }
+function slash(){
+  var T=nearestNetted(); if(!T) return false;
+  if(slashT>0) return true;
+  slashT=0.35; sfx.slash();
+  var o=T.o; if(o.hp===undefined) o.hp=maxHp(T.kind);
+  o.hp--;
+  floater('🔪', T.c);
+  for(var i=0;i<6;i++) emitBubble(T.c.x,T.c.y,T.c.z,0.6);
+  if(o.hp<=0) defeat(T);
+  return true;
+}
+function defeat(T){
+  var o=T.o, reward=T.kind==='shark'?5:(T.kind==='angler'?4:15);
+  for(var i=0;i<40;i++) emitBubble(T.c.x,T.c.y,T.c.z,1.6);
+  player.bagVal+=reward; sfx.win();
+  floater('+'+reward+' 🐚', T.c);
+  var name=T.kind==='shark'?'shark':(T.kind==='angler'?'anglerfish':o.name);
+  showMsg('You beat the '+name+'! 🎉<br><span style="font-size:17px">+'+reward+' shells in your bag — take them home!</span>',2.6);
+  freeNet(o); o.netT=0; o.hp=undefined;
+  if(T.kind==='monster'){ removeMonster(); return; }
+  o.dead=true; o.respawn=rr(80,120); o.g.visible=false; o.state='patrol';
+  if(o.blob) o.blob.visible=false;
+}
+function showNet(o, c, r, t){
+  if(!o.net) o.net=netMesh();
+  o.net.visible=true; o.net.position.copy(c);
+  o.net.scale.setScalar(r*(1+Math.sin(t*9)*0.05)); o.net.rotation.y+=0.02;
+}
+function freeNet(o){ if(o.net) o.net.visible=false; }
+function respawnCheck(o, dt){
+  o.respawn-=dt;
+  if(o.respawn>0) return false;
+  o.dead=false; o.pos.copy(o.home); o.g.visible=true; o.cool=5; o.t=0;
+  return true;
+}
+function updateShots(dt){
+  netReload-=dt; slashT-=dt; aimT-=dt;
+  var list=shots.length?targets():null;
+  for(var i=shots.length-1;i>=0;i--){
+    var s=shots[i]; s.life-=dt;
+    s.g.position.addScaledVector(s.v, dt);
+    s.g.scale.setScalar(Math.min(1.1, s.g.scale.x+dt*3)); s.g.rotation.y+=dt*6;
+    var p=s.g.position, hit=null;
+    for(var j=0;j<list.length;j++){ var T=list[j], R=T.r+0.9; if(T.c.distanceToSquared(p)<R*R){ hit=T; break; } }
+    if(hit){
+      hit.o.netT=gearVal('net');
+      if(hit.o.hp===undefined) hit.o.hp=maxHp(hit.kind);
+      sfx.netHit();
+      showMsg('🕸️ Caught it! Swim up and press '+(isTouch?'🔪':'E')+' to use your knife.',2);
+    }
+    if(hit || s.life<=0 || p.y<heightAt(p.x,p.z)){ sea.remove(s.g); shots.splice(i,1); }
+  }
+  // Arms: point the gun after a shot, swing the knife on a slash.
+  if(aimT>0){ diver.armR.a.rotation.set(PI-0.25, 0, -0.1); diver.armR.b.rotation.x=0; }
+  if(slashT>0){ var k=slashT/0.35; diver.armL.a.rotation.set(lerp(PI*0.45, PI-0.2, k), 0, 0.3); diver.armL.b.rotation.x=-0.3; }
+  diver.gun.visible=diver.knife.visible=true;
+}
+function threatFor(d){
+  var best=null, bd=26*26;
+  sharks.forEach(function(s){ if(!s.dead && !netted(s) && s.state==='chase'){ var q=s.pos.distanceToSquared(player.pos); if(q<bd){ bd=q; best={o:s, kind:'shark', c:s.pos}; } } });
+  anglers.forEach(function(a){ if(!a.dead && !netted(a) && a.state==='chase'){ var q=a.pos.distanceToSquared(player.pos); if(q<bd){ bd=q; best={o:a, kind:'angler', c:a.pos}; } } });
+  var m=MON.cur;
+  if(m && m.state==='hunt' && !netted(m)){ var c=m.kind==='serpent'?m.pos:m.center, q=c.distanceToSquared(player.pos); if(q<bd*1.4){ best={o:m, kind:'monster', c:c}; } }
+  return best;
+}
+function bump(T){
+  var o=T.o;
+  if(T.kind==='shark'){ o.state='flee'; o.t=0; o.cool=12; }
+  else if(T.kind==='angler'){ o.state='flee'; o.t=0; o.cool=10; }
+  else if(o.kind==='serpent'){ o.backT=3; o.shoot=3.5; }
+  else { o.laser='idle'; o.lt=4; o.speed=0; beam.visible=false; }
+  for(var i=0;i<12;i++) emitBubble(T.c.x,T.c.y,T.c.z,0.8);
+  sfx.dolphin();
+  if(clockT>protectMsgT){ protectMsgT=clockT+10; showMsg('🐬 Your dolphin friend bumped it away!',2); }
+}
+function makeFriend(d){
+  if(player.bag<=0){ showMsg('🐬 Dolphins love shells!<br><span style="font-size:17px">Collect a shell and give it to this dolphin.</span>',2.4); sfx.nope(); return; }
+  var each=Math.round(player.bagVal/player.bag);
+  player.bag--; player.bagVal-=each;
+  d.friend=true; d.mode='follow'; save.friends=(save.friends||0)+1; writeSave();
+  sfx.dolphin(); for(var i=0;i<16;i++) emitBubble(d.pos.x,d.pos.y,d.pos.z,1);
+  showMsg('🐬 You made a friend!<br><span style="font-size:17px">Dolphin friends follow you and chase off sharks and monsters.</span>',3);
+}
+function nearWildDolphin(){
+  for(var i=0;i<dolphins.length;i++){ var d=dolphins[i]; if(!d.friend && d.pos.distanceToSquared(player.pos)<20) return d; }
+  return null;
+}
+function placeFriends(){
+  var n=0;
+  dolphins.forEach(function(d){ if(!d.friend) return;
+    d.pos.set(DOOR.x+(n-1)*3, DOOR.y+2, DOOR.z+8); d.dir.set(0,0,1); d.mode='follow'; d.cool=2; n++; });
+}
+function updateDolphins(dt,t){
+  var fi=0;
+  dolphins.forEach(function(d){
+    d.t+=dt; d.cool-=dt;
+    var want=_v2, speed=4.5;
+    if(!d.friend){
+      if(d.pos.distanceToSquared(d.wp)<9 || d.t>9){
+        d.t=0; var a=rnd()*TAU, r=rnd()*22;
+        d.wp.set(d.home.x+Math.cos(a)*r, 0, d.home.z+Math.sin(a)*r);
+        d.wp.y=heightAt(d.wp.x,d.wp.z)+rr(3,9);
+      }
+      want.copy(d.wp).sub(d.pos).normalize();
+    }else if(d.mode==='ram' && d.target && !(d.target.o.dead) && !netted(d.target.o) && d.t<4){
+      speed=15;
+      want.copy(d.target.c).sub(d.pos);
+      if(want.length()<2.6){ bump(d.target); d.mode='follow'; d.cool=6; d.target=null; }
+      want.normalize();
+    }else{
+      d.mode='follow'; d.target=null;
+      if(d.cool<=0 && scene===sea && state==='play'){
+        var T=threatFor(d);
+        if(T){ d.mode='ram'; d.target=T; d.t=0; }
+      }
+      // Swim in a loose ring around the diver.
+      var a=d.slot*2.1+t*0.4;
+      _c.set(player.pos.x+Math.cos(a)*4, player.pos.y+1.2+Math.sin(t*1.3+d.ph)*0.8, player.pos.z+Math.sin(a)*4);
+      want.copy(_c).sub(d.pos);
+      var dist=want.length();
+      speed=clamp(dist*1.6, 2.5, 13);
+      want.normalize();
+      fi++;
+    }
+    steer(d.dir, want, d.mode==='ram'?4:2.4, dt);
+    d.speed=lerp(d.speed, speed, Math.min(1,dt*3));
+    d.pos.addScaledVector(d.dir, d.speed*dt);
+    var fl=heightAt(d.pos.x,d.pos.z)+1.2;
+    if(d.pos.y<fl){ d.pos.y=fl; if(d.dir.y<0) d.dir.y*=-0.5; }
+    if(d.pos.y>SURF-1.5) d.pos.y=SURF-1.5;
+    d.g.position.copy(d.pos);
+    d.g.rotation.order='YXZ';
+    d.g.rotation.set(-Math.asin(clamp(d.dir.y,-1,1))+Math.sin(t*4+d.ph)*0.06, Math.atan2(d.dir.x,d.dir.z), 0);
+    d.tail.rotation.x=Math.sin(t*(3+d.speed*0.5)+d.ph)*0.45;
+    placeBlob(d.blob, d.pos.x, d.pos.y, d.pos.z, 1.1, 2.8, d.g.rotation.y, depthLight(d.pos.y));
+  });
 }
 function updateEels(dt,t){
   eels.forEach(function(e){
@@ -2894,6 +3192,7 @@ function frame(now){
   }else if(state==='shop'){ updateShopCam(dt,t); }
   if(scene===sea){
     updateScenery(dt,t); updateFish(dt,t); updateSharks(dt,t); updateAnglers(dt,t); updateMonsters(dt,t);
+    updateShots(dt); updateDolphins(dt,t);
     updateEels(dt,t); updateJellies(dt,t); updateClams(dt,t); updateShells(dt,t);
   }else{
     // Keep the sea ticking quietly so it has moved on when you come out.
