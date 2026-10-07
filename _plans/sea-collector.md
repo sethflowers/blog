@@ -40,3 +40,19 @@ saves the game. Everything is kept in `localStorage` under `sea-collector-v1`.
 - Kelp, sea grass, coral and rocks are merged into one mesh each; one material hook adds
   caustics and a swaying vertex shader. Fish are one instanced mesh.
 - The camera is a spring arm that stops short of the house, the wreck and rocks.
+
+## Monsters, the net gun and dolphin friends
+
+- **Monsters** (from drawings) climb out of the sand every minute or two while you're away from
+  home, hunt you for about 50 seconds, then burrow back down. Only one at a time, and they won't
+  come near the house.
+  - **Spike Serpent** — a long purple serpent with a spiky crown. Power: shoots spikes off its
+    back. Weakness: the dark — swim down into the Deep Trench and it gives up.
+  - **Eye Walker** — a pale blue walker on four long legs with eyes all over. Power: its top eye
+    glows red, stops aiming, then fires a laser. Weakness: very slow.
+- **Net gun** (click, R or 🕸️): the net holds a shark, anglerfish or monster for 6 seconds (10 with
+  the Big Net Gun from the Gear Locker). While it's netted, swim up and use your **knife** (E,
+  click or 🔪). Sharks take 3 hits, anglerfish 2, monsters 5. Beaten creatures drop shells into your
+  bag; sharks and anglerfish come back later.
+- **Dolphins** roam the Sandy Flats. Give one a shell (E) and it becomes a friend for good
+  (`save.friends`). Friends swim round you and bump away anything that chases you.
