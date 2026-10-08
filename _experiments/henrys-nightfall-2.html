@@ -2705,7 +2705,7 @@ function animateSite(t, wdt){
 
 /* ---------- what is left when a tower comes down ---------- */
 // it topples sideways as seen from its door, so from the door you watch the whole fall
-function towerFall(t){ return {x:Math.cos(t.door), z:-Math.sin(t.door)}; }
+function towerFall(t){ var a=t.fallA!==undefined ? t.fallA : t.door; return {x:Math.cos(a), z:-Math.sin(a)}; }
 function buildRuin(t, plain){
   var ruin=new THREE.Group(); ruin.position.set(t.x,t.y0,t.z); ruin.visible=false; ruin.userData.noCull=true;
   islandGroup.add(ruin); t.ruin=ruin;
@@ -2983,7 +2983,7 @@ function dressFloor(t, floor){
   if(!roomBaseShoot) roomBaseShoot=towerShootables.slice();
   towerShootables.length=0; Array.prototype.push.apply(towerShootables, roomBaseShoot);
   towerColliders.length=0; Array.prototype.push.apply(towerColliders, towerStaticColliders);
-  var keep=_seed; _seed=1000+TOWERS.indexOf(t)*37+floor*7;
+  var keep=_seed; _seed=1000+(t.outpost ? Math.floor(Math.abs(t.x*7+t.z*3)) : TOWERS.indexOf(t)*37)+floor*7;
   colliders=towerColliders; shootables=towerShootables;
   withRoot(floorProps, function(){
     floorProps.position.set(0,0,0);
@@ -6185,6 +6185,7 @@ function tryMove(pos, dx, dz){
    ============================================================ */
 // a tower the dead hold: never taken, or taken and built back up
 function towerHeld(i){ return !state.cleared[i] || !!TOWERS[i].rebuilt; }
+function towerTier(t){ return t.outpost ? t.region : TOWERS.indexOf(t); }
 function objectiveTower(){
   for(var i=0;i<TOWERS.length;i++) if(!state.cleared[i]) return TOWERS[i];
   return null;
@@ -6257,7 +6258,7 @@ function spawnRoamer(){
 
 /* ---------- the dead inside a tower climb out of the dark by the walls ---------- */
 function spawnInTower(){
-  var t=state.tower, ti=TOWERS.indexOf(t);
+  var t=state.tower, ti=towerTier(t);
   var best=null;
   for(var k=0;k<14;k++){
     var a=Math.random()*6.283, r=rand(9.5,11.6);
@@ -6420,7 +6421,7 @@ function enterTower(t){
   });
 }
 function setupFloor(){
-  var t=state.tower, ti=TOWERS.indexOf(t);
+  var t=state.tower, ti=towerTier(t);
   dressFloor(t, state.floor);
   CG=buildGrid(towerColliders);
   state.gateOpen=false;
@@ -6465,7 +6466,7 @@ function goRoof(){
   // it hauls itself over the far parapet
   var hx=t.hatch.x-t.x, hz=t.hatch.z-t.z, hl=Math.hypot(hx,hz)||1;
   var bx=t.x-hx/hl*(t.roofR-3), bz=t.z-hz/hl*(t.roofR-3);
-  var b=makeZombie({boss:t.boss, tier:t.region, aware:true, hpMul:state.cleared[t.region]?0.7:1});
+  var b=makeZombie({boss:t.boss, tier:t.region, aware:true, hpMul:t.outpost ? t.hpMul : state.cleared[t.region]?0.7:1});
   b.group.position.set(bx, t.roofY, bz);
   b.group.rotation.y=Math.atan2(player.pos.x-bx, player.pos.z-bz);
   shake(0.9); sfx.roar();
@@ -6478,8 +6479,10 @@ function onBossDown(z){
   var t=state.tower, ti=TOWERS.indexOf(t);
   state.bossUp=false; state.collapsing=true;
   zombies.forEach(function(o){ if(!o.dead && o.roofKid) killZombie(o); });
-  t.refall=!!t.rebuilt; t.rebuilt=false;
-  state.cleared[ti]=true;
+  if(!t.outpost){
+    t.refall=!!t.rebuilt; t.rebuilt=false;
+    state.cleared[ti]=true;
+  }
   saveGame();
   updateRemaining();
   // with its master dead the tower starts to give way: a moment to grab the coins, then off
@@ -7032,8 +7035,19 @@ function outpostSpot(){
 }
 function makeOutpost(o){
   var t={outpost:true, x:o.x, z:o.z, r:o.r, h:o.h, region:regionAt(o.x,o.z), color:OUTPOST_COLOR,
-         door:o.door||0, built:false, maxHp:900, hp:900};
+         built:false, maxHp:900, hp:900, name:'THE BUILDERS\u2019 TOWER',
+         floors:o.h>=20?2:1, boss:o.boss||(Math.random()<0.5?'brute':'stalker')};
+  t.hpMul=0.45+t.region*0.1;
   t.y0=groundIsland(t.x,t.z)-0.3;
+  // the door faces away from the scaffold, onto open ground
+  if(o.door!==undefined) t.door=o.door;
+  else {
+    for(var da=0; da<8; da++){
+      var try1=o.sa+Math.PI+(da%2?1:-1)*Math.ceil(da/2)*0.4, dx=t.x+Math.sin(try1)*(t.r+3), dz=t.z+Math.cos(try1)*(t.r+3);
+      t.door=try1;
+      if(passable(dx,dz) && groundIsland(dx,dz)>0.6) break;
+    }
+  }
   var keepS=shootables, keepR=root; shootables=islandShootables; root=islandGroup;
   var J=buildRise(t, {sa:o.sa, ux:Math.sin(o.sa), uz:Math.cos(o.sa), vx:Math.cos(o.sa), vz:-Math.sin(o.sa)}, outpostStone);
   t.riseJ=J; t.group=J.group;
@@ -7042,7 +7056,7 @@ function makeOutpost(o){
   var foot=new THREE.Mesh(new THREE.CylinderGeometry(t.r+0.9, t.r+1.4, 3.4, 24), outpostStone);
   foot.position.y=-0.9; foot.castShadow=foot.receiveShadow=true; J.outer.add(foot); setShoot(foot,true); t.foot=foot;
   // the crown, hidden until the wall is done
-  var rt=rAt(t,t.h), R=rt+1.3, crown=new THREE.Group(); J.group.add(crown); t.crown=crown;
+  var rt=rAt(t,t.h), R=rt+2.0, crown=new THREE.Group(); J.group.add(crown); t.crown=crown;
   function cm(geo, mat, y, ry){ var m=new THREE.Mesh(geo, mat); m.position.y=y; if(ry) m.rotation.y=ry; m.castShadow=m.receiveShadow=true; crown.add(m); return m; }
   cm(new THREE.CylinderGeometry(R, rt, 1.8, 24, 1, true), outpostWall, t.h+0.9);
   cm(new THREE.CylinderGeometry(R, R, 0.4, 24), roofStone, t.h+1.95);
@@ -7063,6 +7077,26 @@ function makeOutpost(o){
       sl.position.set(Math.sin(sa)*rr, y, Math.cos(sa)*rr); sl.rotation.y=sa; crown.add(sl);
     }
   }
+  // the door, its torches, and the hatch down from the roof
+  var da=t.door, dr=rAt(t,1.8)+0.05;
+  var door=new THREE.Mesh(new THREE.PlaneGeometry(2.0,3.0), doorMat);
+  door.position.set(Math.sin(da)*dr, 1.8, Math.cos(da)*dr); door.rotation.y=da; crown.add(door);
+  var arch=new THREE.Mesh(new THREE.TorusGeometry(1.15,0.2,6,16,Math.PI), crownStone);
+  arch.position.set(Math.sin(da)*(dr+0.1), 3.3, Math.cos(da)*(dr+0.1)); arch.rotation.y=da; crown.add(arch);
+  [-1,1].forEach(function(sd){
+    var px=Math.sin(da)*(dr+0.35)+Math.cos(da)*sd*1.6, pz=Math.cos(da)*(dr+0.35)-Math.sin(da)*sd*1.6;
+    var gs=glowSprite(0xff9a40,1.5,0.8); gs.position.set(px,3.0,pz); crown.add(gs);
+  });
+  t.torchEm=addEmitter(t.x+Math.sin(da)*(dr+1), t.y0+3, t.z+Math.cos(da)*(dr+1), 0xff8a3a, 1.2, 10, {flick:true});
+  t.torchEm.group=crown;
+  var hr=R-2.4;
+  t.hatchL={x:Math.sin(da)*hr, z:Math.cos(da)*hr};
+  var hatch=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.12,1.6), darkWoodMat);
+  hatch.position.set(t.hatchL.x, t.h+2.2, t.hatchL.z); hatch.rotation.y=da; crown.add(hatch);
+  t.hatchGlow=glowSprite(OUTPOST_COLOR, 2.4, 0.0); t.hatchGlow.position.set(t.hatchL.x, t.h+2.7, t.hatchL.z); crown.add(t.hatchGlow);
+  t.roofY=t.y0+t.h+2.15; t.roofR=R-0.85;
+  t.hatch={x:t.x+t.hatchL.x, z:t.z+t.hatchL.z};
+  t.doorX=t.x+Math.sin(da)*(t.r+2.2); t.doorZ=t.z+Math.cos(da)*(t.r+2.2);
   t.beacon=glowSprite(OUTPOST_COLOR, 6, 0.9); t.beacon.material.fog=false; t.beacon.position.y=t.h+3.6; t.beacon.visible=false; J.group.add(t.beacon);
   t.beaconEm=addEmitter(t.x, t.y0+t.h+3.6, t.z, OUTPOST_COLOR, 0, 22, {flick:true, glow:t.beacon});
   t.beaconEm.group=t.beacon;
@@ -7075,7 +7109,7 @@ function makeOutpost(o){
 function newOutpost(){
   var sp=outpostSpot();
   if(!sp) return false;
-  var t=makeOutpost({x:sp.x, z:sp.z, r:rand(3.2,4.2), h:RISE_CH*Math.round(rand(8,12)), sa:rand(0,Math.PI*2)});
+  var t=makeOutpost({x:sp.x, z:sp.z, r:rand(4.4,5.2), h:RISE_CH*Math.round(rand(8,12)), sa:rand(0,Math.PI*2)});
   startRaise(t, 0, 4);
   toast('THE DEAD ARE BUILDING A NEW TOWER', 3);
   sfx.rumble(1.2);
@@ -7096,7 +7130,7 @@ function removeOutpost(t){
   t.riseJ.courses.concat(t.crown.children, [t.foot]).forEach(function(m){ setShoot(m,false); });
   islandGroup.remove(t.riseJ.outer);
   t.riseJ.outer.traverse(function(o){ if(o.geometry && o.geometry!==risePoleGeo && o.geometry!==ropeGeo && o.geometry!==siteBlockGeo && o.geometry!==riseBlockGeo) o.geometry.dispose(); });
-  [t.riseJ.em, t.beaconEm].forEach(function(e){ var i=emitters.indexOf(e); if(i>=0) emitters.splice(i,1); });
+  [t.riseJ.em, t.beaconEm, t.torchEm].forEach(function(e){ var i=emitters.indexOf(e); if(i>=0) emitters.splice(i,1); });
   for(var c=cullList.length-1;c>=0;c--) if(cullList[c].o===t.riseJ.outer) cullList.splice(c,1);
   t.cols.forEach(removeIslandCollider);
   var i=outposts.indexOf(t); if(i>=0) outposts.splice(i,1);
@@ -7131,7 +7165,11 @@ function blastTowers(pos, radius, dmg){
 function toppleOutpost(t){
   // it goes over away from you
   var fx=t.x-player.pos.x, fz=t.z-player.pos.z, fl=Math.hypot(fx,fz)||1;
-  t.door=Math.atan2(-fz/fl, fx/fl);
+  prepOutpostFall(t, Math.atan2(-fz/fl, fx/fl));
+  startCollapse(t);
+}
+function prepOutpostFall(t, fallA){
+  t.fallA=fallA;
   t.built=false;
   t.beacon.visible=false; t.beaconEm.base=0;
   dropRuin(t);
@@ -7142,7 +7180,6 @@ function toppleOutpost(t){
   t.ruinShoot=islandShootables.slice(before);
   t.ruinShoot.forEach(function(m){ setShoot(m,false); });
   t.ruinEm=emitters.length>eb ? emitters[emitters.length-1] : null;
-  startCollapse(t);
 }
 // after the dust settles: a reward, and the crew comes back to start again
 function onOutpostDown(t){
@@ -7345,6 +7382,7 @@ function viewSpot(t){
 // off the roof and down to the ground, a safe way off, to watch it go
 function leaveFallingTower(t){
   transition(function(){
+    if(t.outpost) prepOutpostFall(t, undefined);
     // whatever the boss dropped and you missed is yours
     for(var c=coins.length-1;c>=0;c--){ if(coins[c].mode==='roof'){ collectCoin(coins[c]); coins.splice(c,1); } }
     clearZombies(); clearGrenades(); clearFireballs();
@@ -7372,6 +7410,11 @@ function findInteract(){
       var t=TOWERS[i];
       if(towerHeld(i) && !t.collapse && Math.hypot(px-t.doorX, pz-t.doorZ)<3.6)
         return {label:'ENTER  ·  '+t.name, fn:(function(tt){ return function(){ enterTower(tt); }; })(t)};
+    }
+    for(i=0;i<outposts.length;i++){
+      var o=outposts[i];
+      if(o.built && !o.collapse && Math.hypot(px-o.doorX, pz-o.doorZ)<3.2)
+        return {label:'ENTER  ·  '+o.name, fn:(function(oo){ return function(){ enterTower(oo); }; })(o)};
     }
   } else if(state.mode==='tower'){
     if(state.gateOpen && Math.hypot(px-(TOWER_O.x+GATE.x), pz-(TOWER_O.z+GATE.z))<3.2)
@@ -7522,7 +7565,7 @@ function saveGame(){
             rebuilt:TOWERS.map(function(t){ return !!t.rebuilt; }),
             raise:TOWERS.map(function(t){ return t.rise && raises.indexOf(t.rise)>=0 ? +t.rise.k.toFixed(3) : 0; }),
             outposts:outposts.map(function(t){
-              return {x:+t.x.toFixed(2), z:+t.z.toFixed(2), r:+t.r.toFixed(2), h:t.h, sa:+t.riseJ.F.sa.toFixed(3), built:!!t.built && !t.collapse,
+              return {x:+t.x.toFixed(2), z:+t.z.toFixed(2), r:+t.r.toFixed(2), h:t.h, sa:+t.riseJ.F.sa.toFixed(3), door:+t.door.toFixed(3), boss:t.boss, built:!!t.built && !t.collapse,
                       k: t.rise && raises.indexOf(t.rise)>=0 ? +t.rise.k.toFixed(3) : 0};
             })};
   try{ localStorage.setItem(SAVE_KEY, JSON.stringify(data)); }catch(e){}
