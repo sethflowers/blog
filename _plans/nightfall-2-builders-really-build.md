@@ -21,10 +21,15 @@ the service worker's cache name moves to `nightfall-two-v3` so phones pick it up
    It goes up in about two minutes. Then it gets a crown, battlements, glowing slit windows and a
    beacon fire on the roof. There are at most four at a time, and only one goes up at a time. They
    show on the map in orange.
-3. **Knocking new towers down.** A finished new tower takes about four rockets or three grenades.
+3. **Climbing new towers.** A finished new tower ("THE BUILDERS' TOWER") has a door with torches
+   facing away from the scaffold. Inside are one floor (two if it is 20 m or taller) of the usual
+   rooms, and on the roof a smaller boss: the Brute or the Stalker, at about half strength. Kill it
+   and the tower comes down like the big ones, you collect its coins, and the crew starts it again.
+   It never counts towards opening regions.
+4. **Knocking new towers down.** A finished new tower takes about four rockets or three grenades.
    Then it falls away from you, crushes anything underneath, and leaves a ruin and a fountain of
    coins. The crew comes back and builds it again.
-4. Rebuilt towers, the progress on every tower going up and the new towers are all saved.
+5. Rebuilt towers, the progress on every tower going up and the new towers are all saved.
 
 ## How it is built
 
@@ -42,7 +47,11 @@ the service worker's cache name moves to `nightfall-two-v3` so phones pick it up
 - New towers: `outpostSpot` / `makeOutpost` / `newOutpost` / `updateOutposts`. The colliders go
   straight into the island grid (`addIslandCollider`). `blastTowers`, called from `explode`, damages
   them. `toppleOutpost` builds a ruin facing away from you and reuses `startCollapse` /
-  `updateCollapses`, which now also loop over the new towers.
+  `updateCollapses`, which now also loop over the new towers. `towerFall` uses `t.fallA` when it
+  is set, so a blasted tower falls away from you and a beaten one falls sideways from its door.
+  New towers have `name`, `floors`, `boss`, `door`, `hatch`, `roofY` and `roofR` like the big ones,
+  so `enterTower` / `climb` / `goRoof` / `onBossDown` / `leaveFallingTower` work on them.
+  `towerTier(t)` gives their difficulty inside (their region).
 - Saving adds `rebuilt`, `raise` (progress per main tower) and `outposts` to the save.
 
 ## Verification
