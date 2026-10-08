@@ -7010,7 +7010,7 @@ function updateRaises(wdt){
    too far from you so you can watch it go up. */
 function outpostSpot(){
   var list=[];
-  for(var tries=0; tries<80; tries++){
+  for(var tries=0; tries<150; tries++){
     var a=rand(0,Math.PI*2), d=rand(50,115), x=player.pos.x+Math.sin(a)*d, z=player.pos.z+Math.cos(a)*d;
     if(Math.hypot(x,z)>ISLAND_R-25) continue;
     var reg=regionAt(x,z);
@@ -7021,7 +7021,7 @@ function outpostSpot(){
       lo=Math.min(lo,h); hi=Math.max(hi,h);
       if(!passable(sx,sz) || distToPath(sx,sz)<4) ok=false;
     }
-    if(!ok || hi-lo>2.2) continue;
+    if(!ok || hi-lo>3) continue;
     if(nearColliders(x,z,12,list).some(function(c){ return c.maxX>x-9 && c.minX<x+9 && c.maxZ>z-9 && c.minZ<z+9; })) continue;
     for(var i=0;i<outposts.length && ok;i++) if(Math.hypot(outposts[i].x-x, outposts[i].z-z)<35) ok=false;
     for(var j=0;j<TOWERS.length && ok;j++) if(Math.hypot(TOWERS[j].x-x, TOWERS[j].z-z)<TOWERS[j].r+40) ok=false;
@@ -8648,7 +8648,7 @@ if(/[?&]debug/.test(location.search)){
     applyCheats:applyCheats, startCollapse:startCollapse, leaveFallingTower:leaveFallingTower, setTowerDown:setTowerDown,
     freezeZombie:freezeZombie, chillZombie:chillZombie, spawnBoss:spawnBoss, lookAt:lookAt, WEAPONS:WEAPONS, scene:scene,
     goRoof:goRoof, shoot:shoot, viewSpot:viewSpot, raises:raises, outposts:outposts, newOutpost:newOutpost,
-    startRaise:startRaise, blastTowers:blastTowers, explode:explode, loadSave:loadSave, resetGame:resetGame,
+    startRaise:startRaise, outpostSpot:outpostSpot, blastTowers:blastTowers, explode:explode, loadSave:loadSave, resetGame:resetGame,
     // run the game forward without drawing, for tests on slow machines
     step:function(n, dt){ for(var i=0;i<n;i++){ if(state.running && !state.paused) update(dt||1/30); updateWorld(dt||1/30); } }};
 }
