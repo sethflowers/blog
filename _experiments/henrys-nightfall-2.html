@@ -2705,11 +2705,11 @@ function animateSite(t, wdt){
 
 /* ---------- what is left when a tower comes down ---------- */
 // it topples sideways as seen from its door, so from the door you watch the whole fall
-function towerFall(t){ return {x:Math.cos(t.door), z:-Math.sin(t.door)}; }
-function buildRuin(t){
+function towerFall(t){ var a=t.fallA!==undefined ? t.fallA : t.door; return {x:Math.cos(a), z:-Math.sin(a)}; }
+function buildRuin(t, plain){
   var ruin=new THREE.Group(); ruin.position.set(t.x,t.y0,t.z); ruin.visible=false; ruin.userData.noCull=true;
   islandGroup.add(ruin); t.ruin=ruin;
-  var f=towerFall(t), keep=_seed; _seed=777+t.x*13+t.z*7;
+  var f=towerFall(t), keep=_seed; _seed=Math.floor(777+t.x*13+t.z*7);
   withRoot(ruin, function(){
     // the stump: the bottom of the wall, broken off ragged
     var sg=new THREE.CylinderGeometry(t.r*0.98, t.r, 8, 28, 6, true), sp=sg.attributes.position;
@@ -2744,6 +2744,7 @@ function buildRuin(t){
       stat(new THREE.BoxGeometry(1.1,0.9,0.55), crownStone, mx-t.x, groundIsland(mx,mz)-t.y0+0.4, mz-t.z, sr(-0.4,0.4),sr(0,3),sr(-0.6,0.6), 0.25);
     }
     // the freed tower still burns its colour, low on the stump
+    if(plain) return;
     var fl=glowSprite(new THREE.Color(t.color).lerp(new THREE.Color(0x9ad8ff),0.5), 6, 0.7); fl.material.fog=false; fl.position.y=4.5; ruin.add(fl);
     addEmitter(0,4.5,0, 0x9ad8ff, 1.2, 14, {glow:null});
   });
@@ -2982,7 +2983,7 @@ function dressFloor(t, floor){
   if(!roomBaseShoot) roomBaseShoot=towerShootables.slice();
   towerShootables.length=0; Array.prototype.push.apply(towerShootables, roomBaseShoot);
   towerColliders.length=0; Array.prototype.push.apply(towerColliders, towerStaticColliders);
-  var keep=_seed; _seed=1000+TOWERS.indexOf(t)*37+floor*7;
+  var keep=_seed; _seed=1000+(t.outpost ? Math.floor(Math.abs(t.x*7+t.z*3)) : TOWERS.indexOf(t)*37)+floor*7;
   colliders=towerColliders; shootables=towerShootables;
   withRoot(floorProps, function(){
     floorProps.position.set(0,0,0);
@@ -3897,6 +3898,7 @@ function explode(pos, radius, dmg, hurtsPlayer){
   shake(Math.max(0, 1.0-d/16));
   sfx.boom(d);
   if(dmg>0){
+    blastTowers(pos, radius, dmg);
     for(var i=0;i<zombies.length;i++){
       var z=zombies[i];
       if(z.dead) continue;
@@ -5553,7 +5555,13 @@ function updateRemaining(){
   }
   ui.waveLabel.textContent=REGIONS[state.region].name;
   var t=objectiveTower();
-  if(!t){ ui.waveNum.textContent='THE ISLAND IS FREE'; ui.remaining.textContent=''; return; }
+  if(!t){
+    var rb=null; TOWERS.forEach(function(tt){ if(tt.rebuilt && !rb) rb=tt; });
+    if(!rb){ ui.waveNum.textContent='THE ISLAND IS FREE'; ui.remaining.textContent=''; return; }
+    t=rb; ui.waveNum.textContent='THEY REBUILT '+t.name;
+    ui.remaining.textContent=Math.round(Math.hypot(t.doorX-player.pos.x, t.doorZ-player.pos.z))+' m';
+    return;
+  }
   ui.waveNum.textContent='CLIMB '+t.name;
   ui.remaining.textContent=Math.round(Math.hypot(t.doorX-player.pos.x, t.doorZ-player.pos.z))+' m';
 }
@@ -5850,6 +5858,14 @@ function projBlocked(pt){
     for(var i=0;i<TOWERS.length;i++){
       var t=TOWERS[i];
       if(t.group.visible && !t.collapse && Math.hypot(pt.x-t.x, pt.z-t.z)<t.r && pt.y<t.y0+t.h+3) return true;
+    }
+    for(var ri=0;ri<raises.length;ri++){
+      var J=raises[ri];
+      if(J.wallH>0 && Math.hypot(pt.x-J.t.x, pt.z-J.t.z)<J.t.r && pt.y<J.t.y0+J.wallH) return true;
+    }
+    for(var oi=0;oi<outposts.length;oi++){
+      var o=outposts[oi];
+      if(o.built && !o.collapse && Math.hypot(pt.x-o.x, pt.z-o.z)<o.r && pt.y<o.y0+o.h+3) return true;
     }
   }
   var list=nearColliders(pt.x,pt.z,0.3,_near2), gy=groundAt(pt.x,pt.z);
@@ -6167,6 +6183,9 @@ function tryMove(pos, dx, dz){
 /* ============================================================
    THE GAME — regions, the roaming dead, towers, coins, traders
    ============================================================ */
+// a tower the dead hold: never taken, or taken and built back up
+function towerHeld(i){ return !state.cleared[i] || !!TOWERS[i].rebuilt; }
+function towerTier(t){ return t.outpost ? t.region : TOWERS.indexOf(t); }
 function objectiveTower(){
   for(var i=0;i<TOWERS.length;i++) if(!state.cleared[i]) return TOWERS[i];
   return null;
@@ -6185,6 +6204,7 @@ function clearZombies(){
   tvHeadCount=0;
   state.toSpawn=0;
   TOWERS.forEach(function(t){ t.site.active=false; t.site.workers=[]; });
+  raises.forEach(function(J){ J.active=false; J.workers=[]; });
   updateBossBar();
 }
 function removeZombie(z){
@@ -6238,7 +6258,7 @@ function spawnRoamer(){
 
 /* ---------- the dead inside a tower climb out of the dark by the walls ---------- */
 function spawnInTower(){
-  var t=state.tower, ti=TOWERS.indexOf(t);
+  var t=state.tower, ti=towerTier(t);
   var best=null;
   for(var k=0;k<14;k++){
     var a=Math.random()*6.283, r=rand(9.5,11.6);
@@ -6401,7 +6421,7 @@ function enterTower(t){
   });
 }
 function setupFloor(){
-  var t=state.tower, ti=TOWERS.indexOf(t);
+  var t=state.tower, ti=towerTier(t);
   dressFloor(t, state.floor);
   CG=buildGrid(towerColliders);
   state.gateOpen=false;
@@ -6446,7 +6466,7 @@ function goRoof(){
   // it hauls itself over the far parapet
   var hx=t.hatch.x-t.x, hz=t.hatch.z-t.z, hl=Math.hypot(hx,hz)||1;
   var bx=t.x-hx/hl*(t.roofR-3), bz=t.z-hz/hl*(t.roofR-3);
-  var b=makeZombie({boss:t.boss, tier:t.region, aware:true, hpMul:state.cleared[t.region]?0.7:1});
+  var b=makeZombie({boss:t.boss, tier:t.region, aware:true, hpMul:t.outpost ? t.hpMul : state.cleared[t.region]?0.7:1});
   b.group.position.set(bx, t.roofY, bz);
   b.group.rotation.y=Math.atan2(player.pos.x-bx, player.pos.z-bz);
   shake(0.9); sfx.roar();
@@ -6459,7 +6479,10 @@ function onBossDown(z){
   var t=state.tower, ti=TOWERS.indexOf(t);
   state.bossUp=false; state.collapsing=true;
   zombies.forEach(function(o){ if(!o.dead && o.roofKid) killZombie(o); });
-  state.cleared[ti]=true;
+  if(!t.outpost){
+    t.refall=!!t.rebuilt; t.rebuilt=false;
+    state.cleared[ti]=true;
+  }
   saveGame();
   updateRemaining();
   // with its master dead the tower starts to give way: a moment to grab the coins, then off
@@ -6488,10 +6511,10 @@ function descend(){
 function updateTowerMarkers(){
   var obj=objectiveTower();
   TOWERS.forEach(function(t,i){
-    if(!t.collapse) setTowerDown(t, !!state.cleared[i] && state.tower!==t);
+    if(!t.collapse) setTowerDown(t, !towerHeld(i) && state.tower!==t);
     t.beam.visible = t===obj && state.mode==='island';
-    t.flame.material.opacity = state.cleared[i] ? 0.85 : 0;
-    t.slitMat.color.set(state.cleared[i] ? 0x9ad8ff : t.color).multiplyScalar(1.6);
+    t.flame.material.opacity = towerHeld(i) ? 0 : 0.85;
+    t.slitMat.color.set(towerHeld(i) ? t.color : 0x9ad8ff).multiplyScalar(1.6);
   });
   updateWalls(0, false);
 }
@@ -6541,7 +6564,7 @@ function updateSites(wdt){
   if(state.mode!=='island'){ return; }
   var near=null, nd=1e9;
   TOWERS.forEach(function(t,i){
-    if(state.cleared[i] || t.collapse) return;
+    if(!towerHeld(i) || t.collapse) return;
     var d=Math.hypot(t.x-player.pos.x, t.z-player.pos.z);
     if(d<nd){ nd=d; near=t; }
   });
@@ -6641,6 +6664,540 @@ function countRoamers(){
   return n;
 }
 
+/* ---------- towers going up ----------
+   The builders really build. A tower that falls is put back up a
+   course of stone at a time: the scaffold climbs with the wall, the
+   hoist swings stone up onto it and the masons hammer it in. Once it
+   stands again it has a boss on the roof again. And now and then a
+   crew starts a brand new tower somewhere out on the island. Rockets
+   and grenades knock a new tower down (or knock a half-built wall
+   back); the crews put that back up too. */
+var RISE_CH=2, RISE_SEGS=14;                     // a course of stone is 2 m, laid in 14 pieces
+var risePoleGeo=new THREE.CylinderGeometry(0.085,0.095,1,6); risePoleGeo.translate(0,0.5,0);
+var riseBlockGeo=new THREE.BoxGeometry(1.0,0.6,0.6);
+var outpostStone=stoneMatRep(6,4), outpostWall=crownStone.clone(); outpostWall.side=THREE.DoubleSide;
+var outposts=[], raises=[];                      // raises: every tower going up right now
+var OUTPOST_MAX=4, OUTPOST_COLOR=0xff7a30;
+function riseDur(t){ return 60+t.h*3; }          // about 2½ minutes for the Landing, under 4 for the Spire
+function rAt(t, y){ return t.r*(1-0.1*Math.min(1,y/t.h)); }
+function setShoot(m, on){
+  var i=islandShootables.indexOf(m);
+  if(on && i<0) islandShootables.push(m);
+  if(!on && i>=0) islandShootables.splice(i,1);
+}
+// colliders added after the island grid was built go straight into its cells
+function addIslandCollider(x,z,w,d){
+  var c={minX:x-w/2, maxX:x+w/2, minZ:z-d/2, maxZ:z+d/2};
+  islandColliders.push(c);
+  for(var ix=Math.floor(c.minX/CELL); ix<=Math.floor(c.maxX/CELL); ix++)
+    for(var iz=Math.floor(c.minZ/CELL); iz<=Math.floor(c.maxZ/CELL); iz++){
+      var k=ix+','+iz; (ISLAND_GRID.cells[k]||(ISLAND_GRID.cells[k]=[])).push(c);
+    }
+  return c;
+}
+function removeIslandCollider(c){
+  var i=islandColliders.indexOf(c); if(i>=0) islandColliders.splice(i,1);
+  Object.keys(ISLAND_GRID.cells).forEach(function(k){ var l=ISLAND_GRID.cells[k], j=l.indexOf(c); if(j>=0) l.splice(j,1); });
+}
+
+/* The rising wall, its scaffold and its hoist. Everything is in the
+   tower's local space, with the scaffold on the side F faces. */
+function buildRise(t, F, mat){
+  var outer=new THREE.Group(); outer.position.set(t.x,t.y0,t.z); islandGroup.add(outer);
+  var g=new THREE.Group(); outer.add(g);
+  var scaf=new THREE.Group(); g.add(scaf);
+  var ri=t.r+0.45, ro=ri+1.6;
+  var J={t:t, outer:outer, group:g, scaf:scaf, F:F, ri:ri, ro:ro, N:Math.ceil(t.h/RISE_CH),
+         courses:[], segs:[], levels:[], poles:[], shown:-1, segShown:-1,
+         k:0, delay:0, dur:riseDur(t), active:false, workers:[], crew:0, ready:0, hoist:{st:'wait', t:0}};
+  // the wall, a course at a time; UVs carry on from course to course so it reads as one wall
+  for(var i=0;i<J.N;i++){
+    var yb=i*RISE_CH, yt=Math.min(t.h, yb+RISE_CH), hc=yt-yb;
+    var geo=new THREE.CylinderGeometry(rAt(t,yt), rAt(t,yb), hc, 28, 1, true), uv=geo.attributes.uv;
+    for(var u=0;u<uv.count;u++) uv.setY(u, (yb+uv.getY(u)*hc)/t.h);
+    var m=new THREE.Mesh(geo, mat); m.position.y=yb+hc/2; m.castShadow=m.receiveShadow=true; m.visible=false;
+    g.add(m); J.courses.push(m);
+  }
+  // the course being laid, in pieces, starting by the hoist and working round both ways
+  for(var s=0;s<RISE_SEGS;s++){
+    var sg=new THREE.CylinderGeometry(t.r, t.r, RISE_CH, 3, 1, true, s/RISE_SEGS*Math.PI*2, Math.PI*2/RISE_SEGS), su=sg.attributes.uv;
+    for(var v=0;v<su.count;v++) su.setY(v, su.getY(v)*RISE_CH/t.h);
+    var sm=new THREE.Mesh(sg, mat); sm.castShadow=true; sm.visible=false; g.add(sm);
+    sm.userData.a=(s+0.5)/RISE_SEGS*Math.PI*2;
+    J.segs.push(sm);
+  }
+  J.segs.sort(function(a,b){ return angDist(a.userData.a,F.sa)-angDist(b.userData.a,F.sa); });
+  // scaffold poles stretch as the wall climbs; ledgers appear lift by lift
+  [-3.6,-1.2,1.2,3.6].forEach(function(c){
+    [ri,ro].forEach(function(r){
+      var p=siteP(F,r,c,0), pm=new THREE.Mesh(risePoleGeo, poleMat);
+      pm.position.copy(p); pm.castShadow=true; scaf.add(pm); J.poles.push(pm);
+    });
+  });
+  for(var y=3; y<t.h+3; y+=3){
+    var parts=[];
+    [ri,ro].forEach(function(r){
+      var p=siteP(F,r,0,y), lg=new THREE.BoxGeometry(7.4,0.13,0.13);
+      dummy.position.copy(p); dummy.rotation.set(0,F.sa+Math.PI/2,0); dummy.scale.set(1,1,1); dummy.updateMatrix();
+      parts.push(lg.applyMatrix4(dummy.matrix));
+    });
+    [-3.6,-1.2,1.2,3.6].forEach(function(c){
+      var p=siteP(F,(ri+ro)/2,c,y), tg=new THREE.BoxGeometry(0.12,0.12,1.7);
+      dummy.position.copy(p); dummy.rotation.set(0,F.sa,0); dummy.updateMatrix();
+      parts.push(tg.applyMatrix4(dummy.matrix));
+    });
+    var lm=new THREE.Mesh(mergeGeos(parts), poleMat); lm.castShadow=true; lm.visible=false; scaf.add(lm);
+    lm.userData.y=y; J.levels.push(lm);
+    parts.forEach(function(pg){ pg.dispose(); });
+  }
+  // the deck the masons stand on, which goes up with them
+  var planks=[];
+  for(var k=0;k<5;k++){
+    var pg=new THREE.BoxGeometry(7.6,0.06,0.3), pp=siteP(F, ri+0.16+k*0.32, 0, 0);
+    dummy.position.copy(pp); dummy.rotation.set(0,F.sa+Math.PI/2,0); dummy.updateMatrix();
+    planks.push(worldUV(pg.applyMatrix4(dummy.matrix),0.5));
+  }
+  J.deck=new THREE.Mesh(mergeGeos(planks), woodMat); J.deck.castShadow=J.deck.receiveShadow=true; scaf.add(J.deck);
+  planks.forEach(function(pg){ pg.dispose(); });
+  // the hoist rides on top of the scaffold: a post, a jib out past the scaffold, a pulley and a work lamp
+  J.head=new THREE.Group(); scaf.add(J.head);
+  var hp=[];
+  function hpart(geo, p, rx,ry,rz){ dummy.position.copy(p); dummy.rotation.set(rx||0,ry||0,rz||0); dummy.updateMatrix(); hp.push(geo.applyMatrix4(dummy.matrix)); }
+  hpart(new THREE.BoxGeometry(0.22,3.2,0.22), siteP(F,ro,0,1.6));
+  hpart(new THREE.BoxGeometry(0.2,0.2,3.4), siteP(F,ro+0.2,0,3.2), 0,F.sa,0);
+  hpart(new THREE.BoxGeometry(0.12,0.12,2.0), siteP(F,ro+0.5,0,2.5), -0.75,F.sa,0);
+  J.head.add(new THREE.Mesh(mergeGeos(hp), darkWoodMat));
+  hp.forEach(function(pg){ pg.dispose(); });
+  var pul=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,0.12,12), escapeMat);
+  pul.position.copy(siteP(F,ro+1.6,0,2.95)); pul.rotation.set(0,F.sa,Math.PI/2); J.head.add(pul);
+  J.lamp=glowSprite(0xffc070, 3.2, 0.85); J.lamp.position.copy(siteP(F,ro-0.2,0.6,2.4)); J.head.add(J.lamp);
+  var lw=siteP(F,ro-0.2,0.6,0);
+  var keepRoot=root; root=islandGroup;
+  J.em=addEmitter(t.x+lw.x, t.y0, t.z+lw.z, 0xffb060, 1.8, 18, {glow:J.lamp});
+  root=keepRoot;
+  J.em.group=J.lamp;
+  J.pulley=new THREE.Vector3(); J.ropeEnd=new THREE.Vector3();
+  J.rope=new THREE.Mesh(ropeGeo, ropeMat); scaf.add(J.rope);
+  J.block=new THREE.Mesh(riseBlockGeo, mat===towerStone?crownStone:outpostWall); J.block.castShadow=true; J.block.visible=false; scaf.add(J.block);
+  // where the haulers bring stone to, at the foot of the rope
+  var hl=siteP(F,ro+1.6,0,0);
+  J.H=new THREE.Vector3(t.x+hl.x, groundIsland(t.x+hl.x,t.z+hl.z), t.z+hl.z);
+  J.readyMeshes=[];
+  for(var rb=0;rb<3;rb++){
+    var rm=new THREE.Mesh(siteBlockGeo, siteStone);
+    rm.position.set(hl.x+F.vx*(0.6+rb*0.55), J.H.y-t.y0+0.21, hl.z+F.vz*(0.6+rb*0.55)); rm.visible=false; rm.castShadow=true;
+    scaf.add(rm); J.readyMeshes.push(rm);
+  }
+  return J;
+}
+// where the stone comes from: the rubble of the fall, or a fresh pile
+function risePile(J, along){
+  var t=J.t, F=J.F, best=null;
+  for(var tries=0; tries<12 && !best; tries++){
+    var x, z;
+    if(along){ var f=towerFall(t), d=t.r+7+tries*1.5; x=t.x+f.x*d+f.z*2.5; z=t.z+f.z*d-f.x*2.5; }
+    else { var a=F.sa+0.9+tries*0.35; x=t.x+Math.sin(a)*(t.r+7); z=t.z+Math.cos(a)*(t.r+7); }
+    if(groundIsland(x,z)>0.4 && regionOpen(regionAt(x,z))) best=new THREE.Vector3(x, groundIsland(x,z), z);
+  }
+  return best || new THREE.Vector3(J.H.x+J.F.vx*5, J.H.y, J.H.z+J.F.vz*5);
+}
+function stonePile(J){
+  var t=J.t, P=J.P, parts=[];
+  for(var q=0;q<12;q++){
+    var qx=P.x+rand(-1.2,1.2), qz=P.z+rand(-1.2,1.2), lay=Math.floor(q/5), bg=new THREE.BoxGeometry(0.5,0.42,0.5);
+    dummy.position.set(qx-t.x, groundIsland(qx,qz)-t.y0+0.21+lay*0.42, qz-t.z); dummy.rotation.set(0,rand(0,3),0); dummy.updateMatrix();
+    parts.push(worldUV(bg.applyMatrix4(dummy.matrix),0.25));
+  }
+  var m=new THREE.Mesh(mergeGeos(parts), siteStone); m.castShadow=m.receiveShadow=true; J.scaf.add(m);
+  parts.forEach(function(pg){ pg.dispose(); });
+}
+
+// show the wall as high as the work has got
+function showRise(J){
+  var t=J.t, kk=Math.min(1,J.k)*J.N, n=Math.floor(kk), seg=n<J.N ? Math.floor((kk-n)*RISE_SEGS) : 0;
+  if(n!==J.shown){
+    J.courses.forEach(function(m,i){ var on=i<n; m.visible=on; setShoot(m, on && J.shootable!==false); });
+    J.shown=n;
+  }
+  if(seg!==J.segShown || n!==J.segN){
+    var y=n*RISE_CH, sc=rAt(t, y+RISE_CH/2)/t.r;
+    J.segs.forEach(function(m,i){ m.visible=i<seg; m.position.y=y+RISE_CH/2; m.scale.set(sc,1,sc); });
+    J.segShown=seg; J.segN=n;
+  }
+  J.wallH=Math.min(t.h, n*RISE_CH+(seg>0?RISE_CH*seg/RISE_SEGS:0));
+  J.topY=Math.min(t.h, n*RISE_CH+(seg>0?RISE_CH:0));
+  var stand=Math.max(0, J.topY-1.25);
+  var deck=Math.round(stand/1)*1;
+  J.deckY=deck;
+  var top=J.topY+1.4;
+  J.poles.forEach(function(p){ p.scale.y=top; });
+  J.levels.forEach(function(l){ l.visible=l.userData.y<top-0.3; });
+  J.deck.position.y=deck+0.07;
+  J.deck.visible=deck>0.2;
+  J.head.position.y=top;
+  J.pulley.copy(siteP(J.F,J.ro+1.6,0,top+2.7));
+  J.em.y=t.y0+top+2.4;
+}
+function riseHoist(J, wdt){
+  var t=J.t, H=J.hoist, gy=J.H.y-t.y0, hl=siteP(J.F,J.ro+1.6,0,0);
+  J.readyMeshes.forEach(function(m,i){ m.visible=i<J.ready; });
+  if(H.st==='wait'){
+    H.t+=wdt;
+    if(J.active ? J.ready>0 : H.t>1.5){ if(J.active) J.ready--; H.st='lift'; H.t=0; }
+    J.ropeEnd.set(J.pulley.x, gy+0.9, J.pulley.z);
+  } else if(H.st==='lift'){
+    H.t+=wdt;
+    var k=Math.min(1,H.t/5);
+    J.ropeEnd.set(J.pulley.x, gy+0.9+(J.pulley.y-1.2-gy-0.9)*k, J.pulley.z);
+    J.block.visible=true; J.block.position.set(J.ropeEnd.x, J.ropeEnd.y-0.35, J.ropeEnd.z);
+    J.block.rotation.y=J.F.sa+Math.sin(H.t*0.9)*0.25;
+    if(k>=1){ H.st='swing'; H.t=0; H.from=J.block.position.clone(); }
+  } else if(H.st==='swing'){
+    H.t+=wdt;
+    var k2=Math.min(1,H.t/1.6), e=k2*k2*(3-2*k2);
+    var seg=J.segs[Math.min(J.segs.length-1, Math.max(0,J.segShown))], a=seg.userData.a, rr=rAt(t,J.topY);
+    var dest=new THREE.Vector3(Math.sin(a)*rr, J.topY+0.3, Math.cos(a)*rr);
+    J.block.position.lerpVectors(H.from, dest, e);
+    J.block.position.y+=Math.sin(k2*Math.PI)*0.6;
+    J.ropeEnd.set(J.block.position.x, J.block.position.y+0.35, J.block.position.z);
+    if(k2>=1){
+      J.block.visible=false;
+      var wp=new THREE.Vector3(t.x+dest.x, t.y0+dest.y, t.z+dest.z), pd=wp.distanceTo(player.pos);
+      if(pd<90) burst(wp, null, 5, 'dust');
+      sfx.chisel(pd);
+      H.st='lower'; H.t=0; H.top=J.ropeEnd.y;
+    }
+  } else if(H.st==='lower'){
+    H.t+=wdt;
+    var k3=Math.min(1,H.t/3);
+    J.ropeEnd.set(J.pulley.x, H.top+(gy+0.9-H.top)*k3, J.pulley.z);
+    if(k3>=1){ H.st='wait'; H.t=0; }
+  }
+  placeRope(J);
+}
+
+// a tower that has fallen gets a crew and starts going back up
+function startRaise(t, k, delay){
+  if(!t.rise){
+    if(t.outpost){ t.rise=t.riseJ; }
+    else {
+      t.rise=buildRise(t, siteFrame(t), towerStone);
+      t.rise.outer.userData.noCull=true;
+    }
+    t.rise.P=risePile(t.rise, !t.outpost);
+    stonePile(t.rise);
+  }
+  var J=t.rise;
+  J.k=k||0; J.delay=delay||0; J.shown=-1; J.segShown=-1; J.segN=-1; J.hoist={st:'wait', t:0}; J.ready=0;
+  J.outer.visible=true; J.group.visible=true; J.scaf.visible=true;
+  J.group.position.set(0,0,0); J.group.quaternion.identity();
+  if(t.crown){ t.crown.visible=false; t.crown.children.forEach(function(m){ setShoot(m,false); }); }
+  if(raises.indexOf(J)<0) raises.push(J);
+  showRise(J);
+}
+function stopRaise(J){
+  deactivateRise(J);
+  var i=raises.indexOf(J); if(i>=0) raises.splice(i,1);
+}
+function finishRaise(J, quiet){
+  var t=J.t, wp=new THREE.Vector3(t.x, t.y0+t.h, t.z), pd=wp.distanceTo(player.pos);
+  // the crew down tools and wander off
+  J.workers.forEach(function(z){
+    if(z.dead || !z.builder || zombies.indexOf(z)<0) return;
+    if(z.builder.carry) z.group.remove(z.builder.carry);
+    if(z.builder.role==='mason'){ var p=J.H; z.group.position.set(p.x+rand(-2,2), groundAt(p.x,p.z), p.z+rand(-2,2)); }
+    z.builder=null; z.aware=false;
+  });
+  J.workers=[]; J.active=false;
+  stopRaise(J);
+  if(quiet) pd=1e9;
+  if(pd<120){ for(var b=0;b<6;b++) burst(new THREE.Vector3(t.x+rand(-t.r,t.r), t.y0+t.h+rand(0,2), t.z+rand(-t.r,t.r)), null, 4, 'dust'); }
+  if(!quiet) sfx.chisel(pd);
+  if(t.outpost){
+    J.k=1; showRise(J);
+    J.scaf.visible=false; J.segs.forEach(function(m){ m.visible=false; });
+    t.crown.visible=true; t.crown.children.forEach(function(m){ if(m.isMesh) setShoot(m,true); });
+    t.built=true; t.hp=t.maxHp;
+    t.beacon.visible=true; t.beaconEm.base=2.2;
+    if(t.ruin){ dropRuin(t); }
+    if(pd<200) toast('A NEW TOWER STANDS', 2.6);
+  } else {
+    J.outer.visible=false;
+    J.courses.forEach(function(m){ setShoot(m,false); });
+    J.shown=-1;
+    t.rebuilt=true;
+    setTowerDown(t, false);
+    resetSite(t);
+    updateTowerMarkers();
+    if(!quiet) toast(t.name+' STANDS AGAIN', 3);
+  }
+  state.dirty=true;
+}
+
+/* ---------- a crew at work on a rising tower ---------- */
+function activateRise(J){
+  var t=J.t, F=J.F, reg=t.outpost ? t.region : t.region, hp=80+reg*32;
+  J.active=true; J.workers=[];
+  function add(role, wpos, face, extra){
+    var z=makeZombie({tier:reg, hp:hp, builder:{role:role, site:J, tower:t, t:rand(0,3), st:'toH', rise:true}});
+    z.group.position.copy(wpos); z.group.rotation.y=face;
+    if(extra) extra(z);
+    J.workers.push(z);
+    return z;
+  }
+  var toWall=Math.atan2(-F.ux,-F.uz);
+  [-1.6,1.4].forEach(function(c){
+    var lp=siteP(F, rAt(t,J.deckY)+0.9, c, J.deckY);
+    var z=add('mason', new THREE.Vector3(t.x+lp.x, t.y0+lp.y, t.z+lp.z), toWall);
+    z.builder.across=c;
+  });
+  [J.P, J.H].forEach(function(at,i){
+    add('haul', new THREE.Vector3(at.x+rand(-0.8,0.8), at.y, at.z+rand(-0.8,0.8)), 0, function(z){
+      z.builder.st = i===0 ? 'toH' : 'toP';
+      var c=new THREE.Mesh(siteBlockGeo, siteStone); c.castShadow=true;
+      c.position.set(0,1.02,0.36); c.scale.setScalar(0.8); c.visible=i===0;
+      z.group.add(c); z.builder.carry=c;
+    });
+  });
+  // one at the foot of the hoist, hauling on the rope
+  var wx=J.H.x-F.vx*1.4+F.ux*0.6, wz=J.H.z-F.vz*1.4+F.uz*0.6;
+  add('winch', new THREE.Vector3(wx, groundIsland(wx,wz), wz), Math.atan2(J.H.x-wx, J.H.z-wz));
+  J.crew=J.workers.length;
+}
+function deactivateRise(J){
+  J.workers.forEach(function(z){ if(z.builder && !z.dead && zombies.indexOf(z)>=0) removeZombie(z); });
+  J.workers=[]; J.active=false;
+}
+// how many of the crew are still at it
+function riseCrew(J){
+  var n=0;
+  J.workers.forEach(function(z){ if(!z.dead && z.builder && zombies.indexOf(z)>=0) n++; });
+  return n;
+}
+function updateRaises(wdt){
+  var island=state.mode==='island';
+  var near=null, nd=1e9;
+  for(var i=raises.length-1;i>=0;i--){
+    var J=raises[i];
+    if(J.delay>0){ J.delay-=wdt; continue; }
+    // the work goes on while you are away; a crew you have thinned out works slower, and a dead crew not at all
+    var rate = J.active ? riseCrew(J)/Math.max(1,J.crew) : 1;
+    var was=Math.floor(J.k*J.N);
+    J.k+=wdt/J.dur*rate;
+    if(Math.floor(J.k*J.N)!==was) state.dirty=true;
+    if(J.k>=1){ finishRaise(J); continue; }
+    showRise(J);
+    if(island){
+      var d=Math.hypot(J.t.x-player.pos.x, J.t.z-player.pos.z);
+      if(d<nd){ nd=d; near=J; }
+    }
+  }
+  raises.forEach(function(J){
+    if(J.active && (!island || J!==near || nd>165)) deactivateRise(J);
+  });
+  if(near && nd<135 && !near.active && !state.busy && near.delay<=0) activateRise(near);
+  raises.forEach(function(J){
+    if(J.delay>0) return;
+    if(nd<200 || J.active) riseHoist(J, wdt);
+    // the masons ride up with the deck
+    J.workers.forEach(function(z){
+      if(z.dead || !z.builder || z.builder.role!=='mason') return;
+      var lp=siteP(J.F, rAt(J.t,J.deckY)+0.9, z.builder.across, J.deckY);
+      z.group.position.set(J.t.x+lp.x, J.t.y0+lp.y, J.t.z+lp.z);
+    });
+  });
+}
+
+/* ---------- new towers ----------
+   A crew picks a clear, level spot in a region you have opened, not
+   too far from you so you can watch it go up. */
+function outpostSpot(){
+  var list=[];
+  for(var tries=0; tries<150; tries++){
+    var a=rand(0,Math.PI*2), d=rand(50,115), x=player.pos.x+Math.sin(a)*d, z=player.pos.z+Math.cos(a)*d;
+    if(Math.hypot(x,z)>ISLAND_R-25) continue;
+    var reg=regionAt(x,z);
+    if(!regionOpen(reg) || !freeSpot(x,z,6)) continue;
+    var ok=true, lo=1e9, hi=-1e9;
+    for(var s=0;s<10 && ok;s++){
+      var sa=s/10*Math.PI*2, sx=x+Math.sin(sa)*7, sz=z+Math.cos(sa)*7, h=groundIsland(sx,sz);
+      lo=Math.min(lo,h); hi=Math.max(hi,h);
+      if(!passable(sx,sz) || distToPath(sx,sz)<4) ok=false;
+    }
+    if(!ok || hi-lo>3) continue;
+    if(nearColliders(x,z,12,list).some(function(c){ return c.maxX>x-9 && c.minX<x+9 && c.maxZ>z-9 && c.minZ<z+9; })) continue;
+    for(var i=0;i<outposts.length && ok;i++) if(Math.hypot(outposts[i].x-x, outposts[i].z-z)<35) ok=false;
+    for(var j=0;j<TOWERS.length && ok;j++) if(Math.hypot(TOWERS[j].x-x, TOWERS[j].z-z)<TOWERS[j].r+40) ok=false;
+    for(var c=0;c<CAMPS.length && ok;c++) if(Math.hypot(CAMPS[c].x-x, CAMPS[c].z-z)<26) ok=false;
+    if(ok) return {x:x, z:z, region:reg};
+  }
+  return null;
+}
+function makeOutpost(o){
+  var t={outpost:true, x:o.x, z:o.z, r:o.r, h:o.h, region:regionAt(o.x,o.z), color:OUTPOST_COLOR,
+         built:false, maxHp:900, hp:900, name:'THE BUILDERS\u2019 TOWER',
+         floors:o.h>=20?2:1, boss:o.boss||(Math.random()<0.5?'brute':'stalker')};
+  t.hpMul=0.45+t.region*0.1;
+  t.y0=groundIsland(t.x,t.z)-0.3;
+  // the door faces away from the scaffold, onto open ground
+  if(o.door!==undefined) t.door=o.door;
+  else {
+    for(var da=0; da<8; da++){
+      var try1=o.sa+Math.PI+(da%2?1:-1)*Math.ceil(da/2)*0.4, dx=t.x+Math.sin(try1)*(t.r+3), dz=t.z+Math.cos(try1)*(t.r+3);
+      t.door=try1;
+      if(passable(dx,dz) && groundIsland(dx,dz)>0.6) break;
+    }
+  }
+  var keepS=shootables, keepR=root; shootables=islandShootables; root=islandGroup;
+  var J=buildRise(t, {sa:o.sa, ux:Math.sin(o.sa), uz:Math.cos(o.sa), vx:Math.cos(o.sa), vz:-Math.sin(o.sa)}, outpostStone);
+  t.riseJ=J; t.group=J.group;
+  cullList.push({o:J.outer, x:t.x, z:t.z, r:Math.max(14,t.h*0.6)});
+  // a footing sunk into the slope
+  var foot=new THREE.Mesh(new THREE.CylinderGeometry(t.r+0.9, t.r+1.4, 3.4, 24), outpostStone);
+  foot.position.y=-0.9; foot.castShadow=foot.receiveShadow=true; J.outer.add(foot); setShoot(foot,true); t.foot=foot;
+  // the crown, hidden until the wall is done
+  var rt=rAt(t,t.h), R=rt+2.0, crown=new THREE.Group(); J.group.add(crown); t.crown=crown;
+  function cm(geo, mat, y, ry){ var m=new THREE.Mesh(geo, mat); m.position.y=y; if(ry) m.rotation.y=ry; m.castShadow=m.receiveShadow=true; crown.add(m); return m; }
+  cm(new THREE.CylinderGeometry(R, rt, 1.8, 24, 1, true), outpostWall, t.h+0.9);
+  cm(new THREE.CylinderGeometry(R, R, 0.4, 24), roofStone, t.h+1.95);
+  cm(new THREE.CylinderGeometry(R, R, 0.8, 24, 1, true), outpostWall, t.h+2.55);
+  var bl=[];
+  for(var m=0;m<12;m++){
+    var a=m/12*Math.PI*2, bg=new THREE.BoxGeometry(1.0,0.8,0.5);
+    dummy.position.set(Math.sin(a)*(R-0.25), t.h+3.35, Math.cos(a)*(R-0.25)); dummy.rotation.set(0,a,0); dummy.scale.set(1,1,1); dummy.updateMatrix();
+    bl.push(worldUV(bg.applyMatrix4(dummy.matrix),0.25));
+  }
+  cm(mergeGeos(bl), crownStone, 0);
+  bl.forEach(function(g){ g.dispose(); });
+  // slits glowing with the fire inside, and a beacon on the roof
+  var slit=new THREE.MeshBasicMaterial({color:new THREE.Color(OUTPOST_COLOR).multiplyScalar(1.5), fog:false});
+  for(var y=4; y<t.h-2; y+=5){
+    for(var s=0;s<3;s++){
+      var sa=s/3*Math.PI*2+y*0.7, rr=rAt(t,y)+0.03, sl=new THREE.Mesh(new THREE.PlaneGeometry(0.3,1.4), slit);
+      sl.position.set(Math.sin(sa)*rr, y, Math.cos(sa)*rr); sl.rotation.y=sa; crown.add(sl);
+    }
+  }
+  // the door, its torches, and the hatch down from the roof
+  var da=t.door, dr=rAt(t,1.8)+0.05;
+  var door=new THREE.Mesh(new THREE.PlaneGeometry(2.0,3.0), doorMat);
+  door.position.set(Math.sin(da)*dr, 1.8, Math.cos(da)*dr); door.rotation.y=da; crown.add(door);
+  var arch=new THREE.Mesh(new THREE.TorusGeometry(1.15,0.2,6,16,Math.PI), crownStone);
+  arch.position.set(Math.sin(da)*(dr+0.1), 3.3, Math.cos(da)*(dr+0.1)); arch.rotation.y=da; crown.add(arch);
+  [-1,1].forEach(function(sd){
+    var px=Math.sin(da)*(dr+0.35)+Math.cos(da)*sd*1.6, pz=Math.cos(da)*(dr+0.35)-Math.sin(da)*sd*1.6;
+    var gs=glowSprite(0xff9a40,1.5,0.8); gs.position.set(px,3.0,pz); crown.add(gs);
+  });
+  t.torchEm=addEmitter(t.x+Math.sin(da)*(dr+1), t.y0+3, t.z+Math.cos(da)*(dr+1), 0xff8a3a, 1.2, 10, {flick:true});
+  t.torchEm.group=crown;
+  var hr=R-2.4;
+  t.hatchL={x:Math.sin(da)*hr, z:Math.cos(da)*hr};
+  var hatch=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.12,1.6), darkWoodMat);
+  hatch.position.set(t.hatchL.x, t.h+2.2, t.hatchL.z); hatch.rotation.y=da; crown.add(hatch);
+  t.hatchGlow=glowSprite(OUTPOST_COLOR, 2.4, 0.0); t.hatchGlow.position.set(t.hatchL.x, t.h+2.7, t.hatchL.z); crown.add(t.hatchGlow);
+  t.roofY=t.y0+t.h+2.15; t.roofR=R-0.85;
+  t.hatch={x:t.x+t.hatchL.x, z:t.z+t.hatchL.z};
+  t.doorX=t.x+Math.sin(da)*(t.r+2.2); t.doorZ=t.z+Math.cos(da)*(t.r+2.2);
+  t.beacon=glowSprite(OUTPOST_COLOR, 6, 0.9); t.beacon.material.fog=false; t.beacon.position.y=t.h+3.6; t.beacon.visible=false; J.group.add(t.beacon);
+  t.beaconEm=addEmitter(t.x, t.y0+t.h+3.6, t.z, OUTPOST_COLOR, 0, 22, {flick:true, glow:t.beacon});
+  t.beaconEm.group=t.beacon;
+  // solid from the day the footing goes in
+  t.cols=[addIslandCollider(t.x,t.z, t.r*2+1.6, t.r*1.2), addIslandCollider(t.x,t.z, t.r*1.2, t.r*2+1.6), addIslandCollider(t.x,t.z, t.r*1.65+1.2, t.r*1.65+1.2)];
+  shootables=keepS; root=keepR;
+  outposts.push(t);
+  return t;
+}
+function newOutpost(){
+  var sp=outpostSpot();
+  if(!sp) return false;
+  var t=makeOutpost({x:sp.x, z:sp.z, r:rand(4.4,5.2), h:RISE_CH*Math.round(rand(8,12)), sa:rand(0,Math.PI*2)});
+  startRaise(t, 0, 4);
+  toast('THE DEAD ARE BUILDING A NEW TOWER', 3);
+  sfx.rumble(1.2);
+  state.dirty=true;
+  return true;
+}
+function dropRuin(t){
+  if(!t.ruin) return;
+  (t.ruinShoot||[]).forEach(function(m){ setShoot(m,false); });
+  islandGroup.remove(t.ruin);
+  t.ruin.traverse(function(o){ if(o.geometry) o.geometry.dispose(); });
+  if(t.ruinEm){ var i=emitters.indexOf(t.ruinEm); if(i>=0) emitters.splice(i,1); }
+  t.ruin=null; t.ruinShoot=null; t.ruinEm=null;
+}
+function removeOutpost(t){
+  if(t.rise) stopRaise(t.rise);
+  dropRuin(t);
+  t.riseJ.courses.concat(t.crown.children, [t.foot]).forEach(function(m){ setShoot(m,false); });
+  islandGroup.remove(t.riseJ.outer);
+  t.riseJ.outer.traverse(function(o){ if(o.geometry && o.geometry!==risePoleGeo && o.geometry!==ropeGeo && o.geometry!==siteBlockGeo && o.geometry!==riseBlockGeo) o.geometry.dispose(); });
+  [t.riseJ.em, t.beaconEm, t.torchEm].forEach(function(e){ var i=emitters.indexOf(e); if(i>=0) emitters.splice(i,1); });
+  for(var c=cullList.length-1;c>=0;c--) if(cullList[c].o===t.riseJ.outer) cullList.splice(c,1);
+  t.cols.forEach(removeIslandCollider);
+  var i=outposts.indexOf(t); if(i>=0) outposts.splice(i,1);
+}
+// a finished new tower falls away from you; a half-built one loses a course or two
+function blastTowers(pos, radius, dmg){
+  if(state.mode!=='island') return;
+  raises.forEach(function(J){
+    var t=J.t, rd=Math.hypot(pos.x-t.x, pos.z-t.z)-rAt(t,0);
+    if(J.delay>0 || rd>radius*0.7 || pos.y>t.y0+J.wallH+1.5) return;
+    var was=J.k;
+    J.k=Math.max(0, J.k-dmg/260*1.5/J.N);
+    if(Math.floor(was*J.N)!==Math.floor(J.k*J.N)){
+      for(var b=0;b<5;b++){
+        var a=rand(0,6.28), y=t.y0+J.wallH;
+        throwDebris(new THREE.Vector3(t.x+Math.sin(a)*t.r, y, t.z+Math.cos(a)*t.r), new THREE.Vector3(Math.sin(a)*rand(2,5), rand(1,4), Math.cos(a)*rand(2,5)), rand(0.4,0.9));
+      }
+      state.dirty=true;
+    }
+  });
+  outposts.forEach(function(t){
+    if(!t.built || t.collapse) return;
+    var rd=Math.hypot(pos.x-t.x, pos.z-t.z)-rAt(t,0);
+    if(rd>radius*0.7 || pos.y>t.y0+t.h+4) return;
+    t.hp-=dmg*(rd<0.5?1:0.6);
+    var a=Math.atan2(pos.x-t.x, pos.z-t.z);
+    for(var b=0;b<3;b++) throwDebris(new THREE.Vector3(t.x+Math.sin(a)*t.r, Math.max(pos.y, t.y0+1), t.z+Math.cos(a)*t.r), new THREE.Vector3(Math.sin(a)*rand(2,5), rand(1,4), Math.cos(a)*rand(2,5)), rand(0.4,0.8));
+    if(t.hp<=0) toppleOutpost(t);
+    else if(t.hp<t.maxHp*0.5) sfx.creak();
+  });
+}
+function toppleOutpost(t){
+  // it goes over away from you
+  var fx=t.x-player.pos.x, fz=t.z-player.pos.z, fl=Math.hypot(fx,fz)||1;
+  prepOutpostFall(t, Math.atan2(-fz/fl, fx/fl));
+  startCollapse(t);
+}
+function prepOutpostFall(t, fallA){
+  t.fallA=fallA;
+  t.built=false;
+  t.beacon.visible=false; t.beaconEm.base=0;
+  dropRuin(t);
+  var before=islandShootables.length, eb=emitters.length;
+  var keepS=shootables; shootables=islandShootables;
+  buildRuin(t, true);
+  shootables=keepS;
+  t.ruinShoot=islandShootables.slice(before);
+  t.ruinShoot.forEach(function(m){ setShoot(m,false); });
+  t.ruinEm=emitters.length>eb ? emitters[emitters.length-1] : null;
+}
+// after the dust settles: a reward, and the crew comes back to start again
+function onOutpostDown(t){
+  dropCoins(t.x, t.y0+2, t.z, 18+t.region*4, 2, true);
+  toast('YOU BROUGHT THEIR TOWER DOWN', 2.6);
+  startRaise(t, 0, 12);
+  state.dirty=true;
+}
+function updateOutposts(wdt){
+  if(state.mode!=='island' || state.busy || !state.running) return;
+  state.outpostT-=wdt;
+  if(state.outpostT>0) return;
+  state.outpostT=10;
+  var building=outposts.some(function(t){ return !t.built; });
+  if(building || outposts.length>=OUTPOST_MAX) return;
+  if(newOutpost()) state.outpostT=rand(80,140);
+}
+
 /* ---------- a tower coming down ----------
    It shudders, leans away from you, falls, and hits the ground in a
    wall of dust. When the dust clears there is a stump and a long
@@ -6680,6 +7237,13 @@ function updateDebris(wdt){
 function clearDebris(){ debris.forEach(function(D){ D.life=0; D.mesh.visible=false; }); }
 // the tower is either standing, or a ruin; shots only hit whichever is there
 function setTowerDown(t, down){
+  if(t.outpost){
+    t.group.visible=!down; if(t.ruin) t.ruin.visible=down;
+    t.group.position.set(0,0,0); t.group.quaternion.identity();
+    if(down){ t.riseJ.courses.concat(t.crown.children).forEach(function(m){ setShoot(m,false); }); t.riseJ.shown=-1; }
+    (t.ruinShoot||[]).forEach(function(m){ setShoot(m,down); });
+    return;
+  }
   t.group.visible=!down; t.ruin.visible=down;
   t.group.position.set(t.x,t.y0,t.z); t.group.quaternion.identity();
   if(!t.shootStand){
@@ -6694,14 +7258,16 @@ function setTowerDown(t, down){
 var _cq=new THREE.Quaternion(), _ca=new THREE.Vector3(), _cv=new THREE.Vector3();
 function startCollapse(t){
   t.collapse={st:'shake', t:0, ang:0, w:0, sink:0, dust:0};
-  siteLamps(t.site, false);
+  if(t.site) siteLamps(t.site, false);
+  if(t.rise) stopRaise(t.rise);
   sfx.rumble(2.4); sfx.creak();
 }
 function towerPoint(t, local){ return local.clone().applyMatrix4(t.group.matrixWorld); }
 function updateCollapses(wdt){
   updateDebris(wdt);
-  for(var i=0;i<TOWERS.length;i++){
-    var t=TOWERS[i], C=t.collapse;
+  var all=TOWERS.concat(outposts);
+  for(var i=0;i<all.length;i++){
+    var t=all[i], C=t.collapse;
     if(!C) continue;
     C.t+=wdt;
     var f=towerFall(t), dist=Math.hypot(t.x-player.pos.x, t.z-player.pos.z);
@@ -6709,6 +7275,7 @@ function updateCollapses(wdt){
     if(C.st==='shake'){
       // it shudders; stones and dust come off the crown
       t.group.position.set(t.x+rand(-0.07,0.07), t.y0+rand(-0.05,0.02), t.z+rand(-0.07,0.07));
+      if(t.outpost) t.group.position.sub(t.group.parent.position);
       state.shake=Math.max(state.shake, 0.35*near);
       if(Math.random()<wdt*6){
         var a=rand(0,6.28), cp=new THREE.Vector3(t.x+Math.sin(a)*(t.r+2), t.y0+t.h+rand(0,4), t.z+Math.cos(a)*(t.r+2));
@@ -6732,6 +7299,7 @@ function updateCollapses(wdt){
       t.group.quaternion.copy(_cq);
       t.group.position.set(t.x-pivot.x, 0, t.z-pivot.z).applyQuaternion(_cq).add(pivot);
       t.group.position.y-=C.sink;
+      if(t.outpost) t.group.position.sub(t.group.parent.position);
       t.group.updateMatrixWorld(true);
       state.shake=Math.max(state.shake, 0.25*near);
       // the wall breaks up as it goes
@@ -6776,7 +7344,12 @@ function towerImpact(t){
 function onTowerDown(t){
   var ti=TOWERS.indexOf(t);
   if(!state.running) return;
-  if(ti<TOWERS.length-1){
+  if(t.outpost){ onOutpostDown(t); return; }
+  // the dead get straight back to work on it
+  startRaise(t, 0, 10);
+  if(t.refall){
+    toast(t.name+' IS DOWN AGAIN', 3);
+  } else if(ti<TOWERS.length-1){
     toast(REGIONS[ti+1].name+' IS OPEN', 4);
     sfx.region();
   } else {
@@ -6809,6 +7382,7 @@ function viewSpot(t){
 // off the roof and down to the ground, a safe way off, to watch it go
 function leaveFallingTower(t){
   transition(function(){
+    if(t.outpost) prepOutpostFall(t, undefined);
     // whatever the boss dropped and you missed is yours
     for(var c=coins.length-1;c>=0;c--){ if(coins[c].mode==='roof'){ collectCoin(coins[c]); coins.splice(c,1); } }
     clearZombies(); clearGrenades(); clearFireballs();
@@ -6834,8 +7408,13 @@ function findInteract(){
     for(i=0;i<traders.length;i++) if(Math.hypot(px-traders[i].x, pz-traders[i].z)<3.6) return {label:'TRADE', fn:openShop};
     for(i=0;i<TOWERS.length;i++){
       var t=TOWERS[i];
-      if(!state.cleared[i] && !t.collapse && Math.hypot(px-t.doorX, pz-t.doorZ)<3.6)
+      if(towerHeld(i) && !t.collapse && Math.hypot(px-t.doorX, pz-t.doorZ)<3.6)
         return {label:'ENTER  ·  '+t.name, fn:(function(tt){ return function(){ enterTower(tt); }; })(t)};
+    }
+    for(i=0;i<outposts.length;i++){
+      var o=outposts[i];
+      if(o.built && !o.collapse && Math.hypot(px-o.doorX, pz-o.doorZ)<3.2)
+        return {label:'ENTER  ·  '+o.name, fn:(function(oo){ return function(){ enterTower(oo); }; })(o)};
     }
   } else if(state.mode==='tower'){
     if(state.gateOpen && Math.hypot(px-(TOWER_O.x+GATE.x), pz-(TOWER_O.z+GATE.z))<3.2)
@@ -6982,7 +7561,13 @@ function saveGame(){
   weapons.forEach(function(w){ reserve[w.def.key]=w.reserve; });
   var data={coins:state.coins, owned:Object.keys(state.owned), reserve:reserve, cleared:state.cleared,
             camp:state.camp, maxHealth:state.maxHealth, plating:state.plating, kills:state.kills,
-            victory:state.victory, forceOpen:state.forceOpen};
+            victory:state.victory, forceOpen:state.forceOpen,
+            rebuilt:TOWERS.map(function(t){ return !!t.rebuilt; }),
+            raise:TOWERS.map(function(t){ return t.rise && raises.indexOf(t.rise)>=0 ? +t.rise.k.toFixed(3) : 0; }),
+            outposts:outposts.map(function(t){
+              return {x:+t.x.toFixed(2), z:+t.z.toFixed(2), r:+t.r.toFixed(2), h:t.h, sa:+t.riseJ.F.sa.toFixed(3), door:+t.door.toFixed(3), boss:t.boss, built:!!t.built && !t.collapse,
+                      k: t.rise && raises.indexOf(t.rise)>=0 ? +t.rise.k.toFixed(3) : 0};
+            })};
   try{ localStorage.setItem(SAVE_KEY, JSON.stringify(data)); }catch(e){}
   state.dirty=false;
 }
@@ -7068,10 +7653,14 @@ function drawMap(){
   traders.forEach(function(t){ c.fillStyle='#f0c060'; c.beginPath(); c.arc(t.x*k,t.z*k,4,0,6.283); c.fill(); });
   var obj=objectiveTower(), pulse=0.6+0.4*Math.sin(worldT*5);
   TOWERS.forEach(function(t,i){
-    c.fillStyle = state.cleared[i] ? '#9ad8ff' : '#'+new THREE.Color(t.color).getHexString();
+    c.fillStyle = towerHeld(i) ? '#'+new THREE.Color(t.color).getHexString() : '#9ad8ff';
     c.globalAlpha = t===obj ? pulse : 0.85;
     c.fillRect(t.x*k-6, t.z*k-6, 12, 12);
     c.globalAlpha=1;
+  });
+  outposts.forEach(function(t){
+    c.fillStyle = t.built ? '#ff7a30' : 'rgba(255,122,48,0.45)';
+    c.fillRect(t.x*k-4, t.z*k-4, 8, 8);
   });
   zombies.forEach(function(z){
     if(z.dead) return;
@@ -7458,6 +8047,7 @@ function update(dt){
       if(countRoamers()<(cheats.horde?18:9)) spawnRoamer();
     }
     updateSites(wdt);
+    updateOutposts(wdt);
   } else if(state.mode==='tower'){
     if(state.toSpawn>0){
       state.spawnT-=wdt;
@@ -7474,6 +8064,7 @@ function update(dt){
   updateFireballs(wdt);
   updateProjs(wdt);
   updateCollapses(wdt);
+  updateRaises(wdt);
   if(state.roofQuake>0){
     // the roof shakes itself apart under you
     state.roofQuake-=dt;
@@ -7982,7 +8573,12 @@ function resetGame(sv){
   state.health=state.maxHealth;
   state.mode='island'; state.tower=null; state.busy=false; state.bossUp=false; state.gateOpen=false;
   state.collapsing=false; state.roofQuake=0; state.throwT=0;
-  TOWERS.forEach(function(t){ t.collapse=null; resetSite(t); });
+  TOWERS.forEach(function(t, i){
+    t.collapse=null; resetSite(t);
+    t.rebuilt = !!(sv && sv.rebuilt && sv.rebuilt[i]) && state.cleared[i];
+    t.refall=false;
+    if(t.rise){ stopRaise(t.rise); t.rise.outer.visible=false; t.rise.courses.forEach(function(m){ setShoot(m,false); }); }
+  });
   state.reloading=false; state.recoil=0; state.recoilVel=0; state.spread=0;
   state.damageT=0; state.roamT=2; state.toSpawn=0; state.dirty=false;
   islandGroup.visible=true; towerGroup.visible=false; rain.visible=true;
@@ -8002,6 +8598,15 @@ function resetGame(sv){
   dawnK = state.victory ? 0.999 : 0.001; updateDawn(1);
   updateWalls(0, true);
   updateTowerMarkers();
+  // towers the dead are putting back up, and the new ones they have raised
+  TOWERS.forEach(function(t, i){ if(!towerHeld(i)) startRaise(t, sv && sv.raise ? sv.raise[i]||0 : 0, 0); });
+  outposts.slice().forEach(removeOutpost);
+  ((sv && sv.outposts) || []).forEach(function(o){
+    var t=makeOutpost(o);
+    startRaise(t, o.built ? 1 : o.k||0, 0);
+    if(o.built) finishRaise(t.rise, true);
+  });
+  state.outpostT=45;
   ui.kills.textContent='KILLS '+state.kills;
   ui.coinNum.textContent=state.coins;
   updateHealth(); updateAmmo(); updateRemaining();
@@ -8085,7 +8690,8 @@ if(/[?&]debug/.test(location.search)){
     keys:keys, ui:ui, BOSSES:BOSSES, equip:equip, launch:launch, projs:projs, onBossDown:onBossDown, makeZombie:makeZombie,
     applyCheats:applyCheats, startCollapse:startCollapse, leaveFallingTower:leaveFallingTower, setTowerDown:setTowerDown,
     freezeZombie:freezeZombie, chillZombie:chillZombie, spawnBoss:spawnBoss, lookAt:lookAt, WEAPONS:WEAPONS, scene:scene,
-    goRoof:goRoof, shoot:shoot, viewSpot:viewSpot,
+    goRoof:goRoof, shoot:shoot, viewSpot:viewSpot, raises:raises, outposts:outposts, newOutpost:newOutpost,
+    startRaise:startRaise, outpostSpot:outpostSpot, blastTowers:blastTowers, explode:explode, loadSave:loadSave, resetGame:resetGame,
     // run the game forward without drawing, for tests on slow machines
     step:function(n, dt){ for(var i=0;i<n;i++){ if(state.running && !state.paused) update(dt||1/30); updateWorld(dt||1/30); } }};
 }
