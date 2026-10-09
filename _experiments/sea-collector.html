@@ -1,6 +1,6 @@
 ---
 title: Sea Collector
-description: A scuba-diving adventure. Swim out from your underwater house, collect shells, dodge sharks, jellyfish, eels and the odd sand monster, and get home before your air runs out. Spend your shells on new clothes and better scuba gear.
+description: A scuba-diving adventure. Swim out from your underwater house, collect shells, dodge sharks, jellyfish, eels and sand monsters (even the Mega Monster), and get home before your air runs out. Spend your shells on new clothes and better scuba gear.
 date: 2026-10-06
 layout: null
 ---
@@ -186,7 +186,7 @@ layout: null
   <div id="shellsdeco">🐚 🐠 🦈 🐙 🐚</div>
   <h1>Sea Collector</h1>
   <p>You are a scuba diver with a little house at the bottom of the sea. Swim out, collect shells, and bring them home before your air runs out.</p>
-  <p>Watch out for sharks, jellyfish, eels and spiky urchins — and the monsters that climb out of the sand every once in a while. Catch them with your net gun 🕸️, give a dolphin a shell to make a friend 🐬, and spend your shells at home on new clothes and better scuba gear, then dive deeper.</p>
+  <p>Watch out for sharks, jellyfish, eels and spiky urchins — and the monsters that climb out of the sand every once in a while (look out for the Mega Monster!). Catch them with your net gun 🕸️, give a dolphin a shell to make a friend 🐬, and spend your shells at home on new clothes and better scuba gear, then dive deeper.</p>
   <button class="big" id="playBtn">Dive in!</button>
   <div class="keys" id="keysDesk">
     <b>W A S D</b> swim &nbsp; <b>Mouse</b> look &nbsp; <b>Space</b> up &nbsp; <b>C</b> down<br>
@@ -477,6 +477,9 @@ var sfx={
   slash:function(){ tone(2200,0.12,'sawtooth',0.05,500); },
   win:function(){ [523,659,784,1046].forEach(function(f,i){ tone(f,0.2,'triangle',0.16,0,i*0.09); }); },
   dolphin:function(){ for(var i=0;i<5;i++) tone(1800+Math.random()*900,0.07,'sine',0.08,2600+Math.random()*900,i*0.08); },
+  water:function(){ for(var i=0;i<6;i++) tone(300+Math.random()*300,0.12,'sine',0.07,800,i*0.03); },
+  freeze:function(){ tone(2400,0.6,'triangle',0.08,1200); tone(3100,0.5,'sine',0.06,1500,0.08); },
+  chomp:function(){ tone(140,0.15,'square',0.14,70); tone(120,0.15,'square',0.14,60,0.18); },
   laser:function(){ tone(1500,0.5,'square',0.07,250); tone(760,0.5,'sawtooth',0.06,180); }
 };
 
@@ -1519,7 +1522,7 @@ var serpent=(function(){
   part3(monCone, spikeM, head, 0,0.72,-0.45, -0.5,0,0, 0.13,0.45,0.13);
   var trail=[]; for(i=0;i<SERP_N*SERP_STEP+SERP_STEP+2;i++) trail.push(new THREE.Vector3());
   return {kind:'serpent', g:g, head:head, segs:segs, mat:mat, trail:trail, pos:new THREE.Vector3(), dir:new THREE.Vector3(),
-    hole:new THREE.Vector3(), name:'Spike Serpent'};
+    hole:new THREE.Vector3(), name:'Spike Serpent', emoji:'🐉', reward:15, hpMax:5};
 })();
 
 var spikeGeo=new THREE.ConeGeometry(0.11,0.7,5); spikeGeo.rotateX(PI/2);
@@ -1587,11 +1590,217 @@ var walker=(function(){
     part3(monCone, horn, c, 0,-0.5,-0.25, -2.65,0,0, 0.1,1.1,0.1);
     claws.push(c);
   });
-  return {kind:'walker', g:g, rig:rig, eye:eye, glow:glow, legs:legs, claws:claws, pos:new THREE.Vector3(), center:new THREE.Vector3(), name:'Eye Walker'};
+  return {kind:'walker', g:g, rig:rig, eye:eye, glow:glow, legs:legs, claws:claws, pos:new THREE.Vector3(), center:new THREE.Vector3(), aim:new THREE.Vector3(), name:'Eye Walker', emoji:'👁️', netR:3, reward:15, hpMax:5};
 })();
 var beamGeo=new THREE.CylinderGeometry(1,1,1,8,1,true); beamGeo.rotateX(PI/2); beamGeo.translate(0,0,0.5);
 var beam=new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:0xff2020, transparent:true, opacity:0.8, depthWrite:false, toneMapped:false}));
 beam.visible=false; beam.frustumCulled=false; sea.add(beam);
+
+/* The other monsters float. Each is a group whose origin is the middle of its body. */
+var serpSegGeo=serpent.segs[0].geometry;
+function scribbleGeo(R, n){
+  // A ball of scribbled loops in four pen colours.
+  var m=new Merger(), cols=['#5a2d91','#2f6f5a','#1a1a22','#f07a3a','#7b3fb0'].map(col);
+  for(var i=0;i<n;i++){
+    var tor=new THREE.TorusGeometry(R*rr(0.55,1), R*0.028, 4, 36);
+    m.add(tor, mtx(rr(-0.2,0.2)*R, rr(-0.2,0.2)*R, rr(-0.2,0.2)*R, rr(0,TAU),rr(0,TAU),rr(0,TAU), 1, rr(0.7,1), 1), pick(cols));
+  }
+  return m.mesh(null).geometry;
+}
+var scribbleMat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.6});
+var redInk=new THREE.MeshStandardMaterial({color:col('#e0402e'), roughness:0.5});
+// The big eyeball: red wiggly veins, an orange-red iris with dark ticks and a green pupil, looking out along +z.
+var eyeballTex=canvasTex(512,256,function(g,w,h){
+  g.fillStyle='#fbf8f4'; g.fillRect(0,0,w,h);
+  var cx=w*0.25, cy=h*0.5;
+  g.strokeStyle='#d0303a'; g.lineWidth=3;
+  for(var i=0;i<16;i++){
+    var a=i/16*TAU, x=cx+Math.cos(a)*52, y=cy+Math.sin(a)*52;
+    g.beginPath(); g.moveTo(x,y);
+    for(var k=1;k<7;k++){ var d=52+k*16, j=(k%2?1:-1)*0.14; g.lineTo(cx+Math.cos(a+j)*d*1.4, cy+Math.sin(a+j)*d*0.8); }
+    g.stroke();
+  }
+  g.fillStyle='#e0552e'; g.beginPath(); g.arc(cx,cy,44,0,TAU); g.fill();
+  g.strokeStyle='#3a1a10'; g.lineWidth=3;
+  for(i=0;i<18;i++){ a=i/18*TAU; g.beginPath(); g.moveTo(cx+Math.cos(a)*32,cy+Math.sin(a)*32); g.lineTo(cx+Math.cos(a)*41,cy+Math.sin(a)*41); g.stroke(); }
+  g.fillStyle='#1f6b4f'; g.beginPath(); g.ellipse(cx,cy,22,26,0,0,TAU); g.fill();
+  g.fillStyle='rgba(255,255,255,0.8)'; g.beginPath(); g.arc(cx-8,cy-9,6,0,TAU); g.fill();
+});
+function eyeball(parent, r, x,y,z){
+  var g=new THREE.Group(); g.position.set(x,y,z); parent.add(g);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(r,32,20), new THREE.MeshStandardMaterial({map:eyeballTex, roughness:0.2})));
+  var lid=new THREE.Mesh(new THREE.SphereGeometry(r*1.04,24,12,0,TAU,0,PI/2), new THREE.MeshStandardMaterial({color:col('#d9c7f2'), roughness:0.6, side:THREE.DoubleSide}));
+  lid.rotation.x=-1.5; g.add(lid);
+  return {g:g, lid:lid};
+}
+function setLid(e, shut){ e.lid.rotation.x=lerp(-1.5, PI/2, shut); }
+var lavender=new THREE.MeshStandardMaterial({color:col('#d9c7f2'), roughness:0.6});
+function tentacle(parent, x,y,z, n, len, r0, side){
+  var root=new THREE.Group(); root.position.set(x,y,z); parent.add(root);
+  var segs=[], p=root;
+  for(var i=0;i<n;i++){
+    var s=new THREE.Group(); s.position.y=i?-len:0; p.add(s);
+    var cg=new THREE.CylinderGeometry(lerp(r0,r0*0.35,i/n), lerp(r0,r0*0.35,(i+1)/n), len*1.05, 8); cg.translate(0,-len/2,0);
+    s.add(new THREE.Mesh(cg, lavender)); segs.push(s); p=s;
+  }
+  return {segs:segs, side:side, ph:rr(0,TAU)};
+}
+function waveTentacle(T, t, amp){
+  T.segs.forEach(function(s,i){
+    s.rotation.z=Math.sin(t*2.2+T.ph-i*0.5)*amp*0.18+(i>T.segs.length-4?T.side*0.55:0);
+    s.rotation.x=Math.cos(t*1.7+T.ph-i*0.4)*amp*0.1;
+  });
+}
+function curvedHorn(parent, sd, mat){
+  var c=new THREE.CatmullRomCurve3([new THREE.Vector3(sd*0.4,1.1,0), new THREE.Vector3(sd*0.7,1.9,0), new THREE.Vector3(sd*1.3,2.5,0), new THREE.Vector3(sd*2.1,2.6,0)]);
+  parent.add(new THREE.Mesh(new THREE.TubeGeometry(c, 16, 0.2, 8), mat));
+  part3(monSphere, mat, parent, sd*2.1,2.6,0, 0,0,0, 0.32,0.16,0.2);
+}
+function pencilHorn(parent, y, mat){
+  part3(new THREE.CylinderGeometry(0.26,0.26,1.1,8), mat, parent, 0,y+0.55,0);
+  part3(new THREE.ConeGeometry(0.26,0.6,8), mat, parent, 0,y+1.4,0);
+}
+// Genie hands: purple, with a pale blue eye-shaped palm the water comes out of.
+var purpleInk=new THREE.MeshStandardMaterial({color:col('#5b2a9a'), roughness:0.5});
+function genieArm(parent, sd, palmMat){
+  var arm=new THREE.Group(); arm.position.set(sd*0.7,0.2,0); parent.add(arm);
+  var c=new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(sd*0.9,-0.2,0.1), new THREE.Vector3(sd*1.5,0.4,0.2), new THREE.Vector3(sd*1.6,1.1,0.25)]);
+  arm.add(new THREE.Mesh(new THREE.TubeGeometry(c, 12, 0.17, 8), purpleInk));
+  var hand=new THREE.Group(); hand.position.set(sd*1.6,1.6,0.25); arm.add(hand);
+  part3(monSphere, purpleInk, hand, 0,0,0, 0,0,0, 0.5,0.65,0.2);
+  part3(monCone, purpleInk, hand, sd*0.1,0.75,0, 0,0,-sd*0.15, 0.14,0.55,0.12);
+  part3(monCone, purpleInk, hand, -sd*0.4,0.35,0, 0,0,sd*0.7, 0.12,0.4,0.1);
+  var palm=part3(monSphere, palmMat, hand, 0,0,0.14, 0,0,0, 0.25,0.36,0.08);
+  return {hand:hand, palm:palm};
+}
+
+// The Freeze Genie: a flame-orange body that curls away at the bottom, a black head and a tuft of flame hair.
+var flameTex=canvasTex(128,128,function(g,w,h){
+  g.fillStyle='#ff7a2a'; g.fillRect(0,0,w,h);
+  var c=['#ff5a1e','#ff9a3c','#ffb347','#e8461a'];
+  for(var i=0;i<260;i++){ g.strokeStyle=c[i%4]; g.lineWidth=1.5; var x=Math.random()*w; g.beginPath(); g.moveTo(x,0); g.bezierCurveTo(x+rr(-6,6),h*0.3,x+rr(-6,6),h*0.7,x+rr(-4,4),h); g.stroke(); }
+},true);
+var genie=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; g.scale.setScalar(1.3); sea.add(g);
+  var flame=new THREE.MeshStandardMaterial({map:flameTex, color:0xffffff, emissive:col('#7a2400'), roughness:0.7, side:THREE.DoubleSide});
+  var pts=[]; for(var i=0;i<=16;i++){ var f=i/16; pts.push(new THREE.Vector2(0.45+Math.pow(f,1.6)*1.1+Math.sin(f*9)*0.06, -f*4.2)); }
+  var trunk=new THREE.Mesh(new THREE.LatheGeometry(pts, 20), flame); body.add(trunk);
+  // The curly tail at the bottom.
+  var curls=[];
+  for(var sd=-1;sd<=1;sd+=2){ var cu=new THREE.Mesh(new THREE.TorusGeometry(0.75,0.38,10,20,PI*1.6), flame); cu.position.set(sd*1.3,-4.0,0); cu.rotation.set(0,PI/2,sd>0?0.3:PI-0.3); body.add(cu); curls.push(cu); }
+  part3(monSphere, flame, body, 0,-4.25,0, 0,0,0, 1.6,0.45,1.3);
+  // Head.
+  var black=new THREE.MeshStandardMaterial({color:col('#15161a'), roughness:0.4});
+  var head=new THREE.Group(); head.position.y=0.75; body.add(head);
+  part3(monSphere, black, head, 0,0,0, 0,0,0, 0.62,0.7,0.6);
+  part3(new THREE.CylinderGeometry(0.3,0.42,0.3,12), black, head, 0,0.7,0);
+  var blue=new THREE.MeshStandardMaterial({color:col('#2f8fd8'), roughness:0.2});
+  for(sd=-1;sd<=1;sd+=2){ part3(monSphere, blue, head, sd*0.24,0.12,0.5, 0,0,0, 0.15,0.13,0.08); part3(monSphere, black, head, sd*0.24,0.12,0.56, 0,0,0, 0.06); }
+  part3(new THREE.BoxGeometry(0.16,0.9,0.05), new THREE.MeshStandardMaterial({color:col('#e8584a'), roughness:0.5}), head, 0.1,0.05,0.56, 0,0,-0.6);
+  var sm=new THREE.Mesh(new THREE.TorusGeometry(0.2,0.035,6,14,PI*0.8), blue); sm.position.set(-0.05,-0.25,0.56); sm.rotation.z=-PI/2-PI*0.4; head.add(sm);
+  // Flame hair, fanning out like a brush.
+  var hair=new THREE.Group(); hair.position.y=0.85; head.add(hair);
+  for(i=0;i<11;i++){ var a=(i/10-0.5)*1.6; part3(monCone, flame, hair, Math.sin(a)*0.25, 0.6, rr(-0.15,0.15), rr(-0.25,0.25),0,-a*0.7, 0.16,1.3,0.16); }
+  var palmMat=new THREE.MeshStandardMaterial({color:col('#8fe3ff'), emissive:col('#2f9fd0'), roughness:0.2});
+  var arms=[genieArm(body,-1,palmMat), genieArm(body,1,palmMat)];
+  return {kind:'genie', g:g, body:body, curls:curls, hair:hair, arms:arms, palmMat:palmMat, name:'Freeze Genie', emoji:'🧞',
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:3, hover:6, sinkDepth:9, reward:15, hpMax:5};
+})();
+
+// The Scribble Muncher: a ball of scribbles with red eyes, a zigzag mouth and stick arms and legs.
+var muncher=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
+  var ball=new THREE.Mesh(scribbleGeo(1.6, 26), scribbleMat); body.add(ball);
+  for(var sd=-1;sd<=1;sd+=2) part3(monSphere, redInk, body, sd*0.42,0.35,1.42, 0,0,0, 0.17,0.13,0.08);
+  var mouth=new THREE.Group(); mouth.position.set(0,-0.25,1.5); body.add(mouth);
+  for(var i=0;i<5;i++) part3(new THREE.BoxGeometry(0.06,0.42,0.06), redInk, mouth, -0.36+i*0.18,0,0, 0,0,(i%2?-0.45:0.45));
+  var limbs=[];
+  function stick(x,y,z, rz, len, split){
+    var p=new THREE.Group(); p.position.set(x,y,z); p.rotation.z=rz; body.add(p);
+    var cg=new THREE.CylinderGeometry(0.06,0.05,len,6); cg.translate(0,len/2,0); p.add(new THREE.Mesh(cg, redInk));
+    if(split) for(var k=-1;k<=1;k+=2){ var f=new THREE.CylinderGeometry(0.04,0.03,0.5,5); f.translate(0,0.25,0); var m=new THREE.Mesh(f, redInk); m.position.y=len; m.rotation.z=k*0.5; p.add(m); }
+    limbs.push(p); return p;
+  }
+  stick(-1.4,0.1,0, 1.25, 1.5, true); stick(1.4,0.3,0, -1.0, 1.5, true);
+  stick(-0.45,-1.4,0, PI-0.12, 2.3, false); stick(0.45,-1.4,0, PI+0.2, 2.3, false);
+  return {kind:'muncher', g:g, body:body, ball:ball, mouth:mouth, limbs:limbs, name:'Scribble Muncher', emoji:'🌀',
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:2.4, hover:4, sinkDepth:6, reward:15, hpMax:4};
+})();
+
+// The Eyeball Squid: one huge eyeball, curved horns and a pencil-point horn on top, three curly tentacles below.
+var squid=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; g.scale.setScalar(1.2); sea.add(g);
+  var eye=eyeball(body, 1.5, 0,0,0);
+  curvedHorn(body,-1,lavender); curvedHorn(body,1,lavender); pencilHorn(body, 1.2, lavender);
+  var tents=[tentacle(body,-0.6,-1.2,0, 10,0.42,0.2,-1), tentacle(body,0.05,-1.4,0, 11,0.42,0.2,1), tentacle(body,0.65,-1.2,0, 10,0.42,0.2,1)];
+  return {kind:'squid', g:g, body:body, eye:eye, tents:tents, name:'Eyeball Squid', emoji:'🦑',
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:2.6, hover:5, sinkDepth:8, reward:15, hpMax:5};
+})();
+var stareBeam=new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:0x5dff9a, transparent:true, opacity:0.25, depthWrite:false, toneMapped:false}));
+stareBeam.visible=false; stareBeam.frustumCulled=false; sea.add(stareBeam);
+
+// THE MEGA MONSTER: every monster stuck together. A scribble ball body with the giant eyeball for a face,
+// the Eye Walker's laser eye and legs, the Genie's flame hair and freezing hands, the Squid's horns
+// and tentacles, and a Spike Serpent for a tail.
+var MEGA_N=24;
+var mega=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
+  body.add(new THREE.Mesh(scribbleGeo(3.2, 40), scribbleMat));
+  var eye=eyeball(body, 1.9, 0,0.3,2.3);
+  // A zigzag mouth under the eye and the Serpent's smile.
+  for(var i=0;i<7;i++) part3(new THREE.BoxGeometry(0.1,0.6,0.1), redInk, body, -0.9+i*0.3,-1.9,2.5, 0.3,0,(i%2?-0.45:0.45));
+  // Laser stalk on top, ringed by flame hair, horns and the Serpent's crown.
+  var skin=new THREE.MeshStandardMaterial({color:col('#a9c1ea'), roughness:0.75});
+  var white=new THREE.MeshStandardMaterial({color:col('#f6f8ff'), roughness:0.25});
+  var ink=new THREE.MeshStandardMaterial({color:col('#1b2a6b'), roughness:0.3});
+  part3(new THREE.CylinderGeometry(0.2,0.3,2.2,8), skin, body, 0,3.6,0.3);
+  var leye=new THREE.Group(); leye.position.set(0,4.9,0.3); body.add(leye);
+  part3(monSphere, white, leye, 0,0,0, 0,0,0, 0.75);
+  part3(monSphere, ink, leye, 0,0,0.62, 0,0,0, 0.27,0.27,0.15);
+  var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkTex, color:0xff3b3b, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}));
+  glow.position.set(0,0,0.85); glow.scale.setScalar(0.01); leye.add(glow);
+  var flame=new THREE.MeshStandardMaterial({map:flameTex, color:0xffffff, emissive:col('#7a2400'), roughness:0.7});
+  var hair=new THREE.Group(); hair.position.y=2.7; body.add(hair);
+  for(i=0;i<14;i++){ var a=i/14*TAU; part3(monCone, flame, hair, Math.cos(a)*0.9,0.6,Math.sin(a)*0.9, Math.sin(a)*0.5,0,-Math.cos(a)*0.5, 0.3,1.8,0.3); }
+  var hornG=new THREE.Group(); hornG.position.set(0,1.2,-0.6); hornG.scale.setScalar(1.6); body.add(hornG);
+  curvedHorn(hornG,-1,lavender); curvedHorn(hornG,1,lavender);
+  var spikeM=new THREE.MeshStandardMaterial({color:col('#ef5fa7'), roughness:0.4});
+  for(i=0;i<5;i++){ a=-0.9+i*0.45; part3(monCone, spikeM, body, Math.sin(a)*2.4,2.4,-1.2+Math.cos(a)*0.4, -0.4,0,-a*0.6, 0.25,1.2,0.25); }
+  // Genie arms.
+  var palmMat=new THREE.MeshStandardMaterial({color:col('#8fe3ff'), emissive:col('#2f9fd0'), roughness:0.2});
+  var armG=new THREE.Group(); armG.scale.setScalar(1.7); armG.position.y=0.2; body.add(armG);
+  var arms=[genieArm(armG,-1,palmMat), genieArm(armG,1,palmMat)];
+  arms.forEach(function(A,i){ A.hand.parent.position.x=(i?1:-1)*1.7; });
+  // Walker legs hanging down and squid tentacles between them.
+  var upperG=new THREE.CylinderGeometry(0.22,0.18,2.4,8); upperG.rotateZ(-PI/2); upperG.translate(1.2,0,0);
+  var lowerG=new THREE.CylinderGeometry(0.18,0.04,4.2,8); lowerG.translate(0,-2.1,0);
+  var legs=[];
+  for(var sd=-1;sd<=1;sd+=2){
+    var side=new THREE.Group(); side.scale.x=sd; body.add(side);
+    [[1.2,sd>0?0:PI],[-1.2,sd>0?PI:0]].forEach(function(L){
+      var hip=new THREE.Group(); hip.position.set(2.2,-1.6,L[0]); side.add(hip);
+      hip.add(new THREE.Mesh(upperG, skin));
+      var knee=new THREE.Group(); knee.position.x=2.4; knee.rotation.z=-0.2; hip.add(knee);
+      knee.add(new THREE.Mesh(lowerG, skin));
+      legs.push({hip:hip, ph:L[1]});
+    });
+  }
+  var tents=[tentacle(body,-0.9,-2.6,0.6, 12,0.55,0.3,-1), tentacle(body,0,-2.9,0.8, 13,0.55,0.3,1), tentacle(body,0.9,-2.6,0.6, 12,0.55,0.3,1)];
+  // The Spike Serpent tail.
+  var mat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.5});
+  var segs=[];
+  var tailG=new THREE.Group(); tailG.visible=false; sea.add(tailG);
+  for(i=0;i<MEGA_N;i++){ var s=new THREE.Mesh(serpSegGeo, mat); tailG.add(s); segs.push(s); }
+  var trail=[]; for(i=0;i<MEGA_N*SERP_STEP+SERP_STEP+2;i++) trail.push(new THREE.Vector3());
+  return {kind:'mega', g:g, body:body, eye:leye, glow:glow, bigEye:eye, hair:hair, arms:arms, palmMat:palmMat, legs:legs, tents:tents, segs:segs, tailG:tailG, trail:trail,
+    tailMat:mat, aim:new THREE.Vector3(), name:'MEGA MONSTER', emoji:'👹',
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:4.2, hover:8, sinkDepth:14, reward:60, hpMax:15};
+})();
+
+// Freezing water blasts from the Genie's hands.
+var waterGeo=new THREE.SphereGeometry(0.4,12,8);
+var waterMat=new THREE.MeshStandardMaterial({color:col('#bff3ff'), emissive:col('#3fb8e8'), roughness:0.1, transparent:true, opacity:0.85});
+var waters=[];
 
 /* ============================================================
    THE DIVER
@@ -2017,7 +2226,7 @@ function fadeFlash(){ ui.fade.style.opacity=1; setTimeout(function(){ ui.fade.st
 var player={
   pos:new THREE.Vector3(0,0,6), vel:new THREE.Vector3(), yaw:PI, swim:0, kick:0, walk:0,
   air:60, hearts:3, bag:0, bagVal:0, inv:0, suffocate:0, exhale:2, shieldCD:0,
-  zone:'home', lowWarned:false, fullWarned:0, darkWarned:false, surfWarned:0, torchOn:false
+  zone:'home', frozen:0, lowWarned:false, fullWarned:0, darkWarned:false, surfWarned:0, torchOn:false
 };
 var scene=sea;
 var state='title';
@@ -2152,7 +2361,7 @@ function transition(fn){
 }
 function enterHouse(fromBlackout, instant){
   var go=function(){
-    removeMonster(); spikes.forEach(function(s){ sea.remove(s.m); }); spikes.length=0;
+    removeMonster(); clearShots(); player.frozen=0; diver.ice.visible=false;
     shots.forEach(function(s){ sea.remove(s.g); }); shots.length=0; diver.gun.visible=diver.knife.visible=false;
     scene=home; setIndoors(true);
     zoneTimer=0; ui.zone.style.opacity=0; ui.minimap.classList.add('hidden');
@@ -2336,9 +2545,9 @@ function drawMap(){
   }
   clams.forEach(function(c){ if(!c.ready) return; var p=toMap(c.pos.x,c.pos.z); g.fillStyle='#7fe7ff'; g.beginPath(); g.arc(p[0],p[1],5,0,TAU); g.fill(); });
   sharks.forEach(function(s){ if(s.dead) return; var p=toMap(s.pos.x,s.pos.z); g.fillStyle=s.state==='chase'?'#ff3030':'#ff8f8f'; g.beginPath(); g.arc(p[0],p[1],s.state==='chase'?8:6,0,TAU); g.fill(); });
-  dolphins.forEach(function(d){ var p=toMap(d.pos.x,d.pos.z); g.fillStyle=d.friend?'#9dffb0':'#d6f4ff'; g.beginPath(); g.arc(p[0],p[1],5,0,TAU); g.fill(); });
+  dolphins.forEach(function(d){ if(d.eaten>0) return; var p=toMap(d.pos.x,d.pos.z); g.fillStyle=d.friend?'#9dffb0':'#d6f4ff'; g.beginPath(); g.arc(p[0],p[1],5,0,TAU); g.fill(); });
   anglers.forEach(function(s){ if(s.dead) return; var p=toMap(s.pos.x,s.pos.z); g.fillStyle='#c08aff'; g.beginPath(); g.arc(p[0],p[1],6,0,TAU); g.fill(); });
-  if(MON.cur){ var mp=toMap(MON.cur.pos.x,MON.cur.pos.z); g.font='24px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(MON.cur.kind==='serpent'?'🐉':'👁️', mp[0], mp[1]); }
+  if(MON.cur){ var mp=toMap(MON.cur.pos.x,MON.cur.pos.z); g.font='24px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(MON.cur.emoji, mp[0], mp[1]); }
   var hp=toMap(DOOR.x,DOOR.z), hx=hp[0]-R, hy=hp[1]-R, hd=Math.sqrt(hx*hx+hy*hy);
   if(hd>R-16){ hp[0]=R+hx/hd*(R-16); hp[1]=R+hy/hd*(R-16); }
   g.font='26px sans-serif'; g.textAlign='center'; g.textBaseline='middle'; g.fillText('🏠', hp[0], hp[1]);
@@ -2362,6 +2571,9 @@ function controls(dt){
 }
 function updateSea(dt, t){
   var c=controls(dt);
+  // Frozen by a Freeze Genie: no swimming until the ice melts.
+  if(player.frozen>0){ player.frozen-=dt; c.x=c.y=c.up=c.down=0; c.boost=false; }
+  diver.ice.visible=player.frozen>0;
   var cp=Math.cos(camPitch);
   _fwd.set(-Math.sin(camYaw)*cp, Math.sin(camPitch), -Math.cos(camYaw)*cp);
   _right.set(Math.cos(camYaw),0,-Math.sin(camYaw));
@@ -2691,19 +2903,21 @@ function updateAnglers(dt,t){
   });
 }
 /* Monsters come out every once in a while when you're away from home. */
-var MON={timer:rr(40,70), next:rnd()<0.5?'serpent':'walker', cur:null};
+var MON={timer:rr(40,70), order:['serpent','walker','genie','muncher','squid'], idx:0, count:0, cur:null};
+(function(){ for(var i=MON.order.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)), k=MON.order[i]; MON.order[i]=MON.order[j]; MON.order[j]=k; } })();
 var _eyeW=new THREE.Vector3(), _aim=new THREE.Vector3(), _ld=new THREE.Vector3();
 function inDark(){ return player.zone==='trench' || depthLight(player.pos.y)<0.6; }
 function spawnMonster(){
-  var kind=MON.next, x=0, z=0, ok=false;
+  // Every sixth monster is the Mega Monster.
+  var kind=MON.count%6===5?'mega':MON.order[MON.idx%MON.order.length], x=0, z=0, ok=false;
   for(var i=0;i<30 && !ok;i++){
     // Somewhere in front of you, so you see it climb out.
-    var a=camYaw+rr(-0.9,0.9), r=rr(24,34);
+    var a=camYaw+rr(-0.9,0.9), r=kind==='mega'?rr(34,42):rr(24,34);
     x=player.pos.x-Math.sin(a)*r; z=player.pos.z-Math.cos(a)*r;
     ok=Math.abs(x)<HALF-28 && Math.abs(z)<HALF-28 && !nearHouse(x,z,45) && heightAt(x,z)<6 && (kind!=='serpent' || z<86);
   }
   if(!ok){
-    if(kind==='serpent'){ MON.next='walker'; }
+    if(kind==='serpent') MON.idx++;
     MON.timer=4; return;
   }
   var fl=heightAt(x,z), m;
@@ -2713,25 +2927,36 @@ function spawnMonster(){
     for(i=0;i<m.trail.length;i++) m.trail[i].set(x, fl-1-i*SERP_PT, z);
     m.shoot=3; m.backT=0; m.darkT=0; m.darkSaid=false; m.wig=rr(0,TAU); m.life=50;
     showMsg('🐉 A SPIKE SERPENT is coming out of the sand!<br><span style="font-size:17px">It shoots spikes — but it hates the dark!</span>',3.5);
-  }else{
+  }else if(kind==='walker'){
     m=walker; m.pos.set(x,fl,z); m.yaw=Math.atan2(player.pos.x-x, player.pos.z-z); m.lift=-6.5; m.speed=0; m.walk=0;
     m.laser='idle'; m.lt=2.5; m.life=55;
     showMsg('👁️ An EYE WALKER is climbing out of the sand!<br><span style="font-size:17px">Its top eye shoots lasers — but it is very slow!</span>',3.5);
+  }else{
+    m={genie:genie, muncher:muncher, squid:squid, mega:mega}[kind];
+    spawnFloater(m, x, fl, z);
+    if(m.tailG) m.tailG.visible=true;
+    showMsg({
+      genie:'🧞 A FREEZE GENIE is rising out of the sand!<br><span style="font-size:17px">He shoots water out of his hands that freezes you — keep moving!</span>',
+      muncher:'🌀 A SCRIBBLE MUNCHER is coming!<br><span style="font-size:17px">It eats dolphins and grows bigger — protect your friends!</span>',
+      squid:'🦑 An EYEBALL SQUID is floating up!<br><span style="font-size:17px">Its stare pulls you in — swim away when it blinks!</span>',
+      mega:'👹 THE MEGA MONSTER IS RISING!<br><span style="font-size:17px">Every monster\'s power in one — but it\'s slow and it hates the dark!</span>'
+    }[kind], 4);
   }
   m.state='rise'; m.t=0; m.g.visible=true; m.netT=0; m.hp=undefined;
-  MON.cur=m; MON.next=kind==='serpent'?'walker':'serpent';
+  MON.cur=m; MON.count++; if(kind!=='mega') MON.idx++;
   sfx.monster();
 }
 function removeMonster(){
   var m=MON.cur; if(!m) return;
   freeNet(m); m.netT=0;
-  m.g.visible=false; beam.visible=false;
+  m.g.visible=false; beam.visible=false; stareBeam.visible=false; m.stare=false; m.prey=null;
+  if(m.tailG) m.tailG.visible=false;
   if(m.blob) m.blob.visible=false;
   MON.cur=null; MON.timer=rr(70,120);
 }
 function fireSpike(from, to){
   var m=new THREE.Mesh(spikeGeo, spikeMat); m.position.copy(from); m.lookAt(to); sea.add(m);
-  spikes.push({m:m, v:_v.copy(to).sub(from).normalize().multiplyScalar(15).clone(), life:3});
+  spikes.push({m:m, v:to.clone().sub(from).normalize().multiplyScalar(15), life:3});
 }
 function updateSpikes(dt){
   for(var i=spikes.length-1;i>=0;i--){
@@ -2742,14 +2967,16 @@ function updateSpikes(dt){
 }
 function updateMonsters(dt,t){
   var out=(scene===sea && state==='play');
-  updateSpikes(dt);
+  updateSpikes(dt); updateWaters(dt);
   if(!MON.cur){
     if(out && player.zone!=='home'){ MON.timer-=dt; if(MON.timer<=0) spawnMonster(); }
     return;
   }
   // Home is safe: monsters won't come near the house.
   var hunting=out && !nearHouse(player.pos.x,player.pos.z,30);
-  if(MON.cur.kind==='serpent') updateSerpent(MON.cur, dt, t, hunting); else updateWalker(MON.cur, dt, t, hunting);
+  if(MON.cur.kind==='serpent') updateSerpent(MON.cur, dt, t, hunting);
+  else if(MON.cur.kind==='walker') updateWalker(MON.cur, dt, t, hunting);
+  else updateFloater(MON.cur, dt, t, hunting);
 }
 function updateSerpent(m, dt, t, hunting){
   var head=m.pos, toP=_d.copy(player.pos).sub(head), dist=toP.length(), dark=inDark(), speed=5.2;
@@ -2849,28 +3076,8 @@ function updateWalker(m, dt, t, hunting){
     m.pos.x=clamp(m.pos.x,-HALF+14,HALF-14); m.pos.z=clamp(m.pos.z,-HALF+14,HALF-14);
     if(nearHouse(m.pos.x,m.pos.z,26)){ _v2.set(m.pos.x-HOUSE.x,0,m.pos.z-HOUSE.z).normalize(); m.pos.addScaledVector(_v2, 3*dt); }
     // Its power: a laser out of the top eye. It glows red while charging and stops aiming just before it fires.
-    m.g.updateMatrixWorld(true);
-    m.eye.getWorldPosition(_eyeW);
-    m.lt-=dt;
-    if(m.laser==='idle'){
-      _aim.copy(player.pos);
-      if(hunting && dist<40 && m.lt<=0){ m.laser='charge'; m.lt=1.5; sfx.charge(); }
-    }else if(m.laser==='charge'){
-      if(m.lt>0.45) _aim.copy(player.pos);
-      m.glow.scale.setScalar(lerp(2.6,0.3,m.lt/1.5));
-      showBeam(_eyeW, _aim, 0.03, 0.35);
-      if(m.lt<=0){ m.laser='fire'; m.lt=0.5; sfx.laser(); }
-    }else{
-      m.glow.scale.setScalar(3);
-      showBeam(_eyeW, _aim, 0.24+Math.sin(t*60)*0.05, 0.9);
-      // Did it hit the diver?
-      _v.copy(player.pos).sub(_eyeW);
-      var along=clamp(_v.dot(_ld), 0, 42);
-      _v.addScaledVector(_ld, -along);
-      if(hunting && _v.lengthSq()<1.1) hurt(1, _eyeW, 8);
-      if(m.lt<=0){ m.laser='idle'; m.lt=2.8; }
-    }
-    if(m.laser!=='fire') m.eye.lookAt(_aim);
+    laserTick(m, dt, t, hunting);
+    if(m.laser==='idle' && hunting && dist<40 && m.lt<=0){ m.laser='charge'; m.lt=1.5; sfx.charge(); }
     if(m.life<=0 && m.laser!=='fire'){ m.state='sink'; m.t=0; }
   }else{
     m.speed=0; m.lift-=dt*1.8;
@@ -2893,6 +3100,230 @@ function showBeam(from, to, r, op){
   beam.position.copy(from); beam.lookAt(_v.copy(from).add(_ld));
   beam.scale.set(r, r, 42); beam.material.opacity=op; beam.visible=true;
 }
+// A block of ice round the diver while frozen.
+diver.ice=new THREE.Mesh(new THREE.BoxGeometry(1.3,2.4,1.1), new THREE.MeshStandardMaterial({color:col('#cdf6ff'), roughness:0.05, metalness:0.2, transparent:true, opacity:0.45, depthWrite:false}));
+diver.ice.position.y=0.4; diver.ice.visible=false; diver.root.add(diver.ice);
+function fireWater(from, to){
+  var m=new THREE.Mesh(waterGeo, waterMat); m.position.copy(from); sea.add(m);
+  waters.push({m:m, v:to.clone().sub(from).normalize().multiplyScalar(13), life:3});
+}
+function freezePlayer(){
+  if(player.frozen>0 || state!=='play' || scene!==sea) return;
+  player.frozen=2.5; player.vel.multiplyScalar(0.2); sfx.freeze();
+  showMsg('🧊 Brrr! You\'re frozen!',1.6);
+}
+function updateWaters(dt){
+  for(var i=waters.length-1;i>=0;i--){
+    var w=waters[i]; w.life-=dt; w.m.position.addScaledVector(w.v, dt);
+    var p=w.m.position, hit=p.distanceToSquared(player.pos)<1.2;
+    if(Math.random()<0.4) emitBubble(p.x,p.y,p.z,0.2);
+    if(hit) freezePlayer();
+    if(hit || w.life<=0 || p.y<heightAt(p.x,p.z)){ sea.remove(w.m); waters.splice(i,1); }
+  }
+}
+function clearShots(){
+  spikes.forEach(function(s){ sea.remove(s.m); }); spikes.length=0;
+  waters.forEach(function(s){ sea.remove(s.m); }); waters.length=0;
+  stareBeam.visible=false;
+}
+// The laser eye, shared by the Eye Walker and the Mega Monster. Start it with m.laser='charge', m.lt=1.5.
+function laserTick(m, dt, t, hunting){
+  m.g.updateMatrixWorld(true);
+  m.eye.getWorldPosition(_eyeW);
+  m.lt-=dt;
+  if(m.laser==='idle'){ m.aim.copy(player.pos); }
+  else if(m.laser==='charge'){
+    if(m.lt>0.45) m.aim.copy(player.pos);
+    m.glow.scale.setScalar(lerp(2.6,0.3,m.lt/1.5)*(m.kind==='mega'?1.6:1));
+    showBeam(_eyeW, m.aim, 0.03, 0.35);
+    if(m.lt<=0){ m.laser='fire'; m.lt=0.5; sfx.laser(); }
+  }else{
+    m.glow.scale.setScalar(m.kind==='mega'?4.5:3);
+    showBeam(_eyeW, m.aim, (0.24+Math.sin(t*60)*0.05)*(m.kind==='mega'?1.6:1), 0.9);
+    // Did it hit the diver?
+    _v.copy(player.pos).sub(_eyeW);
+    var along=clamp(_v.dot(_ld), 0, 42);
+    _v.addScaledVector(_ld, -along);
+    if(hunting && _v.lengthSq()<(m.kind==='mega'?1.8:1.1)) hurt(1, _eyeW, 8);
+    if(m.lt<=0){ m.laser='idle'; m.lt=2.8; }
+  }
+  if(m.laser!=='fire') m.eye.lookAt(m.aim);
+}
+function nearestDolphin(p, r){
+  var best=null, bd=r*r;
+  dolphins.forEach(function(d){ if(d.eaten>0 || d.mode==='ram') return; var q=d.pos.distanceToSquared(p); if(q<bd){ bd=q; best=d; } });
+  return best;
+}
+function eatDolphin(m, d){
+  d.eaten=70; d.g.visible=false; d.blob.visible=false; d.mode='wander'; d.target=null;
+  if(d.friend){ d.friend=false; save.friends=Math.max(0,(save.friends||0)-1); writeSave(); }
+  m.size=Math.min(m.kind==='mega'?1.6:2.6, m.size*(m.kind==='mega'?1.1:1.3));
+  m.hp=(m.hp===undefined?m.hpMax:m.hp)+2;
+  for(var i=0;i<30;i++) emitBubble(d.pos.x,d.pos.y,d.pos.z,1.2);
+  sfx.chomp();
+  showMsg('😱 The '+m.name+' ate a dolphin and grew BIGGER!<br><span style="font-size:17px">Catch it in your net to save the others!</span>',3);
+}
+function spawnFloater(m, x, fl, z){
+  m.pos.set(x, fl-m.sinkDepth*0.6, z); m.vel.set(0,0,0); m.size=1; m.backT=0; m.atkT=2.5; m.darkT=0; m.darkSaid=false;
+  m.yaw=Math.atan2(player.pos.x-x, player.pos.z-z); m.life=m.kind==='mega'?80:50;
+  if(m.trail){ for(var i=0;i<m.trail.length;i++) m.trail[i].set(x, m.pos.y-i*SERP_PT, z); m.laser='idle'; m.lt=2; m.attack=0; }
+}
+/* Genie, Muncher, Squid and the Mega Monster all swim the same way: up out of the sand,
+   around the diver for a while, then back down. What they do on the way is up to each one. */
+function updateFloater(m, dt, t, hunting){
+  m.t+=dt;
+  var toP=_d.copy(player.pos).sub(m.pos), dist=toP.length(), fl=heightAt(m.pos.x,m.pos.z), want=_v2.set(0,0,0);
+  if(m.netT>0){
+    m.netT-=dt; m.vel.multiplyScalar(0.9);
+    if(m.palmMat) m.palmMat.emissive.setRGB(0.18,0.62,0.82);
+    poseFloater(m, dt, t, true, hunting, dist);
+    showNet(m, m.center, m.netR*m.size*1.15, t);
+    if(m.netT<=0){ freeNet(m); m.backT=1.5; m.atkT=Math.max(m.atkT,1.5); }
+    return;
+  }
+  if(m.state==='rise'){
+    want.set(0,3,0);
+    if(rnd()<0.8) emitBubble(m.pos.x+rr(-1.5,1.5), fl+0.3, m.pos.z+rr(-1.5,1.5), 0.8);
+    if(m.pos.y>fl+m.hover){ m.state='hunt'; m.t=0; }
+  }else if(m.state==='hunt'){
+    m.life-=dt;
+    if(!hunting) m.life=Math.min(m.life,0.5);
+    var speed=brain(m, dt, t, hunting, toP, dist, want);
+    if(m.backT>0){ m.backT-=dt; want.copy(toP).normalize().multiplyScalar(-5); want.y+=1.5; }
+    else want.clampLength(0, speed);
+    if(m.life<=0 && m.laser!=='fire'){ m.state='sink'; m.t=0; stareBeam.visible=false; }
+  }else{
+    want.set(0,-3,0);
+    if(m.pos.y<fl+1 && rnd()<0.8) emitBubble(m.pos.x+rr(-1.5,1.5), fl+0.3, m.pos.z+rr(-1.5,1.5), 0.8);
+    if(m.pos.y<fl-m.sinkDepth*m.size){ removeMonster(); return; }
+  }
+  m.vel.lerp(want, Math.min(1, dt*2));
+  m.pos.addScaledVector(m.vel, dt);
+  if(m.state==='hunt'){
+    var lo=fl+m.hover*0.6*m.size;
+    if(m.pos.y<lo) m.pos.y=lerp(m.pos.y, lo, Math.min(1,dt*3));
+    if(m.pos.y>SURF-3*m.size) m.pos.y=SURF-3*m.size;
+    m.pos.x=clamp(m.pos.x,-HALF+14,HALF-14); m.pos.z=clamp(m.pos.z,-HALF+14,HALF-14);
+    if(nearHouse(m.pos.x,m.pos.z,24)){ _v.set(m.pos.x-HOUSE.x,0,m.pos.z-HOUSE.z).normalize(); m.pos.addScaledVector(_v, 6*dt); }
+  }
+  // Face whatever it's after.
+  var face=m.prey?m.prey.pos:player.pos;
+  m.yaw+=clamp(angDiff(m.yaw, Math.atan2(face.x-m.pos.x, face.z-m.pos.z)), -1.5*dt, 1.5*dt);
+  poseFloater(m, dt, t, false, hunting, dist);
+}
+// Each monster's own powers. Returns how fast it may swim and fills in `want`, the velocity it would like.
+function brain(m, dt, t, hunting, toP, dist, want){
+  var dark=inDark();
+  if(m.kind==='genie'){
+    // Keeps its distance and throws freezing water from alternate hands.
+    want.copy(toP).normalize().multiplyScalar((dist-11)*0.6); want.y+=(player.pos.y+1-m.pos.y)*0.5;
+    m.atkT-=dt;
+    m.palmMat.emissive.setRGB(0.18,0.62,0.82).multiplyScalar(m.atkT<0.7?1.5+Math.sin(t*30):1);
+    if(hunting && dist<32 && m.atkT<=0){
+      m.atkT=2.2; m.hand=(m.hand||0)^1;
+      m.arms[m.hand].palm.getWorldPosition(_v); _aim.copy(player.pos).addScaledVector(player.vel,0.3);
+      fireWater(_v, _aim); sfx.water();
+    }
+    return 4.5;
+  }
+  if(m.kind==='muncher'){
+    // Goes after dolphins first; every one it eats makes it bigger.
+    m.prey=nearestDolphin(m.pos, 45);
+    if(m.prey){
+      want.copy(m.prey.pos).sub(m.pos).normalize().multiplyScalar(9.5);
+      if(m.prey.pos.distanceTo(m.pos)<1.8*m.size+0.8){ eatDolphin(m, m.prey); m.prey=null; }
+      return 9.5;
+    }
+    want.copy(toP).normalize().multiplyScalar(4.8);
+    if(hunting && dist<1.7*m.size+0.4 && hurt(1, m.pos, 9)) m.backT=1.8;
+    return 4.8;
+  }
+  if(m.kind==='squid'){
+    // Stares for a few seconds, pulling the diver in, then blinks. Its weakness: while it blinks you can swim away.
+    want.copy(toP).normalize().multiplyScalar((dist-5)*0.5); want.y+=(player.pos.y-m.pos.y)*0.4;
+    m.atkT-=dt;
+    if(m.atkT<=0){ m.blink=!m.blink; m.atkT=m.blink?1.8:3.5; }
+    m.stare=!m.blink && hunting && dist<28;
+    if(m.stare){ player.vel.addScaledVector(toP, -10*dt/Math.max(dist,0.1)); }
+    if(hunting && dist<3.2 && hurt(1, m.pos, 9)) m.backT=1.5;
+    return 3;
+  }
+  // The Mega Monster: slow, and it hates the dark, but it has every power.
+  m.prey=nearestDolphin(m.pos, 14);
+  if(m.prey){ want.copy(m.prey.pos).sub(m.pos).normalize().multiplyScalar(6); if(m.prey.pos.distanceTo(m.pos)<5*m.size){ eatDolphin(m, m.prey); m.prey=null; } return 6; }
+  if(dark && hunting){
+    m.darkT+=dt;
+    if(!m.darkSaid){ m.darkSaid=true; showMsg('🌑 The MEGA MONSTER hates the dark too!<br><span style="font-size:17px">Hide down here until it gives up.</span>',2.8); }
+    if(m.darkT>8) m.life=0;
+    want.copy(toP).normalize().multiplyScalar(-2);
+    return 2;
+  }
+  want.copy(toP).normalize().multiplyScalar((dist-12)*0.5); want.y+=(player.pos.y+3-m.pos.y)*0.4;
+  laserTick(m, dt, t, hunting);
+  m.atkT-=dt;
+  if(m.stare) player.vel.addScaledVector(toP, -8*dt/Math.max(dist,0.1));
+  if(hunting && dist<34 && m.atkT<=0 && m.laser==='idle'){
+    var a=m.attack++%4; m.atkT=2.6; m.stare=false;
+    if(a===0){ sfx.spike(); [4,8,12,16,20].forEach(function(k){ _v.copy(m.segs[k].position); _v.y+=1;
+      _aim.copy(player.pos).addScaledVector(player.vel,0.25); _aim.x+=rr(-1,1); _aim.y+=rr(-0.6,0.6); _aim.z+=rr(-1,1); fireSpike(_v, _aim); }); }
+    else if(a===1){ sfx.water(); m.arms.forEach(function(A){ A.palm.getWorldPosition(_v); fireWater(_v, _aim.copy(player.pos).addScaledVector(player.vel,0.3)); }); }
+    else if(a===2){ m.laser='charge'; m.lt=1.5; sfx.charge(); }
+    else { m.stare=true; m.atkT=2.2; }
+  }
+  if(hunting && dist<4.5*m.size && hurt(1, m.pos, 11)) m.backT=2;
+  return 2.6;
+}
+function poseFloater(m, dt, t, tangled, hunting, dist){
+  var shake=tangled?Math.sin(t*14)*0.15:0;
+  m.g.position.copy(m.pos);
+  m.g.rotation.set(0, m.yaw, shake);
+  var base={genie:1.6, muncher:1.35, squid:1.3, mega:1.25}[m.kind];
+  m.g.scale.setScalar(base*m.size);
+  m.center.copy(m.pos);
+  if(m.kind==='genie'){
+    m.body.rotation.z=Math.sin(t*1.3)*0.08; m.body.position.y=Math.sin(t*1.7)*0.2;
+    m.curls.forEach(function(c,i){ c.rotation.x=Math.sin(t*2+i)*0.2; });
+    m.hair.children.forEach(function(h,i){ h.scale.y=1.3*(1+Math.sin(t*9+i)*0.12); });
+    m.arms.forEach(function(A,i){ A.hand.rotation.z=Math.sin(t*2+i*PI)*0.15; });
+    m.center.y-=1.6*m.size;
+  }else if(m.kind==='muncher'){
+    m.ball.rotation.y+=dt*(tangled?6:1.2); m.ball.rotation.x+=dt*0.5;
+    m.mouth.scale.y=1+Math.max(0,Math.sin(t*(m.prey?12:4)))*0.6;
+    m.limbs.forEach(function(L,i){ L.rotation.x=Math.sin(t*(tangled?12:5)+i*1.7)*0.35; });
+    m.body.position.y=Math.abs(Math.sin(t*3))*0.25;
+  }else if(m.kind==='squid'){
+    setLid(m.eye, m.blink?1:0.05);
+    m.tents.forEach(function(T){ waveTentacle(T, t*(tangled?3:1), 1); });
+    m.body.position.y=Math.sin(t*1.2)*0.3;
+    m.body.rotation.x=-0.15;
+    showStare(m, m.eye.g);
+  }else{
+    m.tents.forEach(function(T){ waveTentacle(T, t*(tangled?3:1), 1); });
+    m.legs.forEach(function(L){ var p=t*1.4+L.ph; L.hip.rotation.set(0, Math.sin(p)*0.3, -0.5+Math.sin(p*0.5)*0.2); });
+    m.hair.children.forEach(function(h,i){ h.scale.y=1.8*(1+Math.sin(t*9+i)*0.12); });
+    setLid(m.bigEye, (!m.stare && Math.sin(t*0.9)>0.85)?1:0.05);
+    m.palmMat.emissive.setRGB(0.18,0.62,0.82);
+    m.body.position.y=Math.sin(t*1.1)*0.3;
+    if(tangled){ m.glow.scale.setScalar(0.01); beam.visible=false; m.laser='idle'; }
+    showStare(m, m.bigEye.g);
+    // The serpent tail follows the path its back end swam.
+    var back=_c.set(-Math.sin(m.yaw), 0, -Math.cos(m.yaw)).multiplyScalar(3.4*m.size).add(m.pos);
+    var tr=m.trail, last=tr[0], d=back.distanceTo(last);
+    while(d>=SERP_PT){ var np=tr.pop(); np.copy(last).lerp(back, SERP_PT/d); tr.unshift(np); last=np; d=back.distanceTo(last); }
+    for(var i=0;i<MEGA_N;i++){ var s=m.segs[i]; s.position.copy(tr[(i+1)*SERP_STEP]); s.lookAt(tr[i*SERP_STEP]); }
+    m.segs.forEach(function(s,i){ s.scale.setScalar(lerp(2.4,0.6,i/(MEGA_N-1))*m.size); });
+  }
+  if(!m.blob) m.blob=makeBlob();
+  placeBlob(m.blob, m.pos.x, m.pos.y, m.pos.z, 3*m.size*base, 3*m.size*base, m.yaw, depthLight(m.pos.y));
+}
+function showStare(m, eyeG){
+  stareBeam.visible=!!m.stare && m.state==='hunt' && !(m.netT>0);
+  if(!stareBeam.visible) return;
+  eyeG.getWorldPosition(_eyeW);
+  var d=_eyeW.distanceTo(player.pos);
+  stareBeam.position.copy(_eyeW); stareBeam.lookAt(player.pos);
+  stareBeam.scale.set(0.5+Math.sin(clockT*8)*0.1, 0.5+Math.sin(clockT*8)*0.1, d);
+}
 /* ============================================================
    NET GUN, KNIFE AND DOLPHIN FRIENDS
    ============================================================ */
@@ -2908,7 +3339,7 @@ function targets(){
     if(m.kind==='serpent'){
       list.push({o:m, kind:'monster', c:m.pos, r:1.3});
       for(var i=3;i<SERP_N;i+=4) list.push({o:m, kind:'monster', c:m.segs[i].position, r:0.9});
-    }else list.push({o:m, kind:'monster', c:m.center, r:3});
+    }else list.push({o:m, kind:'monster', c:m.center, r:m.netR*(m.size||1)});
   }
   return list;
 }
@@ -2931,12 +3362,12 @@ function nearestNetted(){
   });
   return best;
 }
-function maxHp(kind){ return kind==='shark'?3:(kind==='angler'?2:5); }
+function maxHp(T){ return T.kind==='shark'?3:(T.kind==='angler'?2:T.o.hpMax); }
 function slash(){
   var T=nearestNetted(); if(!T) return false;
   if(slashT>0) return true;
   slashT=0.35; sfx.slash();
-  var o=T.o; if(o.hp===undefined) o.hp=maxHp(T.kind);
+  var o=T.o; if(o.hp===undefined) o.hp=maxHp(T);
   o.hp--;
   floater('🔪', T.c);
   for(var i=0;i<6;i++) emitBubble(T.c.x,T.c.y,T.c.z,0.6);
@@ -2944,7 +3375,7 @@ function slash(){
   return true;
 }
 function defeat(T){
-  var o=T.o, reward=T.kind==='shark'?5:(T.kind==='angler'?4:15);
+  var o=T.o, reward=T.kind==='shark'?5:(T.kind==='angler'?4:o.reward);
   for(var i=0;i<40;i++) emitBubble(T.c.x,T.c.y,T.c.z,1.6);
   player.bagVal+=reward; sfx.win();
   floater('+'+reward+' 🐚', T.c);
@@ -2977,8 +3408,8 @@ function updateShots(dt){
     var p=s.g.position, hit=null;
     for(var j=0;j<list.length;j++){ var T=list[j], R=T.r+0.9; if(T.c.distanceToSquared(p)<R*R){ hit=T; break; } }
     if(hit){
-      hit.o.netT=gearVal('net');
-      if(hit.o.hp===undefined) hit.o.hp=maxHp(hit.kind);
+      hit.o.netT=gearVal('net')*(hit.o.kind==='mega'?0.5:1);
+      if(hit.o.hp===undefined) hit.o.hp=maxHp(hit);
       sfx.netHit();
       showMsg('🕸️ Caught it! Swim up and press '+(isTouch?'🔪':'E')+' to use your knife.',2);
     }
@@ -3002,7 +3433,8 @@ function bump(T){
   if(T.kind==='shark'){ o.state='flee'; o.t=0; o.cool=12; }
   else if(T.kind==='angler'){ o.state='flee'; o.t=0; o.cool=10; }
   else if(o.kind==='serpent'){ o.backT=3; o.shoot=3.5; }
-  else { o.laser='idle'; o.lt=4; o.speed=0; beam.visible=false; }
+  else if(o.kind==='walker'){ o.laser='idle'; o.lt=4; o.speed=0; beam.visible=false; }
+  else { o.backT=2.5; o.atkT=Math.max(o.atkT,2); o.stare=false; }
   for(var i=0;i<12;i++) emitBubble(T.c.x,T.c.y,T.c.z,0.8);
   sfx.dolphin();
   if(clockT>protectMsgT){ protectMsgT=clockT+10; showMsg('🐬 Your dolphin friend bumped it away!',2); }
@@ -3016,7 +3448,7 @@ function makeFriend(d){
   showMsg('🐬 You made a friend!<br><span style="font-size:17px">Dolphin friends follow you and chase off sharks and monsters.</span>',3);
 }
 function nearWildDolphin(){
-  for(var i=0;i<dolphins.length;i++){ var d=dolphins[i]; if(!d.friend && d.pos.distanceToSquared(player.pos)<20) return d; }
+  for(var i=0;i<dolphins.length;i++){ var d=dolphins[i]; if(!d.friend && !(d.eaten>0) && d.pos.distanceToSquared(player.pos)<20) return d; }
   return null;
 }
 function placeFriends(){
@@ -3027,6 +3459,11 @@ function placeFriends(){
 function updateDolphins(dt,t){
   var fi=0;
   dolphins.forEach(function(d){
+    if(d.eaten>0){
+      d.eaten-=dt; if(d.eaten>0) return;
+      // A new wild dolphin turns up where that one used to live.
+      d.pos.copy(d.home); d.g.visible=true; d.mode='wander'; d.t=99;
+    }
     d.t+=dt; d.cool-=dt;
     var want=_v2, speed=4.5;
     if(!d.friend){
@@ -3036,6 +3473,11 @@ function updateDolphins(dt,t){
         d.wp.y=heightAt(d.wp.x,d.wp.z)+rr(3,9);
       }
       want.copy(d.wp).sub(d.pos).normalize();
+      // Wild dolphins flee from anything that eats dolphins.
+      var mm=MON.cur;
+      if(mm && (mm.kind==='muncher'||mm.kind==='mega') && mm.state==='hunt' && mm.pos.distanceToSquared(d.pos)<324){
+        want.copy(d.pos).sub(mm.pos); want.y=Math.max(want.y,0); want.normalize(); speed=6;
+      }
     }else if(d.mode==='ram' && d.target && !(d.target.o.dead) && !netted(d.target.o) && d.t<4){
       speed=15;
       want.copy(d.target.c).sub(d.pos);
