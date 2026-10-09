@@ -50,6 +50,17 @@ saves the game. Everything is kept in `localStorage` under `sea-collector-v1`.
     back. Weakness: the dark — swim down into the Deep Trench and it gives up.
   - **Eye Walker** — a pale blue walker on four long legs with eyes all over. Power: its top eye
     glows red, stops aiming, then fires a laser. Weakness: very slow.
+  - **Freeze Genie** — flame-orange body with a curly tail, a black head and flame hair. Power:
+    throws water from his hands that freezes you in a block of ice for a couple of seconds.
+  - **Scribble Muncher** — a ball of scribbles on stick legs. Power: eats dolphins (wild ones and
+    friends) and grows bigger and tougher with each one. Wild dolphins flee from it.
+  - **Eyeball Squid** — one huge eyeball with horns and three curly tentacles. Power: its stare
+    pulls you in for a tentacle slap. Weakness: it blinks, and the pull stops.
+  - **MEGA MONSTER** — every sixth monster. All of them stuck together: scribble body, eyeball
+    face, laser eye on a stalk, flame hair, genie hands, walker legs, squid tentacles and a spike
+    serpent tail. It takes turns with spikes, freezing water, the laser and the stare, and eats
+    dolphins. Weakness: it's slow and hates the dark. 15 hits to beat, nets hold it for half as long,
+    and it's worth 60 shells.
 - **Net gun** (click, R or 🕸️): the net holds a shark, anglerfish or monster for 6 seconds (10 with
   the Big Net Gun from the Gear Locker). While it's netted, swim up and use your **knife** (E,
   click or 🔪). Sharks take 3 hits, anglerfish 2, monsters 5. Beaten creatures drop shells into your
