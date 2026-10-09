@@ -56,10 +56,14 @@ saves the game. Everything is kept in `localStorage` under `sea-collector-v1`.
     friends) and grows bigger and tougher with each one. Wild dolphins flee from it.
   - **Eyeball Squid** — one huge eyeball with horns and three curly tentacles. Power: its stare
     pulls you in for a tentacle slap. Weakness: it blinks, and the pull stops.
+  - **Printer Monster** — a round body with a toothy mouth, spiky legs and a 3D-printer gantry on
+    its head. What it prints becomes real, but it can only print sharks (up to three, which hunt
+    you for about 20 seconds) and tornadoes (up to two, which drift after you and spin you round).
+    It stands still while printing, which is the time to net it.
   - **MEGA MONSTER** — every sixth monster. All of them stuck together: scribble body, eyeball
     face, laser eye on a stalk, flame hair, genie hands, walker legs, squid tentacles and a spike
-    serpent tail. It takes turns with spikes, freezing water, the laser and the stare, and eats
-    dolphins. Weakness: it's slow and hates the dark. 15 hits to beat, nets hold it for half as long,
+    serpent tail, plus the printer on its shoulder. It takes turns with spikes, freezing water, the
+    laser, the stare and printing sharks, and eats dolphins. Weakness: it's slow and hates the dark. 15 hits to beat, nets hold it for half as long,
     and it's worth 60 shells.
 - **Net gun** (click, R or 🕸️): the net holds a shark, anglerfish or monster for 6 seconds (10 with
   the Big Net Gun from the Gear Locker). While it's netted, swim up and use your **knife** (E,

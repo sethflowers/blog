@@ -477,6 +477,8 @@ var sfx={
   slash:function(){ tone(2200,0.12,'sawtooth',0.05,500); },
   win:function(){ [523,659,784,1046].forEach(function(f,i){ tone(f,0.2,'triangle',0.16,0,i*0.09); }); },
   dolphin:function(){ for(var i=0;i<5;i++) tone(1800+Math.random()*900,0.07,'sine',0.08,2600+Math.random()*900,i*0.08); },
+  print:function(){ for(var i=0;i<14;i++) tone(i%2?620:740,0.08,'square',0.035,0,i*0.13); },
+  printed:function(){ tone(880,0.1,'square',0.06); tone(1175,0.18,'square',0.06,0,0.1); },
   water:function(){ for(var i=0;i<6;i++) tone(300+Math.random()*300,0.12,'sine',0.07,800,i*0.03); },
   freeze:function(){ tone(2400,0.6,'triangle',0.08,1200); tone(3100,0.5,'sine',0.06,1500,0.08); },
   chomp:function(){ tone(140,0.15,'square',0.14,70); tone(120,0.15,'square',0.14,60,0.18); },
@@ -1739,9 +1741,71 @@ var squid=(function(){
 var stareBeam=new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:0x5dff9a, transparent:true, opacity:0.25, depthWrite:false, toneMapped:false}));
 stareBeam.visible=false; stareBeam.frustumCulled=false; sea.add(stareBeam);
 
+
+// A 3D-printer gantry: a post, an arm reaching forward, a red light at the corner and a nozzle that slides.
+function printerArm(parent, x,y,z, s){
+  var g=new THREE.Group(); g.position.set(x,y,z); g.scale.setScalar(s); parent.add(g);
+  var shell=new THREE.MeshStandardMaterial({color:col('#efe9e2'), roughness:0.5});
+  part3(new THREE.BoxGeometry(0.4,1.8,0.4), shell, g, 0,0.9,0);
+  part3(new THREE.BoxGeometry(0.4,0.4,3.8), shell, g, 0,1.95,1.7);
+  part3(new THREE.BoxGeometry(0.42,0.08,3.6), redInk, g, 0,2.17,1.7);
+  part3(monSphere, new THREE.MeshBasicMaterial({color:0xff2a2a}), g, 0.24,1.95,0.05, 0,0,0, 0.2);
+  var head=new THREE.Group(); head.position.set(0,1.95,3.4); g.add(head);
+  part3(new THREE.BoxGeometry(0.55,0.55,0.55), redInk, head, 0,-0.1,0);
+  part3(monCone, new THREE.MeshStandardMaterial({color:col('#9a9a9a'), metalness:0.6, roughness:0.3}), head, 0,-0.6,0, PI,0,0, 0.18,0.45,0.18);
+  part3(monSphere, new THREE.MeshBasicMaterial({color:0xff6a3a}), head, 0,-0.85,0, 0,0,0, 0.08);
+  var nozzle=new THREE.Object3D(); nozzle.position.y=-0.9; head.add(nozzle);
+  return {head:head, nozzle:nozzle};
+}
+// The Printer Monster: a round body with a big toothy mouth, spiky legs and a printer on its head.
+// What it prints becomes real — but it can only print sharks and tornadoes.
+var printer=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
+  var shell=new THREE.MeshStandardMaterial({color:col('#efe9e2'), roughness:0.5});
+  var dark=new THREE.MeshStandardMaterial({color:col('#2a1214'), roughness:0.6});
+  var white=new THREE.MeshStandardMaterial({color:col('#fffbea'), roughness:0.3});
+  part3(monSphere, shell, body, 0,0,0, 0,0,0, 1.6,1.5,1.4);
+  part3(monSphere, dark, body, 0,-0.1,1.28, 0,0,0, 0.85,0.48,0.25);
+  var rim=new THREE.Mesh(new THREE.TorusGeometry(1,0.06,6,28), redInk); rim.position.set(0,-0.1,1.36); rim.scale.set(0.88,0.52,1); body.add(rim);
+  var teeth=new THREE.Group(); teeth.position.set(0,-0.1,1.42); body.add(teeth);
+  for(var i=0;i<6;i++){
+    part3(monCone, white, teeth, -0.6+i*0.24,0.3,0, PI,0,0, 0.09,0.3,0.06);
+    part3(monCone, white, teeth, -0.48+i*0.24,-0.3,0, 0,0,0, 0.09,0.3,0.06);
+  }
+  var arm=printerArm(body, -0.3,1.2,-0.3, 1); arm.head.parent.rotation.y=1.1;
+  // Two long legs with arrow tips, and two short spikes underneath.
+  var legs=[];
+  for(var sd=-1;sd<=1;sd+=2){
+    var leg=new THREE.Group(); leg.position.set(sd*1.3,-0.3,0); body.add(leg);
+    var c=new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(sd*1.2,-0.2,0.1), new THREE.Vector3(sd*1.7,-1.2,0.2), new THREE.Vector3(sd*1.8,-2.2,0.3)]);
+    leg.add(new THREE.Mesh(new THREE.TubeGeometry(c, 12, 0.13, 8), shell));
+    part3(monCone, redInk, leg, sd*1.8,-2.5,0.3, PI,0,0, 0.22,0.6,0.22);
+    part3(new THREE.BoxGeometry(0.5,0.06,0.06), redInk, leg, sd*1.8,-2.2,0.3);
+    legs.push(leg);
+    var spike=new THREE.Group(); spike.position.set(sd*0.5,-1.3,0.2); body.add(spike);
+    part3(monCone, shell, spike, 0,-0.5,0, PI,0,0, 0.25,1.1,0.25);
+    legs.push(spike);
+  }
+  return {kind:'printer', g:g, body:body, teeth:teeth, head:arm.head, nozzle:arm.nozzle, legs:legs, name:'Printer Monster', emoji:'🖨️',
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:2.4, hover:5, sinkDepth:8, reward:20, hpMax:6};
+})();
+var printBeam=new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({color:0xff4a3a, transparent:true, opacity:0.85, depthWrite:false, toneMapped:false}));
+printBeam.visible=false; printBeam.frustumCulled=false; sea.add(printBeam);
+// A tornado: stacked, wobbling rings that widen towards the top.
+var tornadoMat=new THREE.MeshStandardMaterial({color:col('#e4eef2'), transparent:true, opacity:0.5, roughness:0.9, depthWrite:false});
+function tornadoModel(){
+  var g=new THREE.Group(), rings=[];
+  for(var i=0;i<11;i++){
+    var r=new THREE.Mesh(new THREE.TorusGeometry(0.3+i*0.26, 0.1+i*0.025, 5, 9), tornadoMat);
+    r.rotation.x=PI/2; r.position.y=i*0.6; g.add(r); rings.push(r);
+  }
+  g.userData.rings=rings; sea.add(g);
+  return g;
+}
+
 // THE MEGA MONSTER: every monster stuck together. A scribble ball body with the giant eyeball for a face,
 // the Eye Walker's laser eye and legs, the Genie's flame hair and freezing hands, the Squid's horns
-// and tentacles, and a Spike Serpent for a tail.
+// and tentacles, a Spike Serpent for a tail and the Printer Monster's printer on its shoulder.
 var MEGA_N=24;
 var mega=(function(){
   var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
@@ -1786,13 +1850,14 @@ var mega=(function(){
     });
   }
   var tents=[tentacle(body,-0.9,-2.6,0.6, 12,0.55,0.3,-1), tentacle(body,0,-2.9,0.8, 13,0.55,0.3,1), tentacle(body,0.9,-2.6,0.6, 12,0.55,0.3,1)];
+  var parm=printerArm(body, 2.2,2.0,-0.4, 1.3);
   // The Spike Serpent tail.
   var mat=new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.5});
   var segs=[];
   var tailG=new THREE.Group(); tailG.visible=false; sea.add(tailG);
   for(i=0;i<MEGA_N;i++){ var s=new THREE.Mesh(serpSegGeo, mat); tailG.add(s); segs.push(s); }
   var trail=[]; for(i=0;i<MEGA_N*SERP_STEP+SERP_STEP+2;i++) trail.push(new THREE.Vector3());
-  return {kind:'mega', g:g, body:body, eye:leye, glow:glow, bigEye:eye, hair:hair, arms:arms, palmMat:palmMat, legs:legs, tents:tents, segs:segs, tailG:tailG, trail:trail,
+  return {kind:'mega', g:g, body:body, eye:leye, glow:glow, bigEye:eye, hair:hair, arms:arms, palmMat:palmMat, legs:legs, tents:tents, segs:segs, tailG:tailG, trail:trail, head:parm.head, nozzle:parm.nozzle,
     tailMat:mat, aim:new THREE.Vector3(), name:'MEGA MONSTER', emoji:'👹',
     pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:4.2, hover:8, sinkDepth:14, reward:60, hpMax:15};
 })();
@@ -2807,6 +2872,8 @@ function updateSharks(dt,t){
   var hunting=(scene===sea && state==='play');
   var safe=nearHouse(player.pos.x,player.pos.z,26);
   sharks.forEach(function(s){
+    // Printed sharks only last a little while, and don't come back once beaten.
+    if(s.printed){ s.ttl-=dt; if(s.ttl<=0 || s.dead){ s.gone=true; return; } }
     if(s.dead){ if(!respawnCheck(s, dt)) return; s.state='patrol'; }
     if(s.netT>0){
       // Tangled in a net: it sinks a little and thrashes.
@@ -2871,6 +2938,7 @@ function updateSharks(dt,t){
     s.g.userData.jaw.rotation.x=s.jaw;
     placeBlob(s.blob, s.pos.x, s.pos.y, s.pos.z, 1.7*s.scale, 5.2*s.scale, yaw, depthLight(s.pos.y));
   });
+  removePrinted();
   if(player.shieldCD>0) player.shieldCD-=dt;
 }
 function updateAnglers(dt,t){
@@ -2903,7 +2971,7 @@ function updateAnglers(dt,t){
   });
 }
 /* Monsters come out every once in a while when you're away from home. */
-var MON={timer:rr(40,70), order:['serpent','walker','genie','muncher','squid'], idx:0, count:0, cur:null};
+var MON={timer:rr(40,70), order:['serpent','walker','genie','muncher','squid','printer'], idx:0, count:0, cur:null};
 (function(){ for(var i=MON.order.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)), k=MON.order[i]; MON.order[i]=MON.order[j]; MON.order[j]=k; } })();
 var _eyeW=new THREE.Vector3(), _aim=new THREE.Vector3(), _ld=new THREE.Vector3();
 function inDark(){ return player.zone==='trench' || depthLight(player.pos.y)<0.6; }
@@ -2932,13 +3000,14 @@ function spawnMonster(){
     m.laser='idle'; m.lt=2.5; m.life=55;
     showMsg('👁️ An EYE WALKER is climbing out of the sand!<br><span style="font-size:17px">Its top eye shoots lasers — but it is very slow!</span>',3.5);
   }else{
-    m={genie:genie, muncher:muncher, squid:squid, mega:mega}[kind];
+    m={genie:genie, muncher:muncher, squid:squid, printer:printer, mega:mega}[kind];
     spawnFloater(m, x, fl, z);
     if(m.tailG) m.tailG.visible=true;
     showMsg({
       genie:'🧞 A FREEZE GENIE is rising out of the sand!<br><span style="font-size:17px">He shoots water out of his hands that freezes you — keep moving!</span>',
       muncher:'🌀 A SCRIBBLE MUNCHER is coming!<br><span style="font-size:17px">It eats dolphins and grows bigger — protect your friends!</span>',
       squid:'🦑 An EYEBALL SQUID is floating up!<br><span style="font-size:17px">Its stare pulls you in — swim away when it blinks!</span>',
+      printer:'🖨️ A PRINTER MONSTER is coming!<br><span style="font-size:17px">What it prints becomes real — sharks and tornadoes! Net it while it\'s busy printing.</span>',
       mega:'👹 THE MEGA MONSTER IS RISING!<br><span style="font-size:17px">Every monster\'s power in one — but it\'s slow and it hates the dark!</span>'
     }[kind], 4);
   }
@@ -2948,7 +3017,10 @@ function spawnMonster(){
 }
 function removeMonster(){
   var m=MON.cur; if(!m) return;
-  freeNet(m); m.netT=0;
+  freeNet(m); m.netT=0; cancelPrint(m);
+  // Its prints don't outlast it for long.
+  sharks.forEach(function(s){ if(s.printed) s.ttl=Math.min(s.ttl,4); });
+  tornadoes.forEach(function(w){ w.ttl=Math.min(w.ttl,2); });
   m.g.visible=false; beam.visible=false; stareBeam.visible=false; m.stare=false; m.prey=null;
   if(m.tailG) m.tailG.visible=false;
   if(m.blob) m.blob.visible=false;
@@ -2967,7 +3039,7 @@ function updateSpikes(dt){
 }
 function updateMonsters(dt,t){
   var out=(scene===sea && state==='play');
-  updateSpikes(dt); updateWaters(dt);
+  updateSpikes(dt); updateWaters(dt); updateTornadoes(dt,t);
   if(!MON.cur){
     if(out && player.zone!=='home'){ MON.timer-=dt; if(MON.timer<=0) spawnMonster(); }
     return;
@@ -3121,9 +3193,80 @@ function updateWaters(dt){
     if(hit || w.life<=0 || p.y<heightAt(p.x,p.z)){ sea.remove(w.m); waters.splice(i,1); }
   }
 }
+/* The Printer Monster's prints: sharks that hunt you and tornadoes that spin you round. */
+var tornadoes=[];
+function startPrint(m, what){
+  m.nozzle.getWorldPosition(_v);
+  var spot=_v.clone(); spot.y-=what==='shark'?2.4*m.size:0;
+  if(what==='tornado') spot.y=heightAt(spot.x,spot.z);
+  var obj=what==='shark'?sharkModel(0.75):tornadoModel();
+  if(what==='shark') sea.add(obj);
+  obj.position.copy(spot); obj.rotation.y=m.yaw; obj.scale.set(1,0.02,1);
+  m.job={what:what, t:0, dur:what==='shark'?2.6:2.2, obj:obj, spot:spot};
+  sfx.print();
+}
+function tickPrint(m, dt, t){
+  var j=m.job; j.t+=dt;
+  var f=Math.min(1, j.t/j.dur), s=j.what==='shark'?0.75:1;
+  j.obj.scale.set(s, s*Math.max(0.02,f), s);
+  // The nozzle zips back and forth and a hot red line feeds the print.
+  m.head.position.x=Math.sin(t*14)*0.35;
+  m.nozzle.getWorldPosition(_eyeW);
+  _c.copy(j.spot); _c.y+=(j.what==='shark'?0.5:6)*f*s;
+  printBeam.position.copy(_eyeW); printBeam.lookAt(_c);
+  printBeam.scale.set(0.06,0.06,Math.max(0.1,_eyeW.distanceTo(_c))); printBeam.visible=true;
+  if(rnd()<0.3) emitBubble(_c.x,_c.y,_c.z,0.3);
+  if(j.t<j.dur) return;
+  printBeam.visible=false; m.head.position.x=0; m.job=null;
+  if(j.what==='shark'){
+    j.obj.scale.setScalar(0.75);
+    sharks.push({g:j.obj, home:j.spot.clone(), r:20, pos:j.spot.clone(), dir:new THREE.Vector3(Math.sin(m.yaw),0,Math.cos(m.yaw)),
+      wp:j.spot.clone(), state:'chase', t:0, cool:0, speed:1.05, ph:rr(0,TAU), scale:0.75,
+      swim:0, yaw:m.yaw, roll:0, pitch:0, jaw:0.1, blob:makeBlob(), printed:true, ttl:22});
+    showMsg('🖨️🦈 It printed a SHARK — and it\'s REAL!',2);
+  }else{
+    tornadoes.push({g:j.obj, pos:j.spot.clone(), ttl:14, hitT:0, ph:rr(0,TAU)});
+    showMsg('🖨️🌪️ It printed a TORNADO!',2);
+  }
+  sfx.printed();
+}
+function cancelPrint(m){
+  if(!m.job) return;
+  sea.remove(m.job.obj); m.job=null; printBeam.visible=false;
+}
+function removePrinted(){
+  for(var i=sharks.length-1;i>=0;i--){
+    var s=sharks[i]; if(!s.gone) continue;
+    for(var b=0;b<16;b++) emitBubble(s.pos.x,s.pos.y,s.pos.z,1);
+    sea.remove(s.g); sea.remove(s.blob); freeNet(s); sharks.splice(i,1);
+  }
+}
+function updateTornadoes(dt,t){
+  for(var i=tornadoes.length-1;i>=0;i--){
+    var w=tornadoes[i]; w.ttl-=dt; w.hitT-=dt;
+    // Drift towards the diver, wandering a little.
+    var dx=player.pos.x-w.pos.x, dz=player.pos.z-w.pos.z, d=Math.sqrt(dx*dx+dz*dz)||1;
+    w.pos.x+=(dx/d*3.2+Math.sin(t*0.9+w.ph)*1.5)*dt; w.pos.z+=(dz/d*3.2+Math.cos(t*0.7+w.ph)*1.5)*dt;
+    if(nearHouse(w.pos.x,w.pos.z,20)){ w.ttl=Math.min(w.ttl,1); }
+    w.pos.y=heightAt(w.pos.x,w.pos.z);
+    var grow=Math.min(1, w.ttl);
+    w.g.position.copy(w.pos); w.g.scale.set(grow,grow,grow); w.g.rotation.y+=dt*7;
+    w.g.userData.rings.forEach(function(r,k){ r.position.x=Math.sin(t*3+k*0.5+w.ph)*0.06*k; r.position.z=Math.cos(t*2.6+k*0.5)*0.05*k; });
+    if(rnd()<0.6) emitBubble(w.pos.x+rr(-1,1), w.pos.y+rr(0,5), w.pos.z+rr(-1,1), 0.3);
+    // Caught in it: spun round and lifted, and bumped every so often.
+    var h=player.pos.y-w.pos.y;
+    if(scene===sea && state==='play' && h>-1 && h<7 && d<1+Math.max(0,h)*0.3){
+      player.vel.x+=(-dz/d*14+dx/d*-4)*dt; player.vel.z+=(dx/d*14+dz/d*-4)*dt; player.vel.y+=9*dt;
+      if(w.hitT<=0){ w.hitT=1.6; if(hurt(1, w.pos, 3)) showMsg('🌪️ You\'re caught in a tornado! Swim out!',1.6); }
+    }
+    if(w.ttl<=0){ sea.remove(w.g); tornadoes.splice(i,1); }
+  }
+}
 function clearShots(){
   spikes.forEach(function(s){ sea.remove(s.m); }); spikes.length=0;
   waters.forEach(function(s){ sea.remove(s.m); }); waters.length=0;
+  tornadoes.forEach(function(w){ sea.remove(w.g); }); tornadoes.length=0;
+  sharks.forEach(function(s){ if(s.printed) s.gone=true; }); removePrinted();
   stareBeam.visible=false;
 }
 // The laser eye, shared by the Eye Walker and the Mega Monster. Start it with m.laser='charge', m.lt=1.5.
@@ -3188,6 +3331,7 @@ function updateFloater(m, dt, t, hunting){
   }else if(m.state==='hunt'){
     m.life-=dt;
     if(!hunting) m.life=Math.min(m.life,0.5);
+    if(m.job) tickPrint(m, dt, t);
     var speed=brain(m, dt, t, hunting, toP, dist, want);
     if(m.backT>0){ m.backT-=dt; want.copy(toP).normalize().multiplyScalar(-5); want.y+=1.5; }
     else want.clampLength(0, speed);
@@ -3238,6 +3382,22 @@ function brain(m, dt, t, hunting, toP, dist, want){
     if(hunting && dist<1.7*m.size+0.4 && hurt(1, m.pos, 9)) m.backT=1.8;
     return 4.8;
   }
+  if(m.kind==='printer'){
+    // Stands still while it prints, which is the best time to net it.
+    if(m.job) return 0;
+    want.copy(toP).normalize().multiplyScalar((dist-14)*0.5); want.y+=(player.pos.y+2-m.pos.y)*0.4;
+    m.atkT-=dt;
+    if(hunting && dist<40 && m.atkT<=0){
+      var printedOut=sharks.filter(function(s){ return s.printed && !s.dead; }).length;
+      var what=m.nextPrint||'shark';
+      if(what==='shark' && printedOut>=3) what='tornado';
+      if(what==='tornado' && tornadoes.length>=2) what=printedOut<3?'shark':null;
+      if(what){ startPrint(m, what); m.nextPrint=what==='shark'?'tornado':'shark'; }
+      m.atkT=what?4.5:2;
+    }
+    if(hunting && dist<2.4*m.size+0.4 && hurt(1, m.pos, 9)) m.backT=1.5;
+    return 3.5;
+  }
   if(m.kind==='squid'){
     // Stares for a few seconds, pulling the diver in, then blinks. Its weakness: while it blinks you can swim away.
     want.copy(toP).normalize().multiplyScalar((dist-5)*0.5); want.y+=(player.pos.y-m.pos.y)*0.4;
@@ -3263,12 +3423,13 @@ function brain(m, dt, t, hunting, toP, dist, want){
   m.atkT-=dt;
   if(m.stare) player.vel.addScaledVector(toP, -8*dt/Math.max(dist,0.1));
   if(hunting && dist<34 && m.atkT<=0 && m.laser==='idle'){
-    var a=m.attack++%4; m.atkT=2.6; m.stare=false;
+    var a=m.attack++%5; m.atkT=2.6; m.stare=false;
     if(a===0){ sfx.spike(); [4,8,12,16,20].forEach(function(k){ _v.copy(m.segs[k].position); _v.y+=1;
       _aim.copy(player.pos).addScaledVector(player.vel,0.25); _aim.x+=rr(-1,1); _aim.y+=rr(-0.6,0.6); _aim.z+=rr(-1,1); fireSpike(_v, _aim); }); }
     else if(a===1){ sfx.water(); m.arms.forEach(function(A){ A.palm.getWorldPosition(_v); fireWater(_v, _aim.copy(player.pos).addScaledVector(player.vel,0.3)); }); }
     else if(a===2){ m.laser='charge'; m.lt=1.5; sfx.charge(); }
-    else { m.stare=true; m.atkT=2.2; }
+    else if(a===3){ m.stare=true; m.atkT=2.2; }
+    else if(!m.job && sharks.filter(function(s){ return s.printed; }).length<3){ startPrint(m, 'shark'); m.atkT=3; }
   }
   if(hunting && dist<4.5*m.size && hurt(1, m.pos, 11)) m.backT=2;
   return 2.6;
@@ -3277,7 +3438,7 @@ function poseFloater(m, dt, t, tangled, hunting, dist){
   var shake=tangled?Math.sin(t*14)*0.15:0;
   m.g.position.copy(m.pos);
   m.g.rotation.set(0, m.yaw, shake);
-  var base={genie:1.6, muncher:1.35, squid:1.3, mega:1.25}[m.kind];
+  var base={genie:1.6, muncher:1.35, squid:1.3, printer:1.3, mega:1.25}[m.kind];
   m.g.scale.setScalar(base*m.size);
   m.center.copy(m.pos);
   if(m.kind==='genie'){
@@ -3291,6 +3452,11 @@ function poseFloater(m, dt, t, tangled, hunting, dist){
     m.mouth.scale.y=1+Math.max(0,Math.sin(t*(m.prey?12:4)))*0.6;
     m.limbs.forEach(function(L,i){ L.rotation.x=Math.sin(t*(tangled?12:5)+i*1.7)*0.35; });
     m.body.position.y=Math.abs(Math.sin(t*3))*0.25;
+  }else if(m.kind==='printer'){
+    m.body.position.y=Math.sin(t*1.5)*0.2;
+    m.teeth.scale.y=1+Math.max(0,Math.sin(t*(m.job?3:6)))*0.5;
+    m.legs.forEach(function(L,i){ L.rotation.z=Math.sin(t*(tangled?12:2.5)+i*1.3)*0.15; });
+    if(tangled) printBeam.visible=false;
   }else if(m.kind==='squid'){
     setLid(m.eye, m.blink?1:0.05);
     m.tents.forEach(function(T){ waveTentacle(T, t*(tangled?3:1), 1); });
