@@ -2,7 +2,7 @@
 title: Monster Killer
 description: One giant at a time, each as tall as the towers it walks through. You are the size of a person and you can fly, fast. Find the lights on its body, hold on, and put your blade through them.
 date: 2026-10-10
-version: "1.1"
+version: "2.0"
 layout: null
 ---
 {% raw %}
@@ -125,6 +125,11 @@ layout: null
     color:var(--bone);background:rgba(0,0,0,.35);border:1px solid rgba(217,210,195,.45);padding:15px 38px;}
   .go:hover{background:rgba(217,210,195,.1);}
   .go.alt{margin-top:12px;font-size:11px;padding:11px 28px;border-color:rgba(217,210,195,.22);color:var(--bone-dim);}
+  #kits{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;pointer-events:auto;}
+  .kit{font:inherit;font-size:11px;letter-spacing:.32em;text-indent:.32em;color:var(--bone-dim);cursor:pointer;
+    background:rgba(0,0,0,.35);border:1px solid rgba(217,210,195,.2);padding:9px 14px;}
+  .kit.on{color:var(--bone);border-color:rgba(207,230,255,.7);box-shadow:0 0 12px rgba(207,230,255,.18) inset;}
+  #kitBlurb{margin-top:10px;color:var(--bone);}
   .stat{margin-top:14px;font-size:12px;letter-spacing:.3em;color:var(--bone-dim);}
   #loading{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#000;
     font-size:11px;letter-spacing:.6em;color:var(--bone-faint);}
@@ -137,6 +142,7 @@ layout: null
     #start h1 span{font-size:11px;}
     #start p{margin-top:8px;font-size:11.5px;line-height:1.5;}
     #start p.keys{font-size:10.5px;line-height:1.6;}
+    #kits{margin-top:8px;} .kit{padding:7px 10px;font-size:10px;}
   }
   .touch .keyshelp{display:none;}
   .desk .touchhelp{display:none;}
@@ -173,13 +179,11 @@ layout: null
 <div class="screen" id="start">
   <h1>MONSTER KILLER<span>one giant at a time</span></h1>
   <div class="lower">
-  <p>It walks through what is left of the city, taller than the towers it breaks. You are the size of a man, and you can fly.
-  Somewhere on its body there are lights. Find them, hold on, and put your blade through every one.</p>
-  <p class="keys keyshelp"><b>WASD</b> fly where you look &middot; <b>mouse</b> look &middot; <b>SHIFT</b> boost &middot; <b>SPACE</b> up / let go &middot; <b>CTRL</b> or <b>C</b> down<br>
-  <b>RIGHT CLICK</b> or <b>E</b> grab on, hold when it shakes &middot; <b>LEFT CLICK</b> strike, hold to charge<br>
-  <b>F</b> hold to raise your blade and find the lights &middot; <b>Q</b> lock your eyes on it &middot; <b>M</b> sound &middot; <b>ESC</b> pause</p>
-  <p class="keys touchhelp">Left thumb flies, push to the edge to boost. Right thumb looks.<br>
-  GRAB to hold on, keep it held when it shakes. Hold STRIKE to charge a stab. SEEK points your blade at the lights.</p>
+  <p>It walks through what is left of the city, taller than the towers it breaks. You are the size of a man.
+  Somewhere on its body there are four lights. Put every one of them out.</p>
+  <div id="kits"></div>
+  <p id="kitBlurb"></p>
+  <p class="keys" id="kitKeys"></p>
   <button class="go" id="startBtn">RISE</button>
   </div>
   <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
@@ -190,18 +194,21 @@ layout: null
   <button class="go" id="resumeBtn">RESUME</button>
   <button class="go alt" id="muteBtn">SOUND ON</button>
   <button class="go alt" id="restartBtn">START OVER</button>
+  <button class="go alt" id="modesBtn1">CHOOSE ANOTHER WAY TO FIGHT</button>
 </div>
 
 <div class="screen mid hidden" id="over">
   <h1>YOU FELL<span>it does not notice</span></h1>
   <div class="stat" id="overStat"></div>
   <button class="go" id="retryBtn">RISE AGAIN</button>
+  <button class="go alt" id="modesBtn2">CHOOSE ANOTHER WAY TO FIGHT</button>
 </div>
 
 <div class="screen mid hidden" id="win">
   <h1>IT HAS FALLEN<span id="winSub">the warden is dead</span></h1>
   <div class="stat" id="winStat"></div>
   <button class="go" id="againBtn">AGAIN</button>
+  <button class="go alt" id="modesBtn3">CHOOSE ANOTHER WAY TO FIGHT</button>
 </div>
 
 <div id="fade"></div>
@@ -481,6 +488,8 @@ sun.shadow.mapSize.set(SHADOW_SIZE,SHADOW_SIZE);
 sun.shadow.bias=-0.0006;
 sun.shadow.normalBias=0.8;
 scene.add(sun); scene.add(sun.target);
+// a cold fill from the other side, so shapes turn away from the light instead of going flat
+var fill=new THREE.DirectionalLight(0x7d8ca3, 0.38); fill.position.set(0.55,0.25,0.8); scene.add(fill);
 
 /* ============================================================
    Ground and mountains
@@ -948,21 +957,20 @@ function blob(r, sx, sy, sz, amp, freq, seedv, detail){
   g.scale(sx,sy,sz);
   return g;
 }
+// armour: a thick, rounded slab of rock, half sunk into the hide (not a flat board)
 function plate(w,h,t,seedv){
-  var g=new THREE.BoxGeometry(w,h,t,3,3,1).toNonIndexed();
+  var g=new THREE.IcosahedronGeometry(1,2);
   var p=g.attributes.position;
   for(var i=0;i<p.count;i++){
     var x=p.getX(i), y=p.getY(i), z=p.getZ(i);
-    var n=noise3(x*0.2+seedv,y*0.2,z*0.2+seedv)-0.5, n2=noise3(x*0.6,y*0.6+seedv,z*0.6)-0.5;
-    var edge=Math.max(Math.abs(x)/(w/2),Math.abs(y)/(h/2));
-    // round the outer face down toward the edges so a plate reads as a slab of rock, not a box
-    var zz=z>0?z*(1-edge*edge*0.75)+n*t*1.1+n2*t*0.5:z;
-    p.setXYZ(i, x*(1+n*0.35)+n2*w*0.06, y*(1+n*0.3)+n2*h*0.06, zz);
+    var n=noise3(x*1.7+seedv,y*1.7,z*1.7-seedv)-0.5, n2=noise3(x*4.1,y*4.1+seedv,z*4.1)-0.5;
+    var k=1+n*0.35+n2*0.12;
+    p.setXYZ(i, x*w*0.5*k, y*h*0.5*k, z*Math.max(t*1.4,Math.min(w,h)*0.22)*(z>0?1:0.6)*k);
   }
   return g;
 }
 function spire(r,h,seedv){
-  var g=new THREE.ConeGeometry(r,h,5,3).toNonIndexed();
+  var g=new THREE.ConeGeometry(r,h,9,5).toNonIndexed();
   g.translate(0,h/2,0);
   var p=g.attributes.position;
   for(var i=0;i<p.count;i++){
@@ -998,7 +1006,7 @@ function furOn(list, n, o){
 
 var C={ j:{}, meshes:[], caps:[], markers:{}, sigils:[], root:new THREE.Object3D(), yaw:0, alive:true };
 scene.add(C.root);
-var colMat=grit(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.93, metalness:0}),'rock',0.11,1.5);
+var colMat=grit(new THREE.MeshStandardMaterial({vertexColors:true, roughness:0.93, metalness:0}),'rock',0.11,2.3);
 
 function J(name,parent,x,y,z){ var o=new THREE.Object3D(); o.name=name; o.position.set(x,y,z); parent.add(o); C.j[name]=o; return o; }
 function M(name,parent,x,y,z){ var o=new THREE.Object3D(); o.position.set(x,y,z); parent.add(o); C.markers[name]=o; return o; }
@@ -1429,12 +1437,12 @@ beam.frustumCulled=false; scene.add(beam);
    Input
    ============================================================ */
 var keys={}, move={x:0,y:0}, look={x:0,y:0};
-var held={up:false, down:false, boost:false, grab:false, strike:false, seek:false};
+var held={up:false, down:false, boost:false, grab:false, strike:false, seek:false, jump:false};
 var ui={};
 ['hud','hpFill','speed','boss','bossName','sigils','reticle','charge','chargeFg','grip','gripFg','gripTxt','prompt','toast','card',
  'cardName','cardSub','hurt','fade','loading','stickZone','lookZone','stick','knob','bStrike','bGrab','bUp','bDown','bSeek',
  'bLock','menuBtn','start','startBtn','pause','resumeBtn','muteBtn','restartBtn','over','overStat','retryBtn','win','winStat',
- 'winSub','againBtn'].forEach(function(id){ ui[id]=document.getElementById(id); });
+ 'winSub','againBtn','modesBtn1','modesBtn2','modesBtn3'].forEach(function(id){ ui[id]=document.getElementById(id); });
 
 var G={ mode:'title', paused:false, t:0, playT:0, slow:1, hitStop:0, shake:0, lock:false, flash:0, hurtFx:0, cardT:-1,
         toastT:0, seenStoneTip:false, endT:0 };
@@ -1453,8 +1461,9 @@ window.addEventListener('keydown', function(e){
   if(e.code==='KeyQ') toggleLock();
   if(e.code==='KeyM') toggleMute();
   if(e.code==='Space' && H.state==='cling') letGo(true);
+  if(e.code==='Space' && G.kit==='run') kitJump(true);
 }, false);
-window.addEventListener('keyup', function(e){ keys[e.code]=false; if(e.code==='KeyE') held.grab=false; }, false);
+window.addEventListener('keyup', function(e){ keys[e.code]=false; if(e.code==='KeyE') held.grab=false; if(e.code==='Space') held.jump=false; }, false);
 window.addEventListener('blur', function(){ keys={}; held.grab=held.strike=false; if(H.charging) strikeUp(); });
 
 var pointerLocked=false, lastLockChange=-1e9;
@@ -1523,7 +1532,7 @@ function bindHold(el, on, off){
   el.addEventListener('mouseleave', function(){ if(el.classList.contains('on')){ el.classList.remove('on'); if(off) off(); } });
 }
 bindHold(ui.bStrike, function(){ strikeDown(); }, function(){ strikeUp(); });
-bindHold(ui.bGrab, function(){ held.grab=true; tryGrab(); }, function(){ held.grab=false; });
+bindHold(ui.bGrab, function(){ if(G.kit==='run'){ kitJump(true); return; } held.grab=true; tryGrab(); }, function(){ if(G.kit==='run'){ kitJump(false); return; } held.grab=false; });
 bindHold(ui.bUp, function(){ held.up=true; if(H.state==='cling') letGo(true); }, function(){ held.up=false; });
 bindHold(ui.bDown, function(){ held.down=true; }, function(){ held.down=false; });
 bindHold(ui.bSeek, function(){ held.seek=true; }, function(){ held.seek=false; });
@@ -1576,13 +1585,14 @@ function updateCamera(dt){
   }
   updateCamBasis();
   var spd=H.vel.length();
-  var want=H.state==='cling'?10:(7+clamp((spd-40)/80,0,1)*3.5);
+  var want=H.state==='cling'?10:(H.state==='ride'?9:(7+clamp((spd-40)/80,0,1)*3.5));
   cam.dist=lerp(cam.dist,want,damp(3,dt));
   var wfov=66+clamp((spd-45)/75,0,1)*20;
   if(H.state==='cling') wfov=62;
   cam.fov=lerp(cam.fov,wfov,damp(4,dt));
   // pivot a little above and to the right of the hero, so the hero does not hide what is ahead
-  _ct.copy(H.pos).addScaledVector(camUpV,0.9).addScaledVector(camRight,-0.0);
+  _ct.copy(H.pos).addScaledVector(camUpV,0.9);
+  if(G.kit==='gun' && H.state==='fly') _ct.addScaledVector(camRight,1.2).addScaledVector(camUpV,0.25);   // over the shoulder, so the crosshair is clear
   if(H.state==='cling') _ct.addScaledVector(H.att.wn, 1.2);
   var d=cam.dist;
   // pull in when something is between the hero and the camera
@@ -1752,6 +1762,7 @@ var Snd=(function(){
     hurt:function(){ if(!AC) return; var t=now(); tone(t,'sine',110,35,0.6,0.8,0.005); noise(t,0.6,'lowpass',900,0.7,0.5,0.005,0.5); },
     whoosh:function(x,y,z){ if(!AC) return; var v=vol(x,y,z,1,700); if(v<0.01) return; var t=now(); var f=noise(t,1.4,'bandpass',200,1.2,v*0.7,0.35,0.9);
       f.frequency.setValueAtTime(150,t); f.frequency.linearRampToValueAtTime(700,t+0.5); f.frequency.linearRampToValueAtTime(180,t+1.3); },
+    shot:function(){ if(!AC) return; var t=now(); noise(t,0.12,'bandpass',2400,1.2,0.16,0.002,0.07); tone(t,'square',520,180,0.08,0.05,0.002); tone(t,'sine',140,60,0.12,0.18,0.003); },
     shatter:function(){ if(!AC) return; var t=now(); for(var i=0;i<7;i++) tone(t+i*0.03,'sine',rand(700,1600),rand(300,600),1.6,0.12,0.01);
       tone(t,'sine',70,28,2.5,0.9,0.01); noise(t,2,'lowpass',300,0.8,0.6,0.01,2); },
     rumble:function(dur){ if(!AC) return; var t=now(); noise(t,dur,'lowpass',120,1.4,0.7,0.3,dur); },
@@ -1960,7 +1971,7 @@ function aiColossus(dt){
   if(G.freezeAI){ if(CS.act){ CS.act.t+=dt; if(CS.act.t>=CS.act.T) CS.act=null; } C.root.rotation.y=CS.yaw; return; }
   CS.roarCD-=dt;
   var playing=G.mode==='play' && H.state!=='dead';
-  var heroOn=playing && H.state==='cling';
+  var heroOn=playing && (H.state==='cling'||H.state==='ride');
   var dx=H.pos.x-root.x, dz=H.pos.z-root.z, d=Math.hypot(dx,dz);
   var angTo=Math.atan2(dx,dz), da=angDiff(CS.yaw,angTo);
   if(CS.act){
@@ -1986,7 +1997,7 @@ function aiColossus(dt){
     else if(playing){
       CS.actCD-=dt;
       var head=C.j.head.getWorldPosition(_tmpA);
-      if(CS.roarCD<=0 && H.pos.distanceTo(head)<95){ startAct('roar',{blast:true}); CS.roarCD=9; }
+      if(G.kit==='climb' && CS.roarCD<=0 && H.pos.distanceTo(head)<95){ startAct('roar',{blast:true}); CS.roarCD=9; }
       else if(CS.actCD<=0) chooseAttack(d,da);
     }
   }
@@ -2267,6 +2278,7 @@ function deathTick(dt){
 var _hv=new V3(), _hd=new V3(), _ho=new V3(), _hax=new V3(), _hm=new THREE.Matrix4(), _hq=new THREE.Quaternion();
 var UP=new V3(0,1,0);
 function tryGrab(){
+  if(G.kit!=='climb') return false;
   if(G.mode!=='play' || !(H.state==='fly'||H.state==='tumble')) return false;
   if(CS.dead) return false;
   var n=nearestCap(H.pos,_hax);
@@ -2296,7 +2308,7 @@ function attachTo(hit){
   var joint=hit.object.userData.joint;
   H.att={joint:joint, lp:joint.worldToLocal(hit.point.clone()), ln:hit.face.normal.clone().normalize(), wp:hit.point.clone(), wn:new V3()};
   H.att.wn.copy(H.att.ln).transformDirection(joint.matrixWorld);
-  if(H.state!=='cling'){
+  if(H.state!=='cling' && H.state!=='ride'){
     H.state='cling'; H.vel.set(0,0,0); Snd.grab(); addShake(0.25);
     if(!G.toldClimb){ G.toldClimb=true; toast(isTouch?'YOU ARE HOLDING ON. MOVE TO CLIMB.':'YOU ARE HOLDING ON. WASD TO CLIMB.',3.2); }
   }
@@ -2321,6 +2333,7 @@ function throwOff(){
 function strikeDown(){
   if(G.mode!=='play'||G.paused) return;
   held.strike=true;
+  if(G.kit!=='climb'){ kitStrikeDown(); return; }
   if(H.state==='cling'){ H.charging=true; H.charge=0; }
   else if(H.state==='fly' && H.lungeCD<=0){
     H.lungeCD=0.75; H.lunge=0.3; H.lungeHit=false; H.stabT=0.3;
@@ -2351,9 +2364,9 @@ function hurtHero(dmg, knock){
   if(H.invuln>0 || H.state==='dead' || G.mode!=='play') return;
   H.hp-=dmg; H.lastHurt=G.t; H.invuln=1.0; H.hits++;
   G.hurtFx=1; addShake(0.9); Snd.hurt();
-  if(H.state==='cling'){ H.state='fly'; H.att=null; H.charging=false; }
+  if(H.state==='cling'||H.state==='ride'){ H.state=G.kit==='run'?'run':'fly'; H.att=null; H.charging=false; }
   if(H.hp<=0){ H.hp=0; die(knock); return; }
-  if(knock){ H.state='tumble'; H.tumbleT=1.1; H.vel.copy(knock); }
+  if(knock){ H.state='tumble'; H.tumbleT=1.1; H.vel.copy(knock); H.pounding=false; }
 }
 function die(knock){
   H.state='dead'; H.deadT=0;
@@ -2365,17 +2378,21 @@ function updateHero(dt, inp){
   H.invuln-=dt; H.lungeCD-=dt; H.stabT=Math.max(0,(H.stabT||0)-dt);
   if(G.mode==='play' && H.state!=='dead' && G.t-H.lastHurt>5) H.hp=Math.min(100,H.hp+8*dt);
   var prev=_ho.copy(H.pos);
-  if(H.state==='fly'){
+  if(H.state==='run'||H.state==='ride'){ runTick(dt,inp); }
+  else if(H.state==='fly'){
     var dir=_hd.set(0,0,0).addScaledVector(camFwd,-inp.my).addScaledVector(camRight,inp.mx);
     if(inp.up) dir.y+=1; if(inp.down) dir.y-=1;
     var l=dir.length(); if(l>1){ dir.multiplyScalar(1/l); l=1; }
     var boost=inp.boost && l>0.1;
     var top=inp.seek?14:(boost?125:46);
     var k=l<0.05?1.4:(boost?1.35:2.3);
+    if(G.kit==='dive' && held.strike){ dir.copy(camFwd); top=235; k=1.0; }   // the comet: everything into speed along the aim
     if(H.lunge>0) { H.lunge-=dt; k=0.4; }
     H.vel.lerp(dir.multiplyScalar(top), damp(k,dt));
     H.pos.addScaledVector(H.vel,dt);
-    var imp=collideHero(H.pos,H.vel,0.9);
+    if(G.kit==='dive') diveImpacts();
+    var imp=H.state==='fly'?collideHero(H.pos,H.vel,0.9):0;
+    if(G.kit==='dive' && imp>100) hurtHero(clamp((imp-100)*0.3,5,30), null);
     if(imp>55){ addShake(clamp(imp/120,0.2,0.7)); Snd.grab(); }
     if(H.lunge>0 && !H.lungeHit){
       var s=nearestSigil(H.pos,true);
@@ -2387,7 +2404,7 @@ function updateHero(dt, inp){
     H.vel.y-=20*dt; H.vel.multiplyScalar(Math.exp(-0.5*dt));
     H.pos.addScaledVector(H.vel,dt);
     collideHero(H.pos,H.vel,0.9);
-    if(H.tumbleT<=0) H.state='fly';
+    if(H.tumbleT<=0){ H.state=G.kit==='run'?'run':'fly'; H.ground=false; }
     H.grip=Math.min(100,H.grip+25*dt);
   }else if(H.state==='cling'){
     var a=H.att;
@@ -2446,9 +2463,20 @@ function poseHero(dt, inp){
     if(_fy.lengthSq()<0.01) _fy.copy(camFwd).addScaledVector(_fz,-camFwd.dot(_fz));
     _fy.normalize(); _fx.crossVectors(_fy,_fz);
     _m4.makeBasis(_fx,_fy,_fz); tgt.setFromRotationMatrix(_m4);
+  }else if(H.state==='ride'){
+    // stand on it: feet to the rock, facing where you are going
+    _fy.copy(H.att.wn);
+    _fz.copy(H.carry&&H.moving?H.carry:camFwd); _fz.addScaledVector(_fy,-_fz.dot(_fy));
+    if(_fz.lengthSq()<1e-4) _fz.set(camFwd.x,0,camFwd.z).addScaledVector(_fy,-camFwd.dot(_fy));
+    _fz.normalize(); _fx.crossVectors(_fy,_fz);
+    _m4.makeBasis(_fx,_fy,_fz); tgt.setFromRotationMatrix(_m4);
+  }else if(H.state==='run'){
+    var hs=Math.hypot(H.vel.x,H.vel.z);
+    var ry=hs>2?Math.atan2(H.vel.x,H.vel.z):Math.atan2(camFwd.x,camFwd.z);
+    _e.set(clamp(hs/62,0,1)*0.32*(H.ground?1:0.4), ry, 0, 'YXZ'); tgt.setFromEuler(_e);
   }else{
     var fwd=_fz;
-    if(spd>6) fwd.copy(H.vel).normalize(); else fwd.set(camFwd.x,0,camFwd.z).normalize();
+    if(spd>6 && !(G.kit==='gun' && (H.aimT>0||spd<35))) fwd.copy(H.vel).normalize(); else fwd.set(camFwd.x,0,camFwd.z).normalize();
     var flat=_fy.set(fwd.x,0,fwd.z); if(flat.lengthSq()<1e-4) flat.set(camFwd.x,0,camFwd.z); flat.normalize();
     var yaw=Math.atan2(flat.x,flat.z);
     var pitch=Math.asin(clamp(fwd.y,-1,1));
@@ -2508,6 +2536,38 @@ function poseHero(dt, inp){
     if(H.charging){ var c=H.charge; s('shR',-3.0-c*0.2,0,0.2); s('elR',-1.2-c*0.9); s('handR',-0.9-c*0.4); s('spine',-0.1-c*0.15,0.2*c,0); }
     if(H.stabT>0){ s('shR',-1.55,0,0.1); s('elR',-0.05); s('handR',-1.4); K=160; }
     if(shk){ var j=Math.sin(t*23)*0.12; T.hipL[0]+=j; T.hipR[0]-=j; T.spine[2]+=Math.sin(t*17)*0.1; }
+  }
+  if(H.state==='run'||H.state==='ride'){
+    var hsp=H.state==='ride'?(H.moving?(H.crawlFast?40:18):0):Math.hypot(H.vel.x,H.vel.z);
+    var onG=H.state==='ride'||H.ground;
+    if(onG){
+      H.runPh=(H.runPh||0)+sdt*hsp*0.42;
+      var am=clamp(hsp/24,0,1), ph=H.runPh, sp2=Math.sin(ph), cp2=Math.cos(ph);
+      s('spine',0.12*am+br,0,0); s('neck',-0.12*am+lookX*0.3,lookY*0.4,0); s('head',-0.1*am,lookY*0.3,0);
+      s('hipL',-0.95*am*sp2,0,-0.05); s('hipR',0.95*am*sp2,0,0.05);
+      s('knL',0.2+1.35*am*Math.max(0,cp2)); s('knR',0.2+1.35*am*Math.max(0,-cp2));
+      s('anL',0.2*am); s('anR',0.2*am);
+      s('shL',0.75*am*sp2,0,-0.12); s('elL',-0.35-1.0*am); s('shR',-0.75*am*sp2,0,0.15); s('elR',-0.35-0.9*am); s('handR',-0.4);
+      K=110;
+    }else if(H.pounding){
+      s('spine',0.45); s('hipL',-1.4,0,-0.1); s('hipR',-1.3,0,0.1); s('knL',2.1); s('knR',2.0);
+      s('shR',-3.0,0,0.1); s('elR',-0.3); s('handR',3.0); s('shL',-0.5,0,-0.8); K=140;
+    }else if(H.vel.y>0){
+      s('spine',0.25); s('hipL',-0.9,0,-0.1); s('hipR',-0.6,0,0.1); s('knL',1.3); s('knR',0.9);
+      s('shL',-0.6,0,-0.6); s('shR',-0.5,0,0.6); s('elL',-0.6); s('elR',-0.7);
+    }else{
+      s('spine',0.05); s('hipL',-0.35,0,-0.12); s('hipR',-0.15,0,0.12); s('knL',0.55); s('knR',0.35);
+      s('shL',-0.3,0,-1.0); s('shR',-0.2,0,1.0); s('elL',-0.3); s('elR',-0.4);
+    }
+    if(H.stabT>0 && onG){ var k3=H.stabT/0.3; s('shR',lerp(-0.4,-2.6,k3),-0.6*k3,0.4); s('elR',lerp(-0.1,-1.2,k3)); K=150; }
+  }
+  if(G.kit==='gun' && fly){
+    H.aimT=Math.max(0,(H.aimT||0)-sdt);
+    if(H.aimT>0||held.strike){ s('shR',-1.57+lookX*0.9,lookY*0.6,0.05); s('elR',-0.05); s('handR',-1.57); s('neck',lookX*0.4,lookY*0.5,0); }
+  }
+  if(G.kit==='dive' && fly && held.strike){
+    s('shL',-2.95,0,-0.05); s('shR',-2.95,0,0.05); s('elL',-0.05); s('elR',-0.05); s('handR',0);
+    s('hipL',0.02); s('hipR',0.06); s('knL',0.1); s('knR',0.15); s('anL',0.9); s('anR',0.9); s('head',-0.9);
   }
   if(H.state==='tumble'){
     var fx=function(o,a){ return Math.sin(t*(5.3+o))*a; };
@@ -2586,6 +2646,7 @@ function updateHud(dt, inp){
   var cl=H.state==='cling';
   ui.grip.classList.toggle('on',cl||H.grip<99);
   ui.grip.classList.toggle('low',H.grip<30);
+  kitHud();
   ui.gripFg.setAttribute('stroke-dashoffset',(169.6*(1-H.grip/100)).toFixed(1));
   ui.charge.style.opacity=H.charging?1:0;
   ui.chargeFg.setAttribute('stroke-dashoffset',(125.7*(1-H.charge)).toFixed(1));
@@ -2594,6 +2655,7 @@ function updateHud(dt, inp){
   if(G.cardT>=0){ G.cardT+=dt; ui.card.style.opacity=(G.cardT>0.2&&G.cardT<4.6)?1:0; if(G.cardT>7) G.cardT=-1; }
   var grabKey=isTouch?'GRAB':'E OR RIGHT CLICK', strikeKey=isTouch?'STRIKE':'LEFT CLICK';
   if(H.state==='dead'){ setPrompt(''); return; }
+  var kp=kitPrompt(); if(kp){ setPrompt(kp[0],kp[1]); return; }
   var shaking=CS.act && CS.act.type==='shake';
   if(cl && shaking){ setPrompt(held.grab?'HOLD ON':'HOLD '+grabKey+'!', true); return; }
   if(cl){
@@ -2607,6 +2669,330 @@ function updateHud(dt, inp){
   }
   setPrompt('');
 }
+
+
+/* ============================================================
+   Kits: different ways to fight the same giant, picked on the
+   title screen, so they can be tried side by side.
+     climb  - grab on, climb, charge and stab the lights
+     gun    - fly and shoot; each light is under a stone shell
+     dive   - you are the weapon: ram the lights at speed
+     run    - no flight: sprint, leap huge, ride its back, pound
+   ============================================================ */
+var KITS={
+  climb:{ name:'CLIMB', blurb:'Grab on anywhere, climb the rock, hold on when it shakes, and stab the lights.',
+    desk:'<b>WASD</b> fly where you look · <b>SHIFT</b> boost · <b>SPACE</b> up / let go · <b>CTRL</b> down<br><b>RIGHT CLICK</b> or <b>E</b> grab on, hold when it shakes · <b>LEFT CLICK</b> hold to charge a stab<br><b>F</b> find the lights · <b>Q</b> lock on · <b>M</b> sound · <b>ESC</b> pause',
+    touch:'Left thumb flies, push to the edge to boost. Right thumb looks.<br>GRAB to hold on, keep it held when it shakes. Hold STRIKE to charge a stab.' },
+  gun:{ name:'GUNNER', blurb:'Fly and shoot. Each light is sealed under stone: blast the shell off, then put the light out.',
+    desk:'<b>WASD</b> fly where you look · <b>SHIFT</b> boost · <b>SPACE</b> up · <b>CTRL</b> down<br><b>LEFT CLICK</b> hold to fire (it overheats) · <b>F</b> find the lights · <b>Q</b> lock on · <b>ESC</b> pause',
+    touch:'Left thumb flies, push to the edge to boost. Right thumb aims.<br>Hold FIRE. Shots pull toward a light near your crosshair. Watch the heat.' },
+  dive:{ name:'COMET', blurb:'You are the weapon. Hold dive and fall on it at 800 km/h. The faster you hit a light, the more it breaks.',
+    desk:'<b>WASD</b> fly where you look · <b>SHIFT</b> boost · <b>SPACE</b> up · <b>CTRL</b> down<br><b>LEFT CLICK</b> hold to dive along your aim · hitting rock at speed hurts · <b>F</b> find the lights · <b>Q</b> lock on',
+    touch:'Left thumb flies, right thumb aims.<br>Hold DIVE to fall like a comet where you are looking. Ram the lights; miss and you hit stone.' },
+  run:{ name:'RUNNER', blurb:'No wings. Run at 220 km/h, leap as high as the towers, ride its back and pound the lights from above.',
+    desk:'<b>WASD</b> run · <b>SHIFT</b> sprint · <b>SPACE</b> jump, hold for height, again in the air to jump twice<br><b>LEFT CLICK</b> in the air: pound down · on the ground or on its back: slash · <b>Q</b> lock on',
+    touch:'Left thumb runs, push to the edge to sprint. Right thumb looks.<br>JUMP (hold to go higher, tap again for a second jump). STRIKE in the air pounds down.' }
+};
+G.kit='climb';
+try{ var savedKit=localStorage.getItem('mk-kit'); if(savedKit && KITS[savedKit]) G.kit=savedKit; }catch(e){}
+
+var _kv=new V3(), _kw=new V3(), _kd=new V3(), _kr=new V3(), _kq=new V3();
+
+/* ---------- gunner ---------- */
+var BOLT_MAX=48, bolts=[];
+var boltLines=(function(){
+  var g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BOLT_MAX*6),3));
+  var m=new THREE.LineSegments(g, new THREE.LineBasicMaterial({color:0xffd7a0, transparent:true, opacity:0.95, blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  m.frustumCulled=false; scene.add(m); return m; })();
+var shellMats=[];
+function addShells(){
+  removeShells();
+  for(var i=0;i<C.sigils.length;i++){
+    var s=C.sigils[i];
+    var g=smoothByAngle(colorize(blob(1,1,1,1,0.18,1.6,i*7+3,2),STONE,{moss:true,seed:i}),60);
+    var m=new THREE.Mesh(g,colMat); m.castShadow=true; m.receiveShadow=true;
+    m.position.copy(s.lp).addScaledVector(s.ln,1.0);
+    m.quaternion.setFromUnitVectors(new V3(0,0,1),s.ln);
+    m.scale.set(11,11,6);
+    m.userData.joint=s.joint; s.joint.add(m); C.meshes.push(m);
+    s.shell={mesh:m, hp:55};
+  }
+}
+function removeShells(){
+  for(var i=0;i<C.sigils.length;i++){ var s=C.sigils[i]; if(!s.shell) continue;
+    s.joint.remove(s.shell.mesh); var k=C.meshes.indexOf(s.shell.mesh); if(k>=0) C.meshes.splice(k,1); s.shell=null; }
+}
+function breakShell(s){
+  var p=s.world;
+  for(var i=0;i<26;i++){ var v=new V3(rand(-1,1),rand(-0.5,1),rand(-1,1)).normalize().multiplyScalar(rand(10,35)).addScaledVector(s.wn,15);
+    Dust.spawn(p.x,p.y,p.z,v.x,v.y,v.z,rand(2,5),rand(4,8),rand(1.5,3),0.9,[0.24,0.23,0.21],{grav:25,floor:true,fadeIn:0.01}); }
+  for(var k=0;k<14;k++) Dust.spawn(p.x+rand(-6,6),p.y+rand(-6,6),p.z+rand(-6,6),rand(-3,3),rand(0,4),rand(-3,3),rand(10,18),rand(30,50),rand(3,5),0.5,[0.5,0.47,0.42]);
+  s.joint.remove(s.shell.mesh); var j=C.meshes.indexOf(s.shell.mesh); if(j>=0) C.meshes.splice(j,1); s.shell=null;
+  s.flash=1; Snd.crumble(p.x,p.y,p.z,0.8); addShake(0.4);
+  toast('THE SHELL IS OFF. NOW THE LIGHT.',2);
+}
+var _aimDir=new V3(), _aimO=new V3(), _aimP=new V3();
+function aimPoint(out){
+  camera.getWorldDirection(_aimDir); _aimO.copy(camera.position);
+  // pull toward a light close to the crosshair
+  var cone=isTouch?0.075:0.04, best=null, bd=cone;
+  for(var i=0;i<C.sigils.length;i++){ var s=C.sigils[i]; if(!s.alive||s.hidden) continue;
+    _kv.subVectors(s.world,_aimO); var L=_kv.length(); if(L>1600) continue;
+    var a=Math.acos(clamp(_kv.dot(_aimDir)/L,-1,1)); if(a<bd){ bd=a; best=s; } }
+  if(best) return out.copy(best.world).addScaledVector(best.wn,2);
+  _ray.set(_aimO,_aimDir); _ray.far=3000;
+  var h=_ray.intersectObjects(C.meshes,false);
+  if(h.length) return out.copy(h[0].point);
+  return out.copy(_aimO).addScaledVector(_aimDir,2500);
+}
+function gunTick(dt){
+  H.fireCD-=dt; if(H.overheat>0){ H.overheat-=dt; if(H.overheat<=0) H.heat=0.4; }
+  else H.heat=Math.max(0,H.heat-dt*0.32);
+  if(held.strike && H.fireCD<=0 && H.overheat<=0 && (H.state==='fly') && G.mode==='play'){
+    H.fireCD=0.13; H.heat+=0.07; H.aimT=0.6;
+    if(H.heat>=1){ H.heat=1; H.overheat=2.0; toast('OVERHEATED',1.4); }
+    var from=H.tip.getWorldPosition(_kw);
+    aimPoint(_aimP);
+    var d=_kd.subVectors(_aimP,from).normalize();
+    d.x+=rand(-0.006,0.006); d.y+=rand(-0.006,0.006); d.z+=rand(-0.006,0.006); d.normalize();
+    if(bolts.length>=BOLT_MAX) bolts.shift();
+    bolts.push({p:from.clone(), v:d.clone().multiplyScalar(950), life:3});
+    Glow.spawn(from.x,from.y,from.z,0,0,0,1.2,0.3,0.08,1,[1,0.8,0.55],{drag:0});
+    Snd.shot(); addShake(0.05);
+  }
+  var arr=boltLines.geometry.attributes.position.array, n=0;
+  for(var i=bolts.length-1;i>=0;i--){
+    var b=bolts[i]; b.life-=dt;
+    var step=b.v.length()*dt; _kd.copy(b.v).normalize();
+    _ray.set(b.p,_kd); _ray.far=step;
+    var h=step>0?_ray.intersectObjects(C.meshes,false):[];
+    var hitPos=null;
+    if(h.length){ hitPos=h[0].point; boltHitGiant(h[0]); }
+    else{
+      b.p.addScaledVector(b.v,dt);
+      if(b.p.y<heightAt(b.p.x,b.p.z)||insideBuilding(b.p,0)) hitPos=b.p;
+      if(hitPos){ for(var k=0;k<5;k++) Dust.spawn(b.p.x,b.p.y+1,b.p.z,rand(-6,6),rand(2,10),rand(-6,6),rand(2,4),rand(6,10),rand(0.8,1.5),0.6,[0.5,0.47,0.42]); }
+    }
+    if(hitPos||b.life<=0){ bolts.splice(i,1); continue; }
+  }
+  for(var j=0;j<bolts.length;j++){
+    var B=bolts[j]; _kd.copy(B.v).normalize();
+    arr[n*6]=B.p.x; arr[n*6+1]=B.p.y; arr[n*6+2]=B.p.z;
+    arr[n*6+3]=B.p.x-_kd.x*26; arr[n*6+4]=B.p.y-_kd.y*26; arr[n*6+5]=B.p.z-_kd.z*26; n++;
+  }
+  boltLines.geometry.setDrawRange(0,n*2);
+  boltLines.geometry.attributes.position.needsUpdate=true;
+}
+function boltHitGiant(hit){
+  var p=hit.point, n=_kq.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+  for(var i=0;i<4;i++) Glow.spawn(p.x,p.y,p.z,n.x*rand(5,20)+rand(-6,6),n.y*rand(5,20)+rand(-6,6),n.z*rand(5,20)+rand(-6,6),rand(0.4,1),0.1,rand(0.2,0.5),1,[1,0.75,0.45],{drag:2,grav:15});
+  Dust.spawn(p.x,p.y,p.z,n.x*4,n.y*4,n.z*4,rand(2,4),rand(7,12),rand(1,2),0.5,[0.45,0.42,0.38]);
+  for(var k=0;k<C.sigils.length;k++){
+    var s=C.sigils[k];
+    if(s.shell && hit.object===s.shell.mesh){ s.shell.hp-=6; s.flash=Math.max(s.flash,0.3); if(s.shell.hp<=0) breakShell(s); return; }
+  }
+  var s2=nearestSigil(p,true);
+  if(s2 && !s2.shell && s2.world.distanceTo(p)<9){
+    s2.hp-=4.5; s2.flash=0.7; CS.flinch=Math.max(CS.flinch,0.35); H.stabs++;
+    ichorBurst(s2.world,s2.wn,0.05);
+    if(s2.hp<=0) breakSigil(s2);
+  }
+}
+
+/* ---------- comet ---------- */
+function diveImpacts(){
+  var spd=H.vel.length();
+  H.diveCD=(H.diveCD||0);
+  if(spd<55 || H.diveCD>G.t) return;
+  for(var i=0;i<C.sigils.length;i++){
+    var s=C.sigils[i]; if(!s.alive||s.hidden) continue;
+    if(s.world.distanceTo(H.pos)<15){
+      var dmg=clamp((spd-40)*0.5,10,62), pw=clamp(spd/220,0.2,1);
+      H.diveCD=G.t+0.6;
+      damageSigil(s,dmg,pw);
+      H.vel.copy(s.wn).multiplyScalar(45).addScaledVector(H.vel,-0.12); H.vel.y+=18;
+      H.state='tumble'; H.tumbleT=0.55; H.invuln=0.7;
+      toast(Math.round(spd*3.6)+' KM/H',1.2);
+      return;
+    }
+  }
+}
+
+/* ---------- runner ---------- */
+var _rk=new V3(), _rd=new V3(), _rt=new V3();
+function kitJump(down){
+  held.jump=down;
+  if(!down || G.mode!=='play' || G.paused) return;
+  if(H.state==='ride'){
+    var n=H.att.wn.clone();
+    H.state='run'; H.vel.copy(H.carry||_rt.set(0,0,0)).multiplyScalar(0.5).addScaledVector(n,20); H.vel.y+=74; H.att=null; H.ground=false;
+    Snd.whoosh(null); return;
+  }
+  if(H.state!=='run') return;
+  if(H.ground){ H.vel.y=74; H.ground=false; Snd.whoosh(null); addShake(0.1);
+    for(var i=0;i<8;i++) Dust.spawn(H.pos.x,H.pos.y-0.8,H.pos.z,rand(-6,6),rand(0,3),rand(-6,6),rand(2,4),rand(6,10),rand(1,2),0.5,[0.5,0.47,0.42]); }
+  else if((H.jumps||0)<1){ H.jumps=(H.jumps||0)+1; H.vel.y=Math.max(H.vel.y,64); Snd.whoosh(null);
+    for(var k=0;k<10;k++) Glow.spawn(H.pos.x,H.pos.y-0.6,H.pos.z,rand(-8,8),rand(-6,0),rand(-8,8),rand(0.5,1.2),0.1,rand(0.3,0.6),0.8,[0.8,0.9,1],{drag:3}); }
+}
+function runStrike(){
+  if(H.state==='run' && !H.ground){
+    H.pounding=true; H.vel.set(H.vel.x*0.2,-175,H.vel.z*0.2); H.stabT=0.3; Snd.whoosh(null); return;
+  }
+  H.stabT=0.3;
+  var s=nearestSigil(H.pos,true);
+  if(s && s.world.distanceTo(H.pos)<10){ damageSigil(s,14,0.35); }
+  else { Snd.whoosh(null); }
+}
+function poundHit(p, onGiant){
+  H.pounding=false;
+  addShake(0.9); G.flash=Math.max(G.flash,0.06);
+  Snd.boom(p.x,p.y,p.z,0.55);
+  for(var i=0;i<24;i++){ var a=rand(0,TAU);
+    Dust.spawn(p.x+Math.cos(a)*2,p.y-0.5,p.z+Math.sin(a)*2,Math.cos(a)*rand(15,35),rand(1,6),Math.sin(a)*rand(15,35),rand(3,6),rand(14,24),rand(1.5,3),0.6,[0.5,0.47,0.42],{drag:1.5}); }
+  for(var k=0;k<C.sigils.length;k++){ var s=C.sigils[k]; if(!s.alive||s.hidden) continue;
+    if(s.world.distanceTo(p)<20){ damageSigil(s,36,0.8); return; } }
+  if(!onGiant){ _rt.copy(p); _rt.y-=2; var b=insideBuilding(_rt,0); if(b) collapseBuilding(b,p.x+1,p.z); }
+}
+function rideAttach(hit){
+  H.state='ride'; attachTo(hit); H.ground=true; H.jumps=0;
+}
+function runTick(dt, inp){
+  var flatF=_rk.set(camFwd.x,0,camFwd.z); if(flatF.lengthSq()<1e-4) flatF.set(0,0,1); flatF.normalize();
+  var dir=_rd.set(0,0,0).addScaledVector(flatF,-inp.my).addScaledVector(camRight,inp.mx);
+  var l=Math.min(1,dir.length());
+  if(H.state==='ride'){ rideTick(dt,inp,l); return; }
+  var sprint=inp.boost && l>0.1;
+  var top=sprint?62:24;
+  var k=H.ground?(sprint?2.4:7):(H.pounding?0:1.0);
+  H.vel.x+=(dir.x*top-H.vel.x)*damp(k,dt); H.vel.z+=(dir.z*top-H.vel.z)*damp(k,dt);
+  if(!H.pounding) H.vel.y-=(held.jump&&H.vel.y>0?20:34)*dt;
+  var vy=H.vel.y;
+  H.pos.addScaledVector(H.vel,dt);
+  var wasAir=!H.ground;
+  collideHero(H.pos,H.vel,0.9);
+  H.ground=false;
+  if(H.pos.y<=heightAt(H.pos.x,H.pos.z)+0.95) H.ground=true;
+  else{ _rt.copy(H.pos); _rt.y-=1.05; var b=insideBuilding(_rt,0); if(b && H.pos.y>=bTop(b)+0.85) H.ground=true; }
+  if(!H.ground && H.vel.y<=8){
+    _ray.set(H.pos,_kd.set(0,-1,0)); _ray.far=H.pounding?6:2.6;
+    var hh=_ray.intersectObjects(C.meshes,false);
+    if(hh.length){ var nn=_kq.copy(hh[0].face.normal).transformDirection(hh[0].object.matrixWorld);
+      if(nn.y>0.4){ var wasPound=H.pounding; rideAttach(hh[0]); if(wasPound) poundHit(hh[0].point,true); else if(vy<-40){ addShake(0.35); Snd.grab(); } return; } }
+  }
+  if(H.ground){
+    H.jumps=0;
+    if(wasAir){ if(H.pounding) poundHit(H.pos,false); else if(vy<-55){ addShake(clamp(-vy/160,0.15,0.5)); Snd.grab();
+      for(var i=0;i<10;i++) Dust.spawn(H.pos.x,H.pos.y-0.8,H.pos.z,rand(-10,10),rand(0,3),rand(-10,10),rand(3,5),rand(8,14),rand(1,2),0.5,[0.5,0.47,0.42]); } }
+    if(H.vel.y<0) H.vel.y=0;
+    H.pounding=false;
+    if(sprint && Math.random()<dt*30) Dust.spawn(H.pos.x,H.pos.y-0.85,H.pos.z,-H.vel.x*0.05,rand(0.5,2),-H.vel.z*0.05,rand(1.5,3),rand(5,9),rand(0.8,1.6),0.4,[0.5,0.47,0.42]);
+  }
+}
+function rideTick(dt, inp, l){
+  var a=H.att;
+  a.joint.localToWorld(a.wp.copy(a.lp));
+  a.wn.copy(a.ln).transformDirection(a.joint.matrixWorld);
+  H.moving=false;
+  if(l>0.05){
+    var cd=_hd.set(0,0,0).addScaledVector(camRight,inp.mx).addScaledVector(_rk.set(camFwd.x,0,camFwd.z).normalize(),-inp.my);
+    cd.addScaledVector(a.wn,-cd.dot(a.wn));
+    if(cd.lengthSq()>1e-4){
+      cd.normalize();
+      var spd=inp.boost?40:18;
+      var cand=_hv.copy(a.wp).addScaledVector(cd,spd*dt*l);
+      nearestCap(cand,_hax);
+      var origin=_ho.copy(cand).addScaledVector(a.wn,3.5);
+      var rd=_hax.clone().sub(origin); var far=rd.length(); rd.normalize();
+      _ray.set(origin,rd); _ray.far=far+3;
+      var hits=_ray.intersectObjects(C.meshes,false);
+      if(hits.length && hits[0].point.distanceTo(a.wp)<spd*dt*5+2){ attachTo(hits[0]); a=H.att; H.moving=true; }
+    }
+  }
+  var np=_hv.copy(a.wp).addScaledVector(a.wn,0.95);
+  H.carry=(H.carry||new V3()).subVectors(np,H.pos).multiplyScalar(1/Math.max(dt,1e-4));
+  if(H.carry.length()>200) H.carry.setLength(200);
+  H.pos.copy(np);
+  // too steep to stand on: slide off
+  if(a.wn.y<0.22){ H.state='run'; H.vel.copy(H.carry).multiplyScalar(0.6).addScaledVector(a.wn,8); H.att=null; H.ground=false; return; }
+  var shk=CS.act && CS.act.type==='shake';
+  if(shk && CS.act.t>0.9){
+    var n2=a.wn.clone(); H.state='tumble'; H.tumbleT=1.3; H.att=null;
+    H.vel.copy(H.carry).multiplyScalar(0.7).addScaledVector(n2,34).add(new V3(rand(-10,10),20,rand(-10,10)));
+    Snd.hurt(); addShake(0.6); toast('THROWN OFF',1.4);
+  }
+}
+
+/* ---------- shared hooks ---------- */
+function kitStrikeDown(){
+  if(G.kit==='gun') return;                  // firing is read from held.strike each frame
+  if(G.kit==='dive') return;                 // diving too
+  if(G.kit==='run') runStrike();
+}
+function kitTick(dt){
+  if(G.kit==='gun') gunTick(dt);
+  else if(bolts.length){ bolts.length=0; boltLines.geometry.setDrawRange(0,0); }
+  if(G.kit==='dive' && H.state==='fly' && held.strike && H.vel.length()>90 && Math.random()<dt*60){
+    Glow.spawn(H.pos.x,H.pos.y,H.pos.z,0,0,0,rand(0.6,1.4),0.1,rand(0.25,0.5),0.7,[0.75,0.85,1],{drag:0});
+  }
+}
+function kitPrompt(){
+  var strikeKey=isTouch?'STRIKE':'LEFT CLICK';
+  if(G.kit==='gun'){
+    if(H.overheat>0) return ['OVERHEATED',true];
+    var s=nearestSigil(H.pos,true);
+    if(s && s.shell && s.world.distanceTo(H.pos)<600) return ['SHOOT THE SHELL OFF THE LIGHT'];
+    return [''];
+  }
+  if(G.kit==='dive'){
+    var spd=H.vel.length();
+    if(held.strike && spd>120) return ['RAM A LIGHT'];
+    return [isTouch?'HOLD DIVE AND AIM AT A LIGHT':'HOLD LEFT CLICK TO DIVE AT A LIGHT'];
+  }
+  if(G.kit==='run'){
+    if(H.state==='ride'){
+      if(CS.act && CS.act.type==='shake') return ['IT IS SHAKING — JUMP!',true];
+      var s2=nearestSigil(H.pos,true);
+      if(s2 && s2.world.distanceTo(H.pos)<10) return [strikeKey+' TO SLASH'];
+      return ['RUN TO A LIGHT · OR JUMP AND POUND DOWN ON ONE'];
+    }
+    if(H.state==='run' && !H.ground) return H.pounding?['']:[strikeKey+' TO POUND DOWN'];
+    return [''];
+  }
+  return null;
+}
+function kitHud(){
+  if(G.kit==='gun'){
+    ui.grip.classList.add('on'); ui.gripTxt.textContent='HEAT';
+    ui.grip.classList.toggle('low',H.overheat>0||H.heat>0.8);
+    ui.gripFg.setAttribute('stroke-dashoffset',(169.6*(1-H.heat)).toFixed(1));
+  }else if(G.kit!=='climb'){ ui.grip.classList.remove('on'); }
+  else ui.gripTxt.textContent='GRIP';
+}
+var KIT_BTNS={ climb:['bStrike','bGrab','bUp','bDown','bSeek','bLock'], gun:['bStrike','bUp','bDown','bSeek','bLock'],
+               dive:['bStrike','bUp','bDown','bSeek','bLock'], run:['bStrike','bGrab','bLock'] };
+var KIT_LABEL={ climb:['STRIKE','GRAB'], gun:['FIRE','GRAB'], dive:['DIVE','GRAB'], run:['STRIKE','JUMP'] };
+function kitSetup(){
+  removeShells(); bolts.length=0; boltLines.geometry.setDrawRange(0,0);
+  H.heat=0; H.overheat=0; H.fireCD=0; H.pounding=false; H.ground=false; H.jumps=0; H.diveCD=0;
+  if(G.kit==='gun') addShells();
+  ui.bStrike.textContent=KIT_LABEL[G.kit][0]; ui.bGrab.textContent=KIT_LABEL[G.kit][1];
+  ['bStrike','bGrab','bUp','bDown','bSeek','bLock'].forEach(function(id){ ui[id].classList.add('hidden'); });
+  if(isTouch) KIT_BTNS[G.kit].forEach(function(id){ ui[id].classList.remove('hidden'); });
+}
+/* title: pick a kit */
+function renderKits(){
+  var box=document.getElementById('kits'), h='';
+  for(var k in KITS) h+='<button class="kit'+(k===G.kit?' on':'')+'" data-kit="'+k+'">'+KITS[k].name+'</button>';
+  box.innerHTML=h;
+  document.getElementById('kitBlurb').textContent=KITS[G.kit].blurb;
+  document.getElementById('kitKeys').innerHTML=isTouch?KITS[G.kit].touch:KITS[G.kit].desk;
+}
+document.getElementById('kits').addEventListener('click', function(e){
+  var k=e.target.getAttribute&&e.target.getAttribute('data-kit'); if(!k) return;
+  G.kit=k; try{ localStorage.setItem('mk-kit',k); }catch(err){}
+  renderKits();
+});
+renderKits();
 
 /* ============================================================
    Game flow
@@ -2633,15 +3019,17 @@ for(var bi=0;bi<buildings.length;bi++){ buildings[bi].origTilt=buildings[bi].til
 function startGame(){
   Snd.init();
   resetWorld();
-  H.pos.set(0,110,-640); H.vel.set(0,0,30); H.state='fly'; H.hp=100; H.grip=100; H.att=null; H.charging=false; H.charge=0;
+  if(G.kit==='run'){ H.pos.set(0,heightAt(0,-640)+1,-640); H.vel.set(0,0,0); H.state='run'; } else { H.pos.set(0,110,-640); H.vel.set(0,0,30); H.state='fly'; }
+  H.ground=false; H.hp=100; H.grip=100; H.att=null; H.charging=false; H.charge=0;
   H.hits=0; H.stabs=0; H.lastHurt=-99; H.invuln=0; H.faceQ.identity(); H.bank=0;
   cam.yaw=0; cam.pitch=0.12; cam.dist=7;
   G.mode='play'; G.paused=false; G.playT=0; G.slow=1; G.lock=false; G.endT=0; G.cardT=0; G.toldClimb=false; G.seenStoneTip=false;
   ui.bLock.classList.remove('on');
   ['start','pause','over','win'].forEach(function(id){ ui[id].classList.add('hidden'); });
   ui.hud.classList.remove('hidden');
-  if(isTouch) ['stickZone','lookZone','bStrike','bGrab','bUp','bDown','bSeek','bLock','menuBtn'].forEach(function(id){ ui[id].classList.remove('hidden'); });
+  if(isTouch) ['stickZone','lookZone','menuBtn'].forEach(function(id){ ui[id].classList.remove('hidden'); });
   else ui.menuBtn.classList.add('hidden');
+  kitSetup();
   updateCaps(0); poseHero(0.016,null); resetScarf();
   ui.cardName.textContent='THE WARDEN'; ui.cardSub.textContent='it was here before the city';
   fadeIn();
@@ -2668,6 +3056,16 @@ function togglePause(){
 ui.startBtn.addEventListener('click', startGame);
 ui.retryBtn.addEventListener('click', startGame);
 ui.againBtn.addEventListener('click', startGame);
+function goTitle(){
+  G.mode='title'; G.paused=false; G.slow=1; G.endT=0;
+  ['pause','over','win'].forEach(function(id){ ui[id].classList.add('hidden'); });
+  ui.hud.classList.add('hidden');
+  ['stickZone','lookZone','bStrike','bGrab','bUp','bDown','bSeek','bLock','menuBtn'].forEach(function(id){ ui[id].classList.add('hidden'); });
+  if(document.exitPointerLock && pointerLocked) document.exitPointerLock();
+  resetWorld(); removeShells(); CS.walkW=1;
+  renderKits(); ui.start.classList.remove('hidden'); fadeIn();
+}
+['modesBtn1','modesBtn2','modesBtn3'].forEach(function(id){ ui[id].addEventListener('click', goTitle); });
 ui.resumeBtn.addEventListener('click', togglePause);
 ui.restartBtn.addEventListener('click', function(){ G.paused=false; startGame(); });
 ui.muteBtn.addEventListener('click', toggleMute);
@@ -2711,6 +3109,7 @@ function simulate(rdt, now){
   if(G.mode!=='title'){
     updateCamBasis();
     updateHero(dt, inp);
+    kitTick(dt);
   }
   tickBoulders(dt); tickHelm(dt); tickBuildings(dt); tickFires(dt);
   if(G.mode==='title') titleCamera(dt); else updateCamera(rdt);
@@ -2758,7 +3157,7 @@ function renderFrame(){
 resetWorld();
 CS.yaw=0.9; C.root.position.set(-120,0,80); CS.walkW=1;
 renderSigilHud();
-window.__mk={step:function(n,inp){ for(var i=0;i<n;i++) simulate(1/30, performance.now()); },readInput:readInput,stickMove:move,heroLocal:heroLocal,nearestSigil:nearestSigil,grabbable:grabbable,G:G,H:H,C:C,CS:CS,cam:cam,startAct:startAct,startGame:startGame,camera:camera,held:held,keys:keys,tryGrab:tryGrab,breakSigil:breakSigil,hurtHero:hurtHero,damageSigil:damageSigil};
+window.__mk={kits:KITS,kitJump:kitJump,strikeDown:strikeDown,strikeUp:strikeUp,step:function(n,inp){ for(var i=0;i<n;i++) simulate(1/30, performance.now()); },readInput:readInput,stickMove:move,heroLocal:heroLocal,nearestSigil:nearestSigil,grabbable:grabbable,G:G,H:H,C:C,CS:CS,cam:cam,startAct:startAct,startGame:startGame,camera:camera,held:held,keys:keys,tryGrab:tryGrab,breakSigil:breakSigil,hurtHero:hurtHero,damageSigil:damageSigil};
 ui.loading.classList.add('hidden');
 setTimeout(function(){ ui.fade.style.opacity=0; }, 50);
 requestAnimationFrame(frame);

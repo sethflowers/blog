@@ -24,7 +24,21 @@ Flying is 46 m/s and boosting is 125 m/s (about 450 km/h, shown top left), but c
 still takes the better part of ten seconds, which is the point. Speed comes across through wind
 streaks, ash rushing past, a wider field of view, a radial blur and the wind getting louder.
 
-## The fight
+## Ways to fight (2.0: four modes to compare)
+
+The title screen has a picker; the choice is remembered. Same giant, same four lights, same attacks.
+
+| Mode | Movement | How a light goes out | Touch buttons |
+| --- | --- | --- | --- |
+| **Climb** | fly | grab on, climb to it, charge and stab (the original, below) | STRIKE, GRAB, UP, DOWN, SEEK, LOCK |
+| **Gunner** | fly | each light is sealed under a stone shell: shoot the shell off, then the light. Hold fire; it overheats after about 2 s and locks for 2 s. Shots pull toward a light near the crosshair (wider pull on touch). Over-the-shoulder camera. | FIRE, UP, DOWN, SEEK, LOCK |
+| **Comet** | fly | hold dive: you go wherever you are looking at up to 235 m/s (about 850 km/h) and ram the light. Damage grows with speed (two fast hits put one out). Hitting rock at over 100 m/s hurts you. | DIVE, UP, DOWN, SEEK, LOCK |
+| **Runner** | no flight | sprint at 62 m/s, jump (hold to go higher, about 140 m; a second jump in the air), land on its back and run along it. STRIKE in the air pounds straight down; landing within 20 m of a light does heavy damage. Slash a light up close. When it shakes, jump or be thrown. | STRIKE, JUMP, LOCK |
+
+In every mode except Climb it never roars you away from its head, so the crown can be reached
+directly once the helm falls.
+
+## The fight (Climb)
 
 - **Lights**: four glowing runes on its body. The back of the right hind shin, the outside of the left
   forearm, between the shoulder blades, and the crown of its head. The crown is under a stone helm
@@ -77,6 +91,10 @@ streaks, ash rushing past, a wider field of view, a radial blur and the wind get
 - Post pass: radial speed blur, chromatic fringe, filmic curve, desaturated cold-shadow grade,
   vignette, grain.
 - `window.__mk` exposes the game state and a fixed-step `step(n)` for testing in a headless browser.
+
+- 2.0 also replaced the flat stone plates and thin spikes (they read as cardboard) with thick,
+  rounded, half-buried slabs of rock and rounder spines, added a cold fill light from the side
+  away from the sun, and deepened the bump detail.
 
 ## Version
 
