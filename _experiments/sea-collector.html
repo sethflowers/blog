@@ -2,6 +2,7 @@
 title: Sea Collector
 description: A scuba-diving adventure. Swim out from your underwater house, collect shells, dodge sharks, jellyfish, eels and sand monsters (even the Mega Monster), and get home before your air runs out. Spend your shells on new clothes and better scuba gear.
 date: 2026-10-06
+version: "1.5"
 layout: null
 ---
 {% raw %}
@@ -194,6 +195,7 @@ layout: null
     <b>Click</b> or <b>R</b> net gun &nbsp; <b>E</b> or <b>Click</b> knife a netted creature
   </div>
   <div class="keys hidden" id="keysTouch">Left thumb swims, right thumb looks. Buttons go up, down, boost, net gun 🕸️ and use.</div>
+  <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 
 <div class="screen hidden" id="pause">

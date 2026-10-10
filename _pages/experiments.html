@@ -14,7 +14,7 @@ permalink: /experiments/
     {% assign experiments = site.experiments | sort: "date" | reverse %}
     {% for experiment in experiments %}
       <li>
-        <span class="post-meta">{{ experiment.date | date: "%b %-d, %Y" }}</span>
+        <span class="post-meta">{{ experiment.date | date: "%b %-d, %Y" }}{% if experiment.version %} &middot; v{{ experiment.version }}{% endif %}</span>
 
         <h2>
           <a class="post-link" href="{{ experiment.url | prepend: site.baseurl }}">{{ experiment.title | escape }}</a>

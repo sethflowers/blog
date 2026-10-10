@@ -2,6 +2,7 @@
 title: Henry’s Nightfall 2
 description: The sequel. Fight across a zombie island one region at a time, climb each tower to its boss and bring it crashing down, collect coins and buy your arsenal, from a bow to a snowball launcher. Works with mouse and keyboard or on a phone.
 date: 2026-10-04
+version: "1.5"
 layout: null
 ---
 {% raw %}
@@ -307,6 +308,7 @@ layout: null
   <div class="saveline hidden" id="saveLine"></div>
   <button class="go" id="startBtn">WASH ASHORE</button>
   <button class="go alt hidden" id="newBtn">NEW GAME</button>
+  <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 
 <div class="screen hidden" id="over">
