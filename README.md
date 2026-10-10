@@ -47,6 +47,7 @@ Standalone pages (games, toys, demos) live in `_experiments/` and are listed at 
    title: My Thing
    description: One sentence shown on the experiments list.
    date: 2026-01-01
+   version: "1.0"
    layout: null
    ---
    {% raw %}
@@ -55,4 +56,8 @@ Standalone pages (games, toys, demos) live in `_experiments/` and are listed at 
    {% endraw %}
    ```
 
-3. Push. It's published at `/experiments/my-thing/` and appears on `/experiments/` automatically.
+3. Show the version on the title screen with `v{% endraw %}{{ page.version }}{% raw %}` (it sits inside the raw
+   block, so it has to step out of it). Every existing experiment has a small `build-version` tag in a corner of
+   its title screen. **Bump `version` every time the game changes**, so it's easy to tell an update has arrived
+   (the service workers serve the cached copy first, so an update shows on the second open).
+4. Push. It's published at `/experiments/my-thing/` and appears on `/experiments/` automatically.

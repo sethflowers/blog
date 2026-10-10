@@ -2,6 +2,7 @@
 title: Dottie’s Mix and Match Racer
 description: Build a racer out of mixed-up animal parts, then race it in 3D over five hilly tracks. Seventeen animals to collect, coins to pick up everywhere, and a house you can walk around inside. Works on a phone.
 date: 2026-09-08 12:00:00 +0000
+version: "1.6"
 layout: null
 ---
 {% raw %}
@@ -284,6 +285,7 @@ layout: null
        House, which you can walk around inside.</p>
     <button class="go" id="playBtn">BUILD YOUR RACER</button>
   </div>
+  <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 
 <!-- ---------- garage ---------- -->

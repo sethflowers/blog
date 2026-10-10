@@ -2,6 +2,7 @@
 title: Dragon Isle
 description: A third-person dragon adventure on a big, hilly island. Walk, run, swim, fly and breathe fire, hunt the Vikings hunting you, and spend their coins on armour and claws back at your cave.
 date: 2026-09-10
+version: "1.2"
 layout: null
 ---
 {% raw %}
@@ -246,6 +247,7 @@ layout: null
   <p class="keyshelp">WASD move &middot; mouse look &middot; SHIFT run or boost &middot; SPACE fly up &middot; SHIFT+SPACE from the ground to take off<br>
   F or left click breathe fire &middot; E or right click bite &middot; CTRL dive &middot; R roar &middot; B shop at the cave &middot; M mute &middot; ESC pause</p>
   <button class="go warm" id="startBtn">WAKE THE DRAGON</button>
+  <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 
 <div class="screen hidden" id="menu">

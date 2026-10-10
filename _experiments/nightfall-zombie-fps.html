@@ -2,6 +2,7 @@
 title: Henry’s Nightfall
 description: A first-person zombie survival shooter. Survive the waves as the night closes in. Works with mouse and keyboard or on a phone.
 date: 2026-09-08
+version: "1.7"
 layout: null
 ---
 {% raw %}
@@ -218,6 +219,7 @@ layout: null
   <p class="touchhelp">Left side of the screen moves you. Drag the right side to aim. Push the stick to the edge to sprint.<br>New guns unlock as you survive. Something huge arrives every fifth wave.<br>Tap &#8801; for cheats. Best with sound on.</p>
   <p class="keyshelp">WASD move &middot; mouse aim &middot; <b>left click shoot</b> &middot; scroll, 1&ndash;7 or Q switch guns &middot; R reload &middot; F light &middot; ` or Esc for cheats<br>New guns unlock as you survive. Something huge arrives every fifth wave.</p>
   <button class="go" id="startBtn">ENTER THE STREET</button>
+  <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 
 <div class="screen hidden" id="over">
