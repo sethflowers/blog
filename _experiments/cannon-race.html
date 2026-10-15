@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "1.0"
+version: "1.1"
 layout: null
 ---
 {% raw %}
@@ -452,16 +452,16 @@ const LEVELS = [
     for (const x of [-1.6, 1.6]){ b.blk('glass', x, 0, 1.3, 1, 2, .2); b.man(x, 0, 0); }
   }},
   { name: 'The Pyramid', D: 56, shots: 5, build(b){
-    for (const x of [-3, -1, 1, 3]) b.blk('wood', x, 0, 0, .5, 1.6, .5);
-    b.blk('wood', 0, 1.6, 0, 7.6, .4, 1.6);
-    for (const x of [-2, 0, 2]) b.blk('wood', x, 2, 0, .5, 1.6, .5);
-    b.blk('wood', 0, 3.6, 0, 5.6, .4, 1.6);
-    for (const x of [-1, 1]) b.blk('wood', x, 4, 0, .5, 1.6, .5);
-    b.blk('stone', 0, 5.6, 0, 3.4, .4, 1.6);
+    for (const x of [-3, -1, 1, 3]) b.blk('wood', x, 0, 0, .5, 2, .5);
+    b.blk('wood', 0, 2, 0, 7.6, .4, 1.6);
+    for (const x of [-2, 0, 2]) b.blk('wood', x, 2.4, 0, .5, 2, .5);
+    b.blk('wood', 0, 4.4, 0, 5.6, .4, 1.6);
+    for (const x of [-1, 1]) b.blk('wood', x, 4.8, 0, .5, 2, .5);
+    b.blk('stone', 0, 6.8, 0, 3.4, .4, 1.6);
     b.man(-2, 0, 0); b.man(0, 0, 0); b.man(2, 0, 0);
-    b.man(-1, 2, 0); b.man(1, 2, 0);
-    b.man(0, 4, 0);
-    b.man(0, 6, 0);
+    b.man(-1, 2.4, 0); b.man(1, 2.4, 0);
+    b.man(0, 4.8, 0);
+    b.man(0, 7.2, 0);
   }}
 ];
 
@@ -472,36 +472,123 @@ const PANTS = [0x2d3a5c, 0x3b3b3b, 0x5a4632, 0x29506b];
 const HAIR = [0x2b1d12, 0x6b3e1f, 0xe2b04a, 0x1a1a1a, 0xa83a1d, 0xd0d0d0];
 const LINES = ['Whoa!', 'Hey!', 'Oof!', 'Not again!', 'Wheee!', 'Ow!', 'My hat!', 'Help!', 'Uh oh!'];
 const boxG = new THREE.BoxGeometry(1, 1, 1);
-const sphereG = new THREE.SphereGeometry(1, 14, 10);
+const sphereG = new THREE.SphereGeometry(1, 20, 14);
 const blackM = new THREE.MeshBasicMaterial({ color: 0x111111 });
+const whiteM = new THREE.MeshBasicMaterial({ color: 0xffffff });
 const lam = c => new THREE.MeshLambertMaterial({ color: c });
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
+// A person 1.75 m tall, built around the centre of their physics box (feet at -0.87), facing +Z
+// toward the cannon. Shoulders and elbows are groups so they can wave their arms about.
+const matCache = {};
+const mat = c => matCache[c] || (matCache[c] = new THREE.MeshLambertMaterial({ color: c }));
+const cylG = new THREE.CylinderGeometry(1, 1, 1, 14);
+const taperG = new THREE.CylinderGeometry(.17, .14, .5, 18);   // torso: shoulders to waist
+const capG = new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI * .5);
+const smileG = new THREE.TorusGeometry(.018, .0045, 6, 12, Math.PI);
+const skirtG = new THREE.CylinderGeometry(.14, .23, .34, 18, 1, true);
+const SHADES = { '0xf2c89b': 0xe0b083, '0xd9a273': 0xc58d60, '0xa86b45': 0x925a37, '0x7a4a2c': 0x683d23, '0xf6d7b8': 0xe8c3a0 };
+
 function personMesh(){
   const g = new THREE.Group();
-  const skin = lam(pick(SKIN)), shirt = lam(pick(SHIRT)), pants = lam(pick(PANTS)), hair = lam(pick(HAIR));
-  const part = (geo, mat, x, y, z, sx, sy, sz) => {
-    const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz);
-    m.castShadow = true; g.add(m); return m;
+  const skinC = pick(SKIN), hairC = pick(HAIR);
+  const skin = mat(skinC), shirt = mat(pick(SHIRT)), pants = mat(pick(PANTS)), hair = mat(hairC);
+  const shoe = mat(pick([0x222222, 0xf4f4f4, 0x6b3e1f, 0xc0392b]));
+  const shade = mat(SHADES['0x' + skinC.toString(16)] || skinC);
+  const top = pick(['tee', 'tee', 'long']);
+  const bottom = pick(['pants', 'pants', 'shorts', 'skirt']);
+  const style = pick(['short', 'short', 'long', 'pony', 'cap', 'bald']);
+  const F = -.87;  // feet
+
+  const add = (parent, geo, m, x, y, z, sx, sy, sz) => {
+    const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz);
+    o.castShadow = true; parent.add(o); return o;
   };
-  part(boxG, pants, -.12, -.47, 0, .2, .8, .22);
-  part(boxG, pants,  .12, -.47, 0, .2, .8, .22);
-  part(boxG, shirt, 0, .24, 0, .5, .62, .3);
-  part(boxG, shirt, -.33, .22, 0, .14, .58, .16);
-  part(boxG, shirt,  .33, .22, 0, .14, .58, .16);
-  part(sphereG, skin, -.33, -.1, 0, .08, .08, .08);
-  part(sphereG, skin,  .33, -.1, 0, .08, .08, .08);
-  part(sphereG, skin, 0, .72, 0, .19, .19, .19);
-  if (Math.random() < .3){
-    part(boxG, lam(pick(SHIRT)), 0, .9, 0, .42, .05, .42);
-    part(boxG, lam(0x222222), 0, .97, 0, .26, .16, .26);
-  } else {
-    part(sphereG, hair, 0, .79, -.03, .2, .14, .2);
+  const tube = (parent, m, x, y0, y1, z, r0, r1) => {   // a limb from y0 down to y1
+    const o = add(parent, cylG, m, x, (y0 + y1) / 2, z, (r0 + r1) / 2, Math.abs(y0 - y1), (r0 + r1) / 2);
+    return o;
+  };
+
+  // legs and shoes
+  for (const s of [-1, 1]){
+    const x = s * .09;
+    const thigh = bottom === 'pants' || bottom === 'shorts' ? pants : skin;
+    const shin = bottom === 'pants' ? pants : skin;
+    tube(g, thigh, x, F + .9, F + .48, 0, .078, .062);
+    add(g, sphereG, shin, x, F + .48, 0, .058, .058, .058);
+    tube(g, shin, x, F + .48, F + .09, 0, .056, .042);
+    add(g, sphereG, shoe, x, F + .05, .035, .06, .05, .125);
   }
-  part(sphereG, blackM, -.07, .75, .17, .03, .035, .03);
-  part(sphereG, blackM,  .07, .75, .17, .03, .035, .03);
-  part(boxG, blackM, 0, .64, .18, .09, .02, .02);
+  // hips, body, chest
+  add(g, sphereG, bottom === 'skirt' ? shirt : pants, 0, F + .93, 0, .165, .1, .11);
+  if (bottom === 'skirt') add(g, skirtG, mat(pick(SHIRT)), 0, F + .78, 0, 1, 1, .8).material.side = THREE.DoubleSide;
+  add(g, taperG, shirt, 0, F + 1.18, 0, 1, 1, .66);
+  add(g, sphereG, shirt, 0, F + 1.42, 0, .19, .075, .115);
+  // neck and head
+  tube(g, skin, 0, F + 1.53, F + 1.42, 0, .045, .05);
+  const head = new THREE.Group(); head.position.set(0, F + 1.63, 0); g.add(head);
+  add(head, sphereG, skin, 0, 0, 0, .1, .118, .108);
+  add(head, sphereG, skin, 0, -.05, .025, .075, .06, .08);           // jaw
+  for (const s of [-1, 1]){
+    add(head, sphereG, skin, s * .1, -.005, 0, .012, .024, .02);      // ear
+    add(head, sphereG, whiteM, s * .037, .015, .088, .019, .014, .01);
+    add(head, sphereG, blackM, s * .037, .015, .096, .009, .009, .006);
+    add(head, boxG, hair, s * .038, .042, .097, .036, .007, .01).rotation.z = s * -.12;   // brow
+  }
+  add(head, sphereG, shade, 0, -.012, .105, .014, .022, .018);       // nose
+  const mouth = add(head, smileG, mat(0x8a2f2f), 0, -.04, .098, 1, 1, 1);
+  mouth.rotation.z = Math.PI;
+  // hair
+  if (style !== 'bald') add(head, capG, hair, 0, .008, -.012, .107, .125, .112).rotation.x = -.35;   // tipped back: a forehead shows
+  if (style === 'long') add(head, boxG, hair, 0, -.11, -.065, .2, .24, .05);
+  if (style === 'pony'){ add(head, sphereG, hair, 0, .02, -.12, .04, .04, .04); add(head, sphereG, hair, 0, -.07, -.13, .035, .09, .035); }
+  if (style === 'cap'){
+    const c = mat(pick(SHIRT));
+    add(head, capG, c, 0, .022, -.005, .113, .12, .118);
+    add(head, boxG, c, 0, .03, .12, .16, .012, .1).rotation.x = -.1;
+  }
+  if (style === 'bald' && Math.random() < .6) add(head, sphereG, hair, 0, -.06, .03, .08, .055, .085);   // beard
+
+  // arms: shoulder groups so the arm can swing, an elbow group inside
+  const arms = [];
+  for (const s of [-1, 1]){
+    const sh = new THREE.Group(); sh.position.set(s * .2, F + 1.4, 0); g.add(sh);
+    add(sh, sphereG, shirt, 0, -.01, 0, .056, .056, .056);
+    tube(sh, shirt, 0, 0, top === 'tee' ? -.15 : -.28, 0, .056, .05);
+    if (top === 'tee') tube(sh, skin, 0, -.15, -.28, 0, .045, .042);
+    const el = new THREE.Group(); el.position.y = -.28; sh.add(el);
+    add(el, sphereG, top === 'tee' ? skin : shirt, 0, 0, 0, .044, .044, .044);
+    tube(el, top === 'tee' ? skin : shirt, 0, 0, -.24, 0, .043, .034);
+    add(el, sphereG, skin, 0, -.29, .005, .035, .055, .025);
+    arms.push({ sh, el, s });
+  }
+  g.userData = { head, arms, phase: Math.random() * 10, panic: 0 };
   return g;
+}
+
+// Idle sway, and arms up in a panic when you come flying at them.
+function animatePeople(dt, t){
+  const flying = S.mode === 'fly' && playerBody;
+  for (const p of people){
+    if (p.gone) continue;
+    const u = p.mesh.userData;
+    let want = p.out ? 1 : 0;
+    if (flying && !p.out){
+      const d = playerBody.position.distanceTo(p.body.position);
+      if (d < 30) want = 1;
+    }
+    u.panic += (want - u.panic) * (1 - Math.exp(-6 * dt));
+    const k = u.panic, ph = t + u.phase;
+    for (const a of u.arms){
+      const idle = .1 + Math.sin(ph * 1.3) * .04;
+      const wave = 2.6 + Math.sin(ph * 14 + a.s) * .35;
+      a.sh.rotation.z = a.s * (idle + (wave - idle) * k);
+      a.sh.rotation.x = Math.sin(ph * 1.1 + a.s) * .05 * (1 - k);
+      a.el.rotation.x = -.25 - .5 * k;
+    }
+    u.head.rotation.y = Math.sin(ph * .5) * .25 * (1 - k);
+    u.head.rotation.x = -.15 * k;
+  }
 }
 
 /* ================= level state ================= */
@@ -1090,7 +1177,7 @@ function stepWorld(dt){
   syncMeshes();
 }
 
-function update(dt){
+function update(dt, now){
   const m = S.mode;
   if (m === 'title'){
     S.titleT += dt;
@@ -1102,6 +1189,7 @@ function update(dt){
   if (S.paused) return;
 
   stepWorld(dt);
+  animatePeople(dt, now / 1000);
   updateDebris(dt);
   if (S.timing){ S.time += dt; updateTimer(); }
   S.shake = Math.max(0, S.shake - dt * 2.2);
@@ -1204,7 +1292,7 @@ let last = performance.now();
 function frame(now){
   const dt = Math.min(.05, (now - last) / 1000);
   last = now;
-  update(dt);
+  update(dt, now);
   updatePops(dt);
   sky.position.copy(camera.position);
   renderer.render(scene, camera);

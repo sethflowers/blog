@@ -32,6 +32,12 @@ take damage from impacts (more from you):
 | Wood | 45 | a fast direct hit snaps it |
 | Stone | 150 | heavy; mostly pushed, not broken |
 
+People are built to real proportions, 1.75 m tall: a small head with eyes, brows, nose, ears and a
+smile, a neck, a tapered body, knees, elbows and shoes. Each one is dressed at random (T-shirt or
+long sleeves; trousers, shorts or a skirt; short hair, long hair, a ponytail, a baseball cap, or
+bald with a beard). They sway a little while they wait, and throw their arms up and wave when you
+come flying at them (within 30 m).
+
 A person is knocked down when you touch them, when anything hits them at over 4.5 m/s, or when
 they tip past about 57°. They shout something, then vanish in a puff.
 
