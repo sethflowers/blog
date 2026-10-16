@@ -2,7 +2,7 @@
 title: Magical Imagineer
 description: A colouring book that marks your work out of 100. Colour Cinderella, Pinocchio, Puss in Boots, Bambi, the Genie or the Cowardly Lion well enough and they step off the page as a figure in your own colours, ready to fight the Snow Queen, the Sea Witch and the rest.
 date: 2026-09-14
-version: "1.2"
+version: "1.3"
 layout: null
 ---
 {% raw %}
@@ -3188,7 +3188,7 @@ document.addEventListener('gesturestart', function(e){ e.preventDefault(); });
 /* Offline: cache the page and its icons on the first visit, so the game runs
    with the network off once it has been opened once. */
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/experiments/magical-imagineer/sw.js').catch(function(){});
+  navigator.serviceWorker.register('/experiments/magical-imagineer/sw.js', { updateViaCache: 'none' }).catch(function(){});
 }
 
 })();

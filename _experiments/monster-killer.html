@@ -2,7 +2,7 @@
 title: Monster Killer
 description: One giant at a time, each as tall as the towers it walks through. You are the size of a person and you can fly, fast. Find the lights on its body, hold on, and put your blade through them.
 date: 2026-10-10
-version: "2.0"
+version: "2.1"
 layout: null
 ---
 {% raw %}
@@ -3163,7 +3163,7 @@ setTimeout(function(){ ui.fade.style.opacity=0; }, 50);
 requestAnimationFrame(frame);
 
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/experiments/monster-killer/sw.js').catch(function(){});
+  navigator.serviceWorker.register('/experiments/monster-killer/sw.js', { updateViaCache: 'none' }).catch(function(){});
 }
 
 })();

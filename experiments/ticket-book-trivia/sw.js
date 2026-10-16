@@ -3,7 +3,7 @@
    connection once it has been opened once. Cached files are served
    immediately and refreshed in the background, so an update shows up the next
    time the game is opened. */
-var CACHE = 'ticket-book-trivia-v1';
+var CACHE = 'ticket-book-trivia-v2';
 var BASE = '/experiments/ticket-book-trivia/';
 var ASSETS = [
   BASE,
@@ -53,10 +53,29 @@ self.addEventListener('fetch', function (e) {
   var key = (navigating || url.pathname === BASE || url.pathname === BASE + 'index.html')
     ? BASE : url.pathname;
 
+  // The page: network first (past the HTTP cache) so a new version shows up straight away;
+  // the cached copy only offline, or when the network takes more than three seconds.
+  if (key === BASE) {
+    e.respondWith(
+      caches.open(CACHE).then(function (c) {
+        var network = fetch(BASE, { cache: 'no-store' }).then(function (res) {
+          if (res && res.ok) c.put(BASE, res.clone());
+          return res;
+        });
+        var slow = new Promise(function (resolve) { setTimeout(resolve, 3000); });
+        return Promise.race([network.catch(function () {}), slow]).then(function (res) {
+          if (res && res.ok) return res;
+          return c.match(BASE).then(function (cached) { return cached || network; });
+        });
+      })
+    );
+    return;
+  }
+
   e.respondWith(
     caches.open(CACHE).then(function (c) {
       return c.match(key).then(function (cached) {
-        var network = fetch(req).then(function (res) {
+        var network = fetch(new Request(req, { cache: 'no-cache' })).then(function (res) {
           if (res && res.ok) c.put(key, res.clone());
           return res;
         }).catch(function () {

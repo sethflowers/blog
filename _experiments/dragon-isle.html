@@ -2,7 +2,7 @@
 title: Dragon Isle
 description: A third-person dragon adventure on a big, hilly island. Walk, run, swim, fly and breathe fire, hunt the Vikings hunting you, and spend their coins on armour and claws back at your cave.
 date: 2026-09-10
-version: "1.2"
+version: "1.3"
 layout: null
 ---
 {% raw %}
@@ -3577,7 +3577,7 @@ animate();
    first launch from the icon has to happen with a connection; after that it
    runs with the network off. */
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/experiments/dragon-isle/sw.js').catch(function(){});
+  navigator.serviceWorker.register('/experiments/dragon-isle/sw.js', { updateViaCache: 'none' }).catch(function(){});
 }
 
 })();

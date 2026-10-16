@@ -2,7 +2,7 @@
 title: Henry’s Nightfall 2
 description: The sequel. Fight across a zombie island one region at a time, climb each tower to its boss and bring it crashing down, collect coins and buy your arsenal, from a bow to a snowball launcher. Works with mouse and keyboard or on a phone.
 date: 2026-10-04
-version: "1.5"
+version: "1.6"
 layout: null
 ---
 {% raw %}
@@ -8705,7 +8705,7 @@ animate();
 // Offline support: once opened, the game and everything it needs stay cached.
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('/experiments/henrys-nightfall-2/sw.js').catch(function(){});
+    navigator.serviceWorker.register('/experiments/henrys-nightfall-2/sw.js', { updateViaCache: 'none' }).catch(function(){});
   });
 }
 </script>

@@ -2,7 +2,7 @@
 title: Dottie’s Mix and Match Racer
 description: Build a racer out of mixed-up animal parts, then race it in 3D over five hilly tracks. Seventeen animals to collect, coins to pick up everywhere, and a house you can walk around inside. Works on a phone.
 date: 2026-09-08 12:00:00 +0000
-version: "1.6"
+version: "1.7"
 layout: null
 ---
 {% raw %}
@@ -4556,7 +4556,7 @@ animate();
 // Offline support: once opened, the game and everything it needs stay cached.
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
-    navigator.serviceWorker.register('/experiments/dotties-mix-and-match-racer/sw.js').catch(function(){});
+    navigator.serviceWorker.register('/experiments/dotties-mix-and-match-racer/sw.js', { updateViaCache: 'none' }).catch(function(){});
   });
 }
 </script>
