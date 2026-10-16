@@ -479,6 +479,8 @@ var sfx={
   slash:function(){ tone(2200,0.12,'sawtooth',0.05,500); },
   win:function(){ [523,659,784,1046].forEach(function(f,i){ tone(f,0.2,'triangle',0.16,0,i*0.09); }); },
   dolphin:function(){ for(var i=0;i<5;i++) tone(1800+Math.random()*900,0.07,'sine',0.08,2600+Math.random()*900,i*0.08); },
+  boing:function(){ tone(180,0.35,'sine',0.14,700); },
+  kiss:function(){ tone(900,0.08,'sine',0.12,1400); tone(500,0.12,'sine',0.1,300,0.08); },
   print:function(){ for(var i=0;i<14;i++) tone(i%2?620:740,0.08,'square',0.035,0,i*0.13); },
   printed:function(){ tone(880,0.1,'square',0.06); tone(1175,0.18,'square',0.06,0,0.1); },
   water:function(){ for(var i=0;i<6;i++) tone(300+Math.random()*300,0.12,'sine',0.07,800,i*0.03); },
@@ -1805,9 +1807,134 @@ function tornadoModel(){
   return g;
 }
 
+
+// The Gobbler: a big round head that is mostly mouth, six eyes on stalks and two bulgy clawed feet.
+// Very, very fast. It sucks you in and eats you — but it's scared of the dark, and sharks bite it.
+var gobbler=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
+  var skin=new THREE.MeshStandardMaterial({color:col('#c9d6f5'), roughness:0.6});
+  var dark=new THREE.MeshStandardMaterial({color:col('#241634'), roughness:0.7});
+  var white=new THREE.MeshStandardMaterial({color:col('#fbfaf6'), roughness:0.25});
+  var ink=new THREE.MeshStandardMaterial({color:col('#1d2a7a'), roughness:0.3});
+  part3(monSphere, skin, body, 0,0,0, 0,0,0, 2.2,1.8,1.8);
+  part3(monSphere, dark, body, 0,-0.2,1.5, 0,0,0, 1.45,0.9,0.4);
+  var teeth=new THREE.Group(); teeth.position.set(0,-0.2,1.78); body.add(teeth);
+  for(var i=0;i<7;i++){
+    part3(monCone, white, teeth, -1.0+i*0.33,0.55,0, PI,0,0, 0.12,0.42,0.08);
+    part3(monCone, white, teeth, -0.85+i*0.3,-0.55,0, 0,0,0, 0.12,0.42,0.08);
+  }
+  // Six eyes on wobbly stalks, every one a bit different.
+  var stalks=[];
+  [[-2.2,2.3,0.4, 'veins'],[-1.3,3.6,0.2, 'star'],[-0.2,4.3,0, 'spiral'],[1.0,4.0,0.1, 'slit'],[1.9,3.2,0.3, 'shade'],[0.4,3.0,-0.8, 'dot']].forEach(function(e,k){
+    var st=new THREE.Group(); st.position.set(e[0]*0.35,1.4,e[2]*0.5); body.add(st);
+    var c=new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(e[0]*0.25,(e[1]-1.4)*0.4,0), new THREE.Vector3(e[0]*0.7,(e[1]-1.4)*0.75,e[2]*0.3), new THREE.Vector3(e[0]*0.65,e[1]-1.4,e[2]*0.5)]);
+    st.add(new THREE.Mesh(new THREE.TubeGeometry(c, 12, 0.13, 6), skin));
+    var eye=new THREE.Group(); eye.position.set(e[0]*0.65,e[1]-1.4+0.45,e[2]*0.5); st.add(eye);
+    if(e[3]==='veins') eye.add(new THREE.Mesh(new THREE.SphereGeometry(0.5,20,14), new THREE.MeshStandardMaterial({map:eyeballTex, roughness:0.2})));
+    else part3(monSphere, white, eye, 0,0,0, 0,0,0, 0.5,0.55,0.45);
+    if(e[3]==='star'||e[3]==='dot') part3(monSphere, ink, eye, 0,0,0.43, 0,0,0, 0.1);
+    if(e[3]==='star') for(var r=0;r<5;r++) part3(new THREE.BoxGeometry(0.03,0.42,0.02), ink, eye, Math.cos(r*1.26)*0.2,Math.sin(r*1.26)*0.2,0.44, 0,0,r*1.26+PI/2);
+    if(e[3]==='spiral') for(r=1;r<4;r++){ var tr=new THREE.Mesh(new THREE.TorusGeometry(r*0.11,0.018,4,20), ink); tr.position.z=0.43-r*0.02; eye.add(tr); }
+    if(e[3]==='slit') part3(new THREE.BoxGeometry(0.34,0.12,0.06), ink, eye, 0,0.05,0.44);
+    if(e[3]==='shade') part3(new THREE.SphereGeometry(1,16,8,0,TAU,PI*0.55,PI*0.45), ink, eye, 0,0,0.02, 0,0,0, 0.51,0.56,0.46);
+    stalks.push({g:st, eye:eye, ph:k*1.1});
+  });
+  // Two big round feet on short necks, three claws each.
+  for(var sd=-1;sd<=1;sd+=2){
+    part3(new THREE.CylinderGeometry(0.35,0.45,1.4,10), skin, body, sd*0.8,-2.0,0);
+    part3(monSphere, skin, body, sd*1.2,-3.4,0.1, 0,0,0, 1.1,1.25,1.0);
+    for(i=0;i<3;i++) part3(monCone, white, body, sd*1.2+(i-1)*0.55,-4.7,0.5, PI+0.2,0,(i-1)*0.15, 0.13,0.65,0.13);
+  }
+  return {kind:'gobbler', g:g, body:body, teeth:teeth, stalks:stalks, name:'Gobbler', emoji:'👄',
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:2.8, hover:6, sinkDepth:10, reward:20, hpMax:6};
+})();
+
+// The Roller: one big eye in a spiky red sun, a huge flame crest, curly arms, a springy nose,
+// a fringe skirt and long black legs on roller-skate wheels. It only rolls along the seabed.
+var roller=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
+  var pale=new THREE.MeshStandardMaterial({color:col('#fff1ea'), roughness:0.55});
+  var red=redInk, black=new THREE.MeshStandardMaterial({color:col('#17181c'), roughness:0.5});
+  var white=new THREE.MeshStandardMaterial({color:col('#fbfaf6'), roughness:0.25});
+  // Head: a round face ringed by red spikes, one tall eye in the middle.
+  part3(new THREE.CylinderGeometry(1.5,1.5,0.6,24), pale, body, 0,1.6,0, PI/2,0,0);
+  for(var i=0;i<18;i++){ var a=i/18*TAU; part3(monCone, red, body, Math.cos(a)*1.65,1.6+Math.sin(a)*1.65,0, 0,0,a-PI/2, 0.16,0.45,0.1); }
+  part3(monSphere, white, body, 0,1.6,0.3, 0,0,0, 0.8,1.15,0.5);
+  var iris=new THREE.Mesh(new THREE.TorusGeometry(0.28,0.04,6,20), red); iris.position.set(0,1.55,0.78); iris.scale.set(0.8,1.25,1); body.add(iris);
+  part3(monSphere, black, body, 0,1.5,0.78, 0,0,0, 0.09,0.12,0.05);
+  // The flame crest: big red licks fanning up and out.
+  var crest=new THREE.Group(); crest.position.y=2.8; body.add(crest);
+  for(i=0;i<7;i++){ var t=(i/6-0.5)*2.4; part3(monCone, red, crest, Math.sin(t)*1.2, 1.1+Math.cos(t)*0.5, -0.2, 0,0,-t*0.75, 0.32,2.4,0.1); }
+  // Curly arms.
+  for(var sd=-1;sd<=1;sd+=2){
+    var pts=[new THREE.Vector3(sd*1.2,0.6,0), new THREE.Vector3(sd*2.4,0.9,0), new THREE.Vector3(sd*3.4,0.3,0.1)];
+    for(var k=0;k<=8;k++){ var an=k/8*TAU*0.9, rad=0.7*(1-k/10); pts.push(new THREE.Vector3(sd*(3.6+Math.cos(an+PI)*rad*-1), -0.4+Math.sin(an+PI)*rad, 0.1)); }
+    body.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.1, 6), red));
+  }
+  // Lower face: a springy coil nose, a mouth and a red fringe skirt.
+  part3(monSphere, pale, body, 0,-0.3,0.1, 0,0,0, 0.95,0.8,0.7);
+  var nose=new THREE.Group(); nose.position.set(0,-0.15,0.75); body.add(nose);
+  for(i=0;i<5;i++){ var c=new THREE.Mesh(new THREE.TorusGeometry(0.13,0.03,5,12), red); c.position.z=i*0.08; nose.add(c); }
+  part3(new THREE.BoxGeometry(0.4,0.04,0.04), red, body, 0,-0.62,0.74);
+  for(i=0;i<9;i++) part3(monCone, red, body, -0.64+i*0.16,-1.25,0.25, PI,0,0, 0.07,0.75,0.07);
+  // Legs on wheels.
+  var wheels=[];
+  var wg=new THREE.CylinderGeometry(0.28,0.28,0.18,16); wg.rotateZ(PI/2);
+  for(sd=-1;sd<=1;sd+=2){
+    var lc=new THREE.CatmullRomCurve3([new THREE.Vector3(sd*0.6,-0.9,0), new THREE.Vector3(sd*1.1,-2.0,0.1), new THREE.Vector3(sd*0.8,-3.3,0), new THREE.Vector3(sd*1.0,-3.8,0.3)]);
+    body.add(new THREE.Mesh(new THREE.TubeGeometry(lc, 12, 0.16, 8), black));
+    part3(new THREE.BoxGeometry(0.4,0.12,1.4), black, body, sd*1.0,-3.95,0.15);
+    for(i=0;i<3;i++){
+      var w=new THREE.Group(); w.position.set(sd*1.0,-4.25,-0.35+i*0.5); body.add(w);
+      w.add(new THREE.Mesh(wg, white));
+      part3(new THREE.CylinderGeometry(0.1,0.1,0.2,8), black, w, 0,0,0, 0,0,PI/2);
+      wheels.push(w);
+    }
+  }
+  // Dizzy stars, for when it misses a jump.
+  var stars=new THREE.Group(); stars.position.y=4.6; stars.visible=false; body.add(stars);
+  for(i=0;i<3;i++){ var s=new THREE.Sprite(new THREE.SpriteMaterial({map:sparkTex, color:0xffe23d, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false})); s.scale.setScalar(0.8); stars.add(s); }
+  return {kind:'roller', g:g, body:body, crest:crest, nose:nose, wheels:wheels, stars:stars, name:'Roller', emoji:'🛼',
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:2.8, hover:5.3, sinkDepth:9, reward:20, hpMax:6};
+})();
+
+// The Kissy Lips: a giant pair of red lips with one little eye on a stalk and three branching legs.
+// Its kiss holds on and drains your hearts until you wriggle free.
+var lips=(function(){
+  var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
+  var red=new THREE.MeshStandardMaterial({color:col('#e0302e'), roughness:0.35});
+  var dark=new THREE.MeshStandardMaterial({color:col('#5a0e14'), roughness:0.6});
+  var white=new THREE.MeshStandardMaterial({color:col('#fbfaf6'), roughness:0.25});
+  var lipG=new THREE.Group(); body.add(lipG);
+  part3(new THREE.SphereGeometry(1,32,14,0,TAU,0,PI/2), red, lipG, 0,0.05,0, 0,0,0, 3.4,1.5,1.5);
+  part3(new THREE.SphereGeometry(1,32,14,0,TAU,PI/2,PI/2), red, lipG, 0,-0.05,0, 0,0,0, 3.4,1.1,1.4);
+  part3(monSphere, dark, lipG, 0,0,0, 0,0,0, 3.3,0.07,1.45);
+  // Little lip lines along the seam.
+  for(var i=0;i<24;i++){
+    var x=-2.9+i*0.25, z=1.48*Math.sqrt(Math.max(0,1-(x/3.4)*(x/3.4)))+0.01;
+    part3(new THREE.BoxGeometry(0.03,0.28,0.03), dark, lipG, x,(i%2?0.22:-0.2),z, 0,0,rr(-0.3,0.3));
+  }
+  // One little eye on a stalk.
+  var eye=new THREE.Group(); eye.position.set(0,1.5,0); body.add(eye);
+  part3(new THREE.CylinderGeometry(0.08,0.1,1.1,8), red, eye, 0,0.55,0);
+  part3(monSphere, white, eye, 0,1.35,0, 0,0,0, 0.38);
+  part3(monSphere, dark, eye, 0,1.37,0.35, 0,0,0, 0.07);
+  // Three legs that branch like little arrows.
+  var legs=[], stick=new THREE.CylinderGeometry(0.05,0.05,1,5); stick.translate(0,-0.5,0);
+  [-0.7,0,0.7].forEach(function(x,k){
+    var L=new THREE.Group(); L.position.set(x,-1.0,0); L.rotation.z=-x*0.15; body.add(L);
+    part3(stick, red, L, 0,0,0, 0,0,0, 1,4.2,1);
+    [1.4,2.6,3.6].forEach(function(y,j){ for(var sd=-1;sd<=1;sd+=2) part3(stick, red, L, 0,-y,0, 0,0,sd*0.55, 1,0.55-j*0.1,1); });
+    legs.push(L);
+  });
+  return {kind:'lips', g:g, body:body, lipG:lipG, eye:eye, legs:legs, name:'Kissy Lips', emoji:'💋', turn:0.7,
+    pos:new THREE.Vector3(), center:new THREE.Vector3(), vel:new THREE.Vector3(), netR:3.2, hover:7, sinkDepth:8, reward:20, hpMax:6};
+})();
+
 // THE MEGA MONSTER: every monster stuck together. A scribble ball body with the giant eyeball for a face,
 // the Eye Walker's laser eye and legs, the Genie's flame hair and freezing hands, the Squid's horns
-// and tentacles, a Spike Serpent for a tail and the Printer Monster's printer on its shoulder.
+// and tentacles, a Spike Serpent for a tail, the Printer Monster's printer on its shoulder, the Gobbler's
+// eye stalks, the Kissy Lips and the Roller's wheels.
 var MEGA_N=24;
 var mega=(function(){
   var g=new THREE.Group(), body=new THREE.Group(); g.add(body); g.visible=false; sea.add(g);
@@ -1848,9 +1975,20 @@ var mega=(function(){
       hip.add(new THREE.Mesh(upperG, skin));
       var knee=new THREE.Group(); knee.position.x=2.4; knee.rotation.z=-0.2; hip.add(knee);
       knee.add(new THREE.Mesh(lowerG, skin));
+      // The Roller's wheels on its feet.
+      for(var w=0;w<2;w++) part3(new THREE.CylinderGeometry(0.45,0.45,0.25,16), white, knee, 0,-4.3,-0.4+w*0.8, 0,0,PI/2);
       legs.push({hip:hip, ph:L[1]});
     });
   }
+  // The Kissy Lips round its mouth, and the Gobbler's eyes on stalks.
+  var lipRed=new THREE.MeshStandardMaterial({color:col('#e0302e'), roughness:0.35});
+  part3(new THREE.SphereGeometry(1,24,10,0,TAU,0,PI/2), lipRed, body, 0,-1.75,2.4, 0,0,0, 1.5,0.55,0.6);
+  part3(new THREE.SphereGeometry(1,24,10,0,TAU,PI/2,PI/2), lipRed, body, 0,-2.05,2.4, 0,0,0, 1.5,0.45,0.55);
+  [[-2.2,3.8],[2.6,3.4],[-1.4,4.6]].forEach(function(e){
+    var c=new THREE.CatmullRomCurve3([new THREE.Vector3(e[0]*0.4,2.2,0), new THREE.Vector3(e[0]*0.8,e[1]-0.6,0.3), new THREE.Vector3(e[0],e[1],0.6)]);
+    body.add(new THREE.Mesh(new THREE.TubeGeometry(c, 10, 0.16, 6), lavender));
+    part3(monSphere, white, body, e[0],e[1]+0.4,0.7, 0,0,0, 0.5); part3(monSphere, ink, body, e[0],e[1]+0.42,1.15, 0,0,0, 0.13);
+  });
   var tents=[tentacle(body,-0.9,-2.6,0.6, 12,0.55,0.3,-1), tentacle(body,0,-2.9,0.8, 13,0.55,0.3,1), tentacle(body,0.9,-2.6,0.6, 12,0.55,0.3,1)];
   var parm=printerArm(body, 2.2,2.0,-0.4, 1.3);
   // The Spike Serpent tail.
@@ -2973,7 +3111,7 @@ function updateAnglers(dt,t){
   });
 }
 /* Monsters come out every once in a while when you're away from home. */
-var MON={timer:rr(40,70), order:['serpent','walker','genie','muncher','squid','printer'], idx:0, count:0, cur:null};
+var MON={timer:rr(40,70), order:['serpent','walker','genie','muncher','squid','printer','gobbler','roller','lips'], idx:0, count:0, cur:null};
 (function(){ for(var i=MON.order.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)), k=MON.order[i]; MON.order[i]=MON.order[j]; MON.order[j]=k; } })();
 var _eyeW=new THREE.Vector3(), _aim=new THREE.Vector3(), _ld=new THREE.Vector3();
 function inDark(){ return player.zone==='trench' || depthLight(player.pos.y)<0.6; }
@@ -3002,13 +3140,16 @@ function spawnMonster(){
     m.laser='idle'; m.lt=2.5; m.life=55;
     showMsg('👁️ An EYE WALKER is climbing out of the sand!<br><span style="font-size:17px">Its top eye shoots lasers — but it is very slow!</span>',3.5);
   }else{
-    m={genie:genie, muncher:muncher, squid:squid, printer:printer, mega:mega}[kind];
+    m={genie:genie, muncher:muncher, squid:squid, printer:printer, gobbler:gobbler, roller:roller, lips:lips, mega:mega}[kind];
     spawnFloater(m, x, fl, z);
     if(m.tailG) m.tailG.visible=true;
     showMsg({
       genie:'🧞 A FREEZE GENIE is rising out of the sand!<br><span style="font-size:17px">He shoots water out of his hands that freezes you — keep moving!</span>',
       muncher:'🌀 A SCRIBBLE MUNCHER is coming!<br><span style="font-size:17px">It eats dolphins and grows bigger — protect your friends!</span>',
       squid:'🦑 An EYEBALL SQUID is floating up!<br><span style="font-size:17px">Its stare pulls you in — swim away when it blinks!</span>',
+      gobbler:'👄 A GOBBLER is zooming up!<br><span style="font-size:17px">It\'s very, very fast and sucks you in — but it\'s scared of the dark, and sharks bite it!</span>',
+      roller:'🛼 A ROLLER is rolling in!<br><span style="font-size:17px">It zooms along the sand and springs up at you — dodge, and it gets dizzy!</span>',
+      lips:'💋 The KISSY LIPS are coming!<br><span style="font-size:17px">Its kiss drains your hearts — it turns slowly, so stay behind it!</span>',
       printer:'🖨️ A PRINTER MONSTER is coming!<br><span style="font-size:17px">What it prints becomes real — sharks and tornadoes! Net it while it\'s busy printing.</span>',
       mega:'👹 THE MEGA MONSTER IS RISING!<br><span style="font-size:17px">Every monster\'s power in one — but it\'s slow and it hates the dark!</span>'
     }[kind], 4);
@@ -3310,6 +3451,7 @@ function eatDolphin(m, d){
 }
 function spawnFloater(m, x, fl, z){
   m.pos.set(x, fl-m.sinkDepth*0.6, z); m.vel.set(0,0,0); m.size=1; m.backT=0; m.atkT=2.5; m.darkT=0; m.darkSaid=false;
+  m.kiss=0; m.kissCD=0; m.suck=false; m.fleeT=0; m.biteCD=0; m.bites=0; m.air=false; m.vy=0; m.dizzy=0; m.jumpT=1;
   m.yaw=Math.atan2(player.pos.x-x, player.pos.z-z); m.life=m.kind==='mega'?80:50;
   if(m.trail){ for(var i=0;i<m.trail.length;i++) m.trail[i].set(x, m.pos.y-i*SERP_PT, z); m.laser='idle'; m.lt=2; m.attack=0; }
 }
@@ -3319,7 +3461,7 @@ function updateFloater(m, dt, t, hunting){
   m.t+=dt;
   var toP=_d.copy(player.pos).sub(m.pos), dist=toP.length(), fl=heightAt(m.pos.x,m.pos.z), want=_v2.set(0,0,0);
   if(m.netT>0){
-    m.netT-=dt; m.vel.multiplyScalar(0.9);
+    m.netT-=dt; m.vel.multiplyScalar(0.9); m.kiss=0; m.suck=false;
     if(m.palmMat) m.palmMat.emissive.setRGB(0.18,0.62,0.82);
     poseFloater(m, dt, t, true, hunting, dist);
     showNet(m, m.center, m.netR*m.size*1.15, t);
@@ -3335,6 +3477,7 @@ function updateFloater(m, dt, t, hunting){
     if(!hunting) m.life=Math.min(m.life,0.5);
     if(m.job) tickPrint(m, dt, t);
     var speed=brain(m, dt, t, hunting, toP, dist, want);
+    if(MON.cur!==m) return;
     if(m.backT>0){ m.backT-=dt; want.copy(toP).normalize().multiplyScalar(-5); want.y+=1.5; }
     else want.clampLength(0, speed);
     if(m.life<=0 && m.laser!=='fire'){ m.state='sink'; m.t=0; stareBeam.visible=false; }
@@ -3347,14 +3490,15 @@ function updateFloater(m, dt, t, hunting){
   m.pos.addScaledVector(m.vel, dt);
   if(m.state==='hunt'){
     var lo=fl+m.hover*0.6*m.size;
-    if(m.pos.y<lo) m.pos.y=lerp(m.pos.y, lo, Math.min(1,dt*3));
+    if(m.pos.y<lo && m.kind!=='roller') m.pos.y=lerp(m.pos.y, lo, Math.min(1,dt*3));
     if(m.pos.y>SURF-3*m.size) m.pos.y=SURF-3*m.size;
     m.pos.x=clamp(m.pos.x,-HALF+14,HALF-14); m.pos.z=clamp(m.pos.z,-HALF+14,HALF-14);
     if(nearHouse(m.pos.x,m.pos.z,24)){ _v.set(m.pos.x-HOUSE.x,0,m.pos.z-HOUSE.z).normalize(); m.pos.addScaledVector(_v, 6*dt); }
   }
   // Face whatever it's after.
   var face=m.prey?m.prey.pos:player.pos;
-  m.yaw+=clamp(angDiff(m.yaw, Math.atan2(face.x-m.pos.x, face.z-m.pos.z)), -1.5*dt, 1.5*dt);
+  var turn=(m.turn||1.5)*dt;
+  m.yaw+=clamp(angDiff(m.yaw, Math.atan2(face.x-m.pos.x, face.z-m.pos.z)), -turn, turn);
   poseFloater(m, dt, t, false, hunting, dist);
 }
 // Each monster's own powers. Returns how fast it may swim and fills in `want`, the velocity it would like.
@@ -3383,6 +3527,97 @@ function brain(m, dt, t, hunting, toP, dist, want){
     want.copy(toP).normalize().multiplyScalar(4.8);
     if(hunting && dist<1.7*m.size+0.4 && hurt(1, m.pos, 9)) m.backT=1.8;
     return 4.8;
+  }
+  if(m.kind==='gobbler'){
+    // Its weakness: the dark. Down in the trench it gives up.
+    if(dark && hunting){
+      m.darkT+=dt;
+      if(!m.darkSaid){ m.darkSaid=true; showMsg('🌑 The Gobbler is scared of the dark!<br><span style="font-size:17px">It won\'t follow you down here.</span>',2.8); }
+      if(m.darkT>4) m.life=0;
+      want.copy(toP).normalize().multiplyScalar(-8); want.y=3;
+      m.suck=false; return 12;
+    }
+    // Its other weakness: shark bites. Sharks go for it, and every bite sends it zooming off.
+    m.biteCD-=dt;
+    for(var i=0;i<sharks.length;i++){
+      var s=sharks[i]; if(s.dead || s.netT>0) continue;
+      var sd=s.pos.distanceTo(m.pos);
+      if(sd<30 && s.state==='patrol') s.wp.copy(m.pos);
+      if(sd<3.2*m.size && m.biteCD<=0){
+        m.biteCD=1.5; m.fleeT=2.5; m.hp=(m.hp===undefined?m.hpMax:m.hp)-1; m.bites=(m.bites||0)+1; m.suck=false;
+        for(var b=0;b<14;b++) emitBubble(m.pos.x,m.pos.y,m.pos.z,1.5);
+        sfx.chomp(); showMsg('🦈 CHOMP! A shark bit the Gobbler!<br><span style="font-size:17px">Sharks are its weakness — lead it to them!</span>',2.4);
+        if(m.hp<=0){ defeat({o:m, kind:'monster', c:m.center}); return 0; }
+        if(m.bites>=3) m.life=0;
+        m.fleeFrom=s.pos;
+      }
+    }
+    if(m.fleeT>0){ m.fleeT-=dt; want.copy(m.pos).sub(m.fleeFrom).normalize().multiplyScalar(13); want.y+=1; return 13; }
+    // Its power: very, very fast — it zooms close, then sucks you into its mouth.
+    m.atkT-=dt;
+    if(m.atkT<=0){ m.suck=!m.suck; m.atkT=m.suck?3:2.2; }
+    if(m.suck && hunting && dist<20){
+      want.copy(toP).normalize().multiplyScalar((dist-6)*0.6); want.y+=(player.pos.y-m.pos.y)*0.5;
+      m.body.localToWorld(_c.set(0,-0.2,2.2));
+      _v.copy(_c).sub(player.pos); var md=_v.length();
+      player.vel.addScaledVector(_v, 22*dt/Math.max(md,0.1));
+      if(rnd()<0.7){ _v.copy(player.pos).lerp(_c, rnd()); emitBubble(_v.x,_v.y,_v.z,0.4); }
+      if(md<2.4 && hurt(1, _c, 14)){
+        showMsg('😱 GULP! The Gobbler ate you — and spat you out!',2);
+        sfx.chomp(); m.suck=false; m.atkT=2.5; m.backT=1.2;
+      }
+      return 4;
+    }
+    m.suck=false;
+    want.copy(toP).normalize().multiplyScalar(dist>8?14:(dist-7)); want.y+=(player.pos.y-m.pos.y)*0.6;
+    return 14;
+  }
+  if(m.kind==='roller'){
+    // Rolls along the seabed on its wheels and springs up with its coily nose.
+    var fl=heightAt(m.pos.x,m.pos.z), gy=fl+m.hover*m.size;
+    m.jumpT-=dt;
+    var flat=Math.sqrt(toP.x*toP.x+toP.z*toP.z);
+    if(m.dizzy>0){
+      m.dizzy-=dt; want.set(0,0,0);
+    }else{
+      want.set(toP.x,0,toP.z).normalize().multiplyScalar(m.air?7:10);
+      if(!m.air && hunting && flat<9 && m.jumpT<=0 && player.pos.y>gy-2){ m.air=true; m.vy=clamp((player.pos.y-gy)*1.4+8, 8, 18); m.hit=false; sfx.boing(); }
+    }
+    if(m.air){
+      m.vy-=18*dt; m.pos.y+=m.vy*dt;
+      if(m.pos.y<=gy && m.vy<0){
+        m.pos.y=gy; m.air=false; m.jumpT=2.2;
+        // Its weakness: when it misses, it lands in a heap and gets dizzy.
+        if(!m.hit){ m.dizzy=3; if(!m.dizzySaid){ m.dizzySaid=true; showMsg('💫 It missed and got dizzy!<br><span style="font-size:17px">Quick — net it!</span>',2.2); } }
+        for(var q=0;q<10;q++) emitBubble(m.pos.x+rr(-1.5,1.5), fl+0.3, m.pos.z+rr(-1.5,1.5), 0.5);
+      }
+    }else m.pos.y=lerp(m.pos.y, gy, Math.min(1,dt*8));
+    if(hunting && dist<2.4*m.size+0.4 && hurt(1, m.pos, 10)){ m.hit=true; m.backT=m.air?0:1; }
+    return m.air?7:10;
+  }
+  if(m.kind==='lips'){
+    // It turns slowly and can only kiss what's right in front of it.
+    m.kissCD-=dt;
+    if(m.kiss>0){
+      m.kiss-=dt; m.drainT-=dt;
+      m.body.localToWorld(_c.set(0,0,2.1));
+      player.pos.lerp(_c, Math.min(1,dt*6));
+      m.struggle+=player.vel.length()*dt*0.08;
+      if(m.drainT<=0){ m.drainT=1.6; player.inv=0; if(hurt(1, _c, 0.1)){ floater('💋', player.pos); sfx.kiss(); } }
+      if(m.struggle>1 || m.kiss<=0 || !hunting){
+        m.kiss=0; m.backT=2; player.vel.addScaledVector(toP.normalize(), 8);
+        if(hunting) showMsg('You broke free! 💨',1.4);
+      }
+      want.set(0,0,0); return 0;
+    }
+    want.copy(toP).normalize().multiplyScalar(dist>4?5.5:2); want.y+=(player.pos.y-m.pos.y)*0.6;
+    var front=(toP.x*Math.sin(m.yaw)+toP.z*Math.cos(m.yaw))/Math.max(dist,0.1);
+    m.pucker=lerp(m.pucker||0, dist<12 && front>0.5?1:0, Math.min(1,dt*3));
+    if(hunting && dist<3.4*m.size && front>0.6 && m.kissCD<=0 && player.inv<=0 && state==='play'){
+      m.kiss=4; m.drainT=0.3; m.struggle=0; m.kissCD=5; sfx.kiss();
+      showMsg('💋 SMOOCH! The Kissy Lips grabbed you!<br><span style="font-size:17px">Swim hard to break free!</span>',2.4);
+    }
+    return 5.5;
   }
   if(m.kind==='printer'){
     // Stands still while it prints, which is the best time to net it.
@@ -3440,7 +3675,7 @@ function poseFloater(m, dt, t, tangled, hunting, dist){
   var shake=tangled?Math.sin(t*14)*0.15:0;
   m.g.position.copy(m.pos);
   m.g.rotation.set(0, m.yaw, shake);
-  var base={genie:1.6, muncher:1.35, squid:1.3, printer:1.3, mega:1.25}[m.kind];
+  var base={genie:1.6, muncher:1.35, squid:1.3, printer:1.3, gobbler:1.3, roller:1.2, lips:1.2, mega:1.25}[m.kind];
   m.g.scale.setScalar(base*m.size);
   m.center.copy(m.pos);
   if(m.kind==='genie'){
@@ -3454,6 +3689,27 @@ function poseFloater(m, dt, t, tangled, hunting, dist){
     m.mouth.scale.y=1+Math.max(0,Math.sin(t*(m.prey?12:4)))*0.6;
     m.limbs.forEach(function(L,i){ L.rotation.x=Math.sin(t*(tangled?12:5)+i*1.7)*0.35; });
     m.body.position.y=Math.abs(Math.sin(t*3))*0.25;
+  }else if(m.kind==='gobbler'){
+    m.stalks.forEach(function(S){ S.g.rotation.z=Math.sin(t*2+S.ph)*0.15; S.g.rotation.x=Math.cos(t*1.7+S.ph)*0.12; S.eye.lookAt(player.pos); });
+    m.teeth.scale.y=m.suck?1.3:1+Math.max(0,Math.sin(t*5))*0.3;
+    m.body.position.y=Math.sin(t*2)*0.2;
+    m.body.rotation.x=lerp(m.body.rotation.x, clamp(m.vel.length()*0.02,0,0.3), Math.min(1,dt*3));
+  }else if(m.kind==='roller'){
+    var sp=m.vel.length();
+    m.wheels.forEach(function(w){ w.rotation.x+=dt*sp*3.5; });
+    m.body.rotation.x=lerp(m.body.rotation.x, m.dizzy>0?Math.sin(t*6)*0.25:clamp(sp*0.03,0,0.3), Math.min(1,dt*4));
+    m.body.rotation.z=m.dizzy>0?Math.sin(t*5)*0.2:0;
+    m.crest.children.forEach(function(c,i){ c.rotation.x=Math.sin(t*4+i)*0.12; });
+    m.nose.scale.z=m.air?2.2:1+Math.sin(t*8)*0.15;
+    m.stars.visible=m.dizzy>0 || tangled;
+    m.stars.rotation.y+=dt*4;
+    m.stars.children.forEach(function(s,i){ var a=i/3*TAU; s.position.set(Math.cos(a)*1.2,0,Math.sin(a)*1.2); });
+  }else if(m.kind==='lips'){
+    var p=m.kiss>0?1:(m.pucker||0), sm=m.kiss>0?Math.sin(t*14)*0.06:0;
+    m.lipG.scale.set(1-0.35*p+sm, 1+0.1*p, 1+0.5*p);
+    m.eye.rotation.z=Math.sin(t*1.8)*0.15;
+    m.legs.forEach(function(L,i){ L.rotation.x=Math.sin(t*2.5+i*1.4)*0.25; });
+    m.body.position.y=Math.sin(t*1.4)*0.25;
   }else if(m.kind==='printer'){
     m.body.position.y=Math.sin(t*1.5)*0.2;
     m.teeth.scale.y=1+Math.max(0,Math.sin(t*(m.job?3:6)))*0.5;
