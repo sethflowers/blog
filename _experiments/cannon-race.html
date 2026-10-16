@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "2.2"
+version: "3.0"
 layout: null
 ---
 {% raw %}
@@ -122,6 +122,38 @@ layout: null
   .stat{font-size:17px;font-weight:700;line-height:1.5;text-shadow:0 1px 0 rgba(0,0,0,.4);}
   .stat b{color:var(--sun);}
   .keys{font-size:13px !important;opacity:.85;}
+  /* ---------- coins and shop ---------- */
+  .coins{display:inline-flex;align-items:center;gap:6px;font-weight:900;font-size:16px;text-shadow:0 2px 0 rgba(0,0,0,.35);}
+  .coins::before,.coin-ic::before{content:"";width:15px;height:15px;border-radius:50%;flex:none;
+    background:radial-gradient(circle at 35% 30%,#fff3b0,#ffc93c 45%,#c98a00);border:2px solid #8a5d00;}
+  .coins.big{font-size:22px;}
+  .coins.big::before{width:20px;height:20px;}
+  .coin-ic{display:inline-flex;vertical-align:-3px;margin-right:4px;}
+  .row2{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;}
+  .go.shopGo{background:#2fb37a;}
+  .pop.coin{background:var(--sun);color:#5a3c00;font-size:14px;padding:3px 8px;}
+  #shop{background:transparent;align-items:flex-end;justify-content:center;padding:0;}
+  .shopPanel{width:min(560px,100%);height:100%;background:rgba(29,36,51,.88);display:flex;flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 12px) calc(env(safe-area-inset-right) + 14px) calc(env(safe-area-inset-bottom) + 12px) 14px;}
+  @media (max-aspect-ratio: 1/1){ .shopPanel{height:62%;border-radius:22px 22px 0 0;} }
+  .shopHead{display:flex;align-items:center;gap:12px;}
+  .shopHead b{font-size:28px;font-weight:900;color:var(--sun);text-shadow:0 3px 0 var(--red);}
+  .shopHead .coins{margin-left:auto;}
+  .shopHead .go{min-width:0;padding:6px 18px;font-size:16px;border-width:3px;}
+  #shopTabs{display:flex;gap:6px;margin:12px 0 10px;flex-wrap:wrap;}
+  .tab{background:rgba(255,255,255,.12);border-radius:14px;padding:6px 12px;font-weight:800;font-size:14px;}
+  .tab.on{background:var(--cream);color:var(--ink);}
+  #shopItems{overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding-bottom:6px;}
+  .item{background:rgba(255,248,230,.96);color:var(--ink);border-radius:14px;padding:9px;text-align:left;display:flex;flex-direction:column;gap:4px;}
+  .item .nm{font-weight:900;font-size:15px;display:flex;align-items:center;gap:7px;}
+  .item .sw{width:18px;height:18px;border-radius:50%;border:2px solid rgba(0,0,0,.25);flex:none;}
+  .item .ds{font-size:12px;opacity:.75;line-height:1.3;}
+  .item .pips{letter-spacing:2px;color:#2fb37a;font-size:13px;}
+  .item button + button{margin-top:4px;}
+  .item button{margin-top:auto;border-radius:10px;padding:6px;font-weight:900;font-size:14px;background:var(--red);color:#fff;}
+  .item button.own{background:#3d8bff;}
+  .item button.on,.item button.max{background:#9aa;cursor:default;}
+  .item button.poor{background:#c9c2b0;color:#6a6458;}
   #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:30;transition:opacity .3s;}
   #fade.on{opacity:1;}
 </style>
@@ -141,6 +173,7 @@ layout: null
       <div class="row"><div id="timer">0:00.0</div><button id="pauseBtn" aria-label="Pause">II</button></div>
       <div id="best"></div>
       <div id="shots"></div>
+      <div class="coins" id="coinHud"></div>
     </div>
   </div>
   <div id="speed"></div>
@@ -161,7 +194,11 @@ layout: null
   <h1>CANNON RACE<span>you are the cannonball</span></h1>
   <p>Climb into the cannon and fire yourself at wobbly towers full of people. Knock every one of them down,
   in as few shots and as little time as you can.</p>
-  <button class="go" id="playBtn">PLAY</button>
+  <div class="row2">
+    <button class="go" id="playBtn">PLAY</button>
+    <button class="go shopGo" id="shopBtn">SHOP</button>
+  </div>
+  <div class="coins big" id="titleCoins"></div>
   <div id="levels"></div>
   <p class="keys">Drag (or arrow keys) to aim · hold FIRE (or Space) to charge, let go to launch ·
   in the air, drag (or arrow keys) to glide: left and right to turn, up to climb, down to dive</p>
@@ -180,15 +217,31 @@ layout: null
   <h1>EVERYBODY DOWN!<span id="winSub"></span></h1>
   <div class="stars" id="winStars"></div>
   <div class="stat" id="winStat"></div>
+  <div class="stat" id="winCoins"></div>
   <button class="go" id="nextBtn">NEXT LEVEL</button>
   <button class="go alt" id="againBtn">TRY FOR A FASTER TIME</button>
   <button class="go alt" id="menuBtn2">ALL LEVELS</button>
+  <button class="go alt" id="shopBtn2">SHOP</button>
 </div>
 
 <div class="screen hidden" id="fail">
   <h1>OUT OF SHOTS<span id="failSub"></span></h1>
+  <div class="stat" id="failCoins"></div>
   <button class="go" id="retryBtn">TRY AGAIN</button>
   <button class="go alt" id="menuBtn3">ALL LEVELS</button>
+  <button class="go alt" id="shopBtn3">SHOP</button>
+</div>
+
+<div class="screen hidden" id="shop">
+  <div class="shopPanel">
+    <div class="shopHead">
+      <b>SHOP</b>
+      <div class="coins big" id="shopCoins"></div>
+      <button class="go" id="shopDone">DONE</button>
+    </div>
+    <div id="shopTabs"></div>
+    <div id="shopItems"></div>
+  </div>
 </div>
 
 <div id="fade"></div>
@@ -214,7 +267,62 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const SAVE_KEY = 'cannon-race';
 let save = { levels: {}, muted: false };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.levels) save = s; } catch (e) {}
+// coins, upgrade levels, what you own and what you are wearing (added in 3.0)
+save.coins = save.coins || 0;
+save.up = Object.assign({ power: 0, wings: 0, helmet: 0, shots: 0, magnet: 0, head: 0, arms: 0 }, save.up);
+save.owned = Object.assign({ outfit: ['red'], hat: ['cap', 'none'], trail: ['none'], cannon: ['black'] }, save.owned);
+save.eq = Object.assign({ outfit: 'red', hat: 'cap', trail: 'none', cannon: 'black', head: 0, arms: 0 }, save.eq);
 function writeSave(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+
+/* ================= shop ================= */
+const UPGRADES = [
+  { id: 'power',  name: 'Bigger Cannon', desc: 'Launch faster and farther.', costs: [60, 120, 200] },
+  { id: 'wings',  name: 'Wing Suit',     desc: 'Glide longer and turn sharper.', costs: [80, 150, 250] },
+  { id: 'helmet', name: 'Hard Head',     desc: 'Smash through blocks more easily.', costs: [70, 140, 220] },
+  { id: 'shots',  name: 'Extra Shot',    desc: 'One more shot on every level.', costs: [250, 500] },
+  { id: 'magnet', name: 'Coin Magnet',   desc: 'Grab coins from farther away.', costs: [100, 200] },
+  { id: 'head',   name: 'Big Head',      desc: 'A bigger head. Then a bigger one. Then a ridiculous one.', costs: [40, 80, 140, 220], sizes: true },
+  { id: 'arms',   name: 'Long Arms',     desc: 'Longer arms, all the way up to noodles.', costs: [40, 80, 140, 220], sizes: true }
+];
+// sizes you can wear once bought; the last ones are deliberately silly
+const HEAD_SIZES = [1, 1.4, 1.9, 2.6, 3.4], HEAD_NAMES = ['Normal', 'Big', 'Bigger', 'Huge', 'Ridiculous'];
+const ARM_SIZES = [1, 1.35, 1.8, 2.4, 3.2], ARM_NAMES = ['Normal', 'Long', 'Longer', 'Super long', 'Noodle'];
+const COSMETICS = {
+  outfit: [
+    { id: 'red',    name: 'Red Rocket',  cost: 0,   shirt: 0xe8483b, pants: 0x2d3a5c },
+    { id: 'blue',   name: 'Blue Streak', cost: 40,  shirt: 0x3d8bff, pants: 0x1d2433 },
+    { id: 'green',  name: 'Green Bean',  cost: 40,  shirt: 0x2fb37a, pants: 0x2d3a5c },
+    { id: 'pink',   name: 'Bubblegum',   cost: 60,  shirt: 0xff8fb1, pants: 0x8e5bd6 },
+    { id: 'ninja',  name: 'Ninja',       cost: 100, shirt: 0x222222, pants: 0x222222 },
+    { id: 'space',  name: 'Astronaut',   cost: 140, shirt: 0xf4f4f4, pants: 0xdddddd },
+    { id: 'gold',   name: 'Solid Gold',  cost: 300, shirt: 0xffc93c, pants: 0xd99b00 }
+  ],
+  hat: [
+    { id: 'cap',    name: 'Cap',         cost: 0 },
+    { id: 'none',   name: 'No Hat',      cost: 0 },
+    { id: 'party',  name: 'Party Hat',   cost: 40 },
+    { id: 'top',    name: 'Top Hat',     cost: 80 },
+    { id: 'viking', name: 'Viking',      cost: 130 },
+    { id: 'crown',  name: 'Crown',       cost: 250 }
+  ],
+  trail: [
+    { id: 'none',    name: 'No Trail',   cost: 0 },
+    { id: 'smoke',   name: 'Smoke',      cost: 50 },
+    { id: 'sparkle', name: 'Sparkles',   cost: 90 },
+    { id: 'rainbow', name: 'Rainbow',    cost: 160 }
+  ],
+  cannon: [
+    { id: 'black', name: 'Iron',         cost: 0,   color: 0x23262d },
+    { id: 'red',   name: 'Fire Red',     cost: 60,  color: 0xb3261e },
+    { id: 'pink',  name: 'Pretty Pink',  cost: 60,  color: 0xe86fa0 },
+    { id: 'blue',  name: 'Deep Blue',    cost: 60,  color: 0x1f4fa8 },
+    { id: 'gold',  name: 'Golden',       cost: 180, color: 0xd9a531 }
+  ]
+};
+const SWATCH = { cap: '#e8483b', none: '#6b3e1f', party: '#ff8fb1', top: '#1d1d1d', viking: '#9aa0a6', crown: '#ffc93c',
+  smoke: '#9aa0a6', sparkle: '#fff3b0', rainbow: 'conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)' };
+const cosmetic = (kind, id) => COSMETICS[kind].find(c => c.id === id) || COSMETICS[kind][0];
+const up = id => save.up[id] || 0;
 
 /* ================= renderer / scene ================= */
 const canvas = $('c');
@@ -351,6 +459,7 @@ scene.add(ground);
 /* ---------- the cannon ---------- */
 const PIVOT_Y = 2.3;
 const cannonG = new THREE.Group();
+const cannonMetal = new THREE.MeshPhongMaterial({ color: cosmetic('cannon', save.eq.cannon).color, shininess: 25, specular: 0x333333 });
 scene.add(cannonG);
 const pivot = new THREE.Group();
 pivot.position.set(0, PIVOT_Y, 0);
@@ -363,7 +472,7 @@ cannonG.add(yawG);
   const plat = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.2, 3.6), stoneM);
   plat.position.y = .6; plat.castShadow = plat.receiveShadow = true; cannonG.add(plat);
 
-  const metal = new THREE.MeshPhongMaterial({ color: 0x23262d, shininess: 25, specular: 0x333333 });
+  const metal = cannonMetal;
   const inside = new THREE.MeshLambertMaterial({ color: 0x15161a, side: THREE.BackSide });
   const outer = new THREE.Mesh(new THREE.CylinderGeometry(.92, 1.08, 3.4, 48, 1, true), metal);
   outer.rotation.x = Math.PI / 2; outer.position.z = -.3; outer.castShadow = true; pivot.add(outer);
@@ -616,6 +725,8 @@ const taperG = new THREE.CylinderGeometry(.17, .14, .5, 18);   // torso: shoulde
 const capG = new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI * .5);
 const smileG = new THREE.TorusGeometry(.018, .0045, 6, 12, Math.PI);
 const skirtG = new THREE.CylinderGeometry(.14, .23, .34, 18, 1, true);
+const coneG = new THREE.ConeGeometry(1, 1, 16);
+const crownG = new THREE.CylinderGeometry(.105, .1, .07, 12, 1, true);
 const SHADES = { '0xf2c89b': 0xe0b083, '0xd9a273': 0xc58d60, '0xa86b45': 0x925a37, '0x7a4a2c': 0x683d23, '0xf6d7b8': 0xe8c3a0 };
 
 function personMesh(o){
@@ -663,7 +774,9 @@ function personMesh(o){
   add(tor, sphereG, shirt, 0, .45, 0, .19, .075, .115);
   tube(tor, skin, 0, .56, .45, 0, .045, .05);
   // head
-  const head = parts.head = grp(g, 0, F + 1.63, 0);
+  const hs = o.headScale || 1, as = o.armScale || 1;
+  const head = parts.head = grp(g, 0, F + 1.52 + .11 * hs, 0);   // sits on the neck however big it is
+  head.scale.setScalar(hs);
   add(head, sphereG, skin, 0, 0, 0, .1, .118, .108);
   add(head, sphereG, skin, 0, -.05, .025, .075, .06, .08);           // jaw
   for (const s of [-1, 1]){
@@ -685,24 +798,43 @@ function personMesh(o){
     add(head, boxG, c, 0, .03, .12, .16, .012, .1).rotation.x = -.1;
   }
   if (style === 'bald' && !o.noBeard && Math.random() < .6) add(head, sphereG, hair, 0, -.06, .03, .08, .055, .085);   // beard
+  // shop hats
+  if (o.hat === 'top'){
+    const blk = mat(0x1d1d1d);
+    add(head, cylG, blk, 0, .2, -.01, .085, .2, .085);
+    add(head, cylG, blk, 0, .1, -.01, .15, .015, .15);
+    add(head, cylG, mat(0xe8483b), 0, .12, -.01, .088, .03, .088);
+  } else if (o.hat === 'party'){
+    add(head, coneG, mat(0xff8fb1), .02, .2, 0, .075, .2, .075).rotation.z = -.15;
+    add(head, sphereG, whiteM, .035, .3, 0, .03, .03, .03);
+  } else if (o.hat === 'viking'){
+    add(head, capG, mat(0x9aa0a6), 0, .02, -.005, .116, .126, .12);
+    for (const s2 of [-1, 1]) add(head, coneG, mat(0xf4ecd8), s2 * .125, .08, 0, .025, .13, .025).rotation.z = -s2 * .9;
+  } else if (o.hat === 'crown'){
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffc93c, side: THREE.DoubleSide, emissive: 0x332200 });
+    add(head, crownG, gold, 0, .13, 0, 1, 1, 1);
+    for (let i = 0; i < 6; i++){ const a = i / 6 * Math.PI * 2; add(head, coneG, gold, Math.sin(a) * .1, .19, Math.cos(a) * .1, .02, .05, .02); }
+    add(head, sphereG, mat(0xe8483b), 0, .13, .105, .018, .018, .012);
+  }
 
   // arms: shoulder groups so the arm can swing, an elbow group inside
   const arms = [];
   for (const s of [-1, 1]){
     const sh = new THREE.Group(); sh.position.set(s * .2, F + 1.4, 0); g.add(sh);
     add(sh, sphereG, shirt, 0, -.01, 0, .056, .056, .056);
-    tube(sh, shirt, 0, 0, top === 'tee' ? -.15 : -.28, 0, .056, .05);
-    if (top === 'tee') tube(sh, skin, 0, -.15, -.28, 0, .045, .042);
-    const el = new THREE.Group(); el.position.y = -.28; sh.add(el);
+    const up1 = .28 * as, lo1 = .24 * as;   // Long Arms stretch the bones, not the hands
+    tube(sh, shirt, 0, 0, top === 'tee' ? -.15 : -up1, 0, .056, .05);
+    if (top === 'tee') tube(sh, skin, 0, -.15, -up1, 0, .045, .042);
+    const el = new THREE.Group(); el.position.y = -up1; sh.add(el);
     add(el, sphereG, top === 'tee' ? skin : shirt, 0, 0, 0, .044, .044, .044);
-    tube(el, top === 'tee' ? skin : shirt, 0, 0, -.24, 0, .043, .034);
-    add(el, sphereG, skin, 0, -.29, .005, .035, .055, .025);
+    tube(el, top === 'tee' ? skin : shirt, 0, 0, -lo1, 0, .043, .034);
+    add(el, sphereG, skin, 0, -lo1 - .05, .005, .035, .055, .025);
     arms.push({ sh, el, s });
     parts['sh' + (s < 0 ? 0 : 1)] = sh; parts['el' + (s < 0 ? 0 : 1)] = el;
   }
   const base = {};
   for (const k in parts) base[k] = parts[k].position.clone();
-  g.userData = { head, arms, parts, base, phase: Math.random() * 10, panic: 0,
+  g.userData = { head, arms, parts, base, hs, as, phase: Math.random() * 10, panic: 0,
     act: pick(['wave', 'cover', 'duck', 'hop', 'spin', 'run']) };
   return g;
 }
@@ -813,10 +945,13 @@ function makeRagdoll(mesh, vel, spin, owner){
   const c = new THREE.Vector3(); P.torso.getWorldPosition(c);
   for (const name in RAG_PARTS){
     const d = RAG_PARTS[name], g = P[name];
+    // big heads and long arms get bigger bodies (and a big head is heavy)
+    const sc = name === 'head' ? mesh.userData.hs || 1 : name[0] === 's' && name[1] === 'h' || name[0] === 'e' ? mesh.userData.as || 1 : 1;
     g.getWorldPosition(rwp); g.getWorldQuaternion(rwq);
-    const b = new CANNON.Body({ mass: d.mass });
-    b.addShape(d.r ? new CANNON.Sphere(d.r) : new CANNON.Box(new CANNON.Vec3(d.half[0], d.half[1], d.half[2])));
-    roff.set(d.off[0], d.off[1], d.off[2]).applyQuaternion(rwq).add(rwp);
+    const b = new CANNON.Body({ mass: name === 'head' ? Math.min(40, d.mass * sc * sc) : d.mass });
+    b.addShape(d.r ? new CANNON.Sphere(d.r * sc) : new CANNON.Box(new CANNON.Vec3(d.half[0], d.half[1] * sc, d.half[2])));
+    const off = new THREE.Vector3(d.off[0], d.off[1] * sc, d.off[2]);
+    roff.copy(off).applyQuaternion(rwq).add(rwp);
     b.position.set(roff.x, roff.y, roff.z);
     b.quaternion.set(rwq.x, rwq.y, rwq.z, rwq.w);
     // spin about the body's middle as well as moving with it
@@ -828,7 +963,7 @@ function makeRagdoll(mesh, vel, spin, owner){
     b.sleepSpeedLimit = .3; b.sleepTimeLimit = .5;
     b.obj = owner;
     world.addBody(b);
-    rag.parts[name] = { g, b, off: new THREE.Vector3(d.off[0], d.off[1], d.off[2]) };
+    rag.parts[name] = { g, b, off };
     rag.bodies.push(b);
   }
   const wq = new CANNON.Quaternion(), ax = new CANNON.Vec3(), wv = new CANNON.Vec3();
@@ -951,6 +1086,7 @@ function buildLevel(i){
   };
   level.build(b);
   center.set(0, top * .45, oz);
+  placeCoins(i, top);
   sun.position.set(center.x + 35, 55, center.z + 30);
   sun.target.position.copy(center);
   syncMeshes();
@@ -977,7 +1113,8 @@ function wakeNear(p, r){
 
 function hitBlock(o, v, other){
   if (o.broken || v < 2) return;
-  const mult = other.heroBall ? 3 : other.isHero ? 1.5 : other.obj && other.obj.kind === 'man' ? .6 : 1;
+  const head = 1 + .3 * up('helmet');   // Hard Head
+  const mult = other.heroBall ? 3 * head : other.isHero ? 1.5 * head : other.obj && other.obj.kind === 'man' ? .6 : 1;
   const dmg = (v - 2) * mult;
   o.hp -= dmg;
   const f = clamp(o.hp / o.maxHp, 0, 1);
@@ -999,6 +1136,7 @@ function knockOut(o){
   replayEvent('oof', o.body.position);
   sfx.oof();
   popText(pick(LINES), o.body.position, 1.2);
+  earn(10, 'people', o.body.position);
   updatePeopleHud();
 }
 
@@ -1010,6 +1148,7 @@ function breakBlock(o){
   replayEvent('break', p, o.type, o.size);
   spawnDebris(p, o.type, o.size);
   sfx.crack(o.type);
+  earn(BLOCK_COINS[o.type], 'blocks', p);
   wakeNear(p, 6);
 }
 
@@ -1059,13 +1198,96 @@ function updateDebris(dt){
 }
 function clearDebris(){ for (const d of debris){ levelGroup.remove(d.m); if (d.puff) d.m.material.dispose(); } debris.length = 0; }
 
+/* ---------- coins ---------- */
+const BLOCK_COINS = { glass: 2, wood: 3, stone: 6 };
+function earn(n, kind, pos){
+  if (S.mode === 'title' || S.mode === 'shop' || !S.earned) return;
+  save.coins += n;
+  S.earned[kind] += n;
+  if (pos) popText('+' + n, pos, 1, 'coin', .5);
+  updateCoinsHud();
+}
+function updateCoinsHud(){
+  for (const id of ['coinHud', 'titleCoins', 'shopCoins']) $(id).textContent = save.coins;
+}
+// Gold coins float along the way to each structure, and one hangs above it. Fly through them.
+const coinGeo = new THREE.CylinderGeometry(.42, .42, .08, 28);
+const coinMat = new THREE.MeshPhongMaterial({ color: 0xffc93c, emissive: 0x5a3c00, shininess: 90, specular: 0xffffff });
+const coinRim = new THREE.TorusGeometry(.42, .04, 6, 28);
+const coinRimMat = new THREE.MeshPhongMaterial({ color: 0xd99b00, emissive: 0x3a2600 });
+let coins = [];
+function placeCoins(idx, top){
+  coins = [];
+  const D = LEVELS[idx].D;
+  const spots = [.35, .55, .75].map((f, i) => [Math.sin(idx * 1.7 + i * 2.1) * (1.5 + i * 1.5), 3.5 + 3 * Math.sin(f * Math.PI) + (idx % 3) * .8, -D * f]);
+  spots.push([0, top + 2.2, -D]);
+  for (const [x, y, z] of spots){
+    const g = new THREE.Group();
+    const c = new THREE.Mesh(coinGeo, coinMat); c.rotation.x = Math.PI / 2; g.add(c);
+    const r = new THREE.Mesh(coinRim, coinRimMat); g.add(r);
+    g.position.set(x, y, z);
+    g.traverse(o => { o.castShadow = true; });
+    levelGroup.add(g);
+    coins.push({ g, got: false });
+  }
+}
+// Particles left behind you while you glide, if you bought a trail.
+const trailFx = [], trailFree = [];
+let trailClock = 0;
+function emitTrail(pos, kind, t){
+  if (kind === 'none') return;
+  let m = trailFree.pop();
+  if (!m){ m = new THREE.Mesh(sphereG, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })); scene.add(m); }
+  m.visible = true;
+  const d = { m, life: 1, max: 1, v: new THREE.Vector3(rand(-.4, .4), rand(-.2, .5), rand(-.4, .4)), s0: .2, s1: .2 };
+  m.position.set(pos.x + rand(-.15, .15), pos.y + rand(-.15, .15), pos.z + rand(-.15, .15));
+  if (kind === 'smoke'){ m.geometry = sphereG; m.material.color.setHex(0xd0d4da); d.s0 = .14; d.s1 = .55; d.life = d.max = 1; d.o = .45; }
+  else if (kind === 'sparkle'){ m.geometry = boxG; m.material.color.setHex(Math.random() < .5 ? 0xfff3b0 : 0xffffff); d.s0 = .12; d.s1 = 0; d.life = d.max = .7; d.o = 1; d.v.multiplyScalar(3); d.spin = true; }
+  else { m.geometry = sphereG; m.material.color.setHSL((t * .6) % 1, 1, .6); d.s0 = .17; d.s1 = .02; d.life = d.max = .9; d.o = .95; }
+  m.material.opacity = d.o;
+  trailFx.push(d);
+}
+function updateTrailFx(dt){
+  for (let i = trailFx.length - 1; i >= 0; i--){
+    const d = trailFx[i];
+    d.life -= dt;
+    if (d.life <= 0){ d.m.visible = false; trailFree.push(d.m); trailFx.splice(i, 1); continue; }
+    const k = 1 - d.life / d.max;
+    d.m.scale.setScalar(Math.max(.001, d.s0 + (d.s1 - d.s0) * k));
+    d.m.material.opacity = d.o * (1 - k);
+    d.m.position.addScaledVector(d.v, dt);
+    if (d.spin){ d.m.rotation.x += dt * 9; d.m.rotation.y += dt * 7; }
+  }
+}
+function trailTick(dt, pos, t){
+  trailClock += dt;
+  while (trailClock > .025){ trailClock -= .025; emitTrail(pos, save.eq.trail, t); }
+}
+
+function updateCoins(dt){
+  for (const c of coins){
+    if (c.got) continue;
+    c.g.rotation.y += dt * 2.5;
+    if (playerBody && (S.mode === 'fly' || S.mode === 'settle')){
+      const r = 1.6 + 1.4 * up('magnet');   // Coin Magnet
+      const b = playerBody.position;
+      if (c.g.position.distanceToSquared(vE.set(b.x, b.y, b.z)) < r * r){
+        c.got = true; c.g.visible = false;
+        earn(5, 'found', c.g.position);
+        sfx.coin();
+      }
+    }
+  }
+}
+const vE = new THREE.Vector3();
+
 /* ---------- pop-up speech ---------- */
 const pops = [];
-function popText(text, p, life){
+function popText(text, p, life, cls, up2){
   const el = document.createElement('div');
-  el.className = 'pop'; el.textContent = text;
+  el.className = 'pop' + (cls ? ' ' + cls : ''); el.textContent = text;
   $('pops').appendChild(el);
-  pops.push({ el, p: new THREE.Vector3(p.x, p.y + 1.2, p.z), life, max: life });
+  pops.push({ el, p: new THREE.Vector3(p.x, p.y + 1.2 + (up2 || 0), p.z), life, max: life });
 }
 const tmpV = new THREE.Vector3();
 function updatePops(dt){
@@ -1089,8 +1311,12 @@ function clearPops(){ for (const q of pops) q.el.remove(); pops.length = 0; }
 // The flier: a person in a red cap and suit. Their mesh sits in a holder whose +Z is the
 // direction of travel; inside it they lie face down with their head forward, arms out like wings.
 const hero = new THREE.Group();
-const HERO_LOOK = { skin: 0xf2c89b, hair: 0x6b3e1f, shirt: 0xe8483b, pants: 0x2d3a5c, shoe: 0xf4f4f4,
-  top: 'long', bottom: 'pants', style: 'cap', cap: 0xe8483b, noBeard: true };
+function heroLook(){
+  const o = cosmetic('outfit', save.eq.outfit), hat = save.eq.hat;
+  return { skin: 0xf2c89b, hair: 0x6b3e1f, shirt: o.shirt, pants: o.pants, shoe: 0xf4f4f4,
+    top: 'long', bottom: 'pants', style: hat === 'cap' ? 'cap' : 'short', cap: o.shirt === 0xf4f4f4 ? 0x3d8bff : o.shirt,
+    hat, noBeard: true, headScale: HEAD_SIZES[save.eq.head] || 1, armScale: ARM_SIZES[save.eq.arms] || 1 };
+}
 let heroBody = null, heroRag = null;
 scene.add(hero);
 const heroDir = new THREE.Vector3(0, 0, -1);
@@ -1112,7 +1338,7 @@ function heroInBarrel(){
     hero.remove(heroBody);
     for (const k in heroBody.userData.parts){ const g = heroBody.userData.parts[k]; if (g.parent) g.parent.remove(g); }
   }
-  heroBody = personMesh(HERO_LOOK);
+  heroBody = personMesh(heroLook());
   hero.add(heroBody);
   pivot.add(hero);
   hero.position.set(0, .2, -1.5);
@@ -1210,6 +1436,8 @@ const sfx = (function(){
     oof(){ const f = rand(260, 520); tone('square', f * 1.4, f, .07, .12); tone('triangle', f * 1.2, f * .7, .12, .22, .08); },
     fanfare(){ [523, 659, 784, 1047].forEach((f, i) => tone('triangle', f, f, .22, i === 3 ? .6 : .18, i * .13)); },
     sad(){ [392, 330, 262].forEach((f, i) => tone('triangle', f, f * .97, .2, .35, i * .2)); },
+    coin(){ tone('square', 1320, 1320, .06, .08); tone('square', 1760, 1760, .06, .18, .07); },
+    buy(){ [880, 1320, 1760].forEach((f, i) => tone('triangle', f, f, .15, .14, i * .07)); },
     click(){ tone('triangle', 800, 600, .08, .06); },
     wind(speed){ if (!ctx) return; const k = clamp((speed - 4) / 40, 0, 1); windGain.gain.setTargetAtTime(k * .5, ctx.currentTime, .08); windFilter.frequency.setTargetAtTime(300 + k * 1500, ctx.currentTime, .1); }
   };
@@ -1246,8 +1474,9 @@ function barrelPose(){
   lookQuat(barrelPos, vD, barrelQuat);
 }
 
-const LAUNCH_MIN = 12, LAUNCH_MAX = 30;
-const launchSpeed = p => LAUNCH_MIN + p * (LAUNCH_MAX - LAUNCH_MIN);
+const LAUNCH_MIN = 12;
+const launchMax = () => 30 + 3 * up('power');   // Bigger Cannon
+const launchSpeed = p => LAUNCH_MIN + p * (launchMax() - LAUNCH_MIN);
 
 // Gliding: lift holds you up while you are fast enough, left/right turns, up climbs (and
 // slows you), down dives (and speeds you up). Gravity itself comes from the physics world.
@@ -1256,12 +1485,13 @@ function glide(v, dt, sx, sy){
   const sp = v.length();
   const k = clamp(sp / 18, 0, 1);
   // turn: rotate the velocity around the vertical
-  const a = -sx * .95 * dt * (.4 + .6 * k);
+  const w = up('wings');   // Wing Suit: more lift, sharper turns
+  const a = -sx * (.95 + .2 * w) * dt * (.4 + .6 * k);
   const c = Math.cos(a), si = Math.sin(a);
   const x = v.x * c + v.z * si, z = -v.x * si + v.z * c;
   v.x = x; v.z = z;
   // lift
-  v.y += 9.82 * .58 * k * k * dt;
+  v.y += 9.82 * (.58 + .06 * w) * k * k * dt;
   const hs = Math.hypot(v.x, v.z) || 1;
   if (sy > 0){   // climb: trade speed for height
     v.y += sy * 7 * k * dt;
@@ -1280,14 +1510,16 @@ function startLevel(i){
   S.levelIdx = i;
   buildLevel(i);
   clearPops();
-  S.shotsLeft = level.shots; S.shotsUsed = 0; S.time = 0; S.timing = false;
+  S.maxShots = level.shots + up('shots');   // Extra Shot
+  S.shotsLeft = S.maxShots; S.shotsUsed = 0;
+  S.earned = { people: 0, blocks: 0, found: 0, bonus: 0 }; S.time = 0; S.timing = false;
   S.yaw = 0; S.pitch = 12 * D2R; S.power = 0; S.charging = false; S.lastPower = null;
   S.introT = 0; S.paused = false;
   for (const id of ['title', 'pause', 'win', 'fail']) $(id).classList.add('hidden');
   $('hud').classList.remove('hidden');
   $('lvlName').textContent = (i + 1) + ' · ' + level.name;
   $('bannerName').textContent = level.name;
-  $('bannerSub').textContent = people.length + ' people · ' + level.shots + ' shots';
+  $('bannerSub').textContent = people.length + ' people · ' + S.maxShots + ' shots';
   const rec = save.levels[i];
   $('best').textContent = rec && rec.best ? 'best ' + fmtTime(rec.best) : '';
   $('hint').textContent = 'Drag to aim · hold FIRE, let go to launch';
@@ -1340,6 +1572,7 @@ function fire(){
 
 function endShot(){
   sfx.wind(0);
+  writeSave();
   const left = people.filter(p => !p.out).length;
   if (left === 0) return win();
   if (S.shotsLeft <= 0) return fail();
@@ -1357,8 +1590,15 @@ function win(){
   const rec = save.levels[S.levelIdx] || {};
   const newBest = !rec.best || S.time < rec.best;
   if (newBest) rec.best = S.time;
+  const firstClear = !rec.stars;
   rec.stars = Math.max(rec.stars || 0, stars);
-  save.levels[S.levelIdx] = rec; writeSave();
+  save.levels[S.levelIdx] = rec;
+  // clearing bonus: 20, 15 more for every shot to spare, 10 for a new best time, 25 the first time
+  const bonus = 20 + 15 * spare + (newBest && !firstClear ? 10 : 0) + (firstClear ? 25 : 0);
+  save.coins += bonus; S.earned.bonus += bonus;
+  writeSave();
+  updateCoinsHud();
+  $('winCoins').innerHTML = coinLines();
   $('winSub').textContent = level.name + ' is clear';
   $('winStars').innerHTML = [0, 1, 2].map(i => i < stars ? '★' : '<span class="off">★</span>').join('');
   $('winStat').innerHTML = 'Time <b>' + fmtTime(S.time) + '</b>' + (newBest ? ' · new best!' : ' · best ' + fmtTime(rec.best)) +
@@ -1374,7 +1614,130 @@ function fail(){
   sfx.sad();
   const left = people.filter(p => !p.out).length;
   $('failSub').textContent = left + (left === 1 ? ' person is' : ' people are') + ' still standing';
+  writeSave();
+  $('failCoins').innerHTML = coinLines();
   setTimeout(() => { if (S.mode === 'done') $('fail').classList.remove('hidden'); }, 600);
+}
+
+/* ---------- the shop screen ---------- */
+// The shop shows you standing next to the cannon wearing what you have on, turning slowly.
+let shopTab = 'upgrades', preview = null;
+const previewSpot = new THREE.Vector3(-2.9, .87, 2.2);
+function rebuildPreview(){
+  if (preview) scene.remove(preview);
+  preview = personMesh(heroLook());
+  preview.position.copy(previewSpot);
+  preview.traverse(o => { o.castShadow = true; });
+  scene.add(preview);
+}
+function openShop(){
+  for (const id of ['title', 'win', 'fail', 'pause']) $(id).classList.add('hidden');
+  $('hud').classList.add('hidden');
+  clearPops(); sfx.wind(0);
+  S.paused = false;
+  if (S.mode !== 'title') buildLevel(S.levelIdx);
+  heroInBarrel();
+  pivot.rotation.set(.25, 0, 0); yawG.rotation.y = 0;
+  rebuildPreview();
+  $('shop').classList.remove('hidden');
+  renderShop();
+  setMode('shop');
+}
+function closeShop(){
+  $('shop').classList.add('hidden');
+  if (preview){ scene.remove(preview); preview = null; }
+  showTitle();
+}
+function updateShop(dt, t){
+  // frame the person on the side the panel isn't on
+  const wide = camera.aspect > 1;
+  // a big head needs a little more room
+  const big = 1 + .25 * ((HEAD_SIZES[save.eq.head] || 1) - 1);
+  if (wide){
+    camera.position.set(previewSpot.x + 1.4, 2.1 * big, previewSpot.z + 5.4 * big);
+    camera.lookAt(previewSpot.x + 2.6, 1.1 * big, previewSpot.z);
+  } else {
+    // the panel covers the bottom of a tall screen: put the person in the top third
+    camera.position.set(previewSpot.x, 1.6, previewSpot.z + 7.5 * big);
+    camera.lookAt(previewSpot.x, -3.2 * big, previewSpot.z);
+  }
+  if (preview){
+    preview.rotation.y = .45 + Math.sin(t * .6) * .6;
+    const u = preview.userData;
+    for (const a of u.arms){ a.sh.rotation.z = a.s * (.15 + Math.sin(t * 1.3) * .05); a.el.rotation.x = -.25; }
+    u.head.rotation.y = Math.sin(t * .8) * .3;
+    if (save.eq.trail !== 'none'){
+      const a = t * 3;
+      trailTick(dt, vE.set(previewSpot.x + Math.cos(a) * .7, previewSpot.y + .2 + Math.sin(t * 1.7) * .6, previewSpot.z + Math.sin(a) * .7), t);
+    }
+  }
+}
+function renderShop(){
+  updateCoinsHud();
+  const tabs = [['upgrades', 'Upgrades'], ['outfit', 'Outfits'], ['hat', 'Hats'], ['trail', 'Trails'], ['cannon', 'Cannons']];
+  $('shopTabs').innerHTML = '';
+  for (const [id, label] of tabs){
+    const b = document.createElement('button');
+    b.className = 'tab' + (id === shopTab ? ' on' : ''); b.textContent = label;
+    b.addEventListener('click', () => { shopTab = id; sfx.click(); renderShop(); });
+    $('shopTabs').appendChild(b);
+  }
+  const box = $('shopItems'); box.innerHTML = '';
+  const card = (swatch, name, desc, extra, btnText, btnCls, onClick) => {
+    const d = document.createElement('div'); d.className = 'item';
+    d.innerHTML = '<div class="nm">' + (swatch ? '<span class="sw" style="background:' + swatch + '"></span>' : '') + name + '</div>' +
+      (desc ? '<div class="ds">' + desc + '</div>' : '') + (extra || '');
+    const b = document.createElement('button'); b.className = btnCls; b.innerHTML = btnText;
+    if (onClick) b.addEventListener('click', onClick);
+    d.appendChild(b); box.appendChild(d);
+  };
+  const price = n => '<span class="coin-ic"></span>' + n;
+  if (shopTab === 'upgrades'){
+    for (const u of UPGRADES){
+      const lv = up(u.id), max = lv >= u.costs.length, cost = u.costs[lv];
+      const pips = '<div class="pips">' + '●'.repeat(lv) + '<span style="opacity:.3">' + '●'.repeat(u.costs.length - lv) + '</span></div>';
+      if (max) card(null, u.name, u.desc, pips, 'MAXED', 'max');
+      else card(null, u.name, u.desc, pips, price(cost), save.coins >= cost ? '' : 'poor', () => {
+        if (save.coins < cost) return;
+        save.coins -= cost; save.up[u.id] = lv + 1;
+        if (u.sizes){ save.eq[u.id] = lv + 1; rebuildPreview(); heroInBarrel(); }
+        writeSave(); sfx.buy(); renderShop();
+      });
+      if (u.sizes && lv > 0){
+        const names = u.id === 'head' ? HEAD_NAMES : ARM_NAMES;
+        const w = document.createElement('button'); w.className = 'own';
+        w.textContent = 'Wearing: ' + names[save.eq[u.id]] + ' ▸';
+        w.addEventListener('click', () => {
+          save.eq[u.id] = (save.eq[u.id] + 1) % (lv + 1);
+          writeSave(); sfx.click(); rebuildPreview(); heroInBarrel(); renderShop();
+        });
+        box.lastChild.appendChild(w);
+      }
+    }
+    return;
+  }
+  for (const c of COSMETICS[shopTab]){
+    const owned = save.owned[shopTab].includes(c.id), on = save.eq[shopTab] === c.id;
+    const sw = c.shirt != null ? '#' + c.shirt.toString(16).padStart(6, '0') : c.color != null ? '#' + c.color.toString(16).padStart(6, '0') : SWATCH[c.id];
+    const equip = () => {
+      save.eq[shopTab] = c.id; writeSave();
+      if (shopTab === 'cannon') cannonMetal.color.setHex(c.color);
+      if (shopTab === 'outfit' || shopTab === 'hat'){ rebuildPreview(); heroInBarrel(); }
+      renderShop();
+    };
+    if (on) card(sw, c.name, '', '', 'WEARING', 'on');
+    else if (owned) card(sw, c.name, '', '', 'USE', 'own', () => { sfx.click(); equip(); });
+    else card(sw, c.name, '', '', price(c.cost), save.coins >= c.cost ? '' : 'poor', () => {
+      if (save.coins < c.cost) return;
+      save.coins -= c.cost; save.owned[shopTab].push(c.id); sfx.buy(); equip();
+    });
+  }
+}
+
+function coinLines(){
+  const e = S.earned, rows = [['People', e.people], ['Blocks', e.blocks], ['Coins found', e.found], ['Bonus', e.bonus]].filter(r => r[1]);
+  const total = e.people + e.blocks + e.found + e.bonus;
+  return rows.map(r => r[0] + ' <b>+' + r[1] + '</b>').join(' · ') + '<br><span class="coin-ic"></span><b>' + total + '</b> coins earned';
 }
 
 function showTitle(){
@@ -1386,6 +1749,7 @@ function showTitle(){
   S.paused = false;
   buildLevel(S.levelIdx);
   renderLevels();
+  updateCoinsHud();
   setMode('title');
 }
 
@@ -1413,7 +1777,7 @@ function updatePeopleHud(){
 }
 function updateShotsHud(){
   let h = '';
-  for (let i = 0; i < level.shots; i++) h += '<div class="ball' + (i < level.shots - S.shotsLeft ? ' used' : '') + '"></div>';
+  for (let i = 0; i < S.maxShots; i++) h += '<div class="ball' + (i < S.maxShots - S.shotsLeft ? ' used' : '') + '"></div>';
   $('shots').innerHTML = h;
 }
 
@@ -1489,7 +1853,7 @@ window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; }
 
 function togglePause(){
   if (S.mode === 'replay'){ endReplay(); return; }
-  if (S.mode === 'title' || S.mode === 'done') return;
+  if (S.mode === 'title' || S.mode === 'done' || S.mode === 'shop') return;
   S.paused = !S.paused;
   $('pause').classList.toggle('hidden', !S.paused);
   if (S.paused) sfx.wind(0);
@@ -1502,6 +1866,8 @@ function syncMute(){ $('muteBtn').textContent = save.muted ? 'SOUND OFF' : 'SOUN
 $('muteBtn').addEventListener('click', () => { save.muted = !save.muted; writeSave(); sfx.setMuted(save.muted); syncMute(); });
 syncMute();
 for (const id of ['menuBtn1', 'menuBtn2', 'menuBtn3']) $(id).addEventListener('click', showTitle);
+for (const id of ['shopBtn', 'shopBtn2', 'shopBtn3']) $(id).addEventListener('click', () => { sfx.init(); sfx.click(); openShop(); });
+$('shopDone').addEventListener('click', () => { sfx.click(); closeShop(); });
 $('nextBtn').addEventListener('click', () => startLevel((S.levelIdx + 1) % LEVELS.length));
 $('againBtn').addEventListener('click', () => startLevel(S.levelIdx));
 $('retryBtn').addEventListener('click', () => startLevel(S.levelIdx));
@@ -1511,7 +1877,7 @@ $('playBtn').addEventListener('click', () => {
   if (i < 0) i = 0;
   startLevel(i);
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden && !S.paused && S.mode !== 'title' && S.mode !== 'done') togglePause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && !S.paused && S.mode !== 'title' && S.mode !== 'done' && S.mode !== 'shop') togglePause(); });
 
 /* ================= speed lines ================= */
 const streaks = Array.from({ length: 46 }, () => ({ a: Math.random() * Math.PI * 2, r: Math.random(), w: rand(.6, 2) }));
@@ -1574,6 +1940,8 @@ function stepWorld(dt){
 
 function update(dt, now){
   const m = S.mode;
+  updateTrailFx(dt);
+  if (m === 'shop'){ updateShop(dt, now / 1000); return; }
   if (m === 'title'){
     S.titleT += dt;
     const a = S.titleT * .12;
@@ -1586,6 +1954,7 @@ function update(dt, now){
   if (m === 'replay'){ updateReplay(dt); return; }
 
   stepWorld(dt);
+  updateCoins(dt);
   animatePeople(dt, now / 1000);
   updateDebris(dt);
   if (S.timing){ S.time += dt; updateTimer(); }
@@ -1680,6 +2049,7 @@ function update(dt, now){
       }
     }
     updateHero(dt);
+    if (S.gliding && m === 'fly') trailTick(dt, vE.set(b.position.x, b.position.y, b.position.z).addScaledVector(flyDir, -.9), now / 1000);
     recordFrame(dt);
     const fov = 70 + clamp((speed - 12) / 20, 0, 1) * 10;
     if (Math.abs(camera.fov - fov) > .1){ camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
@@ -1725,6 +2095,7 @@ function startRecording(){
   S.shotT = 0; S.impactT = null; S.recT = 0;
   for (const b of blocks) if (!b.broken) trackObj(b.mesh);
   for (const p of people) if (!p.gone) trackPerson(p.mesh);
+  for (const c of coins) if (!c.got) trackObj(c.g);
   trackPerson(heroBody);
 }
 function noteImpact(){ if (S.impactT == null && (S.mode === 'fly' || S.mode === 'settle')) S.impactT = S.shotT; }
@@ -1816,6 +2187,7 @@ function updateReplay(dt){
   }
   while (rp.screams.length && rp.screams[0].t <= rp.t){ const sc = rp.screams.shift(); popText(pick(SCREAMS), sc.p, 1.4); sfx.oof(); }
   frameAt(rp.t, rp.focus);
+  if (rp.t < S.impactT) trailTick(dt * rate, rp.focus, rp.t);
   updateDebris(dt * rate);
   const a = (rp.t - S.impactT) * .35;
   const off = vC.copy(rp.side).multiplyScalar(8 * Math.cos(a)).addScaledVector(rp.f, -3 + 8 * Math.sin(a));
@@ -1897,6 +2269,7 @@ function frame(now){
 
 buildLevel(0);
 renderLevels();
+updateCoinsHud();
 requestAnimationFrame(frame);
 
 if ('serviceWorker' in navigator){

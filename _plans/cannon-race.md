@@ -101,3 +101,43 @@ The timer starts on your first shot and stops when the last person goes down.
 - More levels, moving targets, a real race against a rival cannon.
 - Different things to fire out of the cannon (heavy, bouncy, splitting).
 - A replay of the shot from the side.
+
+## Coins and the shop (3.0)
+
+**Earning.** Every coin you earn is kept, even if you run out of shots.
+
+| What | Coins |
+| --- | --- |
+| Knocking someone down | 10 |
+| Breaking glass / wood / stone | 2 / 3 / 6 |
+| A gold coin floating in the level (three on the way, one above the structure) | 5 |
+| Clearing a level | 20, plus 15 per spare shot |
+| First time a level is cleared | 25 more |
+| Beating your best time (after the first clear) | 10 more |
+
+The win and out-of-shots screens list what you earned. Coins show in the top right while you play,
+and on the title screen.
+
+**The shop** opens from the title screen (and the win and out-of-shots screens). You stand next to
+the cannon wearing whatever you have on, turning slowly; the panel sits on the right of a wide
+screen and along the bottom of a tall one.
+
+| Upgrade | Levels | Cost | What it does |
+| --- | --- | --- | --- |
+| Bigger Cannon | 3 | 60 / 120 / 200 | top launch speed +3 m/s a level |
+| Wing Suit | 3 | 80 / 150 / 250 | more lift and sharper turns |
+| Hard Head | 3 | 70 / 140 / 220 | +30% block damage a level |
+| Extra Shot | 2 | 250 / 500 | one more shot on every level |
+| Coin Magnet | 2 | 100 / 200 | grab coins from 1.4 m farther a level |
+| Big Head | 4 | 40 / 80 / 140 / 220 | Big, Bigger, Huge, Ridiculous (3.4x) |
+| Long Arms | 4 | 40 / 80 / 140 / 220 | Long, Longer, Super long, Noodle (3.2x) |
+
+Big Head and Long Arms have a "Wearing" button that steps through every size you own, back to
+normal. They change the ragdoll too: a big head is a big, heavy ball, and long arms are long bones.
+
+Cosmetics: outfits (Red Rocket, Blue Streak, Green Bean, Bubblegum, Ninja, Astronaut, Solid Gold),
+hats (Cap, No Hat, Party Hat, Top Hat, Viking, Crown), trails left behind you while you glide
+(Smoke, Sparkles, Rainbow) and cannon colours (Iron, Fire Red, Pretty Pink, Deep Blue, Golden).
+
+Saved in the same `cannon-race` localStorage entry: `coins`, `up` (upgrade levels), `owned` and `eq`
+(what you're wearing, including the head and arm size).
