@@ -141,3 +141,10 @@ hats (Cap, No Hat, Party Hat, Top Hat, Viking, Crown), trails left behind you wh
 
 Saved in the same `cannon-race` localStorage entry: `coins`, `up` (upgrade levels), `owned` and `eq`
 (what you're wearing, including the head and arm size).
+
+**Previews (3.1).** Every shop card has a picture: people, hats, cannons and head/arm sizes are
+rendered in 3D by a small second renderer (once each, then kept as images); trails and the other
+upgrades are drawn icons. Tap a card to try the item on: the person beside the cannon wears it,
+the cannon changes colour, or the trail swirls around them, with a blue "Trying on" bar. It's only
+kept if you buy it; switching tabs, buying, or leaving the shop puts back what you're wearing. The
+Big Head and Long Arms cards show and try on the next size up.
