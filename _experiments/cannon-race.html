@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "2.1"
+version: "2.2"
 layout: null
 ---
 {% raw %}
@@ -109,8 +109,11 @@ layout: null
     letter-spacing:.04em;box-shadow:0 5px 0 rgba(0,0,0,.3);min-width:200px;}
   .go.alt{background:rgba(29,36,51,.7);font-size:16px;padding:9px 24px;border-width:3px;}
   .go:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.3);}
-  #levels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:min(420px,100%);}
-  .lv{background:rgba(255,248,230,.95);color:var(--ink);border-radius:16px;padding:8px 6px;font-weight:900;font-size:22px;
+  #levels{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;width:min(720px,100%);}
+  #title{justify-content:flex-start;}
+  #title h1{margin-top:auto;}
+  #title .keys{margin-bottom:auto;}
+  .lv{background:rgba(255,248,230,.95);color:var(--ink);border-radius:14px;padding:6px 4px;font-weight:900;font-size:19px;
     box-shadow:0 4px 0 rgba(0,0,0,.25);}
   .lv small{display:block;font-size:11px;font-weight:700;opacity:.75;margin-top:2px;}
   .lv .st{font-size:14px;color:#d99b00;letter-spacing:1px;}
@@ -458,14 +461,7 @@ const LEVELS = [
     b.blk('stone', 4, 0, .9, 1.4, 1.3, .6);
     b.man(4, 0, 0);
   }},
-  { name: 'The Fort', D: 50, shots: 4, build(b){
-    for (const x of [-3.2, 3.2]) for (let k = 0; k < 3; k++) b.blk('stone', x, k * 1.2, 0, 1.2, 1.2, 1.2);
-    b.blk('wood', 0, 3.6, 0, 7.6, .4, 1.4);
-    b.man(-1.2, 4, 0); b.man(1.2, 4, 0);
-    b.blk('stone', 0, 0, 1.3, 1.8, 1.1, .6);
-    b.man(0, 0, 0);
-    for (const x of [-1.6, 1.6]){ b.blk('glass', x, 0, 1.3, 1, 2, .2); b.man(x, 0, 0); }
-  }},
+  { name: 'The Fort', D: 50, shots: 4, build: buildFort },
   { name: 'The Pyramid', D: 56, shots: 5, build(b){
     for (const x of [-3, -1, 1, 3]) b.blk('wood', x, 0, 0, .5, 2, .5);
     b.blk('wood', 0, 2, 0, 7.6, .4, 1.6);
@@ -477,14 +473,132 @@ const LEVELS = [
     b.man(-1, 2.4, 0); b.man(1, 2.4, 0);
     b.man(0, 4.8, 0);
     b.man(0, 7.2, 0);
+  }},
+  { name: 'Twin Towers', D: 52, shots: 5, build(b){
+    for (const x of [-3.5, 3.5]){
+      let y = 0;
+      for (let k = 0; k < 2; k++){ b.man(x, y, 0); y = b.frame(x, y, 3, 2.1); }
+      b.man(x, y, 0);
+    }
+  }},
+  { name: 'Stone Wall', D: 46, shots: 4, build(b){
+    b.blk('stone', 0, 0, 2, 8, 2.2, .6);
+    for (const x of [-2.5, 0, 2.5]) b.man(x, 0, 0);
+    const y = b.frame(0, 0, 3, 2.6, -2.5);
+    b.man(0, y, -2.5);
+  }},
+  { name: 'The Bridge', D: 55, shots: 4, build(b){
+    for (const x of [-5, 0, 5]) b.cubes(x, 0, 0, 3);
+    b.blk('wood', -2.5, 3.6, 0, 5, .4, 1.4);
+    b.blk('wood',  2.5, 3.6, 0, 5, .4, 1.4);
+    for (const x of [-3.5, -1.5, 1.5, 3.5]) b.man(x, 4, 0);
+    b.man(-2.5, 0, 0); b.man(2.5, 0, 0);
+  }},
+  { name: 'Greenhouses', D: 50, shots: 4, build(b){
+    for (const x of [-5, 0, 5]) b.room(x, 0, 0);
+    b.man(0, 2.45, 0);
+  }},
+  { name: 'Skyscraper', D: 58, shots: 5, build(b){
+    let y = 0;
+    for (let k = 0; k < 5; k++){ b.man(0, y, 0); y = b.frame(0, y, 2.6, 2.1, 0, 'wood', 1.2); }
+    b.man(0, y, 0);
+  }},
+  { name: 'Stilts', D: 60, shots: 4, build(b){
+    for (const x of [-6, 0, 6]){
+      b.blk('wood', x, 0, 0, .5, 4, .5);
+      b.blk('wood', x, 4, 0, 1.6, .3, 1.2);
+      b.man(x, 4.3, 0);
+    }
+    b.blk('stone', 3, 0, 1, 1.2, 1.2, .6);
+    b.man(3, 0, 0);
+  }},
+  { name: 'The Barn', D: 54, shots: 5, build(b){
+    b.frame(0, 0, 8, 2.4, 0, 'wood', 2.6);
+    b.blk('wood', 0, 0, 0, .5, 2.4, .5);
+    for (const x of [-2.4, -1, 1, 2.4]) b.man(x, 0, 0);
+    for (const x of [-2, 2]) b.blk('glass', x, 0, 1.5, 3.2, 2, .2);
+    const y = b.frame(0, 2.8, 5, 1.8, 0, 'wood', 2.6);
+    b.man(0, 2.8, 0);
+    b.man(0, y, 0);
+  }},
+  { name: 'Staircase', D: 58, shots: 5, build(b){
+    for (let i = 0; i < 5; i++){
+      const h = i + 1, x = -4 + i * 2;
+      b.blk(i % 2 ? 'wood' : 'stone', x, 0, 0, 2, h, 1.6);
+      b.man(x, h, 0);
+    }
+  }},
+  { name: 'Glass Tower', D: 64, shots: 5, build(b){
+    let y = 0;
+    for (let k = 0; k < 3; k++){
+      b.blk('glass', 0, y, 1, 2.6, 2.1, .2);
+      b.blk('glass', 0, y, -1, 2.6, 2.1, .2);
+      b.blk('glass', -1.4, y, 0, .2, 2.1, 1.8);
+      b.blk('glass', 1.4, y, 0, .2, 2.1, 1.8);
+      b.blk('stone', 0, y + 2.1, 0, 3.2, .3, 2.6);
+      b.man(0, y, 0);
+      y += 2.4;
+    }
+    b.man(0, y, 0);
+  }},
+  { name: 'The Castle', D: 62, shots: 6, build(b){
+    for (const x of [-4, 4]) for (const z of [-2.5, 2.5]) b.cubes(x, 0, z, 3);
+    b.blk('wood', 0, 0, 2.5, 6.8, 1.8, .3);
+    b.blk('wood', 0, 0, -2.5, 6.8, 1.8, .3);
+    for (const x of [-4, 4]) b.blk('wood', x, 0, 0, .3, 1.8, 3.8);
+    b.man(-1.5, 0, 0); b.man(1.5, 0, 0); b.man(0, 0, -1);
+    b.man(-4, 3.6, 2.5); b.man(4, 3.6, 2.5);
+  }},
+  { name: 'Far Fort', D: 75, shots: 5, build: buildFort },
+  { name: 'Two Forts', D: 52, shots: 6, build(b){
+    b.man(0, 0, 0);
+    let y = b.frame(0, 0, 3.4, 2.2);
+    b.man(0, y, 0);
+    b.blk('stone', 0, 0, 1.3, 1.6, 1.1, .6);
+    b.man(4, 0, -16);
+    y = b.frame(4, 0, 3.4, 2.2, -16);
+    b.man(4, y, -16);
+    b.blk('glass', 4, 0, -14.7, 2.4, 2, .2);
+  }},
+  { name: 'Stone Pyramid', D: 60, shots: 5, build(b){
+    for (let k = 0; k < 5; k++){
+      const n = 5 - k;
+      for (let j = 0; j < n; j++) b.blk('stone', (j - (n - 1) / 2) * 1.2, k * 1.2, 0, 1.2, 1.2, 1.2);
+    }
+    b.man(-2.7, 1.2, 0); b.man(2.7, 1.2, 0);
+    b.man(-1.5, 3.6, 0); b.man(1.5, 3.6, 0);
+    b.man(0, 6, 0);
+  }},
+  { name: 'Grand Finale', D: 70, shots: 7, build(b){
+    // a lookout on the left
+    let y = 0;
+    for (let k = 0; k < 2; k++){ b.man(-7, y, 0); y = b.frame(-7, y, 3, 2.1); }
+    b.man(-7, y, 0);
+    // a glass room in the middle with someone on the roof
+    y = b.room(0, 0, 0);
+    b.man(0, y, 0);
+    // a stone tower and plank on the right
+    b.cubes(5.5, 0, 0, 3); b.cubes(8.5, 0, 0, 3);
+    b.blk('wood', 7, 3.6, 0, 4.2, .4, 1.4);
+    b.man(7, 4, 0); b.man(7, 0, 0);
   }}
 ];
+function buildFort(b){
+  for (const x of [-3.2, 3.2]) b.cubes(x, 0, 0, 3);
+  b.blk('wood', 0, 3.6, 0, 7.6, .4, 1.4);
+  b.man(-1.2, 4, 0); b.man(1.2, 4, 0);
+  b.blk('stone', 0, 0, 1.3, 1.8, 1.1, .6);
+  b.man(0, 0, 0);
+  for (const x of [-1.6, 1.6]){ b.blk('glass', x, 0, 1.3, 1, 2, .2); b.man(x, 0, 0); }
+}
+
 
 /* ================= people ================= */
 const SKIN = [0xf2c89b, 0xd9a273, 0xa86b45, 0x7a4a2c, 0xf6d7b8];
 const SHIRT = [0xe8483b, 0x3d8bff, 0xffc93c, 0x8e5bd6, 0x2fb37a, 0xff8fb1, 0xff8a2b];
 const PANTS = [0x2d3a5c, 0x3b3b3b, 0x5a4632, 0x29506b];
 const HAIR = [0x2b1d12, 0x6b3e1f, 0xe2b04a, 0x1a1a1a, 0xa83a1d, 0xd0d0d0];
+const SCREAMS = ['AAAAH!', 'Not the face!', 'Mommy!', 'Duck!', 'Incoming!', 'Noooo!', 'Run!', 'Eek!', 'Why me?!'];
 const LINES = ['Whoa!', 'Hey!', 'Oof!', 'Not again!', 'Wheee!', 'Ow!', 'My hat!', 'Help!', 'Uh oh!'];
 const boxG = new THREE.BoxGeometry(1, 1, 1);
 const sphereG = new THREE.SphereGeometry(1, 20, 14);
@@ -586,32 +700,78 @@ function personMesh(o){
     arms.push({ sh, el, s });
     parts['sh' + (s < 0 ? 0 : 1)] = sh; parts['el' + (s < 0 ? 0 : 1)] = el;
   }
-  g.userData = { head, arms, parts, phase: Math.random() * 10, panic: 0 };
+  const base = {};
+  for (const k in parts) base[k] = parts[k].position.clone();
+  g.userData = { head, arms, parts, base, phase: Math.random() * 10, panic: 0,
+    act: pick(['wave', 'cover', 'duck', 'hop', 'spin', 'run']) };
   return g;
 }
 
-// Idle sway, and arms up in a panic when you come flying at them.
+// Idle sway, and when you come gliding at them each person panics in their own way: waving,
+// covering their face, ducking, hopping, spinning on the spot or running without going anywhere.
+// It is all recorded, so it plays again in slow motion in the replay.
+function setLegs(u, a0, a1, bend){
+  // thigh angles forward (radians); the shin hangs from wherever the knee ends up
+  const P = u.parts, B = u.base;
+  [a0, a1].forEach((a, i) => {
+    const th = P['thigh' + i], sn = P['shin' + i];
+    th.rotation.set(-a, 0, 0);
+    sn.position.set(B['shin' + i].x, B['thigh' + i].y - .42 * Math.cos(a), .42 * Math.sin(a));
+    sn.rotation.set(-a + bend, 0, 0);
+  });
+}
 function animatePeople(dt, t){
   const flying = S.mode === 'fly' && playerBody && S.gliding;
   for (const p of people){
     if (p.gone || p.rag) continue;   // a ragdoll's arms belong to the physics
-    const u = p.mesh.userData;
+    const u = p.mesh.userData, P = u.parts;
     let want = p.out ? 1 : 0;
     if (flying && !p.out){
       const d = playerBody.position.distanceTo(p.body.position);
       if (d < 30) want = 1;
     }
     u.panic += (want - u.panic) * (1 - Math.exp(-6 * dt));
-    const k = u.panic, ph = t + u.phase;
+    const k = u.panic, ph = t + u.phase, act = k > .02 ? u.act : 'idle';
+    // start from standing
+    let lift = 0, crouch = 0, spin = 0;
+    for (const n in P) P[n].position.copy(u.base[n]);
+    P.torso.rotation.set(0, 0, 0);
+    u.head.rotation.set(-.15 * k, Math.sin(ph * .5) * .25 * (1 - k), 0);
     for (const a of u.arms){
       const idle = .1 + Math.sin(ph * 1.3) * .04;
-      const wave = 2.6 + Math.sin(ph * 14 + a.s) * .35;
-      a.sh.rotation.z = a.s * (idle + (wave - idle) * k);
-      a.sh.rotation.x = Math.sin(ph * 1.1 + a.s) * .05 * (1 - k);
-      a.el.rotation.x = -.25 - .5 * k;
+      a.sh.rotation.set(Math.sin(ph * 1.1 + a.s) * .05 * (1 - k), 0, a.s * idle);
+      a.el.rotation.set(-.25, 0, 0);
     }
-    u.head.rotation.y = Math.sin(ph * .5) * .25 * (1 - k);
-    u.head.rotation.x = -.15 * k;
+    setLegs(u, 0, 0, 0);
+    if (act === 'wave'){
+      for (const a of u.arms){ a.sh.rotation.z = a.s * (.1 + 2.5 * k + Math.sin(ph * 14 + a.s) * .35 * k); a.el.rotation.x = -.25 - .5 * k; }
+    } else if (act === 'cover'){
+      for (const a of u.arms){ a.sh.rotation.x = -2.3 * k; a.sh.rotation.z = a.s * .45 * k; a.el.rotation.x = -.25 - 1.7 * k; }
+      u.head.rotation.x = .35 * k + Math.sin(ph * 20) * .05 * k;
+      P.torso.rotation.x = .15 * k;
+    } else if (act === 'duck'){
+      const a = 1.2 * k;
+      setLegs(u, a, a, 2 * a);
+      crouch = .85 * (1 - Math.cos(a));   // bent legs lift the feet: lower everything to keep them down
+      P.torso.rotation.x = .6 * k;
+      for (const a2 of u.arms){ a2.sh.rotation.x = -2.9 * k; a2.sh.rotation.z = a2.s * .3 * k; a2.el.rotation.x = -1.2 * k; }
+    } else if (act === 'hop'){
+      lift = Math.abs(Math.sin(ph * 9)) * .45 * k;
+      setLegs(u, .3 * k, .3 * k, .6 * k);
+      for (const a of u.arms){ a.sh.rotation.z = a.s * (2.8 * k); a.el.rotation.x = -.2; }
+    } else if (act === 'spin'){
+      spin = ph * 9 * k;
+      for (const a of u.arms){ a.sh.rotation.z = a.s * 1.5 * k; }
+    } else if (act === 'run'){
+      const sw = Math.sin(ph * 16) * .8 * k;
+      setLegs(u, sw, -sw, .9 * k);
+      lift = Math.abs(Math.sin(ph * 16)) * .08 * k;
+      for (const a of u.arms){ a.sh.rotation.x = a.s * sw; a.el.rotation.x = -1.3 * k; }
+      u.head.rotation.y = Math.sin(ph * 7) * .6 * k;   // looking for somewhere to go
+    }
+    if (crouch) for (const n in P) if (n[0] !== 'e') P[n].position.y -= crouch;   // elbows ride on their shoulders
+    if (lift) p.mesh.position.y += lift;
+    if (spin) p.mesh.rotateY(spin);
   }
 }
 
@@ -718,7 +878,6 @@ function clearLevel(){
   while (levelGroup.children.length) levelGroup.remove(levelGroup.children[0]);
   blocks = []; people = []; breakQueue = []; ragQueue = [];
   clearDebris();
-  clearTrail();
 }
 
 function buildLevel(i){
@@ -765,6 +924,29 @@ function buildLevel(i){
       body.sleep();
       people.push(o);
       top = Math.max(top, y + 1.75);
+    },
+    // two posts and a plank across them; returns the height of the plank's top
+    frame(x, y, w, h, z = 0, type = 'wood', d = 1.4, topType = type){
+      const px = w / 2 - .25;
+      this.blk(type, x - px, y, z, .5, h, .5);
+      this.blk(type, x + px, y, z, .5, h, .5);
+      this.blk(topType, x, y + h, z, w, .4, d);
+      return y + h + .4;
+    },
+    // a column of cubes; returns the height of its top
+    cubes(x, y, z, n, size = 1.2, type = 'stone'){
+      for (let i = 0; i < n; i++) this.blk(type, x, y + i * size, z, size, size, size);
+      return y + n * size;
+    },
+    // a little glass room with a stone roof and someone inside
+    room(x, y, z, withMan = true){
+      this.blk('glass', x, y, z + 1.15, 2.4, 2.1, .2);
+      this.blk('glass', x, y, z - 1.15, 2.4, 2.1, .2);
+      this.blk('glass', x - 1.3, y, z, .2, 2.1, 2.1);
+      this.blk('glass', x + 1.3, y, z, .2, 2.1, 2.1);
+      this.blk('stone', x, y + 2.1, z, 3, .35, 2.6);
+      if (withMan) this.man(x, y, z);
+      return y + 2.45;
     }
   };
   level.build(b);
@@ -902,19 +1084,6 @@ function updatePops(dt){
 function clearPops(){ for (const q of pops) q.el.remove(); pops.length = 0; }
 
 /* ---------- last shot's path ---------- */
-let trailMesh = null, trailPts = [], trailT = 0;
-const trailGeo = new THREE.SphereGeometry(.13, 8, 6);
-const trailMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .85 });
-function clearTrail(){ if (trailMesh){ scene.remove(trailMesh); trailMesh.dispose && trailMesh.dispose(); trailMesh = null; } }
-function buildTrail(){
-  clearTrail();
-  const pts = trailPts.slice(0, 200);
-  if (!pts.length) return;
-  trailMesh = new THREE.InstancedMesh(trailGeo, trailMat, pts.length);
-  const m = new THREE.Matrix4();
-  pts.forEach((p, i) => { m.makeTranslation(p.x, p.y, p.z); trailMesh.setMatrixAt(i, m); });
-  scene.add(trailMesh);
-}
 
 /* ---------- you ---------- */
 // The flier: a person in a red cap and suit. Their mesh sits in a holder whose +Z is the
@@ -1114,7 +1283,6 @@ function startLevel(i){
   S.shotsLeft = level.shots; S.shotsUsed = 0; S.time = 0; S.timing = false;
   S.yaw = 0; S.pitch = 12 * D2R; S.power = 0; S.charging = false; S.lastPower = null;
   S.introT = 0; S.paused = false;
-  trailPts = [];
   for (const id of ['title', 'pause', 'win', 'fail']) $(id).classList.add('hidden');
   $('hud').classList.remove('hidden');
   $('lvlName').textContent = (i + 1) + ' · ' + level.name;
@@ -1160,7 +1328,7 @@ function fire(){
   heroDir.copy(dir); heroBank = 0;
   scene.attach(hero);
   S.gliding = true;
-  S.flyT = 0; S.slowT = 0; trailPts = []; trailT = 0;
+  S.flyT = 0; S.slowT = 0;
   S.toRag = false;
   preVel.copy(dir).multiplyScalar(speed);
   startRecording();
@@ -1175,7 +1343,6 @@ function endShot(){
   const left = people.filter(p => !p.out).length;
   if (left === 0) return win();
   if (S.shotsLeft <= 0) return fail();
-  buildTrail();
   setMode('reset');
   S.resetT = 0;
   $('fade').classList.add('on');
@@ -1478,8 +1645,6 @@ function update(dt, now){
         vA.set(v.x, v.y, v.z).normalize();
         flyDir.lerp(vA, 1 - Math.exp(-5 * dt)).normalize();
       }
-      trailT += dt;
-      if (trailT > .06){ trailT = 0; trailPts.push(new THREE.Vector3(b.position.x, b.position.y, b.position.z)); }
       S.slowT = speed < 1.2 ? S.slowT + dt : 0;
       const out = Math.abs(b.position.x) > 160 || b.position.z < -260 || b.position.z > 40 || b.position.y < -5 ||
         (S.flyT > 2 && b.position.z < center.z - 25);   // sailed past everything
@@ -1554,33 +1719,36 @@ function update(dt, now){
 let track = [], frames = [], events = [], rp = null, liveSnap = null;
 S.shotT = 0; S.impactT = null;
 function trackObj(o){ track.push(o); }
-function trackPerson(mesh){
-  trackObj(mesh);
-  for (const k in mesh.userData.parts) trackObj(mesh.userData.parts[k]);
-}
+function trackPerson(mesh){ for (const k in mesh.userData.parts) trackObj(mesh.userData.parts[k]); }
 function startRecording(){
   track = []; frames = []; events = [];
   S.shotT = 0; S.impactT = null; S.recT = 0;
   for (const b of blocks) if (!b.broken) trackObj(b.mesh);
   for (const p of people) if (!p.gone) trackPerson(p.mesh);
-  trackObj(hero); trackPerson(heroBody);
+  trackPerson(heroBody);
 }
 function noteImpact(){ if (S.impactT == null && (S.mode === 'fly' || S.mode === 'settle')) S.impactT = S.shotT; }
 function replayEvent(kind, pos, type, size){
   if (S.mode !== 'fly' && S.mode !== 'settle') return;
   events.push({ t: S.shotT, kind, p: new THREE.Vector3(pos.x, pos.y, pos.z), type, size });
 }
+// Recorded in world space: a body part moves from its person into the level when that person
+// becomes a ragdoll, and blending a local position with a world one would throw it miles away.
+const sp = new THREE.Vector3(), sq = new THREE.Quaternion();
 function snapshot(){
-  const n = track.length, f = new Float32Array(n * 8), par = new Array(n);
+  scene.updateMatrixWorld();
+  const n = track.length, f = new Float32Array(n * 8);
   for (let i = 0; i < n; i++){
     const o = track[i], j = i * 8;
-    f[j] = o.position.x; f[j + 1] = o.position.y; f[j + 2] = o.position.z;
-    f[j + 3] = o.quaternion.x; f[j + 4] = o.quaternion.y; f[j + 5] = o.quaternion.z; f[j + 6] = o.quaternion.w;
-    f[j + 7] = o.visible ? 1 : 0;
-    par[i] = o.parent;
+    o.getWorldPosition(sp); o.getWorldQuaternion(sq);
+    f[j] = sp.x; f[j + 1] = sp.y; f[j + 2] = sp.z;
+    f[j + 3] = sq.x; f[j + 4] = sq.y; f[j + 5] = sq.z; f[j + 6] = sq.w;
+    let vis = true;
+    for (let q = o; q; q = q.parent) if (!q.visible) vis = false;
+    f[j + 7] = vis ? 1 : 0;
   }
   const b = playerBody;
-  return { t: S.shotT, f, par, focus: b ? new THREE.Vector3(b.position.x, b.position.y, b.position.z) : null };
+  return { t: S.shotT, f, focus: b ? new THREE.Vector3(b.position.x, b.position.y, b.position.z) : null };
 }
 function recordFrame(dt){
   S.shotT += dt;
@@ -1595,7 +1763,7 @@ const rq1 = new THREE.Quaternion(), rq2 = new THREE.Quaternion();
 function applyFrame(a, b, u){
   for (let i = 0; i < track.length; i++){
     const o = track[i], j = i * 8, fa = a.f, fb = b.f;
-    if (o.parent !== a.par[i]){ if (a.par[i]) a.par[i].add(o); else if (o.parent) o.parent.remove(o); }
+    if (o.parent !== levelGroup) levelGroup.add(o);   // the level sits at the origin, so local = world
     o.position.set(fa[j] + (fb[j] - fa[j]) * u, fa[j + 1] + (fb[j + 1] - fa[j + 1]) * u, fa[j + 2] + (fb[j + 2] - fa[j + 2]) * u);
     rq1.set(fa[j + 3], fa[j + 4], fa[j + 5], fa[j + 6]);
     rq2.set(fb[j + 3], fb[j + 4], fb[j + 5], fb[j + 6]);
@@ -1615,7 +1783,7 @@ function startReplay(){
   if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break')) return false;
   const t0 = Math.max(frames[0].t, S.impactT - .8), t1 = Math.min(frames[frames.length - 1].t, S.impactT + 1.7);
   if (t1 - t0 < .5) return false;
-  liveSnap = snapshot();
+  liveSnap = track.map(o => ({ parent: o.parent, p: o.position.clone(), q: o.quaternion.clone(), v: o.visible }));
   clearDebris(); clearPops();
   sfx.wind(0);
   // a camera off to the side of the hit, swinging slowly round as it plays
@@ -1626,6 +1794,7 @@ function startReplay(){
   const side = new THREE.Vector3(-f.z, 0, f.x).multiplyScalar(Math.random() < .5 ? 1 : -1);
   rp = { t: t0, t0, t1, real: 0, ev: 0, P, f, side, focus: new THREE.Vector3().copy(P), look: new THREE.Vector3().copy(P) };
   while (rp.ev < events.length && events[rp.ev].t < t0) rp.ev++;
+  rp.screams = events.filter(e => e.kind === 'oof' && e.t - .7 > t0).map(e => ({ t: e.t - .7, p: e.p }));
   camera.fov = 50; camera.updateProjectionMatrix();
   $('replayUI').classList.remove('hidden');
   setMode('replay');
@@ -1645,6 +1814,7 @@ function updateReplay(dt){
     else if (e.kind === 'puff') spawnPuff(e.p);
     else if (e.kind === 'oof') sfx.oof();
   }
+  while (rp.screams.length && rp.screams[0].t <= rp.t){ const sc = rp.screams.shift(); popText(pick(SCREAMS), sc.p, 1.4); sfx.oof(); }
   frameAt(rp.t, rp.focus);
   updateDebris(dt * rate);
   const a = (rp.t - S.impactT) * .35;
@@ -1656,8 +1826,12 @@ function updateReplay(dt){
 }
 function endReplay(){
   if (S.mode !== 'replay') return;
-  applyFrame(liveSnap, liveSnap, 0);
-  clearDebris();
+  track.forEach((o, i) => {
+    const L = liveSnap[i];
+    if (o.parent !== L.parent) L.parent.add(o);
+    o.position.copy(L.p); o.quaternion.copy(L.q); o.visible = L.v;
+  });
+  clearDebris(); clearPops();
   $('replayUI').classList.add('hidden');
   camera.fov = 70; camera.updateProjectionMatrix();
   rp = null;
