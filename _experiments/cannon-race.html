@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "2.0"
+version: "2.1"
 layout: null
 ---
 {% raw %}
@@ -83,6 +83,16 @@ layout: null
   body:not([data-mode=aim]) #fireBtn{display:none;}
   #stick{position:fixed;z-index:11;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;border:3px solid rgba(255,255,255,.7);
     background:rgba(29,36,51,.25);pointer-events:none;}
+  #replayUI{position:fixed;inset:0;z-index:12;pointer-events:none;}
+  #replayUI .bar{position:absolute;left:0;right:0;height:9vh;background:#000;}
+  #replayUI .bar.top{top:0;} #replayUI .bar.bottom{bottom:0;}
+  #replayTag{position:absolute;left:calc(env(safe-area-inset-left) + 16px);top:calc(9vh + 10px);font-weight:900;font-size:18px;
+    letter-spacing:.08em;text-shadow:0 2px 0 rgba(0,0,0,.4);animation:blink 1s steps(2) infinite;}
+  #replayTag::first-letter{color:var(--red);}
+  @keyframes blink{50%{opacity:.35;}}
+  #skipBtn{position:absolute;pointer-events:auto;right:calc(env(safe-area-inset-right) + 16px);bottom:calc(9vh + 14px);
+    background:rgba(29,36,51,.7);border:3px solid var(--cream);border-radius:30px;padding:8px 22px;font-weight:900;font-size:17px;}
+  body[data-mode=replay] #hud{display:none;}
   #stickDot{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:rgba(255,255,255,.85);}
   body:not([data-mode=fly]):not([data-mode=settle]) #speed{display:none;}
   body:not([data-mode=intro]) #banner{display:none;}
@@ -138,6 +148,11 @@ layout: null
   <button id="fireBtn">FIRE</button>
 </div>
 <div id="stick" class="hidden"><div id="stickDot"></div></div>
+<div id="replayUI" class="hidden">
+  <div class="bar top"></div><div class="bar bottom"></div>
+  <div id="replayTag">● REPLAY</div>
+  <button id="skipBtn">SKIP ▸</button>
+</div>
 
 <div class="screen" id="title">
   <h1>CANNON RACE<span>you are the cannonball</span></h1>
@@ -376,6 +391,9 @@ world.solver.iterations = 14;
 world.defaultContactMaterial.friction = 0.6;
 world.defaultContactMaterial.restitution = 0.05;
 
+// Solid things are in collision group 1 and hit groups 1 and 2; ragdoll parts are group 2 and
+// only hit group 1, so the parts of a ragdoll don't fight each other.
+function addSolid(b){ b.collisionFilterGroup = 1; b.collisionFilterMask = 3; world.addBody(b); }
 const groundMat = new CANNON.Material('ground');
 const playerMat = new CANNON.Material('player');
 world.addContactMaterial(new CANNON.ContactMaterial(playerMat, groundMat, { friction: 0.5, restitution: 0.35 }));
@@ -383,11 +401,11 @@ world.addContactMaterial(new CANNON.ContactMaterial(playerMat, groundMat, { fric
 const groundBody = new CANNON.Body({ mass: 0, material: groundMat });
 groundBody.addShape(new CANNON.Plane());
 groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-world.addBody(groundBody);
+addSolid(groundBody);
 const platBody = new CANNON.Body({ mass: 0 });
 platBody.addShape(new CANNON.Box(new CANNON.Vec3(1.8, .6, 1.8)));
 platBody.position.set(0, .6, 0);
-world.addBody(platBody);
+addSolid(platBody);
 
 /* ================= materials for blocks ================= */
 const TYPES = {
@@ -507,24 +525,31 @@ function personMesh(o){
     return o;
   };
 
+  // Every body part hangs in its own group whose origin is the joint it turns about, so the
+  // same mesh can stand rigid, wave its arms, or be split up into a ragdoll.
+  const grp = (parent, x, y, z) => { const q = new THREE.Group(); q.position.set(x, y, z); parent.add(q); return q; };
+  const parts = {};
   // legs and shoes
-  for (const s of [-1, 1]){
-    const x = s * .09;
-    const thigh = bottom === 'pants' || bottom === 'shorts' ? pants : skin;
-    const shin = bottom === 'pants' ? pants : skin;
-    tube(g, thigh, x, F + .9, F + .48, 0, .078, .062);
-    add(g, sphereG, shin, x, F + .48, 0, .058, .058, .058);
-    tube(g, shin, x, F + .48, F + .09, 0, .056, .042);
-    add(g, sphereG, shoe, x, F + .05, .035, .06, .05, .125);
-  }
-  // hips, body, chest
-  add(g, sphereG, bottom === 'skirt' ? shirt : pants, 0, F + .93, 0, .165, .1, .11);
-  if (bottom === 'skirt') add(g, skirtG, mat(pick(SHIRT)), 0, F + .78, 0, 1, 1, .8).material.side = THREE.DoubleSide;
-  add(g, taperG, shirt, 0, F + 1.18, 0, 1, 1, .66);
-  add(g, sphereG, shirt, 0, F + 1.42, 0, .19, .075, .115);
-  // neck and head
-  tube(g, skin, 0, F + 1.53, F + 1.42, 0, .045, .05);
-  const head = new THREE.Group(); head.position.set(0, F + 1.63, 0); g.add(head);
+  [-1, 1].forEach((s, i) => {
+    const thighM = bottom === 'pants' || bottom === 'shorts' ? pants : skin;
+    const shinM = bottom === 'pants' ? pants : skin;
+    const th = parts['thigh' + i] = grp(g, s * .09, F + .9, 0);
+    tube(th, thighM, 0, 0, -.42, 0, .078, .062);
+    const sn = parts['shin' + i] = grp(g, s * .09, F + .48, 0);
+    add(sn, sphereG, shinM, 0, 0, 0, .058, .058, .058);
+    tube(sn, shinM, 0, 0, -.39, 0, .056, .042);
+    add(sn, sphereG, shoe, 0, -.43, .035, .06, .05, .125);
+  });
+  // hips, body, chest, neck
+  const pel = parts.pelvis = grp(g, 0, F + .93, 0);
+  add(pel, sphereG, bottom === 'skirt' ? shirt : pants, 0, 0, 0, .165, .1, .11);
+  if (bottom === 'skirt') add(pel, skirtG, mat(pick(SHIRT)), 0, -.15, 0, 1, 1, .8).material.side = THREE.DoubleSide;
+  const tor = parts.torso = grp(g, 0, F + .97, 0);
+  add(tor, taperG, shirt, 0, .21, 0, 1, 1, .66);
+  add(tor, sphereG, shirt, 0, .45, 0, .19, .075, .115);
+  tube(tor, skin, 0, .56, .45, 0, .045, .05);
+  // head
+  const head = parts.head = grp(g, 0, F + 1.63, 0);
   add(head, sphereG, skin, 0, 0, 0, .1, .118, .108);
   add(head, sphereG, skin, 0, -.05, .025, .075, .06, .08);           // jaw
   for (const s of [-1, 1]){
@@ -559,8 +584,9 @@ function personMesh(o){
     tube(el, top === 'tee' ? skin : shirt, 0, 0, -.24, 0, .043, .034);
     add(el, sphereG, skin, 0, -.29, .005, .035, .055, .025);
     arms.push({ sh, el, s });
+    parts['sh' + (s < 0 ? 0 : 1)] = sh; parts['el' + (s < 0 ? 0 : 1)] = el;
   }
-  g.userData = { head, arms, phase: Math.random() * 10, panic: 0 };
+  g.userData = { head, arms, parts, phase: Math.random() * 10, panic: 0 };
   return g;
 }
 
@@ -568,7 +594,7 @@ function personMesh(o){
 function animatePeople(dt, t){
   const flying = S.mode === 'fly' && playerBody && S.gliding;
   for (const p of people){
-    if (p.gone) continue;
+    if (p.gone || p.rag) continue;   // a ragdoll's arms belong to the physics
     const u = p.mesh.userData;
     let want = p.out ? 1 : 0;
     if (flying && !p.out){
@@ -589,18 +615,108 @@ function animatePeople(dt, t){
   }
 }
 
+/* ================= ragdolls ================= */
+// A knocked-down person (and you, once you hit something) is eleven bodies held together by
+// cone-twist joints. Each body sits at the middle of its part; the part's mesh group hangs off it
+// at the joint. Parts of a ragdoll never collide with each other, only with the world.
+const RAG_PARTS = {
+  pelvis: { half: [.16, .1, .11], off: [0, -.02, 0], mass: 12 },
+  torso:  { half: [.17, .27, .1], off: [0, .27, 0], mass: 22 },
+  head:   { r: .12, off: [0, 0, 0], mass: 5 },
+  sh0:    { half: [.055, .15, .055], off: [0, -.14, 0], mass: 2.5 },
+  sh1:    { half: [.055, .15, .055], off: [0, -.14, 0], mass: 2.5 },
+  el0:    { half: [.045, .16, .045], off: [0, -.15, 0], mass: 2 },
+  el1:    { half: [.045, .16, .045], off: [0, -.15, 0], mass: 2 },
+  thigh0: { half: [.075, .21, .075], off: [0, -.21, 0], mass: 8 },
+  thigh1: { half: [.075, .21, .075], off: [0, -.21, 0], mass: 8 },
+  shin0:  { half: [.06, .23, .06], off: [0, -.21, 0], mass: 5 },
+  shin1:  { half: [.06, .23, .06], off: [0, -.21, 0], mass: 5 }
+};
+// parent, child, joint (in the child's group), the child's bone direction, cone angle, twist
+const RAG_JOINTS = [
+  ['pelvis', 'torso', [0, 0, 0], [0, 1, 0], .5, .4],
+  ['torso', 'head', [0, -.11, 0], [0, 1, 0], .7, .6],
+  ['torso', 'sh0', [0, 0, 0], [0, -1, 0], 1.8, .8],
+  ['torso', 'sh1', [0, 0, 0], [0, -1, 0], 1.8, .8],
+  ['sh0', 'el0', [0, 0, 0], [0, -1, 0], 1.3, .3],
+  ['sh1', 'el1', [0, 0, 0], [0, -1, 0], 1.3, .3],
+  ['pelvis', 'thigh0', [0, 0, 0], [0, -1, 0], 1.0, .3],
+  ['pelvis', 'thigh1', [0, 0, 0], [0, -1, 0], 1.0, .3],
+  ['thigh0', 'shin0', [0, 0, 0], [0, -1, 0], 1.2, .2],
+  ['thigh1', 'shin1', [0, 0, 0], [0, -1, 0], 1.2, .2]
+];
+const rwp = new THREE.Vector3(), rwq = new THREE.Quaternion(), roff = new THREE.Vector3();
+function makeRagdoll(mesh, vel, spin, owner){
+  mesh.updateMatrixWorld(true);
+  const P = mesh.userData.parts;
+  const rag = { parts: {}, bodies: [], cons: [], torso: null };
+  const c = new THREE.Vector3(); P.torso.getWorldPosition(c);
+  for (const name in RAG_PARTS){
+    const d = RAG_PARTS[name], g = P[name];
+    g.getWorldPosition(rwp); g.getWorldQuaternion(rwq);
+    const b = new CANNON.Body({ mass: d.mass });
+    b.addShape(d.r ? new CANNON.Sphere(d.r) : new CANNON.Box(new CANNON.Vec3(d.half[0], d.half[1], d.half[2])));
+    roff.set(d.off[0], d.off[1], d.off[2]).applyQuaternion(rwq).add(rwp);
+    b.position.set(roff.x, roff.y, roff.z);
+    b.quaternion.set(rwq.x, rwq.y, rwq.z, rwq.w);
+    // spin about the body's middle as well as moving with it
+    const rx = roff.x - c.x, ry = roff.y - c.y, rz = roff.z - c.z;
+    b.velocity.set(vel.x + spin.y * rz - spin.z * ry, vel.y + spin.z * rx - spin.x * rz, vel.z + spin.x * ry - spin.y * rx);
+    b.angularVelocity.set(spin.x, spin.y, spin.z);
+    b.linearDamping = .05; b.angularDamping = .35;
+    b.collisionFilterGroup = 2; b.collisionFilterMask = 1;
+    b.sleepSpeedLimit = .3; b.sleepTimeLimit = .5;
+    b.obj = owner;
+    world.addBody(b);
+    rag.parts[name] = { g, b, off: new THREE.Vector3(d.off[0], d.off[1], d.off[2]) };
+    rag.bodies.push(b);
+  }
+  const wq = new CANNON.Quaternion(), ax = new CANNON.Vec3(), wv = new CANNON.Vec3();
+  for (const [pa, ch, piv, bone, angle, twist] of RAG_JOINTS){
+    const A = rag.parts[pa].b, B = rag.parts[ch].b;
+    const w = P[ch].localToWorld(rwp.set(piv[0], piv[1], piv[2]));
+    const jw = new CANNON.Vec3(w.x, w.y, w.z);
+    const axisB = new CANNON.Vec3(bone[0], bone[1], bone[2]);
+    B.quaternion.vmult(axisB, wv);
+    A.quaternion.inverse(wq).vmult(wv, ax);
+    const con = new CANNON.ConeTwistConstraint(A, B, {
+      pivotA: A.pointToLocalFrame(jw), pivotB: B.pointToLocalFrame(jw),
+      axisA: ax.clone(), axisB, angle, twistAngle: twist, collideConnected: false
+    });
+    world.addConstraint(con);
+    rag.cons.push(con);
+  }
+  for (const name in rag.parts) levelGroup.attach(rag.parts[name].g);
+  rag.torso = rag.parts.torso.b;
+  return rag;
+}
+function syncRag(rag){
+  for (const name in rag.parts){
+    const p = rag.parts[name], b = p.b;
+    p.g.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
+    roff.copy(p.off).applyQuaternion(p.g.quaternion);
+    p.g.position.set(b.position.x - roff.x, b.position.y - roff.y, b.position.z - roff.z);
+  }
+}
+function removeRag(rag, hide){
+  for (const c of rag.cons) world.removeConstraint(c);
+  for (const b of rag.bodies) world.remove(b);
+  if (hide) for (const name in rag.parts) rag.parts[name].g.visible = false;
+}
+
 /* ================= level state ================= */
 const levelGroup = new THREE.Group();
 scene.add(levelGroup);
-let blocks = [], people = [], breakQueue = [];
+let blocks = [], people = [], breakQueue = [], ragQueue = [];
 let playerBody = null;
 let level = null, center = new THREE.Vector3();
 
 function clearLevel(){
-  for (const o of blocks.concat(people)){ if (o.body) world.remove(o.body); }
-  if (playerBody){ world.remove(playerBody); playerBody = null; }
+  for (const o of blocks) world.remove(o.body);
+  for (const o of people){ if (o.rag) removeRag(o.rag); else world.remove(o.body); }
+  removeHeroPhysics();
   while (levelGroup.children.length) levelGroup.remove(levelGroup.children[0]);
-  blocks = []; people = []; breakQueue = [];
+  blocks = []; people = []; breakQueue = []; ragQueue = [];
   clearDebris();
   clearTrail();
 }
@@ -629,7 +745,7 @@ function buildLevel(i){
       const o = { kind: 'block', type, body, mesh, mat, hp: T.hp, maxHp: T.hp, broken: false, size: Math.max(w, h, d) };
       body.obj = o;
       body.addEventListener('collide', e => hitBlock(o, Math.abs(e.contact.getImpactVelocityAlongNormal()), e.body));
-      world.addBody(body);
+      addSolid(body);
       body.sleep();
       blocks.push(o);
       top = Math.max(top, y + h);
@@ -645,7 +761,7 @@ function buildLevel(i){
       const o = { kind: 'man', body, mesh, out: false, outT: 0, gone: false };
       body.obj = o;
       body.addEventListener('collide', e => hitPerson(o, Math.abs(e.contact.getImpactVelocityAlongNormal()), e.body));
-      world.addBody(body);
+      addSolid(body);
       body.sleep();
       people.push(o);
       top = Math.max(top, y + 1.75);
@@ -660,7 +776,11 @@ function buildLevel(i){
 
 function syncMeshes(){
   for (const o of blocks) if (!o.broken){ o.mesh.position.copy(o.body.position); o.mesh.quaternion.copy(o.body.quaternion); }
-  for (const o of people) if (!o.gone){ o.mesh.position.copy(o.body.position); o.mesh.quaternion.copy(o.body.quaternion); }
+  for (const o of people){
+    if (o.rag){ if (!o.gone) syncRag(o.rag); }
+    else if (!o.gone){ o.mesh.position.copy(o.body.position); o.mesh.quaternion.copy(o.body.quaternion); }
+  }
+  if (heroRag) syncRag(heroRag);
 }
 
 function wakeNear(p, r){
@@ -675,7 +795,7 @@ function wakeNear(p, r){
 
 function hitBlock(o, v, other){
   if (o.broken || v < 2) return;
-  const mult = other === playerBody ? 3 : other.obj && other.obj.kind === 'man' ? .6 : 1;
+  const mult = other.heroBall ? 3 : other.isHero ? 1.5 : other.obj && other.obj.kind === 'man' ? .6 : 1;
   const dmg = (v - 2) * mult;
   o.hp -= dmg;
   const f = clamp(o.hp / o.maxHp, 0, 1);
@@ -686,12 +806,15 @@ function hitBlock(o, v, other){
 
 function hitPerson(o, v, other){
   if (o.out) return;
-  if ((other === playerBody && v > 1) || v > 4.5) knockOut(o);
+  if ((other.isHero && v > 1) || v > 4.5) knockOut(o);
 }
 
 function knockOut(o){
   if (o.out) return;
   o.out = true; o.outT = 0;
+  ragQueue.push(o);   // becomes a ragdoll after this physics step
+  noteImpact();
+  replayEvent('oof', o.body.position);
   sfx.oof();
   popText(pick(LINES), o.body.position, 1.2);
   updatePeopleHud();
@@ -699,8 +822,10 @@ function knockOut(o){
 
 function breakBlock(o){
   world.remove(o.body);
-  levelGroup.remove(o.mesh);
+  o.mesh.visible = false;   // hidden, not removed, so the replay can show it again
   const p = o.body.position;
+  noteImpact();
+  replayEvent('break', p, o.type, o.size);
   spawnDebris(p, o.type, o.size);
   sfx.crack(o.type);
   wakeNear(p, 6);
@@ -750,7 +875,7 @@ function updateDebris(dt){
     }
   }
 }
-function clearDebris(){ for (const d of debris){ if (d.puff) d.m.material.dispose(); } debris.length = 0; }
+function clearDebris(){ for (const d of debris){ levelGroup.remove(d.m); if (d.puff) d.m.material.dispose(); } debris.length = 0; }
 
 /* ---------- pop-up speech ---------- */
 const pops = [];
@@ -795,10 +920,9 @@ function buildTrail(){
 // The flier: a person in a red cap and suit. Their mesh sits in a holder whose +Z is the
 // direction of travel; inside it they lie face down with their head forward, arms out like wings.
 const hero = new THREE.Group();
-const heroBody = personMesh({ skin: 0xf2c89b, hair: 0x6b3e1f, shirt: 0xe8483b, pants: 0x2d3a5c, shoe: 0xf4f4f4,
-  top: 'long', bottom: 'pants', style: 'cap', cap: 0xe8483b, noBeard: true });
-heroBody.rotation.x = Math.PI / 2;
-hero.add(heroBody);
+const HERO_LOOK = { skin: 0xf2c89b, hair: 0x6b3e1f, shirt: 0xe8483b, pants: 0x2d3a5c, shoe: 0xf4f4f4,
+  top: 'long', bottom: 'pants', style: 'cap', cap: 0xe8483b, noBeard: true };
+let heroBody = null, heroRag = null;
 scene.add(hero);
 const heroDir = new THREE.Vector3(0, 0, -1);
 let heroBank = 0;
@@ -814,6 +938,13 @@ function poseHero(spread, flap){
 }
 // Put the flier in the barrel, head poking out of the muzzle.
 function heroInBarrel(){
+  // after a crash the old body is in pieces: build a fresh one
+  if (heroBody){
+    hero.remove(heroBody);
+    for (const k in heroBody.userData.parts){ const g = heroBody.userData.parts[k]; if (g.parent) g.parent.remove(g); }
+  }
+  heroBody = personMesh(HERO_LOOK);
+  hero.add(heroBody);
   pivot.add(hero);
   hero.position.set(0, .2, -1.5);
   hero.quaternion.identity();
@@ -823,6 +954,41 @@ function heroInBarrel(){
   poseHero(0, 0);
 }
 heroInBarrel();
+
+function removeHeroPhysics(){
+  if (heroRag){ removeRag(heroRag); heroRag = null; playerBody = null; }
+  else if (playerBody){ world.remove(playerBody); playerBody = null; }
+}
+
+// First hit: swap the gliding ball for a ragdoll, carrying on with most of the speed you had.
+const preVel = new THREE.Vector3();
+function heroToRagdoll(){
+  const ball = playerBody;
+  $('hint').style.opacity = 0;   // no more gliding
+  hero.position.set(ball.position.x, ball.position.y, ball.position.z);
+  const v = new THREE.Vector3(ball.velocity.x, ball.velocity.y, ball.velocity.z).multiplyScalar(.4).addScaledVector(preVel, .6);
+  const spin = new THREE.Vector3(rand(-3, 3), rand(-2, 2), rand(-3, 3));
+  world.remove(ball);
+  heroRag = makeRagdoll(heroBody, v, spin, { kind: 'hero' });
+  for (const b of heroRag.bodies) b.isHero = true;
+  heroRag.torso.addEventListener('collide', e => {
+    const iv = Math.abs(e.contact.getImpactVelocityAlongNormal());
+    if (iv > 3){ sfx.thud(Math.min(1, iv / 20) * .6); S.shake = Math.max(S.shake, Math.min(.6, iv / 25)); }
+  });
+  playerBody = heroRag.torso;
+}
+
+// A knocked-down person stops being one stiff box and goes floppy.
+function personToRagdoll(p){
+  if (p.gone || p.rag) return;
+  const b = p.body;
+  world.remove(b);
+  const v = new THREE.Vector3(b.velocity.x, b.velocity.y, b.velocity.z);
+  const w = new THREE.Vector3(b.angularVelocity.x, b.angularVelocity.y, b.angularVelocity.z);
+  p.mesh.userData.arms.forEach(a => { a.sh.rotation.z = a.s * 2.4; });   // arms up as they go
+  p.rag = makeRagdoll(p.mesh, v, w, p);
+  p.body = p.rag.torso;
+}
 
 /* ================= sound ================= */
 const sfx = (function(){
@@ -977,6 +1143,7 @@ function fire(){
   const speed = launchSpeed(p);
   playerBody = new CANNON.Body({ mass: 200, material: playerMat });
   playerBody.addShape(new CANNON.Sphere(.6));
+  playerBody.isHero = playerBody.heroBall = true;
   playerBody.linearDamping = .02; playerBody.angularDamping = .6;
   playerBody.allowSleep = false;
   const start = new THREE.Vector3(0, PIVOT_Y, 0).addScaledVector(dir, 2.5);
@@ -984,16 +1151,19 @@ function fire(){
   playerBody.velocity.set(dir.x * speed, dir.y * speed, dir.z * speed);
   playerBody.addEventListener('collide', e => {
     const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
-    playerBody.linearDamping = .3;   // once you have hit something, roll to a stop instead of forever
-    if (S.gliding){ S.gliding = false; playerBody.angularVelocity.set(rand(-6, 6), rand(-3, 3), rand(-6, 6)); }
+    if (e.body !== groundBody) noteImpact();
+    if (S.gliding){ S.gliding = false; S.toRag = true; }
     if (v > 2){ sfx.thud(Math.min(1, v / 25)); S.shake = Math.max(S.shake, Math.min(1, v / 20)); }
   });
-  world.addBody(playerBody);
+  addSolid(playerBody);
   flyDir.copy(dir);
   heroDir.copy(dir); heroBank = 0;
   scene.attach(hero);
   S.gliding = true;
   S.flyT = 0; S.slowT = 0; trailPts = []; trailT = 0;
+  S.toRag = false;
+  preVel.copy(dir).multiplyScalar(speed);
+  startRecording();
   sfx.boom();
   S.shake = .8;
   updateShotsHud();
@@ -1086,6 +1256,7 @@ canvas.addEventListener('pointerdown', e => {
   sfx.init();
   if (S.paused) return;
   if (S.mode === 'intro'){ S.introT = 99; return; }
+  if (S.mode === 'replay'){ endReplay(); return; }
   if (S.mode === 'aim' || S.mode === 'fly'){
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY };
     canvas.setPointerCapture(e.pointerId);
@@ -1139,6 +1310,7 @@ window.addEventListener('keydown', e => {
     if (e.repeat || S.paused) return;
     sfx.init();
     if (S.mode === 'intro') S.introT = 99;
+    else if (S.mode === 'replay') endReplay();
     else if (S.mode === 'aim'){ S.charging = true; S.power = 0; S.powerDir = 1; fireBtn.classList.add('charging'); }
   }
 });
@@ -1149,12 +1321,14 @@ window.addEventListener('keyup', e => {
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 function togglePause(){
+  if (S.mode === 'replay'){ endReplay(); return; }
   if (S.mode === 'title' || S.mode === 'done') return;
   S.paused = !S.paused;
   $('pause').classList.toggle('hidden', !S.paused);
   if (S.paused) sfx.wind(0);
 }
 $('pauseBtn').addEventListener('click', togglePause);
+$('skipBtn').addEventListener('click', endReplay);
 $('resumeBtn').addEventListener('click', togglePause);
 $('restartBtn').addEventListener('click', () => startLevel(S.levelIdx));
 function syncMute(){ $('muteBtn').textContent = save.muted ? 'SOUND OFF' : 'SOUND ON'; }
@@ -1209,6 +1383,8 @@ function lookQuat(from, to, out){
 function stepWorld(dt){
   world.step(1 / 90, dt, 6);
   while (breakQueue.length) breakBlock(breakQueue.shift());
+  if (S.toRag && playerBody && playerBody.heroBall){ S.toRag = false; heroToRagdoll(); }
+  while (ragQueue.length) personToRagdoll(ragQueue.shift());
   for (const p of people){
     if (p.gone) continue;
     if (!p.out && p.body.sleepState !== CANNON.Body.SLEEPING){
@@ -1217,11 +1393,11 @@ function stepWorld(dt){
     }
     if (p.out){
       p.outT += dt;
-      if (p.outT > 1.1){
+      if (p.outT > 2.2){   // long enough to watch them flop
         p.gone = true;
         spawnPuff(p.body.position);
-        world.remove(p.body);
-        levelGroup.remove(p.mesh);
+        replayEvent('puff', p.body.position);
+        if (p.rag) removeRag(p.rag, true); else { world.remove(p.body); p.mesh.visible = false; }
         wakeNear(p.body.position, 3);
       }
     }
@@ -1239,6 +1415,8 @@ function update(dt, now){
     return;
   }
   if (S.paused) return;
+
+  if (m === 'replay'){ updateReplay(dt); return; }
 
   stepWorld(dt);
   animatePeople(dt, now / 1000);
@@ -1294,6 +1472,7 @@ function update(dt, now){
         glide(vA, dt, sx, sy);
         v.set(vA.x, vA.y, vA.z);
         heroBank += (sx * .7 - heroBank) * (1 - Math.exp(-5 * dt));
+        preVel.set(v.x, v.y, v.z);
       }
       if (speed > 2){
         vA.set(v.x, v.y, v.z).normalize();
@@ -1331,9 +1510,12 @@ function update(dt, now){
       S.quietT = maxV < .4 ? S.quietT + dt : 0;
       const pending = people.some(p => p.out && !p.gone);
       const left = people.filter(p => !p.out).length;
-      if (!pending && ((S.quietT > .5 && S.settleT > 1.2) || S.settleT > 6 || (left === 0 && S.settleT > .9))) endShot();
+      if (!pending && ((S.quietT > .5 && S.settleT > 1.2) || S.settleT > 6 || (left === 0 && S.settleT > .9))){
+        if (!startReplay()) endShot();
+      }
     }
     updateHero(dt);
+    recordFrame(dt);
     const fov = 70 + clamp((speed - 12) / 20, 0, 1) * 10;
     if (Math.abs(camera.fov - fov) > .1){ camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
     $('speed').innerHTML = Math.round(speed * 3.6) + ' <small>km/h</small>';
@@ -1341,7 +1523,7 @@ function update(dt, now){
   } else if (m === 'reset'){
     S.resetT += dt;
     if (S.resetT > .35 && playerBody){
-      world.remove(playerBody); playerBody = null;
+      removeHeroPhysics();
       heroInBarrel();
       camera.fov = 72; camera.updateProjectionMatrix();
       barrelPose();
@@ -1365,11 +1547,130 @@ function update(dt, now){
   guide.visible = m === 'aim';
 }
 
+/* ================= slow-motion replay ================= */
+// During a shot every moving thing's transform is recorded about 45 times a second. If the shot
+// knocked someone down or broke something, the moment around the first hit plays back in slow
+// motion from the side, then everything is put back exactly as it was. Tap or SKIP to cut it short.
+let track = [], frames = [], events = [], rp = null, liveSnap = null;
+S.shotT = 0; S.impactT = null;
+function trackObj(o){ track.push(o); }
+function trackPerson(mesh){
+  trackObj(mesh);
+  for (const k in mesh.userData.parts) trackObj(mesh.userData.parts[k]);
+}
+function startRecording(){
+  track = []; frames = []; events = [];
+  S.shotT = 0; S.impactT = null; S.recT = 0;
+  for (const b of blocks) if (!b.broken) trackObj(b.mesh);
+  for (const p of people) if (!p.gone) trackPerson(p.mesh);
+  trackObj(hero); trackPerson(heroBody);
+}
+function noteImpact(){ if (S.impactT == null && (S.mode === 'fly' || S.mode === 'settle')) S.impactT = S.shotT; }
+function replayEvent(kind, pos, type, size){
+  if (S.mode !== 'fly' && S.mode !== 'settle') return;
+  events.push({ t: S.shotT, kind, p: new THREE.Vector3(pos.x, pos.y, pos.z), type, size });
+}
+function snapshot(){
+  const n = track.length, f = new Float32Array(n * 8), par = new Array(n);
+  for (let i = 0; i < n; i++){
+    const o = track[i], j = i * 8;
+    f[j] = o.position.x; f[j + 1] = o.position.y; f[j + 2] = o.position.z;
+    f[j + 3] = o.quaternion.x; f[j + 4] = o.quaternion.y; f[j + 5] = o.quaternion.z; f[j + 6] = o.quaternion.w;
+    f[j + 7] = o.visible ? 1 : 0;
+    par[i] = o.parent;
+  }
+  const b = playerBody;
+  return { t: S.shotT, f, par, focus: b ? new THREE.Vector3(b.position.x, b.position.y, b.position.z) : null };
+}
+function recordFrame(dt){
+  S.shotT += dt;
+  if (S.impactT != null && S.shotT > S.impactT + 1.9) return;   // have everything the replay needs
+  S.recT += dt;
+  if (S.recT < 1 / 45 && frames.length) return;
+  S.recT = 0;
+  frames.push(snapshot());
+  if (S.impactT == null) while (frames.length > 2 && frames[1].t < S.shotT - 1.3) frames.shift();
+}
+const rq1 = new THREE.Quaternion(), rq2 = new THREE.Quaternion();
+function applyFrame(a, b, u){
+  for (let i = 0; i < track.length; i++){
+    const o = track[i], j = i * 8, fa = a.f, fb = b.f;
+    if (o.parent !== a.par[i]){ if (a.par[i]) a.par[i].add(o); else if (o.parent) o.parent.remove(o); }
+    o.position.set(fa[j] + (fb[j] - fa[j]) * u, fa[j + 1] + (fb[j + 1] - fa[j + 1]) * u, fa[j + 2] + (fb[j + 2] - fa[j + 2]) * u);
+    rq1.set(fa[j + 3], fa[j + 4], fa[j + 5], fa[j + 6]);
+    rq2.set(fb[j + 3], fb[j + 4], fb[j + 5], fb[j + 6]);
+    o.quaternion.copy(rq1).slerp(rq2, u);
+    o.visible = fa[j + 7] > .5;
+  }
+}
+function frameAt(t, out){
+  let i = 0;
+  while (i < frames.length - 2 && frames[i + 1].t < t) i++;
+  const a = frames[i], b = frames[Math.min(i + 1, frames.length - 1)];
+  const u = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1) : 0;
+  applyFrame(a, b, u);
+  if (out && a.focus && b.focus) out.lerpVectors(a.focus, b.focus, u);
+}
+function startReplay(){
+  if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break')) return false;
+  const t0 = Math.max(frames[0].t, S.impactT - .8), t1 = Math.min(frames[frames.length - 1].t, S.impactT + 1.7);
+  if (t1 - t0 < .5) return false;
+  liveSnap = snapshot();
+  clearDebris(); clearPops();
+  sfx.wind(0);
+  // a camera off to the side of the hit, swinging slowly round as it plays
+  const P = new THREE.Vector3(); frameAt(S.impactT, P);
+  const f = new THREE.Vector3(flyDir.x, 0, flyDir.z);
+  if (f.lengthSq() < .01) f.set(0, 0, -1);
+  f.normalize();
+  const side = new THREE.Vector3(-f.z, 0, f.x).multiplyScalar(Math.random() < .5 ? 1 : -1);
+  rp = { t: t0, t0, t1, real: 0, ev: 0, P, f, side, focus: new THREE.Vector3().copy(P), look: new THREE.Vector3().copy(P) };
+  while (rp.ev < events.length && events[rp.ev].t < t0) rp.ev++;
+  camera.fov = 50; camera.updateProjectionMatrix();
+  $('replayUI').classList.remove('hidden');
+  setMode('replay');
+  updateReplay(0);
+  return true;
+}
+function updateReplay(dt){
+  const d = rp.t - S.impactT;
+  // full speed on the way in, slowest just after the hit, easing back up
+  const far = d < 0 ? -d * 2.2 : d * .9;
+  const rate = .3 + .7 * smooth(clamp((far - .15) / 1, 0, 1));
+  rp.t += dt * rate; rp.real += dt;
+  if (rp.t >= rp.t1 || rp.real > 5) return endReplay();   // never more than five seconds
+  while (rp.ev < events.length && events[rp.ev].t <= rp.t){
+    const e = events[rp.ev++];
+    if (e.kind === 'break'){ spawnDebris(e.p, e.type, e.size); sfx.crack(e.type); }
+    else if (e.kind === 'puff') spawnPuff(e.p);
+    else if (e.kind === 'oof') sfx.oof();
+  }
+  frameAt(rp.t, rp.focus);
+  updateDebris(dt * rate);
+  const a = (rp.t - S.impactT) * .35;
+  const off = vC.copy(rp.side).multiplyScalar(8 * Math.cos(a)).addScaledVector(rp.f, -3 + 8 * Math.sin(a));
+  camera.position.copy(rp.P).add(off);
+  camera.position.y = Math.max(1, rp.P.y + 2.2);
+  rp.look.lerp(rp.focus, dt ? 1 - Math.exp(-6 * dt) : 1);
+  camera.lookAt(rp.look);
+}
+function endReplay(){
+  if (S.mode !== 'replay') return;
+  applyFrame(liveSnap, liveSnap, 0);
+  clearDebris();
+  $('replayUI').classList.add('hidden');
+  camera.fov = 70; camera.updateProjectionMatrix();
+  rp = null;
+  setMode('settle');
+  endShot();
+}
+
 // While gliding the flier faces along their velocity and banks into turns; once they hit
 // something they tumble with the physics ball.
 const heroM = new THREE.Matrix4();
 function updateHero(dt){
   const b = playerBody;
+  if (heroRag) return;   // the ragdoll moves its own parts
   hero.position.set(b.position.x, b.position.y, b.position.z);
   if (S.gliding){
     const v = b.velocity;
@@ -1379,9 +1680,6 @@ function updateHero(dt){
     hero.rotateY(Math.PI);
     hero.rotateZ(heroBank);   // dip the wing on the inside of the turn
     poseHero(1, Math.sin(S.flyT * 9) * .06 + heroBank * .15);
-  } else {
-    hero.quaternion.slerp(qC.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w), 1 - Math.exp(-12 * dt));
-    poseHero(.6, Math.sin(S.flyT * 16) * .5);
   }
 }
 
