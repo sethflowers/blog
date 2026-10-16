@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "4.0"
+version: "4.1"
 layout: null
 ---
 {% raw %}
@@ -275,9 +275,9 @@ let save = { levels: {}, muted: false };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.levels) save = s; } catch (e) {}
 // coins, upgrade levels, what you own and what you are wearing (added in 3.0)
 save.coins = save.coins || 0;
-save.up = Object.assign({ power: 0, wings: 0, helmet: 0, shots: 0, magnet: 0, head: 0, arms: 0, feet: 0 }, save.up);
+save.up = Object.assign({ power: 0, wings: 0, helmet: 0, shots: 0, magnet: 0, head: 0, arms: 0, feet: 0, belly: 0 }, save.up);
 save.owned = Object.assign({ outfit: ['red'], hat: ['cap', 'none'], trail: ['none'], cannon: ['black'], ammo: ['you'] }, save.owned);
-save.eq = Object.assign({ outfit: 'red', hat: 'cap', trail: 'none', cannon: 'black', head: 0, arms: 0, feet: 0, ammo: 'you' }, save.eq);
+save.eq = Object.assign({ outfit: 'red', hat: 'cap', trail: 'none', cannon: 'black', head: 0, arms: 0, feet: 0, belly: 0, ammo: 'you' }, save.eq);
 function writeSave(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 
 /* ================= shop ================= */
@@ -289,14 +289,16 @@ const UPGRADES = [
   { id: 'magnet', name: 'Coin Magnet',   desc: 'Grab coins from farther away.', costs: [100, 200] },
   { id: 'head',   name: 'Big Head',      desc: 'A bigger head. Then a bigger one. Then a ridiculous one.', costs: [40, 80, 140, 220], sizes: true },
   { id: 'arms',   name: 'Long Arms',     desc: 'Longer arms, all the way up to noodles.', costs: [40, 80, 140, 220], sizes: true },
-  { id: 'feet',   name: 'Big Feet',      desc: 'Bigger shoes. Then clown shoes. Then feet like canoes.', costs: [40, 80, 140, 220], sizes: true }
+  { id: 'feet',   name: 'Big Feet',      desc: 'Bigger shoes. Then clown shoes. Then feet like canoes.', costs: [40, 80, 140, 220], sizes: true },
+  { id: 'belly',  name: 'Big Belly',     desc: 'Eat more pies. Heavier, so you hit harder.', costs: [50, 100, 160, 240], sizes: true }
 ];
 // sizes you can wear once bought; the last ones are deliberately silly
 const HEAD_SIZES = [1, 1.4, 1.9, 2.6, 3.4], HEAD_NAMES = ['Normal', 'Big', 'Bigger', 'Huge', 'Ridiculous'];
 const ARM_SIZES = [1, 1.35, 1.8, 2.4, 3.2], ARM_NAMES = ['Normal', 'Long', 'Longer', 'Super long', 'Noodle'];
 const FOOT_SIZES = [1, 1.6, 2.4, 3.3, 4.5], FOOT_NAMES = ['Normal', 'Big', 'Clown', 'Huge', 'Canoe'];
-const SIZE_NAMES = { head: HEAD_NAMES, arms: ARM_NAMES, feet: FOOT_NAMES };
-const SIZE_WORD = { head: ' head', arms: ' arms', feet: ' feet' };
+const BELLY_SIZES = [1, 1.3, 1.7, 2.2, 2.9], BELLY_NAMES = ['Normal', 'Chubby', 'Round', 'Huge', 'Beach Ball'];
+const SIZE_NAMES = { head: HEAD_NAMES, arms: ARM_NAMES, feet: FOOT_NAMES, belly: BELLY_NAMES };
+const SIZE_WORD = { head: ' head', arms: ' arms', feet: ' feet', belly: ' belly' };
 const COSMETICS = {
   outfit: [
     { id: 'red',    name: 'Red Rocket',  cost: 0,   shirt: 0xe8483b, pants: 0x2d3a5c },
@@ -954,6 +956,106 @@ LEVELS.push(
   }}
 );
 
+// Levels 41-100 are made by a generator: a few buildings side by side, sometimes on a mountain
+// top or an island, with lakes, highways and mountains in the way. Each one comes from its own
+// fixed seed, so level 57 is always the same level 57 (and your stars and times stay with it).
+function seeded(seed){
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+// The pieces a generated level is made of. Each fits in 5.2 m of width, centred on x.
+const PIECES = {
+  lookout(b, x, r){ lookout(b, x, 1 + Math.floor(r() * 3)); },
+  room(b, x, r){ const y = b.room(x, 0, 0); if (r() < .6) b.man(x, y, 0); },
+  stoneTower(b, x, r){ const y = b.cubes(x, 0, 0, 2 + Math.floor(r() * 3)); b.man(x, y, 0); },
+  bridge(b, x, r){
+    const n = 2 + Math.floor(r() * 2);
+    b.cubes(x - 2, 0, 0, n); b.cubes(x + 2, 0, 0, n);
+    b.blk('wood', x, n * 1.2, 0, 5.2, .4, 1.4);
+    b.man(x - 1.2, n * 1.2 + .4, 0); b.man(x + 1.2, n * 1.2 + .4, 0); b.man(x, 0, 0);
+  },
+  stack(b, x, r){
+    let y = b.frame(x, 0, 4.6, 1.8); b.man(x - 1, 0, 0); b.man(x + 1, 0, 0); b.man(x, y, 0);
+    if (r() < .6){ y = b.frame(x, y, 3, 1.8); b.man(x, y, 0); }
+  },
+  shelter(b, x, r){
+    b.blk(r() < .5 ? 'stone' : 'wood', x, 0, 1.2, 2.6, 1.2, .5);
+    b.man(x - .6, 0, 0); b.man(x + .6, 0, 0);
+    if (r() < .5) b.blk('glass', x, 0, -1.2, 2.6, 1.8, .2);
+  },
+  glassBox(b, x, r){
+    const y = b.room(x, 0, 0);
+    const y2 = b.room(x, y, 0);
+    if (r() < .5) b.man(x, y2, 0);
+  }
+};
+const ADJ = ['Windy', 'Sunny', 'Wobbly', 'Crooked', 'Sleepy', 'Rocky', 'Misty', 'Breezy', 'Giggly', 'Muddy', 'Frosty', 'Dizzy',
+  'Rusty', 'Golden', 'Silly', 'Lucky', 'Jolly', 'Wonky', 'Bumpy', 'Snowy', 'Squeaky', 'Noisy', 'Sneaky', 'Bouncy', 'Tiny', 'Giant'];
+const NOUNS = { lake: ['Lake', 'Pond', 'Bay', 'Lagoon'], highway: ['Crossing', 'Junction', 'Road', 'Turnpike'],
+  mountain: ['Ridge', 'Hill', 'Pass', 'Valley'], top: ['Peak', 'Summit', 'Lookout', 'Heights'], island: ['Island', 'Isle', 'Atoll'],
+  none: ['Farm', 'Village', 'Camp', 'Yard', 'Town', 'Market', 'Fair', 'Square'] };
+function genLevel(n){
+  const r = seeded(4242 + n * 7919);
+  const pk = a => a[Math.floor(r() * a.length)];
+  const hard = n / 60;   // 0 for level 41, nearly 1 for level 100
+  const D = Math.round(44 + r() * 20 + hard * 22);
+  const nPieces = Math.max(n >= 8 ? 2 : 1, 1 + Math.floor(r() * (2 + hard * 1.5)) % 3);   // from level 49, at least two buildings
+  const pieceNames = [];
+  for (let i = 0; i < nPieces; i++) pieceNames.push(pk(Object.keys(PIECES)));
+  const base = r() < .22 ? 'top' : r() < .25 ? 'island' : 'ground';
+  const wants = [];
+  const nObs = Math.floor(r() * (1.6 + hard * 1.6));
+  for (let i = 0; i < nObs; i++) wants.push(pk(['lake', 'highway', 'mountain', 'highway', 'lake']));
+  const kind = base !== 'ground' ? base : wants[0] || 'none';
+  const name = pk(ADJ) + ' ' + pk(NOUNS[kind]);
+  const seed = 99 + n * 31;
+  return { name, D, shots: 0, gen: true, build(b){
+    const rr = seeded(seed);
+    const xs = nPieces === 1 ? [0] : nPieces === 2 ? [-3.2, 3.2] : [-6, 0, 6];
+    const half = nPieces === 1 ? 3 : nPieces === 2 ? 6 : 9;
+    let near = 7 + half * .4;   // obstacles go from just in front of the buildings toward the cannon
+    if (base === 'top'){
+      const h = 5 + Math.floor(rr() * 7), r0 = 14 + half;
+      const y = b.mountain(0, 0, h, r0, half * 2 + 3);
+      b.at(0, y, 0);
+      near = r0 + 3;
+    } else if (base === 'island'){
+      const isl = half + 2.5;
+      b.lake(0, 0, isl + 7 + rr() * 4, isl);
+      near = isl + 12;
+    }
+    pieceNames.forEach((pn, i) => PIECES[pn](b, xs[i], rr));
+    b.at(0, 0, 0);
+    for (const w of wants){
+      if (w === 'lake'){
+        const rad = 5 + rr() * 6, z = near + rad + rr() * 4;
+        if (z + rad > D - 10) continue;
+        b.lake((rr() - .5) * 6, z, rad); near = z + rad + 3;
+      } else if (w === 'highway'){
+        const lanes = rr() < .3 ? 4 : 2, wd = lanes * 3.6 + 1.6, z = near + wd / 2 + rr() * 5;
+        if (z + wd / 2 > D - 9) continue;
+        b.highway(z, lanes, 10 + rr() * 6); near = z + wd / 2 + 3;
+      } else {
+        const h = 6 + rr() * 9, rad = Math.max(h, 8 + rr() * 6), z = near + rad + rr() * 4;
+        if (z + rad > D - 10) continue;
+        const pair = rr() < .35;
+        if (pair){ const gap = 3 + rad; b.mountain(-gap, z, h, rad); b.mountain(gap, z, h, rad); }
+        else b.mountain((rr() - .5) * 8, z, h, rad);
+        near = z + rad + 3;
+      }
+    }
+  }};
+}
+for (let n = 0; n < 60; n++){
+  const L = genLevel(n);
+  while (LEVELS.some(o => o.name === L.name)) L.name += ' Too';   // no two levels share a name
+  LEVELS.push(L);
+}
+
 
 /* ================= people ================= */
 const SKIN = [0xf2c89b, 0xd9a273, 0xa86b45, 0x7a4a2c, 0xf6d7b8];
@@ -1008,7 +1110,7 @@ function personMesh(o){
 
   // Every body part hangs in its own group whose origin is the joint it turns about, so the
   // same mesh can stand rigid, wave its arms, or be split up into a ragdoll.
-  const fs = o.footScale || 1;
+  const fs = o.footScale || 1, bs = o.bellyScale || 1;
   const grp = (parent, x, y, z) => { const q = new THREE.Group(); q.position.set(x, y, z); parent.add(q); return q; };
   const parts = {};
   // legs and shoes
@@ -1025,11 +1127,16 @@ function personMesh(o){
   });
   // hips, body, chest, neck
   const pel = parts.pelvis = grp(g, 0, F + .93, 0);
-  add(pel, sphereG, bottom === 'skirt' ? shirt : pants, 0, 0, 0, .165, .1, .11);
+  const hip = 1 + (bs - 1) * .55;
+  add(pel, sphereG, bottom === 'skirt' ? shirt : pants, 0, 0, 0, .165 * hip, .1, .11 * hip);
   if (bottom === 'skirt') add(pel, skirtG, mat(pick(SHIRT)), 0, -.15, 0, 1, 1, .8).material.side = THREE.DoubleSide;
   const tor = parts.torso = grp(g, 0, F + .97, 0);
-  add(tor, taperG, shirt, 0, .21, 0, 1, 1, .66);
-  add(tor, sphereG, shirt, 0, .45, 0, .19, .075, .115);
+  add(tor, taperG, shirt, 0, .21, 0, 1 + (bs - 1) * .6, 1, .66 * (1 + (bs - 1) * .6));
+  add(tor, sphereG, shirt, 0, .45, 0, .19 * (1 + (bs - 1) * .4), .075, .115 * (1 + (bs - 1) * .4));
+  if (bs > 1){   // Big Belly: a round tummy out front, and a little belly button
+    add(tor, sphereG, shirt, 0, .17, .03 * bs, .16 * bs, .18 + .05 * bs, .12 * bs);
+    add(tor, sphereG, mat(0x8a2f2f), 0, .15, .03 * bs + .12 * bs, .012, .012, .006);
+  }
   tube(tor, skin, 0, .56, .45, 0, .045, .05);
   // head
   const hs = o.headScale || 1, as = o.armScale || 1;
@@ -1079,7 +1186,7 @@ function personMesh(o){
   // arms: shoulder groups so the arm can swing, an elbow group inside
   const arms = [];
   for (const s of [-1, 1]){
-    const sh = new THREE.Group(); sh.position.set(s * .2, F + 1.4, 0); g.add(sh);
+    const sh = new THREE.Group(); sh.position.set(s * (.2 + .07 * (bs - 1)), F + 1.4, 0); g.add(sh);
     add(sh, sphereG, shirt, 0, -.01, 0, .056, .056, .056);
     const up1 = .28 * as, lo1 = .24 * as;   // Long Arms stretch the bones, not the hands
     tube(sh, shirt, 0, 0, top === 'tee' ? -.15 : -up1, 0, .056, .05);
@@ -1093,7 +1200,7 @@ function personMesh(o){
   }
   const base = {};
   for (const k in parts) base[k] = parts[k].position.clone();
-  g.userData = { head, arms, parts, base, hs, as, fs, phase: Math.random() * 10, panic: 0,
+  g.userData = { head, arms, parts, base, hs, as, fs, bs, phase: Math.random() * 10, panic: 0,
     act: pick(['wave', 'cover', 'duck', 'hop', 'spin', 'run']) };
   return g;
 }
@@ -1208,8 +1315,9 @@ function makeRagdoll(mesh, vel, spin, owner){
     const sc = name === 'head' ? mesh.userData.hs || 1 : name[0] === 's' && name[1] === 'h' || name[0] === 'e' ? mesh.userData.as || 1 : 1;
     g.getWorldPosition(rwp); g.getWorldQuaternion(rwq);
     const feet = name.startsWith('shin') ? mesh.userData.fs || 1 : 1;   // big shoes are heavy
-    const b = new CANNON.Body({ mass: name === 'head' ? Math.min(40, d.mass * sc * sc) : d.mass * Math.min(4, feet * feet) });
-    b.addShape(d.r ? new CANNON.Sphere(d.r * sc) : new CANNON.Box(new CANNON.Vec3(d.half[0], d.half[1] * sc, d.half[2])));
+    const fat = name === 'torso' || name === 'pelvis' ? mesh.userData.bs || 1 : 1;   // a big belly is wide and heavy
+    const b = new CANNON.Body({ mass: name === 'head' ? Math.min(40, d.mass * sc * sc) : d.mass * Math.min(4, feet * feet) * fat * fat });
+    b.addShape(d.r ? new CANNON.Sphere(d.r * sc) : new CANNON.Box(new CANNON.Vec3(d.half[0] * (1 + (fat - 1) * .6), d.half[1] * sc, d.half[2] * fat)));
     const off = new THREE.Vector3(d.off[0], d.off[1] * sc, d.off[2]);
     roff.copy(off).applyQuaternion(rwq).add(rwp);
     b.position.set(roff.x, roff.y, roff.z);
@@ -1276,7 +1384,7 @@ function clearLevel(){
   for (const o of people){ if (o.rag) removeRag(o.rag); else world.remove(o.body); }
   removeHeroPhysics();
   while (levelGroup.children.length) levelGroup.remove(levelGroup.children[0]);
-  blocks = []; people = []; breakQueue = []; ragQueue = [];
+  blocks = []; people = []; breakQueue = []; ragQueue = []; popQueue = [];
   clearDebris();
 }
 
@@ -1326,7 +1434,7 @@ function buildLevel(i){
       levelGroup.add(mesh);
       const o = { kind: 'man', body, mesh, out: false, outT: 0, gone: false };
       body.obj = o;
-      body.addEventListener('collide', e => hitPerson(o, Math.abs(e.contact.getImpactVelocityAlongNormal()), e.body));
+      body.addEventListener('collide', e => hitPerson(o, Math.abs(e.contact.getImpactVelocityAlongNormal()), e.body, e.contact));
       addSolid(body);
       body.sleep();
       people.push(o);
@@ -1408,6 +1516,7 @@ function buildLevel(i){
     }
   };
   level.build(b);
+  if (level.gen && !level.shots) level.shots = Math.min(8, Math.max(3, Math.round(people.length * .55) + 2));
   if (bottom === Infinity) bottom = 0;
   center.set(0, bottom + (top - bottom) * .45, oz);
   placeCoins(i, top);
@@ -1449,10 +1558,44 @@ function hitBlock(o, v, other){
   else if (dmg > 2) sfx.knock(o.type, Math.min(1, v / 15));
 }
 
-function hitPerson(o, v, other){
+// Where on a standing person something hit them: 0 at the middle of their body, +0.87 the top of the
+// head. Anything you fire that hits above the neck is a headshot.
+const hp = new CANNON.Vec3(), hl = new CANNON.Vec3();
+function hitHeight(o, c){
+  const mine = c.bi === o.body, r = mine ? c.ri : c.rj, b = mine ? c.bi : c.bj;
+  b.position.vadd(r, hp);
+  b.pointToLocalFrame(hp, hl);
+  return hl.y;
+}
+function hitPerson(o, v, other, contact){
   if (o.out) return;
+  if (other.isHero && v > 1 && contact && hitHeight(o, contact) > .5){ o.out = true; popQueue.push(o); return; }
   if ((other.isHero && v > 1) || v > 4.5) knockOut(o);
 }
+
+// Headshot: the person bursts into confetti and smoke with a POP. Only them: nothing is pushed or
+// knocked over by it (anyone standing on them just falls, as they would anyway).
+function headshot(o){
+  if (o.gone) return;
+  o.out = true; o.gone = true; o.outT = 0;
+  const p = o.body.position;
+  world.remove(o.body);
+  o.mesh.visible = false;
+  noteImpact();
+  replayEvent('pop', p);
+  popFx(p);
+  earn(10, 'people', p);
+  earn(15, 'bonus', { x: p.x, y: p.y + .8, z: p.z });
+  wakeNear(p, 3);
+  updatePeopleHud();
+}
+function popFx(p){
+  sfx.pop();
+  spawnConfetti(p);
+  spawnPuff(p);
+  popText('HEADSHOT!', { x: p.x, y: p.y + .5, z: p.z }, 1.4, 'coin');
+}
+let popQueue = [];
 
 function knockOut(o){
   if (o.out) return;
@@ -1494,6 +1637,18 @@ function spawnDebris(p, type, size){
     debris.push({ m, v: new THREE.Vector3(rand(-4, 4), rand(2, 7), rand(-4, 4)), s: new THREE.Vector3(rand(-8, 8), rand(-8, 8), rand(-8, 8)), life: rand(1.4, 2.2), puff: false });
   }
 }
+const CONFETTI = [0xe8483b, 0xffc93c, 0x3d8bff, 0x2fb37a, 0xff8fb1, 0x8e5bd6, 0xffffff].map(c => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
+function spawnConfetti(p){
+  for (let i = 0; i < 70; i++){
+    const m = new THREE.Mesh(boxG, CONFETTI[i % CONFETTI.length]);
+    m.scale.set(.09, .015, .14);
+    m.position.set(p.x + rand(-.2, .2), p.y + .5 + rand(-.3, .3), p.z + rand(-.2, .2));
+    levelGroup.add(m);
+    const a = Math.random() * Math.PI * 2, up2 = rand(.2, 1), sp = rand(3, 9);
+    debris.push({ m, v: new THREE.Vector3(Math.cos(a) * sp * (1 - up2 * .5), up2 * sp + 2, Math.sin(a) * sp * (1 - up2 * .5)),
+      s: new THREE.Vector3(rand(-12, 12), rand(-12, 12), rand(-12, 12)), life: rand(2, 3), puff: false, flutter: true });
+  }
+}
 function spawnPuff(p){
   for (let i = 0; i < 9; i++){
     const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: .9, emissive: 0x777777 });
@@ -1515,7 +1670,8 @@ function updateDebris(dt){
       d.m.material.opacity = .9 * (1 - k);
       d.m.position.addScaledVector(d.v, dt);
     } else {
-      d.v.y -= 9.8 * dt;
+      if (d.flutter){ d.v.multiplyScalar(Math.exp(-2.2 * dt)); d.v.y -= 2.5 * dt; }   // paper drifts down
+      else d.v.y -= 9.8 * dt;
       d.m.position.addScaledVector(d.v, dt);
       if (d.m.position.y < .05){ d.m.position.y = .05; d.v.y *= -.3; d.v.x *= .6; d.v.z *= .6; d.s.multiplyScalar(.6); }
       d.m.rotation.x += d.s.x * dt; d.m.rotation.y += d.s.y * dt; d.m.rotation.z += d.s.z * dt;
@@ -1653,7 +1809,7 @@ function heroLook(eq){
   const o = cosmetic('outfit', eq.outfit), hat = eq.hat;
   return { skin: 0xf2c89b, hair: 0x6b3e1f, shirt: o.shirt, pants: o.pants, shoe: 0xf4f4f4,
     top: 'long', bottom: 'pants', style: hat === 'cap' ? 'cap' : 'short', cap: o.shirt === 0xf4f4f4 ? 0x3d8bff : o.shirt,
-    hat, woman: false, noBeard: true, headScale: HEAD_SIZES[eq.head] || 1, armScale: ARM_SIZES[eq.arms] || 1, footScale: FOOT_SIZES[eq.feet] || 1 };
+    hat, woman: false, noBeard: true, headScale: HEAD_SIZES[eq.head] || 1, armScale: ARM_SIZES[eq.arms] || 1, footScale: FOOT_SIZES[eq.feet] || 1, bellyScale: BELLY_SIZES[eq.belly] || 1 };
 }
 let heroBody = null, heroRag = null, heroProp = null, heroPropBody = null;
 scene.add(hero);
@@ -1815,6 +1971,7 @@ const sfx = (function(){
     },
     honk(){ tone('square', 392, 392, .12, .25); tone('square', 494, 494, .1, .25); tone('square', 392, 392, .12, .3, .32); tone('square', 494, 494, .1, .3, .32); },
     splash(){ burst('lowpass', 900, .6, 1, .6); burst('highpass', 2500, .5, .4, .5, .05); tone('sine', 300, 80, .3, .3); },
+    pop(){ tone('square', 900, 120, .25, .12); burst('highpass', 1800, .6, .7, .2); tone('sawtooth', 300, 700, .1, .45, .08); tone('sawtooth', 380, 820, .08, .45, .08); },
     quack(){ tone('square', 520, 330, .12, .16); tone('square', 480, 300, .12, .2, .2); },
     squeak(){ tone('sine', 1300, 2400, .2, .18); tone('sine', 1500, 2700, .2, .22, .22); tone('sine', 900, 600, .12, .35, .5); },
     splat(){ burst('lowpass', 700, .8, 1, .35); tone('sine', 220, 50, .5, .3); },
@@ -1933,8 +2090,9 @@ function fire(){
   const dir = aimDir(new THREE.Vector3());
   const speed = launchSpeed(p);
   const am = ammoDef(save.eq.ammo);
-  playerBody = new CANNON.Body({ mass: Math.max(200, am.mass || 0), material: playerMat });
-  playerBody.hitMult = am.hit || 1;
+  const belly = am.id === 'you' ? BELLY_SIZES[save.eq.belly] || 1 : 1;   // Big Belly: heavier, hits harder
+  playerBody = new CANNON.Body({ mass: Math.max(200, am.mass || 0) * (1 + .4 * (belly - 1)), material: playerMat });
+  playerBody.hitMult = (am.hit || 1) * (1 + .3 * (belly - 1));
   playerBody.addShape(new CANNON.Sphere(.6));
   playerBody.isHero = playerBody.heroBall = true;
   playerBody.linearDamping = .02; playerBody.angularDamping = .6;
@@ -2196,15 +2354,16 @@ function star(g, x, y, r, c){
   g.fill();
 }
 function itemThumb(kind, id){
-  if (kind === 'outfit'){ const [m, c, l] = thumbPerson({ outfit: id, hat: 'none', head: 0, arms: 0, feet: 0 }); return thumb3d('outfit:' + id, m, c, l); }
+  if (kind === 'outfit'){ const [m, c, l] = thumbPerson({ belly: 0, outfit: id, hat: 'none', head: 0, arms: 0, feet: 0 }); return thumb3d('outfit:' + id, m, c, l); }
   if (kind === 'hat'){ const [m, c, l] = thumbPerson({ hat: id, outfit: 'red', head: 0 }, 'head'); return thumb3d('hat:' + id, m, c, l); }
   if (kind === 'cannon') return thumb3d('cannon:' + id, thumbCannon(cosmetic('cannon', id).color), [3.4, 1.8, 2.6], [0, .9, .1]);
   if (kind === 'trail') return thumb2d('trail:' + id, g => drawTrail(g, id));
-  if (kind === 'head'){ const [m, c, l] = thumbPerson({ head: id, arms: 0, hat: 'none', outfit: 'red' }); return thumb3d('head:' + id, m, c, l); }
-  if (kind === 'arms'){ const [m, c, l] = thumbPerson({ arms: id, head: 0, hat: 'none', outfit: 'red' }, null, true); return thumb3d('arms:' + id, m, c, l); }
-  if (kind === 'feet'){ const [m, c, l] = thumbPerson({ feet: id, head: 0, arms: 0, hat: 'none', outfit: 'red' }, 'feet'); return thumb3d('feet:' + id, m, c, l); }
+  if (kind === 'head'){ const [m, c, l] = thumbPerson({ belly: 0, head: id, arms: 0, hat: 'none', outfit: 'red' }); return thumb3d('head:' + id, m, c, l); }
+  if (kind === 'arms'){ const [m, c, l] = thumbPerson({ belly: 0, arms: id, head: 0, hat: 'none', outfit: 'red' }, null, true); return thumb3d('arms:' + id, m, c, l); }
+  if (kind === 'belly'){ const [m, c, l] = thumbPerson({ belly: id, head: 0, arms: 0, feet: 0, hat: 'none', outfit: 'red' }); return thumb3d('belly:' + id, m, c, l); }
+  if (kind === 'feet'){ const [m, c, l] = thumbPerson({ belly: 0, feet: id, head: 0, arms: 0, hat: 'none', outfit: 'red' }, 'feet'); return thumb3d('feet:' + id, m, c, l); }
   if (kind === 'ammo'){
-    if (id === 'you'){ const [m, c, l] = thumbPerson({ head: 0, arms: 0, feet: 0 }); return thumb3d('ammo:you', m, c, l); }
+    if (id === 'you'){ const [m, c, l] = thumbPerson({ belly: 0, head: 0, arms: 0, feet: 0 }); return thumb3d('ammo:you', m, c, l); }
     const a = ammoDef(id), d = 2.3 * Math.max(...a.half);
     return thumb3d('ammo:' + id, propMesh(id), [d * .75, d * .45, d * 1.05], [0, 0, 0]);
   }
@@ -2476,6 +2635,7 @@ function stepWorld(dt){
   while (breakQueue.length) breakBlock(breakQueue.shift());
   if (S.toRag && playerBody && playerBody.heroBall){ S.toRag = false; heroToRagdoll(); }
   while (ragQueue.length) personToRagdoll(ragQueue.shift());
+  while (popQueue.length) headshot(popQueue.shift());
   for (const p of people){
     if (p.gone) continue;
     if (!p.out && p.body.sleepState !== CANNON.Body.SLEEPING){
@@ -2711,7 +2871,7 @@ function frameAt(t, out){
   if (out && a.focus && b.focus) out.lerpVectors(a.focus, b.focus, u);
 }
 function startReplay(){
-  if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break' || e.kind === 'splash')) return false;
+  if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break' || e.kind === 'splash' || e.kind === 'pop')) return false;
   const t0 = Math.max(frames[0].t, S.impactT - .8), t1 = Math.min(frames[frames.length - 1].t, S.impactT + 1.7);
   if (t1 - t0 < .5) return false;
   liveSnap = track.map(o => ({ parent: o.parent, p: o.position.clone(), q: o.quaternion.clone(), v: o.visible }));
@@ -2746,6 +2906,7 @@ function updateReplay(dt){
     else if (e.kind === 'oof') sfx.oof();
     else if (e.kind === 'ammo') ammoNoise(ammoDef(e.type), e.p);
     else if (e.kind === 'splash') splashFx(e.p);
+    else if (e.kind === 'pop') popFx(e.p);
   }
   while (rp.screams.length && rp.screams[0].t <= rp.t){ const sc = rp.screams.shift(); popText(pick(SCREAMS), sc.p, 1.4); sfx.oof(); }
   frameAt(rp.t, rp.focus);
