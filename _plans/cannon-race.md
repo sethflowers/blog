@@ -22,9 +22,24 @@ it installs and runs offline.
    left/right turns (and banks into the turn), up climbs but slows you, down dives and speeds
    you up. Lift holds you up while you are fast, so you sink as you slow down. There is no push
    button any more.
-4. **Hit**: the first thing you touch ends the glide; from then on you tumble with the physics.
+4. **Hit**: the first thing you touch ends the glide, and you become a ragdoll (see below) that
+   carries on with most of your speed.
 5. **Settle**: once you stop (or fly off past everything), the camera turns to watch the
    structure until it stops moving, then you are back in the cannon.
+6. **Replay** (2.1): if the shot knocked someone down or broke something, the moment around
+   the first hit plays again in slow motion from a camera off to the side, with letterbox bars.
+   It runs from just before the hit to 1.7 s after, slowest right after the hit, and never takes
+   more than five seconds. Tap anywhere, SKIP, Space or Esc cuts it short. The race clock does
+   not run during it. Every moving thing is recorded about 45 times a second during the shot,
+   and everything is put back exactly as it was when the replay ends.
+
+## Ragdolls (2.1)
+
+You (after your first hit) and every knocked-down person become ragdolls: eleven bodies (pelvis,
+chest, head, upper and lower arms, thighs, shins) held together by cone-twist joints with limits,
+so they fold, flop and slide instead of tipping over like a plank. A ragdoll's own parts don't
+collide with each other, only with the world. Knocked-down people flop for about two seconds
+before they vanish in a puff.
 
 ## The structures
 
