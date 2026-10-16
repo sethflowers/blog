@@ -148,3 +148,8 @@ upgrades are drawn icons. Tap a card to try the item on: the person beside the c
 the cannon changes colour, or the trail swirls around them, with a blue "Trying on" bar. It's only
 kept if you buy it; switching tabs, buying, or leaving the shop puts back what you're wearing. The
 Big Head and Long Arms cards show and try on the next size up.
+
+**Updates (3.2).** The service worker fetches the page from the network first, bypassing the HTTP
+cache, and falls back to the cached copy offline or after three seconds. Before, it served the cached
+page and refreshed it in the background, which a phone could skip (the refresh came from the HTTP
+cache, or was killed when the app closed), leaving the installed app stuck on an old version.
