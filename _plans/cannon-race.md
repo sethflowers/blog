@@ -67,8 +67,8 @@ they tip past about 57°. They shout something, then vanish in a puff.
 
 ## Levels
 
-| # | Name | Distance | Shots | People |
-| --- | --- | --- | --- | --- |
+| # | Name | Distance | Shots | People | In the way |
+| --- | --- | --- | --- | --- | --- |
 | 1 | Backyard | 28 m | 3 | 2 |
 | 2 | The Shed | 34 m | 3 | 3 |
 | 3 | Glass House | 38 m | 4 | 4 |
@@ -89,6 +89,26 @@ they tip past about 57°. They shout something, then vanish in a puff.
 | 18 | Two Forts | 52 m and 68 m | 6 | 4 |
 | 19 | Stone Pyramid | 60 m | 5 | 5 |
 | 20 | Grand Finale | 70 m | 7 | 7 |
+| 21 | Lakeside | 40 m | 3 | 3 | lake |
+| 22 | Over the Highway | 42 m | 3 | 3 | highway |
+| 23 | The Mountain | 55 m | 4 | 5 | mountain |
+| 24 | Island | 46 m | 4 | 3 | lake around an island |
+| 25 | Rush Hour | 56 m | 5 | 6 | two highways |
+| 26 | Mountain Top | 62 m | 4 | 3 | on a mountain |
+| 27 | Duck Pond | 46 m | 4 | 4 | lake |
+| 28 | Valley Village | 60 m | 4 | 2 | two mountains with a gap |
+| 29 | Traffic Jam | 50 m | 4 | 6 | highway right in front |
+| 30 | Ski Lodge | 66 m | 5 | 3 | on a snowy mountain |
+| 31 | Big Lake | 75 m | 5 | 5 | big lake |
+| 32 | Highway and Lake | 62 m | 5 | 5 | highway, then a lake |
+| 33 | Peak Tower | 66 m | 5 | 6 | a tall snowy peak |
+| 34 | Lighthouse | 58 m | 4 | 3 | island |
+| 35 | Twin Peaks | 70 m | 5 | 6 | two mountains |
+| 36 | Freeway | 58 m | 5 | 5 | four lanes |
+| 37 | Castle Moat | 64 m | 6 | 5 | moat round the castle |
+| 38 | Mountain Pass | 68 m | 5 | 5 | mountains and a highway |
+| 39 | Everything | 78 m | 6 | 7 | lake, highway and mountain |
+| 40 | The Last Stand | 80 m | 7 | 7 | lake, then a fort on a mountain |
 
 Levels are built from `blk` and `man` plus three helpers: `frame` (two posts and a plank),
 `cubes` (a column of stone cubes) and `room` (a little glass room with a stone roof).
@@ -153,3 +173,41 @@ Big Head and Long Arms cards show and try on the next size up.
 cache, and falls back to the cached copy offline or after three seconds. Before, it served the cached
 page and refreshed it in the background, which a phone could skip (the refresh came from the HTTP
 cache, or was killed when the app closed), leaving the installed app stuck on an old version.
+
+## Obstacles (4.0)
+
+Built with the level, positioned relative to the building (+z toward the cannon):
+
+- `mountain(x, z, h, r, flat)`: a slice of a big static sphere sunk into the ground, snow on top if
+  it's over 9 m. With `flat`, a static wooden deck on the peak, and `b.at(0, y, 0)` builds the
+  structure up there. Hitting the slope ends your glide like anything else.
+- `lake(x, z, r, island)`: water with a sandy shore, optionally a dry island in the middle. Coming
+  down in it makes a big splash (sound, spray, "SPLASH!") and the water slows you right down. A splash
+  is enough for a replay.
+- `highway(z, lanes, speed)`: a road with cars driving both ways. Cars are kinematic bodies: they keep
+  going whatever hits them, shove things aside, knock people down and honk when they hit you.
+  They loop at ±80 m.
+
+Coins are never placed inside a mountain.
+
+## Ammo and Big Feet (3.3)
+
+The shop's **Ammo** tab: fire something other than yourself. It glides the same way, then tumbles
+as one solid lump with its own noise and a word ("MOOOO!"), which also plays in the replay.
+
+| Ammo | Cost | Notes |
+| --- | --- | --- |
+| You | free | |
+| Giant Rubber Duck | 60 | quacks |
+| Watermelon | 80 | spins, and splats into red and green bits |
+| Rubber Chicken | 100 | spins fast, squeaks |
+| Toilet | 130 | flushes, hits 1.3x |
+| Cow | 180 | moos, hits 1.5x |
+| Grand Piano | 260 | a crashing chord, hits 2x |
+
+Big Feet (upgrade, 4 levels: Big, Clown, Huge, Canoe): the soles stay on the ground and the shoes
+grow forward; big shoes make the ragdoll's shins heavier.
+
+People are dressed consistently (3.3): men wear trousers or shorts, with short hair, a cap, or bald
+(sometimes a beard); women wear trousers, shorts or a skirt, with long hair, a ponytail, short hair or
+a cap, and never a beard.

@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "3.2"
+version: "4.0"
 layout: null
 ---
 {% raw %}
@@ -275,9 +275,9 @@ let save = { levels: {}, muted: false };
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.levels) save = s; } catch (e) {}
 // coins, upgrade levels, what you own and what you are wearing (added in 3.0)
 save.coins = save.coins || 0;
-save.up = Object.assign({ power: 0, wings: 0, helmet: 0, shots: 0, magnet: 0, head: 0, arms: 0 }, save.up);
-save.owned = Object.assign({ outfit: ['red'], hat: ['cap', 'none'], trail: ['none'], cannon: ['black'] }, save.owned);
-save.eq = Object.assign({ outfit: 'red', hat: 'cap', trail: 'none', cannon: 'black', head: 0, arms: 0 }, save.eq);
+save.up = Object.assign({ power: 0, wings: 0, helmet: 0, shots: 0, magnet: 0, head: 0, arms: 0, feet: 0 }, save.up);
+save.owned = Object.assign({ outfit: ['red'], hat: ['cap', 'none'], trail: ['none'], cannon: ['black'], ammo: ['you'] }, save.owned);
+save.eq = Object.assign({ outfit: 'red', hat: 'cap', trail: 'none', cannon: 'black', head: 0, arms: 0, feet: 0, ammo: 'you' }, save.eq);
 function writeSave(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
 
 /* ================= shop ================= */
@@ -288,11 +288,15 @@ const UPGRADES = [
   { id: 'shots',  name: 'Extra Shot',    desc: 'One more shot on every level.', costs: [250, 500] },
   { id: 'magnet', name: 'Coin Magnet',   desc: 'Grab coins from farther away.', costs: [100, 200] },
   { id: 'head',   name: 'Big Head',      desc: 'A bigger head. Then a bigger one. Then a ridiculous one.', costs: [40, 80, 140, 220], sizes: true },
-  { id: 'arms',   name: 'Long Arms',     desc: 'Longer arms, all the way up to noodles.', costs: [40, 80, 140, 220], sizes: true }
+  { id: 'arms',   name: 'Long Arms',     desc: 'Longer arms, all the way up to noodles.', costs: [40, 80, 140, 220], sizes: true },
+  { id: 'feet',   name: 'Big Feet',      desc: 'Bigger shoes. Then clown shoes. Then feet like canoes.', costs: [40, 80, 140, 220], sizes: true }
 ];
 // sizes you can wear once bought; the last ones are deliberately silly
 const HEAD_SIZES = [1, 1.4, 1.9, 2.6, 3.4], HEAD_NAMES = ['Normal', 'Big', 'Bigger', 'Huge', 'Ridiculous'];
 const ARM_SIZES = [1, 1.35, 1.8, 2.4, 3.2], ARM_NAMES = ['Normal', 'Long', 'Longer', 'Super long', 'Noodle'];
+const FOOT_SIZES = [1, 1.6, 2.4, 3.3, 4.5], FOOT_NAMES = ['Normal', 'Big', 'Clown', 'Huge', 'Canoe'];
+const SIZE_NAMES = { head: HEAD_NAMES, arms: ARM_NAMES, feet: FOOT_NAMES };
+const SIZE_WORD = { head: ' head', arms: ' arms', feet: ' feet' };
 const COSMETICS = {
   outfit: [
     { id: 'red',    name: 'Red Rocket',  cost: 0,   shirt: 0xe8483b, pants: 0x2d3a5c },
@@ -325,8 +329,112 @@ const COSMETICS = {
     { id: 'gold',  name: 'Golden',       cost: 180, color: 0xd9a531 }
   ]
 };
+// Things to fire out of the cannon instead of yourself. Each glides like you do, then tumbles as a
+// solid lump once it hits something, with its own noise. half: the box it tumbles as (metres).
+const AMMO = [
+  { id: 'you',     name: 'You',               cost: 0 },
+  { id: 'duck',    name: 'Giant Rubber Duck', cost: 60,  half: [.55, .6, .75], mass: 150, hit: 1,   roll: 0,   noise: 'quack',  word: 'QUACK!' },
+  { id: 'melon',   name: 'Watermelon',        cost: 80,  half: [.5, .5, .7],   mass: 120, hit: 1,   roll: 4,   noise: 'splat',  word: 'SPLAT!' },
+  { id: 'chicken', name: 'Rubber Chicken',    cost: 100, half: [.28, .35, .85], mass: 80, hit: .8,  roll: 7,   noise: 'squeak', word: 'SQUEAAK!' },
+  { id: 'toilet',  name: 'Toilet',            cost: 130, half: [.38, .55, .55], mass: 220, hit: 1.3, roll: 0,  noise: 'flush',  word: 'FLUSH!' },
+  { id: 'cow',     name: 'Cow',               cost: 180, half: [.42, .7, 1],   mass: 300, hit: 1.5, roll: 1.2, noise: 'moo',    word: 'MOOOO!' },
+  { id: 'piano',   name: 'Grand Piano',       cost: 260, half: [.75, .55, .85], mass: 450, hit: 2,  roll: 0,   noise: 'piano',  word: 'PLONK!' }
+];
+const ammoDef = id => AMMO.find(a => a.id === id) || AMMO[0];
+COSMETICS.ammo = AMMO;
+
+// The ammo meshes, built around their middle and facing +Z (the way they fly).
+let melonM = null, cowM = null, keysM = null;
+function propMesh(id){
+  const g = new THREE.Group();
+  const put = (geo, m, x, y, z, sx, sy, sz, rx, ry, rz) => {
+    const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz);
+    o.rotation.set(rx || 0, ry || 0, rz || 0); o.castShadow = true; g.add(o); return o;
+  };
+  if (id === 'duck'){
+    const y = mat(0xffd21f), o = mat(0xff8a2b);
+    put(sphereG, y, 0, -.15, -.05, .55, .42, .7);
+    put(sphereG, y, 0, .3, .38, .32, .32, .32);
+    put(sphereG, o, 0, .25, .72, .14, .06, .16);
+    put(sphereG, y, 0, -.05, -.62, .18, .22, .14, -.6);   // tail
+    for (const s2 of [-1, 1]){
+      put(sphereG, whiteM, s2 * .16, .4, .62, .07, .07, .05);
+      put(sphereG, blackM, s2 * .17, .4, .66, .035, .04, .03);
+      put(sphereG, y, s2 * .48, -.08, -.05, .12, .22, .38, 0, 0, s2 * .3);   // wings
+    }
+  } else if (id === 'melon'){
+    if (!melonM) melonM = canvasMat(256, (c, n) => {
+      c.fillStyle = '#3f8f2f'; c.fillRect(0, 0, n, n);
+      c.fillStyle = '#1f5a1c';
+      for (let i = 0; i < 9; i++){ c.beginPath(); for (let y2 = 0; y2 <= n; y2 += 8) c.lineTo(i * n / 9 + Math.sin(y2 * .08 + i) * 6, y2); for (let y2 = n; y2 >= 0; y2 -= 8) c.lineTo(i * n / 9 + 12 + Math.sin(y2 * .08 + i) * 6, y2); c.fill(); }
+    });
+    put(sphereG, melonM, 0, 0, 0, .5, .5, .7, Math.PI / 2);
+  } else if (id === 'chicken'){
+    const y = mat(0xffe25a), r = mat(0xe8483b), o = mat(0xff8a2b);
+    put(cylG, y, 0, -.05, -.1, .2, .9, .16, Math.PI / 2 - .15);        // long rubbery body
+    put(cylG, y, 0, .12, .5, .07, .4, .07, 1.0);                         // droopy neck
+    put(sphereG, y, 0, .25, .72, .12, .12, .13);
+    put(coneG, o, 0, .22, .88, .05, .12, .05, Math.PI / 2);
+    put(boxG, r, 0, .38, .7, .02, .1, .14);                              // comb
+    put(sphereG, r, 0, .13, .82, .03, .06, .03);                         // wattle
+    for (const s2 of [-1, 1]){
+      put(sphereG, blackM, s2 * .1, .29, .79, .025, .03, .02);
+      put(cylG, o, s2 * .08, -.28, -.55, .025, .3, .025, .4);            // dangly legs
+    }
+  } else if (id === 'toilet'){
+    const w = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 90, specular: 0x666666 });
+    put(cylG, w, 0, -.3, .1, .2, .5, .24);
+    put(cylG, w, 0, .02, .12, .32, .18, .4);                              // bowl
+    put(new THREE.TorusGeometry(1, .18, 8, 24), w, 0, .12, .12, .27, .34, .27, Math.PI / 2);   // seat
+    put(cylG, mat(0x7fc8ff), 0, .1, .12, .24, .02, .3);                   // water
+    put(boxG, w, 0, .25, -.38, .6, .55, .22);                             // tank
+    put(boxG, w, 0, .55, -.38, .66, .05, .26);
+    put(boxG, mat(0xc0c4c8), .22, .42, -.26, .1, .03, .04);               // handle
+  } else if (id === 'cow'){
+    if (!cowM) cowM = canvasMat(256, (c, n) => {
+      c.fillStyle = '#f4f1ea'; c.fillRect(0, 0, n, n); c.fillStyle = '#1d1d1d';
+      for (let i = 0; i < 9; i++){ c.beginPath(); c.ellipse(Math.random() * n, Math.random() * n, 18 + Math.random() * 26, 14 + Math.random() * 18, Math.random() * 3, 0, 7); c.fill(); }
+    });
+    const pink = mat(0xf2a7b5), dark = mat(0x2a2a2a), horn = mat(0xf4ecd8);
+    put(boxG, cowM, 0, .05, -.1, .8, .7, 1.5);
+    put(boxG, cowM, 0, .3, .82, .5, .45, .5);
+    put(boxG, pink, 0, .2, 1.1, .4, .25, .1);                               // snout
+    for (const s2 of [-1, 1]){
+      put(sphereG, dark, s2 * .14, .2, 1.16, .04, .04, .02);              // nostrils
+      put(sphereG, whiteM, s2 * .2, .42, 1.06, .06, .06, .03);
+      put(sphereG, blackM, s2 * .2, .42, 1.09, .03, .035, .02);
+      put(coneG, horn, s2 * .22, .6, .78, .04, .2, .04, 0, 0, -s2 * .5);
+      put(boxG, cowM, s2 * .32, .48, .72, .2, .08, .12);                 // ears
+      for (const z of [-.6, .4]) put(boxG, cowM, s2 * .27, -.55, z, .16, .6, .16);   // legs
+    }
+    put(sphereG, pink, 0, -.3, -.3, .2, .12, .2);                          // udder
+    put(cylG, dark, 0, .1, -.95, .03, .5, .03, .7);                        // tail
+  } else if (id === 'piano'){
+    if (!keysM) keysM = canvasMat(256, (c, n) => {
+      c.fillStyle = '#fff'; c.fillRect(0, 0, n, n); c.fillStyle = '#222';
+      for (let i = 0; i < 26; i++) c.fillRect(i * n / 26, 0, 1.5, n);
+      for (let i = 0; i < 26; i++) if ([0, 1, 3, 4, 5].includes(i % 7)) c.fillRect(i * n / 26 + 6, 0, 6, n * .6);
+    });
+    const blk = new THREE.MeshPhongMaterial({ color: 0x141414, shininess: 120, specular: 0x777777 });
+    put(boxG, blk, 0, .12, -.15, 1.4, .32, 1.3);
+    put(cylG, blk, .25, .12, -.75, .45, .32, .45);                          // the curved end
+    put(boxG, keysM, 0, .12, .62, 1.3, .06, .24);
+    put(boxG, blk, 0, .23, .62, 1.4, .1, .04);
+    const lid = put(boxG, blk, 0, .55, -.25, 1.38, .03, 1.25, -.55);        // lid propped open
+    lid.position.y = .55;
+    put(cylG, mat(0x333333), -.1, .55, -.05, .015, .6, .015, -.5);         // lid stick
+    for (const [x, z] of [[-.6, .5], [.6, .5], [.2, -.8]]) put(cylG, blk, x, -.25, z, .06, .45, .06);
+    put(boxG, mat(0xd9a531), 0, -.32, .55, .3, .05, .12);                 // pedals
+  } else {
+    put(sphereG, mat(0x888888), 0, 0, 0, .5, .5, .5);
+  }
+  g.userData.ammo = id;
+  return g;
+}
+
 const SWATCH = { cap: '#e8483b', none: '#6b3e1f', party: '#ff8fb1', top: '#1d1d1d', viking: '#9aa0a6', crown: '#ffc93c',
-  smoke: '#9aa0a6', sparkle: '#fff3b0', rainbow: 'conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)' };
+  smoke: '#9aa0a6', sparkle: '#fff3b0', rainbow: 'conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)',
+  you: '#e8483b', duck: '#ffd21f', melon: '#3f8f2f', chicken: '#ffe25a', toilet: '#ffffff', cow: 'repeating-linear-gradient(45deg,#fff 0 5px,#222 5px 9px)', piano: '#141414' };
 const cosmetic = (kind, id) => COSMETICS[kind].find(c => c.id === id) || COSMETICS[kind][0];
 const up = id => save.up[id] || 0;
 
@@ -378,6 +486,11 @@ sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
 /* ---------- canvas textures ---------- */
+function canvasMat(size, draw, color){
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  draw(c.getContext('2d'), size);
+  return new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c), color: color || 0xffffff });
+}
 function canvasTex(size, draw, repeat){
   const c = document.createElement('canvas'); c.width = c.height = size;
   draw(c.getContext('2d'), size);
@@ -536,6 +649,79 @@ function blockMaterial(type){
   if (type === 'stone') return new THREE.MeshLambertMaterial({ map: stoneTex });
   return new THREE.MeshPhongMaterial({ color: 0xbfe8ff, transparent: true, opacity: .42, shininess: 120, specular: 0xffffff });
 }
+
+/* ================= obstacles ================= */
+const mountainMat = canvasMat(256, (c, n) => {
+  c.fillStyle = '#5f9a3f'; c.fillRect(0, 0, n, n);
+  for (let i = 0; i < 500; i++){ c.fillStyle = Math.random() < .5 ? 'rgba(60,110,40,.5)' : 'rgba(130,120,100,.35)'; c.fillRect(Math.random() * n, Math.random() * n, 5, 3); }
+});
+mountainMat.map.wrapS = mountainMat.map.wrapT = THREE.RepeatWrapping; mountainMat.map.repeat.set(8, 4);
+const snowMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x222833 });
+const sandMat = new THREE.MeshLambertMaterial({ color: 0xe8d39a, polygonOffset: true, polygonOffsetFactor: -1 });
+const waterMat = new THREE.MeshPhongMaterial({ color: 0x2f8fd8, transparent: true, opacity: .82, shininess: 120, specular: 0xffffff, polygonOffset: true, polygonOffsetFactor: -2 });
+const roadMat = new THREE.MeshLambertMaterial({ color: 0x3a3d44, polygonOffset: true, polygonOffsetFactor: -1 });
+const dashMat = canvasMat(64, (c, n) => { c.fillStyle = '#fff'; c.fillRect(0, 0, n * .55, n); }, 0xffffff);
+dashMat.transparent = true; dashMat.map.wrapS = THREE.RepeatWrapping; dashMat.map.repeat.set(80, 1);
+dashMat.polygonOffset = true; dashMat.polygonOffsetFactor = -2;
+const yellowLineMat = new THREE.MeshLambertMaterial({ color: 0xffc93c, polygonOffset: true, polygonOffsetFactor: -2 });
+const CAR_COLORS = [0xe8483b, 0x3d8bff, 0xffc93c, 0x2fb37a, 0xf4f4f4, 0x8e5bd6, 0xff8a2b, 0x222222];
+// Cars are kinematic: they drive at a steady speed whatever hits them, and shove things aside.
+function addCar(x, z, vx){
+  const g = new THREE.Group(), paint = new THREE.MeshPhongMaterial({ color: pick(CAR_COLORS), shininess: 70 });
+  const glassM = new THREE.MeshPhongMaterial({ color: 0x9fd4ff, shininess: 120 });
+  const body = new THREE.Mesh(boxG, paint); body.scale.set(4.2, .8, 1.9); body.position.y = .65; g.add(body);
+  const cab = new THREE.Mesh(boxG, glassM); cab.scale.set(2.2, .7, 1.7); cab.position.set(-.2, 1.35, 0); g.add(cab);
+  const roof = new THREE.Mesh(boxG, paint); roof.scale.set(2, .08, 1.72); roof.position.set(-.2, 1.72, 0); g.add(roof);
+  const wheelG = new THREE.CylinderGeometry(.38, .38, .3, 14), tyre = mat(0x1a1a1a);
+  for (const wx of [-1.35, 1.35]) for (const wz of [-.9, .9]){ const w = new THREE.Mesh(wheelG, tyre); w.rotation.x = Math.PI / 2; w.position.set(wx, .38, wz); g.add(w); }
+  for (const s2 of [-.6, .6]){ const l = new THREE.Mesh(sphereG, new THREE.MeshBasicMaterial({ color: 0xfff3b0 })); l.scale.set(.05, .1, .14); l.position.set(2.1 * Math.sign(vx), .75, s2); g.add(l); }
+  g.traverse(o => { o.castShadow = true; });
+  g.rotation.y = 0;
+  levelGroup.add(g);
+  const b = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC });
+  b.addShape(new CANNON.Box(new CANNON.Vec3(2.1, .85, .95)));
+  b.position.set(x, .85, z); b.velocity.set(vx, 0, 0);
+  b.isCar = true;
+  b.addEventListener('collide', e => {
+    if (e.body.isHero && !S.honked){ S.honked = true; sfx.honk(); popText('HONK!', b.position, 1.2); }
+  });
+  addSolid(b); obstacleBodies.push(b);
+  cars.push({ g, b });
+  g.position.set(x, 0, z);
+}
+function updateCars(){
+  for (const c of cars){
+    const b = c.b;
+    if (b.position.x > 80) b.position.x = -80;
+    if (b.position.x < -80) b.position.x = 80;
+    c.g.position.set(b.position.x, 0, b.position.z);
+  }
+}
+// Landing in a lake: a big splash, and you stop.
+function inLake(x, z){
+  for (const l of lakes){
+    const d = Math.hypot(x - l.x, z - l.z);
+    if (d < l.r && d > l.island) return true;
+  }
+  return false;
+}
+function checkSplash(){
+  if (S.splashed || !playerBody || !lakes.length) return;
+  const p = playerBody.position;
+  if (p.y > 1.1 || !inLake(p.x, p.z)) return;
+  S.splashed = true;
+  if (S.gliding){ S.gliding = false; S.toRag = true; }
+  splashFx(p);
+  replayEvent('splash', p);
+  noteImpact();
+}
+function splashFx(p){
+  spawnDebris({ x: p.x, y: .3, z: p.z }, 'water', 3);
+  spawnDebris({ x: p.x, y: .3, z: p.z }, 'foam', 2);
+  sfx.splash();
+  popText('SPLASH!', p, 1.3);
+}
+function heroBodies(){ return heroRag ? heroRag.bodies : playerBody ? [playerBody] : []; }
 
 /* ================= levels ================= */
 // Coordinates are relative to the middle of each structure, which stands D metres in
@@ -707,6 +893,67 @@ function buildFort(b){
   for (const x of [-1.6, 1.6]){ b.blk('glass', x, 0, 1.3, 1, 2, .2); b.man(x, 0, 0); }
 }
 
+// Levels 21-40: the same kinds of buildings, with mountains, lakes and highways in the way.
+// Obstacle positions are relative to the building too: +z is toward the cannon.
+const like = i => b => LEVELS[i].build(b);
+function lookout(b, x, floors){
+  let y = 0;
+  for (let k = 0; k < floors; k++){ b.man(x, y, 0); y = b.frame(x, y, 3, 2.1); }
+  b.man(x, y, 0);
+}
+LEVELS.push(
+  { name: 'Lakeside', D: 40, shots: 3, build(b){
+    b.lake(0, 13, 8);
+    b.frame(0, 0, 3.4, 2.2); b.man(0, 2.6, 0); b.man(0, 0, 0); b.man(3.4, 0, 0);
+  }},
+  { name: 'Over the Highway', D: 42, shots: 3, build(b){ b.highway(16); like(1)(b); } },
+  { name: 'The Mountain', D: 55, shots: 4, build(b){ b.mountain(0, 26, 9, 15); like(3)(b); } },
+  { name: 'Island', D: 46, shots: 4, build(b){
+    b.lake(0, 0, 15, 5);
+    b.room(-1.6, 0, 0); b.frame(1.8, 0, 2.4, 2); b.man(1.8, 0, 0); b.man(1.8, 2.4, 0);
+  }},
+  { name: 'Rush Hour', D: 56, shots: 5, build(b){ b.highway(30, 2, 12); b.highway(14, 2, 16); like(6)(b); } },
+  { name: 'Mountain Top', D: 62, shots: 4, build(b){
+    const y = b.mountain(0, 0, 8, 20, 10);
+    b.at(0, y, 0); like(0)(b); b.man(-3, 0, 0);
+  }},
+  { name: 'Duck Pond', D: 46, shots: 4, build(b){ b.lake(0, 15, 10); like(2)(b); } },
+  { name: 'Valley Village', D: 60, shots: 4, build(b){
+    b.mountain(-15, 22, 13, 13); b.mountain(15, 22, 13, 13);
+    for (const x of [-3, 3]) b.room(x, 0, 0);
+  }},
+  { name: 'Traffic Jam', D: 50, shots: 4, build(b){ b.highway(8, 2, 10); like(8)(b); } },
+  { name: 'Ski Lodge', D: 66, shots: 5, build(b){
+    const y = b.mountain(0, 2, 13, 18, 9);
+    b.at(0, y, 0); b.room(-2.2, 0, 0); b.room(2.2, 0, 0); b.man(0, 2.45, 0);
+  }},
+  { name: 'Big Lake', D: 75, shots: 5, build(b){ b.lake(0, 30, 22); buildFort(b); } },
+  { name: 'Highway and Lake', D: 62, shots: 5, build(b){ b.highway(40); b.lake(0, 16, 9); like(4)(b); } },
+  { name: 'Peak Tower', D: 66, shots: 5, build(b){ b.mountain(0, 30, 16, 16); like(10)(b); } },
+  { name: 'Lighthouse', D: 58, shots: 4, build(b){
+    b.lake(0, 0, 18, 4);
+    const y = b.cubes(0, 0, 0, 5); b.at(0, y, 0); b.room(0, 0, 0); b.man(0, 2.45, 0);
+    b.at(0, 0, 0); b.man(-1.6, 0, 1.6);
+  }},
+  { name: 'Twin Peaks', D: 70, shots: 5, build(b){ b.mountain(-4, 44, 10, 12); b.mountain(5, 22, 12, 12); lookout(b, -3, 2); lookout(b, 3, 2); } },
+  { name: 'Freeway', D: 58, shots: 5, build(b){ b.highway(22, 4, 15); like(12)(b); } },
+  { name: 'Castle Moat', D: 64, shots: 6, build(b){ b.lake(0, 0, 13, 7.5); like(15)(b); } },
+  { name: 'Mountain Pass', D: 68, shots: 5, build(b){
+    b.mountain(-17, 28, 15, 14); b.mountain(17, 28, 15, 14); b.highway(28, 2, 14); like(18)(b);
+  }},
+  { name: 'Everything', D: 78, shots: 6, build(b){
+    b.lake(-6, 52, 8); b.highway(36, 2, 13); b.mountain(8, 20, 8, 10); like(19)(b);
+  }},
+  { name: 'The Last Stand', D: 80, shots: 7, build(b){
+    b.lake(0, 40, 12);
+    const y = b.mountain(0, 0, 10, 24, 16);
+    b.at(0, y, 0);
+    lookout(b, -5, 2);
+    b.room(0, 0, 0); b.man(0, 2.45, 0);
+    b.cubes(3.6, 0, 0, 2); b.cubes(6.4, 0, 0, 2); b.blk('wood', 5, 2.4, 0, 3.6, .4, 1.4); b.man(5, 2.8, 0); b.man(5, 0, 0);
+  }}
+);
+
 
 /* ================= people ================= */
 const SKIN = [0xf2c89b, 0xd9a273, 0xa86b45, 0x7a4a2c, 0xf6d7b8];
@@ -743,8 +990,11 @@ function personMesh(o){
   const shoe = mat(o.shoe || pick([0x222222, 0xf4f4f4, 0x6b3e1f, 0xc0392b]));
   const shade = mat(SHADES['0x' + skinC.toString(16)] || skinC);
   const top = o.top || pick(['tee', 'tee', 'long']);
-  const bottom = o.bottom || pick(['pants', 'pants', 'shorts', 'skirt']);
-  const style = o.style || pick(['short', 'short', 'long', 'pony', 'cap', 'bald']);
+  // Men: trousers or shorts; short hair, a cap, or bald (maybe with a beard).
+  // Women: trousers, shorts or a skirt; long hair, a ponytail, short hair or a cap; never a beard.
+  const woman = o.woman != null ? o.woman : Math.random() < .5;
+  const bottom = o.bottom || pick(woman ? ['pants', 'shorts', 'skirt', 'skirt'] : ['pants', 'pants', 'shorts']);
+  const style = o.style || pick(woman ? ['long', 'long', 'pony', 'pony', 'short', 'cap'] : ['short', 'short', 'cap', 'bald']);
   const F = -.87;  // feet
 
   const add = (parent, geo, m, x, y, z, sx, sy, sz) => {
@@ -758,6 +1008,7 @@ function personMesh(o){
 
   // Every body part hangs in its own group whose origin is the joint it turns about, so the
   // same mesh can stand rigid, wave its arms, or be split up into a ragdoll.
+  const fs = o.footScale || 1;
   const grp = (parent, x, y, z) => { const q = new THREE.Group(); q.position.set(x, y, z); parent.add(q); return q; };
   const parts = {};
   // legs and shoes
@@ -769,7 +1020,8 @@ function personMesh(o){
     const sn = parts['shin' + i] = grp(g, s * .09, F + .48, 0);
     add(sn, sphereG, shinM, 0, 0, 0, .058, .058, .058);
     tube(sn, shinM, 0, 0, -.39, 0, .056, .042);
-    add(sn, sphereG, shoe, 0, -.43, .035, .06, .05, .125);
+    // Big Feet: the sole stays on the ground and the toes grow forward (and apart, so they don't overlap)
+    add(sn, sphereG, shoe, s * .045 * (fs - 1), -.48 + .05 * fs, .035 + .1 * (fs - 1), .06 * fs, .05 * fs, .125 * fs);
   });
   // hips, body, chest, neck
   const pel = parts.pelvis = grp(g, 0, F + .93, 0);
@@ -803,7 +1055,8 @@ function personMesh(o){
     add(head, capG, c, 0, .022, -.005, .113, .12, .118);
     add(head, boxG, c, 0, .03, .12, .16, .012, .1).rotation.x = -.1;
   }
-  if (style === 'bald' && !o.noBeard && Math.random() < .6) add(head, sphereG, hair, 0, -.06, .03, .08, .055, .085);   // beard
+  if (woman && style === 'cap') add(head, boxG, hair, 0, -.11, -.065, .2, .24, .05);   // long hair under the cap
+  if (!woman && style === 'bald' && !o.noBeard && Math.random() < .6) add(head, sphereG, hair, 0, -.06, .03, .08, .055, .085);   // beard
   // shop hats
   if (o.hat === 'top'){
     const blk = mat(0x1d1d1d);
@@ -840,7 +1093,7 @@ function personMesh(o){
   }
   const base = {};
   for (const k in parts) base[k] = parts[k].position.clone();
-  g.userData = { head, arms, parts, base, hs, as, phase: Math.random() * 10, panic: 0,
+  g.userData = { head, arms, parts, base, hs, as, fs, phase: Math.random() * 10, panic: 0,
     act: pick(['wave', 'cover', 'duck', 'hop', 'spin', 'run']) };
   return g;
 }
@@ -954,7 +1207,8 @@ function makeRagdoll(mesh, vel, spin, owner){
     // big heads and long arms get bigger bodies (and a big head is heavy)
     const sc = name === 'head' ? mesh.userData.hs || 1 : name[0] === 's' && name[1] === 'h' || name[0] === 'e' ? mesh.userData.as || 1 : 1;
     g.getWorldPosition(rwp); g.getWorldQuaternion(rwq);
-    const b = new CANNON.Body({ mass: name === 'head' ? Math.min(40, d.mass * sc * sc) : d.mass });
+    const feet = name.startsWith('shin') ? mesh.userData.fs || 1 : 1;   // big shoes are heavy
+    const b = new CANNON.Body({ mass: name === 'head' ? Math.min(40, d.mass * sc * sc) : d.mass * Math.min(4, feet * feet) });
     b.addShape(d.r ? new CANNON.Sphere(d.r * sc) : new CANNON.Box(new CANNON.Vec3(d.half[0], d.half[1] * sc, d.half[2])));
     const off = new THREE.Vector3(d.off[0], d.off[1] * sc, d.off[2]);
     roff.copy(off).applyQuaternion(rwq).add(rwp);
@@ -1012,7 +1266,12 @@ let blocks = [], people = [], breakQueue = [], ragQueue = [];
 let playerBody = null;
 let level = null, center = new THREE.Vector3();
 
+// Obstacles between the cannon and the people: mountains to glide over, lakes to splash into and
+// highways full of traffic. They're built with the level and torn down with it.
+let obstacleBodies = [], mountains = [], lakes = [], cars = [];
 function clearLevel(){
+  for (const b of obstacleBodies) world.remove(b);
+  obstacleBodies = []; mountains = []; lakes = []; cars = [];
   for (const o of blocks) world.remove(o.body);
   for (const o of people){ if (o.rag) removeRag(o.rag); else world.remove(o.body); }
   removeHeroPhysics();
@@ -1025,9 +1284,14 @@ function buildLevel(i){
   clearLevel();
   level = LEVELS[i];
   const oz = -level.D;
-  let top = 0;
+  let top = 0, bottom = Infinity;
+  const off = { x: 0, y: 0, z: 0 };
   const b = {
+    // build what follows somewhere else: on a mountain top, on an island...
+    at(x, y, z){ off.x = x; off.y = y; off.z = z; },
     blk(type, x, y, z, w, h, d){
+      x += off.x; y += off.y; z += off.z;
+      bottom = Math.min(bottom, y);
       const T = TYPES[type];
       const body = new CANNON.Body({ mass: w * h * d * T.density });
       body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)));
@@ -1051,6 +1315,8 @@ function buildLevel(i){
       top = Math.max(top, y + h);
     },
     man(x, y, z){
+      x += off.x; y += off.y; z += off.z;
+      bottom = Math.min(bottom, y);
       const body = new CANNON.Body({ mass: 60 });
       body.addShape(new CANNON.Box(new CANNON.Vec3(.28, .87, .17)));
       body.position.set(x, y + .87, z + oz);
@@ -1088,10 +1354,62 @@ function buildLevel(i){
       this.blk('stone', x, y + 2.1, z, 3, .35, 2.6);
       if (withMan) this.man(x, y, z);
       return y + 2.45;
+    },
+    // A round mountain, h metres high and r wide at the bottom, centred at (x, z). It's a slice of
+    // a big sphere sunk into the ground. With flat, a wooden deck on the top to build on.
+    mountain(x, z, h, r, flat){
+      const R = (r * r + h * h) / (2 * h), cy = h - R;
+      const body = new CANNON.Body({ mass: 0 });
+      body.addShape(new CANNON.Sphere(R));
+      body.position.set(x, cy, z + oz);
+      addSolid(body); obstacleBodies.push(body);
+      const cap = Math.acos(clamp(-cy / R, -1, 1));   // the part of the sphere above the ground
+      const m = new THREE.Mesh(new THREE.SphereGeometry(R, 48, 24, 0, Math.PI * 2, 0, cap), mountainMat);
+      m.position.set(x, cy, z + oz); m.receiveShadow = m.castShadow = true;
+      levelGroup.add(m);
+      if (h > 9){
+        const snow = new THREE.Mesh(new THREE.SphereGeometry(R * 1.004, 48, 12, 0, Math.PI * 2, 0, Math.min(cap, Math.acos(clamp((h - 3.5 - cy) / R, -1, 1)))), snowMat);
+        snow.position.copy(m.position); levelGroup.add(snow);
+      }
+      mountains.push({ x, z: z + oz, cy, R });
+      if (flat){
+        const deck = new CANNON.Body({ mass: 0 });
+        deck.addShape(new CANNON.Box(new CANNON.Vec3(flat / 2, .3, 3.5)));
+        deck.position.set(x, h + .1, z + oz);
+        addSolid(deck); obstacleBodies.push(deck);
+        const dm = new THREE.Mesh(new THREE.BoxGeometry(flat, .6, 7), new THREE.MeshLambertMaterial({ map: woodTex }));
+        dm.position.set(x, h + .1, z + oz); dm.receiveShadow = dm.castShadow = true; levelGroup.add(dm);
+        return h + .4;
+      }
+      return h;
+    },
+    // A round lake of radius r at (x, z); with island, a dry island of that radius in the middle.
+    lake(x, z, r, island = 0){
+      const shore = new THREE.Mesh(island ? new THREE.RingGeometry(Math.max(0, island - 1.2), r + 1.6, 48) : new THREE.CircleGeometry(r + 1.6, 48), sandMat);
+      shore.rotation.x = -Math.PI / 2; shore.position.set(x, .03, z + oz); shore.receiveShadow = true; levelGroup.add(shore);
+      const w = new THREE.Mesh(island ? new THREE.RingGeometry(island, r, 48) : new THREE.CircleGeometry(r, 48), waterMat);
+      w.rotation.x = -Math.PI / 2; w.position.set(x, .07, z + oz); levelGroup.add(w);
+      lakes.push({ x, z: z + oz, r, island });
+    },
+    // A highway running left to right at z, with lanes of cars going both ways.
+    highway(z, lanes = 2, speed = 13){
+      const width = lanes * 3.6 + 1.6;
+      const road = new THREE.Mesh(new THREE.PlaneGeometry(400, width), roadMat);
+      road.rotation.x = -Math.PI / 2; road.position.set(0, .05, z + oz); road.receiveShadow = true; levelGroup.add(road);
+      for (let i = 1; i < lanes; i++){
+        const line = new THREE.Mesh(new THREE.PlaneGeometry(400, .18), i === lanes / 2 ? yellowLineMat : dashMat);
+        line.rotation.x = -Math.PI / 2; line.position.set(0, .06, z + oz - width / 2 + .8 + i * 3.6); levelGroup.add(line);
+      }
+      for (let l = 0; l < lanes; l++){
+        const dir = l < lanes / 2 ? 1 : -1, lz = z + oz - width / 2 + .8 + 1.8 + l * 3.6;
+        const n = 3, gap = 140 / n;
+        for (let k = 0; k < n; k++) addCar(-70 + k * gap + rand(-6, 6) + l * 11, lz, dir * speed * rand(.85, 1.15));
+      }
     }
   };
   level.build(b);
-  center.set(0, top * .45, oz);
+  if (bottom === Infinity) bottom = 0;
+  center.set(0, bottom + (top - bottom) * .45, oz);
   placeCoins(i, top);
   sun.position.set(center.x + 35, 55, center.z + 30);
   sun.target.position.copy(center);
@@ -1105,6 +1423,7 @@ function syncMeshes(){
     else if (!o.gone){ o.mesh.position.copy(o.body.position); o.mesh.quaternion.copy(o.body.quaternion); }
   }
   if (heroRag) syncRag(heroRag);
+  if (heroPropBody){ heroProp.position.copy(heroPropBody.position); heroProp.quaternion.copy(heroPropBody.quaternion); }
 }
 
 function wakeNear(p, r){
@@ -1120,7 +1439,8 @@ function wakeNear(p, r){
 function hitBlock(o, v, other){
   if (o.broken || v < 2) return;
   const head = 1 + .3 * up('helmet');   // Hard Head
-  const mult = other.heroBall ? 3 * head : other.isHero ? 1.5 * head : other.obj && other.obj.kind === 'man' ? .6 : 1;
+  const hm = other.hitMult || 1;   // a piano hits harder than a chicken
+  const mult = other.heroBall ? 3 * head * hm : other.isHero ? 1.5 * head * hm : other.obj && other.obj.kind === 'man' ? .6 : 1;
   const dmg = (v - 2) * mult;
   o.hp -= dmg;
   const f = clamp(o.hp / o.maxHp, 0, 1);
@@ -1160,12 +1480,13 @@ function breakBlock(o){
 
 /* ================= particles ================= */
 const debris = [];
-const debrisMats = { wood: lam(0xb27a45), stone: lam(0x8d8b86), glass: new THREE.MeshPhongMaterial({ color: 0xd8f3ff, transparent: true, opacity: .7 }) };
+const debrisMats = { water: new THREE.MeshPhongMaterial({ color: 0x5fb4f0, transparent: true, opacity: .8 }), foam: lam(0xffffff), melon: lam(0xe8483b), rind: lam(0x3f8f2f), wood: lam(0xb27a45), stone: lam(0x8d8b86), glass: new THREE.MeshPhongMaterial({ color: 0xd8f3ff, transparent: true, opacity: .7 }) };
 function spawnDebris(p, type, size){
   const n = type === 'glass' ? 16 : 10;
   for (let i = 0; i < n; i++){
-    const m = new THREE.Mesh(boxG, debrisMats[type]);
-    const s = rand(.12, .35) * Math.min(1.5, size / 2 + .3);
+    const wet = type === 'water' || type === 'foam';   // splashes are round drops, not chunks
+    const m = new THREE.Mesh(wet ? sphereG : boxG, debrisMats[type]);
+    const s = rand(.12, .35) * Math.min(1.5, size / 2 + .3) * (wet ? .45 : 1);
     m.scale.set(s, type === 'glass' ? s * .2 : s, s);
     m.position.set(p.x + rand(-.5, .5) * size * .5, p.y + rand(-.3, .3), p.z + rand(-.3, .3));
     m.castShadow = true;
@@ -1222,12 +1543,22 @@ const coinMat = new THREE.MeshPhongMaterial({ color: 0xffc93c, emissive: 0x5a3c0
 const coinRim = new THREE.TorusGeometry(.42, .04, 6, 28);
 const coinRimMat = new THREE.MeshPhongMaterial({ color: 0xd99b00, emissive: 0x3a2600 });
 let coins = [];
+// How high the land is at (x, z): the ground, or a mountain.
+function landHeight(x, z){
+  let h = 0;
+  for (const m of mountains){
+    const d2 = (x - m.x) * (x - m.x) + (z - m.z) * (z - m.z);
+    if (d2 < m.R * m.R) h = Math.max(h, m.cy + Math.sqrt(m.R * m.R - d2));
+  }
+  return h;
+}
 function placeCoins(idx, top){
   coins = [];
   const D = LEVELS[idx].D;
   const spots = [.35, .55, .75].map((f, i) => [Math.sin(idx * 1.7 + i * 2.1) * (1.5 + i * 1.5), 3.5 + 3 * Math.sin(f * Math.PI) + (idx % 3) * .8, -D * f]);
   spots.push([0, top + 2.2, -D]);
-  for (const [x, y, z] of spots){
+  for (const [x, y0, z] of spots){
+    const y = Math.max(y0, landHeight(x, z) + 2.5);   // never inside a mountain
     const g = new THREE.Group();
     const c = new THREE.Mesh(coinGeo, coinMat); c.rotation.x = Math.PI / 2; g.add(c);
     const r = new THREE.Mesh(coinRim, coinRimMat); g.add(r);
@@ -1322,13 +1653,14 @@ function heroLook(eq){
   const o = cosmetic('outfit', eq.outfit), hat = eq.hat;
   return { skin: 0xf2c89b, hair: 0x6b3e1f, shirt: o.shirt, pants: o.pants, shoe: 0xf4f4f4,
     top: 'long', bottom: 'pants', style: hat === 'cap' ? 'cap' : 'short', cap: o.shirt === 0xf4f4f4 ? 0x3d8bff : o.shirt,
-    hat, noBeard: true, headScale: HEAD_SIZES[eq.head] || 1, armScale: ARM_SIZES[eq.arms] || 1 };
+    hat, woman: false, noBeard: true, headScale: HEAD_SIZES[eq.head] || 1, armScale: ARM_SIZES[eq.arms] || 1, footScale: FOOT_SIZES[eq.feet] || 1 };
 }
-let heroBody = null, heroRag = null;
+let heroBody = null, heroRag = null, heroProp = null, heroPropBody = null;
 scene.add(hero);
 const heroDir = new THREE.Vector3(0, 0, -1);
 let heroBank = 0;
 function poseHero(spread, flap){
+  if (!heroBody) return;
   const u = heroBody.userData;
   for (const a of u.arms){
     a.sh.rotation.z = a.s * (.15 + spread * 1.35 + flap);
@@ -1345,6 +1677,17 @@ function heroInBarrel(){
     hero.remove(heroBody);
     for (const k in heroBody.userData.parts){ const g = heroBody.userData.parts[k]; if (g.parent) g.parent.remove(g); }
   }
+  if (heroProp && heroProp.parent) heroProp.parent.remove(heroProp);
+  heroBody = heroProp = null;
+  if (save.eq.ammo !== 'you'){
+    heroProp = propMesh(save.eq.ammo);
+    hero.add(heroProp);
+    pivot.add(hero);
+    hero.position.set(0, .1, -1.6);
+    hero.quaternion.identity();
+    hero.rotation.y = Math.PI;
+    return;
+  }
   heroBody = personMesh(heroLook());
   hero.add(heroBody);
   pivot.add(hero);
@@ -1358,6 +1701,7 @@ function heroInBarrel(){
 heroInBarrel();
 
 function removeHeroPhysics(){
+  if (heroPropBody){ world.remove(heroPropBody); heroPropBody = null; playerBody = null; }
   if (heroRag){ removeRag(heroRag); heroRag = null; playerBody = null; }
   else if (playerBody){ world.remove(playerBody); playerBody = null; }
 }
@@ -1371,6 +1715,7 @@ function heroToRagdoll(){
   const v = new THREE.Vector3(ball.velocity.x, ball.velocity.y, ball.velocity.z).multiplyScalar(.4).addScaledVector(preVel, .6);
   const spin = new THREE.Vector3(rand(-3, 3), rand(-2, 2), rand(-3, 3));
   world.remove(ball);
+  if (heroProp){ propTumble(ball, v, spin); return; }
   heroRag = makeRagdoll(heroBody, v, spin, { kind: 'hero' });
   for (const b of heroRag.bodies) b.isHero = true;
   heroRag.torso.addEventListener('collide', e => {
@@ -1378,6 +1723,34 @@ function heroToRagdoll(){
     if (iv > 3){ sfx.thud(Math.min(1, iv / 20) * .6); S.shake = Math.max(S.shake, Math.min(.6, iv / 25)); }
   });
   playerBody = heroRag.torso;
+}
+
+// Fired things become one solid lump that tumbles, with their own noise (and a splat for the melon).
+function propTumble(ball, v, spin){
+  const a = ammoDef(save.eq.ammo);
+  hero.updateMatrixWorld(true);
+  levelGroup.attach(heroProp);
+  const b = new CANNON.Body({ mass: a.mass });
+  b.addShape(new CANNON.Box(new CANNON.Vec3(a.half[0], a.half[1], a.half[2])));
+  b.position.set(heroProp.position.x, heroProp.position.y, heroProp.position.z);
+  b.quaternion.set(heroProp.quaternion.x, heroProp.quaternion.y, heroProp.quaternion.z, heroProp.quaternion.w);
+  b.velocity.set(v.x, v.y, v.z);
+  b.angularVelocity.set(spin.x, spin.y, spin.z);
+  b.linearDamping = .05; b.angularDamping = .3;
+  b.isHero = true; b.hitMult = a.hit;
+  b.addEventListener('collide', e => {
+    const iv = Math.abs(e.contact.getImpactVelocityAlongNormal());
+    if (iv > 3){ sfx.thud(Math.min(1, iv / 20) * .6); S.shake = Math.max(S.shake, Math.min(.6, iv / 25)); }
+  });
+  addSolid(b);
+  heroPropBody = playerBody = b;
+  ammoNoise(a, b.position);
+  replayEvent('ammo', b.position, a.id);
+}
+function ammoNoise(a, p){
+  sfx[a.noise]();
+  popText(a.word, p, 1.3);
+  if (a.id === 'melon'){ spawnDebris(p, 'melon', 1.6); spawnDebris(p, 'rind', 1.2); }
 }
 
 // A knocked-down person stops being one stiff box and goes floppy.
@@ -1440,6 +1813,14 @@ const sfx = (function(){
       else if (type === 'wood'){ burst('bandpass', 900, 1.5, .8, .2); burst('lowpass', 300, 1, .5, .3, .03); }
       else { burst('lowpass', 500, .7, .9, .45); burst('bandpass', 1500, 1, .3, .2); }
     },
+    honk(){ tone('square', 392, 392, .12, .25); tone('square', 494, 494, .1, .25); tone('square', 392, 392, .12, .3, .32); tone('square', 494, 494, .1, .3, .32); },
+    splash(){ burst('lowpass', 900, .6, 1, .6); burst('highpass', 2500, .5, .4, .5, .05); tone('sine', 300, 80, .3, .3); },
+    quack(){ tone('square', 520, 330, .12, .16); tone('square', 480, 300, .12, .2, .2); },
+    squeak(){ tone('sine', 1300, 2400, .2, .18); tone('sine', 1500, 2700, .2, .22, .22); tone('sine', 900, 600, .12, .35, .5); },
+    splat(){ burst('lowpass', 700, .8, 1, .35); tone('sine', 220, 50, .5, .3); },
+    flush(){ burst('bandpass', 500, .6, .6, 1.2); burst('bandpass', 1200, .8, .3, .9, .2); tone('sine', 300, 120, .1, 1, .3); },
+    moo(){ tone('sawtooth', 165, 120, .22, .5); tone('sawtooth', 130, 95, .22, .9, .45); },
+    piano(){ [196, 233, 277, 311, 370, 415].forEach((f, i) => tone('triangle', f, f, .14, 1.6, i * .015)); burst('lowpass', 300, 1, .6, .3); },
     oof(){ const f = rand(260, 520); tone('square', f * 1.4, f, .07, .12); tone('triangle', f * 1.2, f * .7, .12, .22, .08); },
     fanfare(){ [523, 659, 784, 1047].forEach((f, i) => tone('triangle', f, f, .22, i === 3 ? .6 : .18, i * .13)); },
     sad(){ [392, 330, 262].forEach((f, i) => tone('triangle', f, f * .97, .2, .35, i * .2)); },
@@ -1514,6 +1895,9 @@ function glide(v, dt, sx, sy){
 
 function startLevel(i){
   sfx.init();
+  // never carry a replay over into a new level
+  $('replayUI').classList.add('hidden'); rp = null;
+  camera.fov = 70; camera.updateProjectionMatrix();
   S.levelIdx = i;
   buildLevel(i);
   clearPops();
@@ -1548,7 +1932,9 @@ function fire(){
   $('hint').style.opacity = S.levelIdx === 0 && S.shotsUsed === 1 ? 1 : 0;
   const dir = aimDir(new THREE.Vector3());
   const speed = launchSpeed(p);
-  playerBody = new CANNON.Body({ mass: 200, material: playerMat });
+  const am = ammoDef(save.eq.ammo);
+  playerBody = new CANNON.Body({ mass: Math.max(200, am.mass || 0), material: playerMat });
+  playerBody.hitMult = am.hit || 1;
   playerBody.addShape(new CANNON.Sphere(.6));
   playerBody.isHero = playerBody.heroBall = true;
   playerBody.linearDamping = .02; playerBody.angularDamping = .6;
@@ -1568,7 +1954,7 @@ function fire(){
   scene.attach(hero);
   S.gliding = true;
   S.flyT = 0; S.slowT = 0;
-  S.toRag = false;
+  S.toRag = false; S.splashed = false; S.honked = false;
   preVel.copy(dir).multiplyScalar(speed);
   startRecording();
   sfx.boom();
@@ -1644,17 +2030,27 @@ function setTryOn(t){
   rebuildPreview();
   const tag = $('tryTag');
   if (t){
-    const names = t.kind === 'head' ? HEAD_NAMES : t.kind === 'arms' ? ARM_NAMES : null;
-    tag.textContent = 'Trying on: ' + (names ? names[t.id] + (t.kind === 'head' ? ' head' : ' arms') : cosmetic(t.kind, t.id).name) + ' (buy it to keep it)';
+    const names = SIZE_NAMES[t.kind];
+    tag.textContent = (t.kind === 'ammo' ? 'Looking at: ' : 'Trying on: ') + (names ? names[t.id] + SIZE_WORD[t.kind] : cosmetic(t.kind, t.id).name) + ' (buy it to keep it)';
     tag.classList.remove('hidden');
   } else tag.classList.add('hidden');
 }
+let previewProp = null;
 function rebuildPreview(){
   if (preview) scene.remove(preview);
+  if (previewProp){ scene.remove(previewProp); previewProp = null; }
   preview = personMesh(heroLook(shopLook()));
   preview.position.copy(previewSpot);
   preview.traverse(o => { o.castShadow = true; });
   scene.add(preview);
+  // whatever you'd fire out of the cannon stands next to you
+  const am = shopLook().ammo;
+  if (am && am !== 'you'){
+    const a = ammoDef(am);
+    previewProp = propMesh(am);
+    previewProp.position.set(previewSpot.x + 1.3 + a.half[0], a.half[1] + .05, previewSpot.z - .3);
+    scene.add(previewProp);
+  }
 }
 function openShop(){
   for (const id of ['title', 'win', 'fail', 'pause']) $(id).classList.add('hidden');
@@ -1673,6 +2069,7 @@ function closeShop(){
   setTryOn(null);
   $('shop').classList.add('hidden');
   if (preview){ scene.remove(preview); preview = null; }
+  if (previewProp){ scene.remove(previewProp); previewProp = null; }
   showTitle();
 }
 function updateShop(dt, t){
@@ -1690,6 +2087,7 @@ function updateShop(dt, t){
   }
   if (preview){
     preview.rotation.y = .45 + Math.sin(t * .6) * .6;
+    if (previewProp) previewProp.rotation.y = .6 + Math.sin(t * .5) * .5;
     const u = preview.userData;
     for (const a of u.arms){ a.sh.rotation.z = a.s * (.15 + Math.sin(t * 1.3) * .05); a.el.rotation.x = -.25; }
     u.head.rotation.y = Math.sin(t * .8) * .3;
@@ -1735,6 +2133,7 @@ function thumbPerson(eq, view, armsOut){
   m.rotation.y = -.35;
   if (armsOut) for (const a of m.userData.arms){ a.sh.rotation.z = a.s * 1.25; a.el.rotation.x = -.1; }
   if (view === 'head') return [m, [.32, .86, 1.25], [0, .8, 0]];
+  if (view === 'feet'){ const f = FOOT_SIZES[eq.feet] || 1; return [m, [1 + .3 * f, .1 + .1 * f, 2 + .45 * f], [0, -.45, .2 * f]]; }
   const hs = HEAD_SIZES[eq.head != null ? eq.head : save.eq.head] || 1, as = ARM_SIZES[eq.arms != null ? eq.arms : save.eq.arms] || 1;
   const k = Math.max(1, .8 + .2 * hs, armsOut ? .6 + .4 * as : 1);
   return [m, [.85 * k, .4 + .2 * hs, 3 * k], [0, .1 + .2 * (hs - 1), 0]];
@@ -1797,18 +2196,24 @@ function star(g, x, y, r, c){
   g.fill();
 }
 function itemThumb(kind, id){
-  if (kind === 'outfit'){ const [m, c, l] = thumbPerson({ outfit: id, hat: 'none', head: 0, arms: 0 }); return thumb3d('outfit:' + id, m, c, l); }
+  if (kind === 'outfit'){ const [m, c, l] = thumbPerson({ outfit: id, hat: 'none', head: 0, arms: 0, feet: 0 }); return thumb3d('outfit:' + id, m, c, l); }
   if (kind === 'hat'){ const [m, c, l] = thumbPerson({ hat: id, outfit: 'red', head: 0 }, 'head'); return thumb3d('hat:' + id, m, c, l); }
   if (kind === 'cannon') return thumb3d('cannon:' + id, thumbCannon(cosmetic('cannon', id).color), [3.4, 1.8, 2.6], [0, .9, .1]);
   if (kind === 'trail') return thumb2d('trail:' + id, g => drawTrail(g, id));
   if (kind === 'head'){ const [m, c, l] = thumbPerson({ head: id, arms: 0, hat: 'none', outfit: 'red' }); return thumb3d('head:' + id, m, c, l); }
   if (kind === 'arms'){ const [m, c, l] = thumbPerson({ arms: id, head: 0, hat: 'none', outfit: 'red' }, null, true); return thumb3d('arms:' + id, m, c, l); }
+  if (kind === 'feet'){ const [m, c, l] = thumbPerson({ feet: id, head: 0, arms: 0, hat: 'none', outfit: 'red' }, 'feet'); return thumb3d('feet:' + id, m, c, l); }
+  if (kind === 'ammo'){
+    if (id === 'you'){ const [m, c, l] = thumbPerson({ head: 0, arms: 0, feet: 0 }); return thumb3d('ammo:you', m, c, l); }
+    const a = ammoDef(id), d = 2.3 * Math.max(...a.half);
+    return thumb3d('ammo:' + id, propMesh(id), [d * .75, d * .45, d * 1.05], [0, 0, 0]);
+  }
   return thumb2d('up:' + kind, ICON[kind]);
 }
 
 function renderShop(){
   updateCoinsHud();
-  const tabs = [['upgrades', 'Upgrades'], ['outfit', 'Outfits'], ['hat', 'Hats'], ['trail', 'Trails'], ['cannon', 'Cannons']];
+  const tabs = [['upgrades', 'Upgrades'], ['outfit', 'Outfits'], ['hat', 'Hats'], ['trail', 'Trails'], ['cannon', 'Cannons'], ['ammo', 'Ammo']];
   $('shopTabs').innerHTML = '';
   for (const [id, label] of tabs){
     const b = document.createElement('button');
@@ -1851,7 +2256,7 @@ function renderShop(){
         writeSave(); sfx.buy(); renderShop();
       }, pic, tryIt);
       if (u.sizes && lv > 0){
-        const names = u.id === 'head' ? HEAD_NAMES : ARM_NAMES;
+        const names = SIZE_NAMES[u.id];
         const w = document.createElement('button'); w.className = 'own';
         w.textContent = 'Wearing: ' + names[save.eq[u.id]] + ' ▸';
         w.addEventListener('click', e => {
@@ -1871,11 +2276,11 @@ function renderShop(){
       tryOn = null; setTryOn(null);
       save.eq[shopTab] = c.id; writeSave();
       if (shopTab === 'cannon') cannonMetal.color.setHex(c.color);
-      if (shopTab === 'outfit' || shopTab === 'hat'){ rebuildPreview(); heroInBarrel(); }
+      if (shopTab === 'outfit' || shopTab === 'hat' || shopTab === 'ammo'){ rebuildPreview(); heroInBarrel(); }
       renderShop();
     };
     const pic = itemThumb(shopTab, c.id), tryIt = on ? null : { kind: shopTab, id: c.id };
-    if (on) card(sw, c.name, '', '', 'WEARING', 'on', null, pic);
+    if (on) card(sw, c.name, '', '', shopTab === 'ammo' ? 'LOADED' : 'WEARING', 'on', null, pic);
     else if (owned) card(sw, c.name, '', '', 'USE', 'own', () => { sfx.click(); equip(); }, pic, tryIt);
     else card(sw, c.name, '', '', price(c.cost), save.coins >= c.cost ? '' : 'poor', () => {
       if (save.coins < c.cost) return;
@@ -2065,6 +2470,9 @@ function lookQuat(from, to, out){
 
 function stepWorld(dt){
   world.step(1 / 90, dt, 6);
+  updateCars();
+  checkSplash();
+  if (S.splashed) for (const hb of heroBodies()) hb.velocity.scale(Math.exp(-5 * dt), hb.velocity);   // water slows you right down
   while (breakQueue.length) breakBlock(breakQueue.shift());
   if (S.toRag && playerBody && playerBody.heroBall){ S.toRag = false; heroToRagdoll(); }
   while (ragQueue.length) personToRagdoll(ragQueue.shift());
@@ -2246,10 +2654,12 @@ function startRecording(){
   for (const b of blocks) if (!b.broken) trackObj(b.mesh);
   for (const p of people) if (!p.gone) trackPerson(p.mesh);
   for (const c of coins) if (!c.got) trackObj(c.g);
-  trackPerson(heroBody);
+  for (const c of cars) trackObj(c.g);
+  if (heroBody) trackPerson(heroBody); else if (heroProp) trackObj(heroProp);
 }
 function noteImpact(){ if (S.impactT == null && (S.mode === 'fly' || S.mode === 'settle')) S.impactT = S.shotT; }
 function replayEvent(kind, pos, type, size){
+  if (kind === 'ammo' && S.mode !== 'fly' && S.mode !== 'settle') return;
   if (S.mode !== 'fly' && S.mode !== 'settle') return;
   events.push({ t: S.shotT, kind, p: new THREE.Vector3(pos.x, pos.y, pos.z), type, size });
 }
@@ -2301,7 +2711,7 @@ function frameAt(t, out){
   if (out && a.focus && b.focus) out.lerpVectors(a.focus, b.focus, u);
 }
 function startReplay(){
-  if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break')) return false;
+  if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break' || e.kind === 'splash')) return false;
   const t0 = Math.max(frames[0].t, S.impactT - .8), t1 = Math.min(frames[frames.length - 1].t, S.impactT + 1.7);
   if (t1 - t0 < .5) return false;
   liveSnap = track.map(o => ({ parent: o.parent, p: o.position.clone(), q: o.quaternion.clone(), v: o.visible }));
@@ -2334,6 +2744,8 @@ function updateReplay(dt){
     if (e.kind === 'break'){ spawnDebris(e.p, e.type, e.size); sfx.crack(e.type); }
     else if (e.kind === 'puff') spawnPuff(e.p);
     else if (e.kind === 'oof') sfx.oof();
+    else if (e.kind === 'ammo') ammoNoise(ammoDef(e.type), e.p);
+    else if (e.kind === 'splash') splashFx(e.p);
   }
   while (rp.screams.length && rp.screams[0].t <= rp.t){ const sc = rp.screams.shift(); popText(pick(SCREAMS), sc.p, 1.4); sfx.oof(); }
   frameAt(rp.t, rp.focus);
@@ -2366,7 +2778,7 @@ function endReplay(){
 const heroM = new THREE.Matrix4();
 function updateHero(dt){
   const b = playerBody;
-  if (heroRag) return;   // the ragdoll moves its own parts
+  if (heroRag || heroPropBody) return;   // the ragdoll (or tumbling prop) moves itself
   hero.position.set(b.position.x, b.position.y, b.position.z);
   if (S.gliding){
     const v = b.velocity;
@@ -2376,6 +2788,7 @@ function updateHero(dt){
     hero.rotateY(Math.PI);
     hero.rotateZ(heroBank);   // dip the wing on the inside of the turn
     poseHero(1, Math.sin(S.flyT * 9) * .06 + heroBank * .15);
+    if (heroProp) heroProp.rotation.z += dt * ammoDef(save.eq.ammo).roll;   // some things spin as they go
   }
 }
 
