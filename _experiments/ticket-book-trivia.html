@@ -2,7 +2,7 @@
 title: Ticket Book Trivia
 description: A pass-and-play trivia game built out of a Disneyland ticket book. Pick a category, then punch tickets worth one to five points — Disney, the Bible, animals, Pokémon, American Girl or Nintendo.
 date: 2026-09-14
-version: "1.1"
+version: "1.2"
 layout: null
 ---
 {% raw %}
@@ -1981,7 +1981,7 @@ renderSetup();
    first launch from the icon has to happen with a connection; after that it
    runs with the network off. */
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/experiments/ticket-book-trivia/sw.js').catch(function(){});
+  navigator.serviceWorker.register('/experiments/ticket-book-trivia/sw.js', { updateViaCache: 'none' }).catch(function(){});
 }
 </script>
 </body>

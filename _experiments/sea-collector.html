@@ -2,7 +2,7 @@
 title: Sea Collector
 description: A scuba-diving adventure. Swim out from your underwater house, collect shells, dodge sharks, jellyfish, eels and sand monsters (even the Mega Monster), and get home before your air runs out. Spend your shells on new clothes and better scuba gear.
 date: 2026-10-06
-version: "1.5"
+version: "1.6"
 layout: null
 ---
 {% raw %}
@@ -3822,7 +3822,7 @@ updateJar();
 requestAnimationFrame(frame);
 
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/experiments/sea-collector/sw.js').catch(function(){});
+  navigator.serviceWorker.register('/experiments/sea-collector/sw.js', { updateViaCache: 'none' }).catch(function(){});
 }
 
 })();
