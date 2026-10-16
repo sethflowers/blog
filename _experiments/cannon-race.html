@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "3.1"
+version: "3.2"
 layout: null
 ---
 {% raw %}
@@ -2423,7 +2423,15 @@ updateCoinsHud();
 requestAnimationFrame(frame);
 
 if ('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/experiments/cannon-race/sw.js').catch(function(){});
+  // updateViaCache: always look for a new sw.js on the network, never in the HTTP cache
+  navigator.serviceWorker.register('/experiments/cannon-race/sw.js', { updateViaCache: 'none' }).catch(function(){});
+  // When a new version's service worker takes over, reload once to show it, but only on the
+  // title screen so nobody loses a level in progress.
+  var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if (!hadController || reloaded || S.mode !== 'title') return;
+    reloaded = true; location.reload();
+  });
 }
 
 })();
