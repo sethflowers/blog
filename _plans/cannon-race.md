@@ -8,17 +8,22 @@ Same shape as the other experiments: one self-contained HTML file, Three.js r128
 0.6.2 (physics) served from `experiments/cannon-race/`, a manifest, a service worker and icons so
 it installs and runs offline.
 
-## A shot
+## A shot (2.0: third person, gliding)
 
-1. **Intro**: the camera starts beside the structure, then swoops back into the barrel.
-2. **Aim**: you look out of the inside of the barrel. Drag (or arrow keys / WASD) to turn it,
-   ±40° left and right, -6° to 62° up. Hold FIRE (or Space): the power meter climbs and falls
-   back; let go to launch at 16–46 m/s. A white line on the meter marks the last shot's power,
-   and a dotted line in the air shows the last shot's path.
-3. **Fly**: you are a 200 kg ball; the camera looks where you are going, with your gloved fists
-   out in front, speed lines, wind and a wider field of view as you go faster. Tap (or Space)
-   once in the air for a PUSH, an extra 14 m/s in the direction you are facing.
-4. **Settle**: once you stop (or fly off past everything), the camera turns to watch the
+1. **Intro**: the camera starts beside the structure, then swoops back to behind the cannon.
+2. **Aim**: the camera sits behind and above the cannon; the flier's head pokes out of the
+   muzzle. Drag (or arrow keys / WASD) to turn the barrel, ±40° left and right, -6° to 62° up.
+   Hold FIRE (or Space): the power meter climbs and falls back; let go to launch at 12–30 m/s.
+   Yellow dots show the first second and a half of the shot at the current power (or the last
+   shot's power), and a white line on the meter marks the last shot's power. White dots in the
+   air show the last shot's whole path.
+3. **Glide**: a chase camera follows the flier, who flies face down with arms out like wings.
+   Drag anywhere (a joystick appears where your finger went down) or use the arrow keys:
+   left/right turns (and banks into the turn), up climbs but slows you, down dives and speeds
+   you up. Lift holds you up while you are fast, so you sink as you slow down. There is no push
+   button any more.
+4. **Hit**: the first thing you touch ends the glide; from then on you tumble with the physics.
+5. **Settle**: once you stop (or fly off past everything), the camera turns to watch the
    structure until it stops moving, then you are back in the cannon.
 
 ## The structures
@@ -36,9 +41,9 @@ People are built to real proportions, 1.75 m tall: a small head with eyes, brows
 smile, a neck, a tapered body, knees, elbows and shoes. Each one is dressed at random (T-shirt or
 long sleeves; trousers, shorts or a skirt; short hair, long hair, a ponytail, a baseball cap, or
 bald with a beard). They sway a little while they wait, and throw their arms up and wave when you
-come flying at them (within 30 m).
+come gliding at them (within 30 m).
 
-A person is knocked down when you touch them, when anything hits them at over 4.5 m/s, or when
+They wave their arms in a panic while you glide at them. A person is knocked down when you touch them, when anything hits them at over 4.5 m/s, or when
 they tip past about 57°. They shout something, then vanish in a puff.
 
 ## Levels

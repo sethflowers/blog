@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "1.1"
+version: "2.0"
 layout: null
 ---
 {% raw %}
@@ -59,9 +59,6 @@ layout: null
   #speed{position:absolute;left:50%;top:calc(env(safe-area-inset-top) + 12px);transform:translateX(-50%);
     font:900 26px/1 ui-monospace,Menlo,Consolas,monospace;text-shadow:0 2px 0 rgba(0,0,0,.4);}
   #speed small{font-size:12px;opacity:.8;}
-  #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:2px solid rgba(255,255,255,.85);
-    border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.3);}
-  #cross::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#fff;}
   #meter{position:absolute;left:calc(env(safe-area-inset-left) + 18px);bottom:calc(env(safe-area-inset-bottom) + 22px);
     width:26px;height:min(42vh,230px);border-radius:13px;background:rgba(29,36,51,.55);border:3px solid rgba(255,255,255,.85);overflow:hidden;}
   #meterFill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(to top,#4caf50,#ffc93c 55%,#e8483b);}
@@ -72,8 +69,6 @@ layout: null
     width:104px;height:104px;border-radius:50%;background:var(--red);border:5px solid var(--cream);
     font-weight:900;font-size:20px;letter-spacing:.04em;box-shadow:0 6px 0 rgba(0,0,0,.3);}
   #fireBtn.charging{transform:scale(.94);background:#ff6b3d;}
-  #fireBtn.push{background:#3d8bff;}
-  #fireBtn.spent{opacity:.3;}
   #hint{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom) + 140px);transform:translateX(-50%);max-width:min(80vw,420px);
     background:rgba(29,36,51,.6);padding:8px 14px;border-radius:20px;font-size:14px;font-weight:700;text-align:center;transition:opacity .6s;}
   #banner{position:absolute;left:0;right:0;top:32%;text-align:center;text-shadow:0 3px 0 rgba(0,0,0,.35);}
@@ -82,11 +77,13 @@ layout: null
   #pops{position:fixed;inset:0;pointer-events:none;z-index:9;}
   .pop{position:absolute;transform:translate(-50%,-100%);background:#fff;color:var(--ink);font-weight:900;font-size:15px;
     padding:4px 9px;border-radius:12px;white-space:nowrap;box-shadow:0 3px 0 rgba(0,0,0,.25);}
-  body:not([data-mode=aim]) #cross,
   body:not([data-mode=aim]) #meter,
   body:not([data-mode=aim]) #meterLabel,
-  body:not([data-mode=aim]) #hint{display:none;}
-  body:not([data-mode=aim]):not([data-mode=fly]) #fireBtn{display:none;}
+  body:not([data-mode=aim]):not([data-mode=fly]) #hint{display:none;}
+  body:not([data-mode=aim]) #fireBtn{display:none;}
+  #stick{position:fixed;z-index:11;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;border:3px solid rgba(255,255,255,.7);
+    background:rgba(29,36,51,.25);pointer-events:none;}
+  #stickDot{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:rgba(255,255,255,.85);}
   body:not([data-mode=fly]):not([data-mode=settle]) #speed{display:none;}
   body:not([data-mode=intro]) #banner{display:none;}
 
@@ -134,13 +131,13 @@ layout: null
     </div>
   </div>
   <div id="speed"></div>
-  <div id="cross"></div>
   <div id="meter"><div id="meterFill"></div><div id="meterLast"></div></div>
   <div id="meterLabel">POWER</div>
   <div id="hint">Drag to aim · hold FIRE, let go to launch</div>
   <div id="banner"><b id="bannerName"></b><span id="bannerSub"></span></div>
   <button id="fireBtn">FIRE</button>
 </div>
+<div id="stick" class="hidden"><div id="stickDot"></div></div>
 
 <div class="screen" id="title">
   <h1>CANNON RACE<span>you are the cannonball</span></h1>
@@ -149,7 +146,7 @@ layout: null
   <button class="go" id="playBtn">PLAY</button>
   <div id="levels"></div>
   <p class="keys">Drag (or arrow keys) to aim · hold FIRE (or Space) to charge, let go to launch ·
-  tap again in the air for one extra push</p>
+  in the air, drag (or arrow keys) to glide: left and right to turn, up to climb, down to dive</p>
   <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.7;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 
@@ -348,7 +345,7 @@ cannonG.add(yawG);
   const plat = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.2, 3.6), stoneM);
   plat.position.y = .6; plat.castShadow = plat.receiveShadow = true; cannonG.add(plat);
 
-  const metal = new THREE.MeshPhongMaterial({ color: 0x23262d, shininess: 60, specular: 0x555555 });
+  const metal = new THREE.MeshPhongMaterial({ color: 0x23262d, shininess: 25, specular: 0x333333 });
   const inside = new THREE.MeshLambertMaterial({ color: 0x15161a, side: THREE.BackSide });
   const outer = new THREE.Mesh(new THREE.CylinderGeometry(.92, 1.08, 3.4, 48, 1, true), metal);
   outer.rotation.x = Math.PI / 2; outer.position.z = -.3; outer.castShadow = true; pivot.add(outer);
@@ -489,15 +486,16 @@ const smileG = new THREE.TorusGeometry(.018, .0045, 6, 12, Math.PI);
 const skirtG = new THREE.CylinderGeometry(.14, .23, .34, 18, 1, true);
 const SHADES = { '0xf2c89b': 0xe0b083, '0xd9a273': 0xc58d60, '0xa86b45': 0x925a37, '0x7a4a2c': 0x683d23, '0xf6d7b8': 0xe8c3a0 };
 
-function personMesh(){
+function personMesh(o){
+  o = o || {};
   const g = new THREE.Group();
-  const skinC = pick(SKIN), hairC = pick(HAIR);
-  const skin = mat(skinC), shirt = mat(pick(SHIRT)), pants = mat(pick(PANTS)), hair = mat(hairC);
-  const shoe = mat(pick([0x222222, 0xf4f4f4, 0x6b3e1f, 0xc0392b]));
+  const skinC = o.skin || pick(SKIN), hairC = o.hair || pick(HAIR);
+  const skin = mat(skinC), shirt = mat(o.shirt || pick(SHIRT)), pants = mat(o.pants || pick(PANTS)), hair = mat(hairC);
+  const shoe = mat(o.shoe || pick([0x222222, 0xf4f4f4, 0x6b3e1f, 0xc0392b]));
   const shade = mat(SHADES['0x' + skinC.toString(16)] || skinC);
-  const top = pick(['tee', 'tee', 'long']);
-  const bottom = pick(['pants', 'pants', 'shorts', 'skirt']);
-  const style = pick(['short', 'short', 'long', 'pony', 'cap', 'bald']);
+  const top = o.top || pick(['tee', 'tee', 'long']);
+  const bottom = o.bottom || pick(['pants', 'pants', 'shorts', 'skirt']);
+  const style = o.style || pick(['short', 'short', 'long', 'pony', 'cap', 'bald']);
   const F = -.87;  // feet
 
   const add = (parent, geo, m, x, y, z, sx, sy, sz) => {
@@ -543,11 +541,11 @@ function personMesh(){
   if (style === 'long') add(head, boxG, hair, 0, -.11, -.065, .2, .24, .05);
   if (style === 'pony'){ add(head, sphereG, hair, 0, .02, -.12, .04, .04, .04); add(head, sphereG, hair, 0, -.07, -.13, .035, .09, .035); }
   if (style === 'cap'){
-    const c = mat(pick(SHIRT));
+    const c = mat(o.cap || pick(SHIRT));
     add(head, capG, c, 0, .022, -.005, .113, .12, .118);
     add(head, boxG, c, 0, .03, .12, .16, .012, .1).rotation.x = -.1;
   }
-  if (style === 'bald' && Math.random() < .6) add(head, sphereG, hair, 0, -.06, .03, .08, .055, .085);   // beard
+  if (style === 'bald' && !o.noBeard && Math.random() < .6) add(head, sphereG, hair, 0, -.06, .03, .08, .055, .085);   // beard
 
   // arms: shoulder groups so the arm can swing, an elbow group inside
   const arms = [];
@@ -568,7 +566,7 @@ function personMesh(){
 
 // Idle sway, and arms up in a panic when you come flying at them.
 function animatePeople(dt, t){
-  const flying = S.mode === 'fly' && playerBody;
+  const flying = S.mode === 'fly' && playerBody && S.gliding;
   for (const p of people){
     if (p.gone) continue;
     const u = p.mesh.userData;
@@ -677,7 +675,7 @@ function wakeNear(p, r){
 
 function hitBlock(o, v, other){
   if (o.broken || v < 2) return;
-  const mult = other === playerBody ? 2.2 : other.obj && other.obj.kind === 'man' ? .6 : 1;
+  const mult = other === playerBody ? 3 : other.obj && other.obj.kind === 'man' ? .6 : 1;
   const dmg = (v - 2) * mult;
   o.hp -= dmg;
   const f = clamp(o.hp / o.maxHp, 0, 1);
@@ -793,26 +791,38 @@ function buildTrail(){
   scene.add(trailMesh);
 }
 
-/* ---------- your arms, in flight ---------- */
-const arms = new THREE.Group();
-(function(){
-  const sleeve = new THREE.MeshLambertMaterial({ color: 0x3d8bff, depthTest: false });
-  const glove = new THREE.MeshLambertMaterial({ color: 0xe8483b, depthTest: false });
-  for (const s of [-1, 1]){
-    const a = new THREE.Group();
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(.05, .065, .62, 10), sleeve);
-    arm.rotation.x = Math.PI / 2; arm.position.z = -.2; a.add(arm);
-    const fist = new THREE.Mesh(new THREE.SphereGeometry(.065, 12, 8), glove);
-    fist.position.z = -.54; a.add(fist);
-    a.position.set(s * .36, -.4, -.12);
-    a.rotation.y = -s * .32;
-    a.rotation.x = .12;
-    arms.add(a);
+/* ---------- you ---------- */
+// The flier: a person in a red cap and suit. Their mesh sits in a holder whose +Z is the
+// direction of travel; inside it they lie face down with their head forward, arms out like wings.
+const hero = new THREE.Group();
+const heroBody = personMesh({ skin: 0xf2c89b, hair: 0x6b3e1f, shirt: 0xe8483b, pants: 0x2d3a5c, shoe: 0xf4f4f4,
+  top: 'long', bottom: 'pants', style: 'cap', cap: 0xe8483b, noBeard: true });
+heroBody.rotation.x = Math.PI / 2;
+hero.add(heroBody);
+scene.add(hero);
+const heroDir = new THREE.Vector3(0, 0, -1);
+let heroBank = 0;
+function poseHero(spread, flap){
+  const u = heroBody.userData;
+  for (const a of u.arms){
+    a.sh.rotation.z = a.s * (.15 + spread * 1.35 + flap);
+    a.sh.rotation.x = 0;
+    a.el.rotation.x = -.1;
   }
-  arms.traverse(o => { o.renderOrder = 999; });
-  arms.visible = false;
-  camera.add(arms);
-})();
+  u.head.rotation.x = -.5 * spread;   // look ahead, not at the ground
+  u.head.rotation.y = 0;
+}
+// Put the flier in the barrel, head poking out of the muzzle.
+function heroInBarrel(){
+  pivot.add(hero);
+  hero.position.set(0, .2, -1.5);
+  hero.quaternion.identity();
+  hero.rotation.y = Math.PI;
+  heroBody.rotation.set(Math.PI / 2, 0, 0);
+  heroBody.position.set(0, 0, 0);
+  poseHero(0, 0);
+}
+heroInBarrel();
 
 /* ================= sound ================= */
 const sfx = (function(){
@@ -863,7 +873,6 @@ const sfx = (function(){
       else { burst('lowpass', 500, .7, .9, .45); burst('bandpass', 1500, 1, .3, .2); }
     },
     oof(){ const f = rand(260, 520); tone('square', f * 1.4, f, .07, .12); tone('triangle', f * 1.2, f * .7, .12, .22, .08); },
-    push(){ burst('bandpass', 900, .8, .6, .5); tone('sawtooth', 200, 600, .05, .3); },
     fanfare(){ [523, 659, 784, 1047].forEach((f, i) => tone('triangle', f, f, .22, i === 3 ? .6 : .18, i * .13)); },
     sad(){ [392, 330, 262].forEach((f, i) => tone('triangle', f, f * .97, .2, .35, i * .2)); },
     click(){ tone('triangle', 800, 600, .08, .06); },
@@ -876,26 +885,59 @@ const S = {
   mode: 'title', paused: false, levelIdx: 0,
   yaw: 0, pitch: 12 * D2R, power: 0, powerDir: 1, charging: false, lastPower: null,
   shotsLeft: 0, shotsUsed: 0, time: 0, timing: false,
-  flyT: 0, slowT: 0, settleT: 0, quietT: 0, pushed: false, introT: 0, shake: 0, titleT: 0, resetT: 0
+  flyT: 0, slowT: 0, settleT: 0, quietT: 0, gliding: false, introT: 0, shake: 0, titleT: 0, resetT: 0
 };
 const flyDir = new THREE.Vector3(0, 0, -1);
 const camPos = new THREE.Vector3();
 const keys = {};
 
-function setMode(m){ S.mode = m; document.body.dataset.mode = m; arms.visible = (m === 'fly' || m === 'settle'); updateFireBtn(); }
+const steer = { x: 0, y: 0 };
+function setMode(m){ S.mode = m; document.body.dataset.mode = m; if (m !== 'fly') endSteer(); }
 
 function aimDir(out){
   const cp = Math.cos(S.pitch);
   return out.set(-Math.sin(S.yaw) * cp, Math.sin(S.pitch), -Math.cos(S.yaw) * cp);
 }
 
+// The aiming camera sits behind and above the cannon and looks along the barrel.
 const barrelPos = new THREE.Vector3(), barrelQuat = new THREE.Quaternion();
 function barrelPose(){
   pivot.rotation.set(S.pitch, S.yaw, 0);
   yawG.rotation.y = S.yaw;
   cannonG.updateMatrixWorld(true);
-  barrelPos.set(0, 0, -1.2).applyMatrix4(pivot.matrixWorld);
-  pivot.getWorldQuaternion(barrelQuat);
+  const d = aimDir(vC);
+  barrelPos.set(Math.sin(S.yaw) * 7, PIVOT_Y + 3.6, Math.cos(S.yaw) * 7);
+  vD.set(0, PIVOT_Y - 1.5, 0).addScaledVector(d, 30);
+  lookQuat(barrelPos, vD, barrelQuat);
+}
+
+const LAUNCH_MIN = 12, LAUNCH_MAX = 30;
+const launchSpeed = p => LAUNCH_MIN + p * (LAUNCH_MAX - LAUNCH_MIN);
+
+// Gliding: lift holds you up while you are fast enough, left/right turns, up climbs (and
+// slows you), down dives (and speeds you up). Gravity itself comes from the physics world.
+// Used both for the real flight and for the dotted aiming guide.
+function glide(v, dt, sx, sy){
+  const sp = v.length();
+  const k = clamp(sp / 18, 0, 1);
+  // turn: rotate the velocity around the vertical
+  const a = -sx * .95 * dt * (.4 + .6 * k);
+  const c = Math.cos(a), si = Math.sin(a);
+  const x = v.x * c + v.z * si, z = -v.x * si + v.z * c;
+  v.x = x; v.z = z;
+  // lift
+  v.y += 9.82 * .58 * k * k * dt;
+  const hs = Math.hypot(v.x, v.z) || 1;
+  if (sy > 0){   // climb: trade speed for height
+    v.y += sy * 7 * k * dt;
+    const f = 1 - sy * .45 * dt;
+    v.x *= f; v.z *= f;
+  } else if (sy < 0){   // dive
+    v.y += sy * 9 * dt;
+    v.x += v.x / hs * -sy * 4 * dt; v.z += v.z / hs * -sy * 4 * dt;
+  }
+  // air drag
+  v.multiplyScalar(1 - .06 * dt);
 }
 
 function startLevel(i){
@@ -914,7 +956,9 @@ function startLevel(i){
   $('bannerSub').textContent = people.length + ' people · ' + level.shots + ' shots';
   const rec = save.levels[i];
   $('best').textContent = rec && rec.best ? 'best ' + fmtTime(rec.best) : '';
+  $('hint').textContent = 'Drag to aim · hold FIRE, let go to launch';
   $('hint').style.opacity = i === 0 ? 1 : 0;
+  heroInBarrel();
   updatePeopleHud(); updateShotsHud(); updateTimer();
   $('meterLast').style.display = 'none';
   setMode('intro');
@@ -927,11 +971,12 @@ function fire(){
   S.lastPower = p; S.power = 0; S.charging = false;
   $('fireBtn').classList.remove('charging');
   const ml = $('meterLast'); ml.style.display = 'block'; ml.style.bottom = (p * 100) + '%';
-  $('hint').style.opacity = 0;
+  $('hint').textContent = 'Drag to glide: left and right to turn, up to climb, down to dive';
+  $('hint').style.opacity = S.levelIdx === 0 && S.shotsUsed === 1 ? 1 : 0;
   const dir = aimDir(new THREE.Vector3());
-  const speed = 16 + p * 30;
+  const speed = launchSpeed(p);
   playerBody = new CANNON.Body({ mass: 200, material: playerMat });
-  playerBody.addShape(new CANNON.Sphere(.45));
+  playerBody.addShape(new CANNON.Sphere(.6));
   playerBody.linearDamping = .02; playerBody.angularDamping = .6;
   playerBody.allowSleep = false;
   const start = new THREE.Vector3(0, PIVOT_Y, 0).addScaledVector(dir, 2.5);
@@ -940,25 +985,19 @@ function fire(){
   playerBody.addEventListener('collide', e => {
     const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
     playerBody.linearDamping = .3;   // once you have hit something, roll to a stop instead of forever
+    if (S.gliding){ S.gliding = false; playerBody.angularVelocity.set(rand(-6, 6), rand(-3, 3), rand(-6, 6)); }
     if (v > 2){ sfx.thud(Math.min(1, v / 25)); S.shake = Math.max(S.shake, Math.min(1, v / 20)); }
   });
   world.addBody(playerBody);
   flyDir.copy(dir);
-  S.flyT = 0; S.slowT = 0; S.pushed = false; trailPts = []; trailT = 0;
+  heroDir.copy(dir); heroBank = 0;
+  scene.attach(hero);
+  S.gliding = true;
+  S.flyT = 0; S.slowT = 0; trailPts = []; trailT = 0;
   sfx.boom();
   S.shake = .8;
   updateShotsHud();
   setMode('fly');
-}
-
-function push(){
-  if (S.mode !== 'fly' || S.pushed || S.flyT < .12 || !playerBody) return;
-  S.pushed = true;
-  const v = playerBody.velocity;
-  playerBody.velocity.set(v.x + flyDir.x * 14, v.y + flyDir.y * 14 + 1.5, v.z + flyDir.z * 14);
-  sfx.push();
-  S.shake = Math.max(S.shake, .4);
-  updateFireBtn();
 }
 
 function endShot(){
@@ -1040,12 +1079,6 @@ function updateShotsHud(){
   for (let i = 0; i < level.shots; i++) h += '<div class="ball' + (i < level.shots - S.shotsLeft ? ' used' : '') + '"></div>';
   $('shots').innerHTML = h;
 }
-function updateFireBtn(){
-  const b = $('fireBtn');
-  b.classList.toggle('push', S.mode === 'fly');
-  b.classList.toggle('spent', S.mode === 'fly' && S.pushed);
-  b.textContent = S.mode === 'fly' ? 'PUSH' : 'FIRE';
-}
 
 /* ================= input ================= */
 let drag = null;
@@ -1053,18 +1086,38 @@ canvas.addEventListener('pointerdown', e => {
   sfx.init();
   if (S.paused) return;
   if (S.mode === 'intro'){ S.introT = 99; return; }
-  if (S.mode === 'fly'){ push(); return; }
-  if (S.mode === 'aim'){ drag = { id: e.pointerId, x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); }
+  if (S.mode === 'aim' || S.mode === 'fly'){
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY };
+    canvas.setPointerCapture(e.pointerId);
+    if (S.mode === 'fly') showStick(e.clientX, e.clientY, 0, 0);
+  }
 });
+// In the air the drag works like a joystick around where your finger went down.
+const STICK_R = 60;
+function showStick(x, y, dx, dy){
+  const st = $('stick'); st.classList.remove('hidden');
+  st.style.left = x + 'px'; st.style.top = y + 'px';
+  $('stickDot').style.transform = 'translate(' + dx * 34 + 'px,' + dy * 34 + 'px)';
+}
+function endSteer(){ steer.x = steer.y = 0; $('stick').classList.add('hidden'); }
 canvas.addEventListener('pointermove', e => {
-  if (!drag || drag.id !== e.pointerId || S.mode !== 'aim') return;
+  if (!drag || drag.id !== e.pointerId) return;
+  if (S.mode === 'fly'){
+    let dx = (e.clientX - drag.x0) / STICK_R, dy = (e.clientY - drag.y0) / STICK_R;
+    const l = Math.hypot(dx, dy); if (l > 1){ dx /= l; dy /= l; }
+    steer.x = dx; steer.y = -dy;
+    showStick(drag.x0, drag.y0, dx, dy);
+    if (l > .3) $('hint').style.opacity = 0;
+    return;
+  }
+  if (S.mode !== 'aim') return;
   const k = (e.pointerType === 'mouse' ? .16 : .22) * D2R * (70 / Math.max(320, Math.min(window.innerWidth, window.innerHeight)) * 4.5);
   S.yaw = clamp(S.yaw - (e.clientX - drag.x) * k, -40 * D2R, 40 * D2R);
   S.pitch = clamp(S.pitch - (e.clientY - drag.y) * k, -6 * D2R, 62 * D2R);
   drag.x = e.clientX; drag.y = e.clientY;
   if (Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 0) $('hint').style.opacity = 0;
 });
-const endDrag = e => { if (drag && drag.id === e.pointerId) drag = null; };
+const endDrag = e => { if (drag && drag.id === e.pointerId){ drag = null; endSteer(); } };
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
 
@@ -1072,7 +1125,6 @@ const fireBtn = $('fireBtn');
 fireBtn.addEventListener('pointerdown', e => {
   e.preventDefault(); sfx.init();
   if (S.paused) return;
-  if (S.mode === 'fly') return push();
   if (S.mode === 'aim'){ S.charging = true; S.power = 0; S.powerDir = 1; fireBtn.classList.add('charging'); fireBtn.setPointerCapture(e.pointerId); }
 });
 const fireUp = () => { if (S.charging && S.mode === 'aim') fire(); };
@@ -1087,7 +1139,6 @@ window.addEventListener('keydown', e => {
     if (e.repeat || S.paused) return;
     sfx.init();
     if (S.mode === 'intro') S.introT = 99;
-    else if (S.mode === 'fly') push();
     else if (S.mode === 'aim'){ S.charging = true; S.power = 0; S.powerDir = 1; fireBtn.classList.add('charging'); }
   }
 });
@@ -1146,7 +1197,8 @@ function drawFx(speed, dt){
 const qA = new THREE.Quaternion(), qB = new THREE.Quaternion();
 const mLook = new THREE.Matrix4();
 const UP = new THREE.Vector3(0, 1, 0);
-const vA = new THREE.Vector3(), vB = new THREE.Vector3();
+const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), vD = new THREE.Vector3();
+const qC = new THREE.Quaternion();
 const upC = new CANNON.Vec3(0, 1, 0), upOut = new CANNON.Vec3();
 
 function lookQuat(from, to, out){
@@ -1224,30 +1276,52 @@ function update(dt, now){
     barrelPose();
     camera.position.copy(barrelPos);
     camera.quaternion.copy(barrelQuat);
-    if (S.charging){ camera.position.x += rand(-1, 1) * .006 * S.power; camera.position.y += rand(-1, 1) * .006 * S.power; }
+    if (S.charging){ camera.position.x += rand(-1, 1) * .02 * S.power; camera.position.y += rand(-1, 1) * .02 * S.power; }
+    updateGuide();
   } else if (m === 'fly' || m === 'settle'){
     const b = playerBody;
     const v = b.velocity;
     speed = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-    camPos.set(b.position.x, b.position.y + .15, b.position.z);
     if (m === 'fly'){
       S.flyT += dt;
+      if (S.gliding){
+        let sx = steer.x, sy = steer.y;
+        if (keys.ArrowLeft || keys.KeyA) sx = -1;
+        if (keys.ArrowRight || keys.KeyD) sx = 1;
+        if (keys.ArrowUp || keys.KeyW) sy = 1;
+        if (keys.ArrowDown || keys.KeyS) sy = -1;
+        vA.set(v.x, v.y, v.z);
+        glide(vA, dt, sx, sy);
+        v.set(vA.x, vA.y, vA.z);
+        heroBank += (sx * .7 - heroBank) * (1 - Math.exp(-5 * dt));
+      }
       if (speed > 2){
         vA.set(v.x, v.y, v.z).normalize();
-        flyDir.lerp(vA, 1 - Math.exp(-7 * dt)).normalize();
+        flyDir.lerp(vA, 1 - Math.exp(-5 * dt)).normalize();
       }
       trailT += dt;
       if (trailT > .06){ trailT = 0; trailPts.push(new THREE.Vector3(b.position.x, b.position.y, b.position.z)); }
       S.slowT = speed < 1.2 ? S.slowT + dt : 0;
       const out = Math.abs(b.position.x) > 160 || b.position.z < -260 || b.position.z > 40 || b.position.y < -5 ||
         (S.flyT > 2 && b.position.z < center.z - 25);   // sailed past everything
-      if ((S.slowT > .6 && S.flyT > .5) || S.flyT > 10 || out){ setMode('settle'); S.settleT = 0; S.quietT = 0; }
-      vB.copy(camPos).add(flyDir);
-      lookQuat(camPos, vB, qA);
-      camera.quaternion.copy(qA);
+      if ((S.slowT > .6 && S.flyT > .5) || S.flyT > 14 || out){ setMode('settle'); S.settleT = 0; S.quietT = 0; }
+      // chase camera: behind you along your heading, a little above
+      vB.set(flyDir.x, 0, flyDir.z);
+      if (vB.lengthSq() < .01) vB.set(0, 0, -1);
+      vB.normalize();
+      camPos.set(b.position.x, b.position.y, b.position.z).addScaledVector(vB, -4.6);
+      camPos.y += 1.5 - flyDir.y * 1.5;
+      if (camPos.y < .6) camPos.y = .6;
+      if (S.flyT < .05) camera.position.copy(camPos);
+      else camera.position.lerp(camPos, 1 - Math.exp(-6 * dt));
+      vD.set(b.position.x, b.position.y + .5, b.position.z).addScaledVector(flyDir, 6);
+      lookQuat(camera.position, vD, qA);
+      camera.quaternion.slerp(qA, 1 - Math.exp(-8 * dt));
     } else {
       S.settleT += dt;
-      lookQuat(camPos, center, qB);
+      // pull back a little and watch the structure
+      vD.set(b.position.x, b.position.y + 1, b.position.z).lerp(center, .25);
+      lookQuat(camera.position, vD, qB);
       camera.quaternion.slerp(qB, 1 - Math.exp(-3 * dt));
       let maxV = 0;
       for (const o of blocks.concat(people)){
@@ -1259,8 +1333,8 @@ function update(dt, now){
       const left = people.filter(p => !p.out).length;
       if (!pending && ((S.quietT > .5 && S.settleT > 1.2) || S.settleT > 6 || (left === 0 && S.settleT > .9))) endShot();
     }
-    camera.position.copy(camPos);
-    const fov = 72 + clamp((speed - 15) / 35, 0, 1) * 16;
+    updateHero(dt);
+    const fov = 70 + clamp((speed - 12) / 20, 0, 1) * 10;
     if (Math.abs(camera.fov - fov) > .1){ camera.fov += (fov - camera.fov) * (1 - Math.exp(-4 * dt)); camera.updateProjectionMatrix(); }
     $('speed').innerHTML = Math.round(speed * 3.6) + ' <small>km/h</small>';
     sfx.wind(m === 'fly' ? speed : 0);
@@ -1268,6 +1342,7 @@ function update(dt, now){
     S.resetT += dt;
     if (S.resetT > .35 && playerBody){
       world.remove(playerBody); playerBody = null;
+      heroInBarrel();
       camera.fov = 72; camera.updateProjectionMatrix();
       barrelPose();
       camera.position.copy(barrelPos); camera.quaternion.copy(barrelQuat);
@@ -1278,14 +1353,63 @@ function update(dt, now){
     if (playerBody){
       lookQuat(camera.position, center, qB);
       camera.quaternion.slerp(qB, 1 - Math.exp(-3 * dt));
+      updateHero(dt);
     }
   }
 
   if (S.shake > 0){
-    const s = S.shake * S.shake * .12;
+    const s = S.shake * S.shake * .25;
     camera.position.x += rand(-s, s); camera.position.y += rand(-s, s); camera.position.z += rand(-s, s);
   }
   drawFx(m === 'fly' ? speed : 0, dt);
+  guide.visible = m === 'aim';
+}
+
+// While gliding the flier faces along their velocity and banks into turns; once they hit
+// something they tumble with the physics ball.
+const heroM = new THREE.Matrix4();
+function updateHero(dt){
+  const b = playerBody;
+  hero.position.set(b.position.x, b.position.y, b.position.z);
+  if (S.gliding){
+    const v = b.velocity;
+    if (v.length() > 1) heroDir.lerp(vA.set(v.x, v.y, v.z).normalize(), 1 - Math.exp(-10 * dt)).normalize();
+    heroM.lookAt(vB.set(0, 0, 0), heroDir, UP);    // for an object, lookAt points -Z; we want +Z forward
+    hero.quaternion.setFromRotationMatrix(heroM);
+    hero.rotateY(Math.PI);
+    hero.rotateZ(heroBank);   // dip the wing on the inside of the turn
+    poseHero(1, Math.sin(S.flyT * 9) * .06 + heroBank * .15);
+  } else {
+    hero.quaternion.slerp(qC.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w), 1 - Math.exp(-12 * dt));
+    poseHero(.6, Math.sin(S.flyT * 16) * .5);
+  }
+}
+
+// Dotted guide for the first second and a half of the shot at the current power (no steering).
+const GUIDE_N = 16;
+const guide = new THREE.InstancedMesh(new THREE.SphereGeometry(.17, 8, 6),
+  new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: .9 }), GUIDE_N);
+guide.frustumCulled = false;
+guide.visible = false;
+scene.add(guide);
+const gp = new THREE.Vector3(), gv = new THREE.Vector3(), gm = new THREE.Matrix4();
+function updateGuide(){
+  const p = S.charging ? S.power : (S.lastPower == null ? .4 : S.lastPower);
+  aimDir(gv);
+  gp.set(0, PIVOT_Y, 0).addScaledVector(gv, 2.5);
+  gv.multiplyScalar(launchSpeed(p));
+  const h = 1 / 30;
+  for (let i = 0; i < GUIDE_N; i++){
+    for (let k = 0; k < 3; k++){
+      glide(gv, h, 0, 0);
+      gv.y -= 9.82 * h;
+      gp.addScaledVector(gv, h);
+    }
+    const s = 1 - i / GUIDE_N * .6;
+    gm.makeScale(s, s, s).setPosition(gp);
+    guide.setMatrixAt(i, gm);
+  }
+  guide.instanceMatrix.needsUpdate = true;
 }
 
 let last = performance.now();
