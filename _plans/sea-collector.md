@@ -60,6 +60,16 @@ saves the game. Everything is kept in `localStorage` under `sea-collector-v1`.
     its head. What it prints becomes real, but it can only print sharks (up to three, which hunt
     you for about 20 seconds) and tornadoes (up to two, which drift after you and spin you round).
     It stands still while printing, which is the time to net it.
+  - **Gobbler** — a big round head that's mostly mouth, six different eyes on stalks and two bulgy
+    clawed feet. Power: very, very fast, and sucks you into its mouth to eat you (it spits you
+    back out a heart down). Weakness: scared of the dark, and shark bites — nearby sharks go for it,
+    and three bites send it away.
+  - **Roller** — one big eye in a spiky red sun, a flame crest, curly arms, a springy nose and long
+    legs on roller-skate wheels. It only rolls along the seabed, then springs up at you. If it misses
+    it lands dizzy for three seconds.
+  - **Kissy Lips** — giant red lips with one eye on a stalk and three branching legs. Its kiss holds
+    on and drains a heart every couple of seconds until you swim hard enough to break free. It
+    turns slowly and only kisses what's in front of it.
   - **MEGA MONSTER** — every sixth monster. All of them stuck together: scribble body, eyeball
     face, laser eye on a stalk, flame hair, genie hands, walker legs, squid tentacles and a spike
     serpent tail, plus the printer on its shoulder. It takes turns with spikes, freezing water, the
