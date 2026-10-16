@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "3.0"
+version: "3.1"
 layout: null
 ---
 {% raw %}
@@ -145,6 +145,11 @@ layout: null
   .tab.on{background:var(--cream);color:var(--ink);}
   #shopItems{overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding-bottom:6px;}
   .item{background:rgba(255,248,230,.96);color:var(--ink);border-radius:14px;padding:9px;text-align:left;display:flex;flex-direction:column;gap:4px;}
+  .item{cursor:pointer;border:3px solid transparent;}
+  .item.trying{border-color:#3d8bff;box-shadow:0 0 0 3px rgba(61,139,255,.35);}
+  .item .th{width:100%;height:86px;object-fit:contain;border-radius:10px;background:radial-gradient(circle at 50% 40%,#fff,#e8dfc7);}
+  .item .try{font-size:11px;font-weight:800;color:#3d8bff;}
+  #tryTag{background:#3d8bff;border-radius:12px;padding:6px 10px;font-weight:800;font-size:13px;margin:-2px 0 10px;}
   .item .nm{font-weight:900;font-size:15px;display:flex;align-items:center;gap:7px;}
   .item .sw{width:18px;height:18px;border-radius:50%;border:2px solid rgba(0,0,0,.25);flex:none;}
   .item .ds{font-size:12px;opacity:.75;line-height:1.3;}
@@ -240,6 +245,7 @@ layout: null
       <button class="go" id="shopDone">DONE</button>
     </div>
     <div id="shopTabs"></div>
+    <div id="tryTag" class="hidden"></div>
     <div id="shopItems"></div>
   </div>
 </div>
@@ -1259,9 +1265,9 @@ function updateTrailFx(dt){
     if (d.spin){ d.m.rotation.x += dt * 9; d.m.rotation.y += dt * 7; }
   }
 }
-function trailTick(dt, pos, t){
+function trailTick(dt, pos, t, kind){
   trailClock += dt;
-  while (trailClock > .025){ trailClock -= .025; emitTrail(pos, save.eq.trail, t); }
+  while (trailClock > .025){ trailClock -= .025; emitTrail(pos, kind || save.eq.trail, t); }
 }
 
 function updateCoins(dt){
@@ -1311,11 +1317,12 @@ function clearPops(){ for (const q of pops) q.el.remove(); pops.length = 0; }
 // The flier: a person in a red cap and suit. Their mesh sits in a holder whose +Z is the
 // direction of travel; inside it they lie face down with their head forward, arms out like wings.
 const hero = new THREE.Group();
-function heroLook(){
-  const o = cosmetic('outfit', save.eq.outfit), hat = save.eq.hat;
+function heroLook(eq){
+  eq = eq || save.eq;
+  const o = cosmetic('outfit', eq.outfit), hat = eq.hat;
   return { skin: 0xf2c89b, hair: 0x6b3e1f, shirt: o.shirt, pants: o.pants, shoe: 0xf4f4f4,
     top: 'long', bottom: 'pants', style: hat === 'cap' ? 'cap' : 'short', cap: o.shirt === 0xf4f4f4 ? 0x3d8bff : o.shirt,
-    hat, noBeard: true, headScale: HEAD_SIZES[save.eq.head] || 1, armScale: ARM_SIZES[save.eq.arms] || 1 };
+    hat, noBeard: true, headScale: HEAD_SIZES[eq.head] || 1, armScale: ARM_SIZES[eq.arms] || 1 };
 }
 let heroBody = null, heroRag = null;
 scene.add(hero);
@@ -1623,9 +1630,28 @@ function fail(){
 // The shop shows you standing next to the cannon wearing what you have on, turning slowly.
 let shopTab = 'upgrades', preview = null;
 const previewSpot = new THREE.Vector3(-2.9, .87, 2.2);
+// What you're trying on in the shop, on top of what you're wearing: { kind, id } or null.
+let tryOn = null;
+function shopLook(){
+  const eq = Object.assign({}, save.eq);
+  if (tryOn) eq[tryOn.kind] = tryOn.id;
+  return eq;
+}
+function setTryOn(t){
+  tryOn = t;
+  const eq = shopLook();
+  cannonMetal.color.setHex(cosmetic('cannon', eq.cannon).color);
+  rebuildPreview();
+  const tag = $('tryTag');
+  if (t){
+    const names = t.kind === 'head' ? HEAD_NAMES : t.kind === 'arms' ? ARM_NAMES : null;
+    tag.textContent = 'Trying on: ' + (names ? names[t.id] + (t.kind === 'head' ? ' head' : ' arms') : cosmetic(t.kind, t.id).name) + ' (buy it to keep it)';
+    tag.classList.remove('hidden');
+  } else tag.classList.add('hidden');
+}
 function rebuildPreview(){
   if (preview) scene.remove(preview);
-  preview = personMesh(heroLook());
+  preview = personMesh(heroLook(shopLook()));
   preview.position.copy(previewSpot);
   preview.traverse(o => { o.castShadow = true; });
   scene.add(preview);
@@ -1644,6 +1670,7 @@ function openShop(){
   setMode('shop');
 }
 function closeShop(){
+  setTryOn(null);
   $('shop').classList.add('hidden');
   if (preview){ scene.remove(preview); preview = null; }
   showTitle();
@@ -1652,7 +1679,7 @@ function updateShop(dt, t){
   // frame the person on the side the panel isn't on
   const wide = camera.aspect > 1;
   // a big head needs a little more room
-  const big = 1 + .25 * ((HEAD_SIZES[save.eq.head] || 1) - 1);
+  const big = 1 + .25 * ((HEAD_SIZES[shopLook().head] || 1) - 1);
   if (wide){
     camera.position.set(previewSpot.x + 1.4, 2.1 * big, previewSpot.z + 5.4 * big);
     camera.lookAt(previewSpot.x + 2.6, 1.1 * big, previewSpot.z);
@@ -1666,12 +1693,119 @@ function updateShop(dt, t){
     const u = preview.userData;
     for (const a of u.arms){ a.sh.rotation.z = a.s * (.15 + Math.sin(t * 1.3) * .05); a.el.rotation.x = -.25; }
     u.head.rotation.y = Math.sin(t * .8) * .3;
-    if (save.eq.trail !== 'none'){
+    const trail = shopLook().trail;
+    if (trail !== 'none'){
       const a = t * 3;
-      trailTick(dt, vE.set(previewSpot.x + Math.cos(a) * .7, previewSpot.y + .2 + Math.sin(t * 1.7) * .6, previewSpot.z + Math.sin(a) * .7), t);
+      trailTick(dt, vE.set(previewSpot.x + Math.cos(a) * .7, previewSpot.y + .2 + Math.sin(t * 1.7) * .6, previewSpot.z + Math.sin(a) * .7), t, trail);
     }
   }
 }
+/* ---------- shop pictures ---------- */
+// Each item gets a little picture, drawn once and kept: people, hats and cannons are rendered in
+// 3D by a small second renderer; trails and upgrades are drawn by hand on a 2D canvas.
+const thumbs = {};
+let thumbR = null, thumbScene = null, thumbCam = null;
+function thumb3d(key, obj, camPos, look){
+  if (thumbs[key]) return thumbs[key];
+  if (!thumbR){
+    thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    thumbR.setSize(176, 136, false);
+    thumbScene = new THREE.Scene();
+    thumbScene.add(new THREE.HemisphereLight(0xffffff, 0x8a8170, 1));
+    const d = new THREE.DirectionalLight(0xffffff, .7); d.position.set(2, 3, 4); thumbScene.add(d);
+    thumbCam = new THREE.PerspectiveCamera(30, 176 / 136, .05, 50);
+  }
+  thumbScene.add(obj);
+  thumbCam.position.set(camPos[0], camPos[1], camPos[2]);
+  thumbCam.lookAt(look[0], look[1], look[2]);
+  thumbR.render(thumbScene, thumbCam);
+  thumbScene.remove(obj);
+  return (thumbs[key] = thumbR.domElement.toDataURL());
+}
+function thumb2d(key, draw){
+  if (thumbs[key]) return thumbs[key];
+  const c = document.createElement('canvas'); c.width = 176; c.height = 136;
+  const g = c.getContext('2d');
+  g.lineCap = g.lineJoin = 'round';
+  draw(g);
+  return (thumbs[key] = c.toDataURL());
+}
+function thumbPerson(eq, view, armsOut){
+  const m = personMesh(heroLook(Object.assign({}, save.eq, eq)));
+  m.rotation.y = -.35;
+  if (armsOut) for (const a of m.userData.arms){ a.sh.rotation.z = a.s * 1.25; a.el.rotation.x = -.1; }
+  if (view === 'head') return [m, [.32, .86, 1.25], [0, .8, 0]];
+  const hs = HEAD_SIZES[eq.head != null ? eq.head : save.eq.head] || 1, as = ARM_SIZES[eq.arms != null ? eq.arms : save.eq.arms] || 1;
+  const k = Math.max(1, .8 + .2 * hs, armsOut ? .6 + .4 * as : 1);
+  return [m, [.85 * k, .4 + .2 * hs, 3 * k], [0, .1 + .2 * (hs - 1), 0]];
+}
+function thumbCannon(color){
+  const g = new THREE.Group();
+  const metal = new THREE.MeshPhongMaterial({ color, shininess: 40, specular: 0x444444 });
+  const wood = new THREE.MeshLambertMaterial({ color: 0xa8733f });
+  // the barrel lies along +Z (muzzle end), tipped up
+  const tube = new THREE.Group(); tube.position.y = .95; tube.rotation.x = -.45; g.add(tube);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(.42, .52, 2, 24), metal);
+  barrel.rotation.x = Math.PI / 2; tube.add(barrel);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.43, .08, 8, 24), metal);
+  rim.position.z = 1; tube.add(rim);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(.36, 20), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+  hole.position.z = 1.001; tube.add(hole);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(.5, .06, 8, 24), new THREE.MeshPhongMaterial({ color: 0xd9a531 }));
+  band.position.z = -.2; tube.add(band);
+  for (const s2 of [-1, 1]){
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(.42, .42, .14, 18), wood);
+    w.rotation.z = Math.PI / 2; w.position.set(s2 * .62, .42, .2); g.add(w);
+  }
+  return g;
+}
+const ICON = {
+  power(g){ g.fillStyle = '#23262d'; g.save(); g.translate(78, 84); g.rotate(-.5); g.fillRect(-48, -16, 92, 32); g.beginPath(); g.arc(44, 0, 18, 0, 7); g.fill(); g.restore();
+    g.fillStyle = '#a8733f'; g.beginPath(); g.arc(70, 104, 18, 0, 7); g.fill(); plus(g, 136, 40); },
+  wings(g){ g.fillStyle = '#3d8bff'; for (const s2 of [-1, 1]){ g.beginPath(); g.moveTo(88, 64); g.quadraticCurveTo(88 + s2 * 50, 18, 88 + s2 * 80, 40); g.quadraticCurveTo(88 + s2 * 50, 70, 88, 92); g.fill(); }
+    g.fillStyle = '#e8483b'; g.beginPath(); g.arc(88, 64, 14, 0, 7); g.fill(); },
+  helmet(g){ g.fillStyle = '#e8483b'; g.beginPath(); g.arc(88, 84, 46, Math.PI, 0); g.fill(); g.fillRect(36, 82, 104, 12);
+    g.strokeStyle = '#fff'; g.lineWidth = 6; g.beginPath(); g.arc(88, 84, 30, Math.PI * 1.15, Math.PI * 1.45); g.stroke();
+    g.fillStyle = '#c9c2b0'; g.fillRect(42, 104, 92, 14); g.fillStyle = '#8d8b86'; g.fillRect(42, 104, 30, 14); },
+  shots(g){ for (const [x, y] of [[60, 86], [94, 86], [77, 58]]){ const gr = g.createRadialGradient(x - 6, y - 6, 2, x, y, 18); gr.addColorStop(0, '#888'); gr.addColorStop(1, '#111'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, 17, 0, 7); g.fill(); } plus(g, 136, 40); },
+  magnet(g){ g.lineWidth = 22; g.strokeStyle = '#e8483b'; g.beginPath(); g.arc(80, 70, 30, Math.PI * .5, Math.PI * 1.5, true); g.stroke();
+    g.strokeStyle = '#ccc'; g.beginPath(); g.moveTo(80, 40); g.lineTo(100, 40); g.moveTo(80, 100); g.lineTo(100, 100); g.stroke();
+    coin(g, 138, 52, 12); coin(g, 146, 92, 10); }
+};
+function plus(g, x, y){ g.fillStyle = '#2fb37a'; g.fillRect(x - 15, y - 5, 30, 10); g.fillRect(x - 5, y - 15, 10, 30); }
+function coin(g, x, y, r){ g.fillStyle = '#ffc93c'; g.strokeStyle = '#8a5d00'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.stroke(); }
+function drawTrail(g, kind){
+  // a little flier swooping along a curve, with the trail behind
+  const pts = [];
+  for (let i = 0; i <= 14; i++){ const u = i / 14; pts.push([20 + u * 120, 100 - Math.sin(u * 2.4) * 60]); }
+  if (kind === 'none'){
+    g.strokeStyle = 'rgba(29,36,51,.3)'; g.lineWidth = 3; g.setLineDash([6, 8]); g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); g.setLineDash([]);
+  }
+  pts.forEach(([x, y], i) => {
+    const u = i / 14;
+    if (kind === 'smoke'){ g.fillStyle = 'rgba(150,155,165,' + (.15 + .4 * u) + ')'; g.beginPath(); g.arc(x, y, 6 + (1 - u) * 12, 0, 7); g.fill(); }
+    else if (kind === 'sparkle' && i % 2 === 0){ star(g, x + Math.sin(i * 3) * 8, y + Math.cos(i * 5) * 8, 4 + u * 5, i % 4 ? '#ffc93c' : '#fff3b0'); }
+    else if (kind === 'rainbow'){ g.fillStyle = 'hsl(' + (i * 25) + ',95%,60%)'; g.beginPath(); g.arc(x, y, 3 + u * 8, 0, 7); g.fill(); }
+  });
+  const [hx, hy] = pts[14];
+  g.fillStyle = '#e8483b'; g.beginPath(); g.arc(hx + 10, hy - 4, 12, 0, 7); g.fill();
+  g.fillStyle = '#f2c89b'; g.beginPath(); g.arc(hx + 16, hy - 6, 6, 0, 7); g.fill();
+}
+function star(g, x, y, r, c){
+  g.fillStyle = c; g.beginPath();
+  for (let i = 0; i < 8; i++){ const a = i / 8 * Math.PI * 2, rr = i % 2 ? r * .4 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+  g.fill();
+}
+function itemThumb(kind, id){
+  if (kind === 'outfit'){ const [m, c, l] = thumbPerson({ outfit: id, hat: 'none', head: 0, arms: 0 }); return thumb3d('outfit:' + id, m, c, l); }
+  if (kind === 'hat'){ const [m, c, l] = thumbPerson({ hat: id, outfit: 'red', head: 0 }, 'head'); return thumb3d('hat:' + id, m, c, l); }
+  if (kind === 'cannon') return thumb3d('cannon:' + id, thumbCannon(cosmetic('cannon', id).color), [3.4, 1.8, 2.6], [0, .9, .1]);
+  if (kind === 'trail') return thumb2d('trail:' + id, g => drawTrail(g, id));
+  if (kind === 'head'){ const [m, c, l] = thumbPerson({ head: id, arms: 0, hat: 'none', outfit: 'red' }); return thumb3d('head:' + id, m, c, l); }
+  if (kind === 'arms'){ const [m, c, l] = thumbPerson({ arms: id, head: 0, hat: 'none', outfit: 'red' }, null, true); return thumb3d('arms:' + id, m, c, l); }
+  return thumb2d('up:' + kind, ICON[kind]);
+}
+
 function renderShop(){
   updateCoinsHud();
   const tabs = [['upgrades', 'Upgrades'], ['outfit', 'Outfits'], ['hat', 'Hats'], ['trail', 'Trails'], ['cannon', 'Cannons']];
@@ -1679,16 +1813,24 @@ function renderShop(){
   for (const [id, label] of tabs){
     const b = document.createElement('button');
     b.className = 'tab' + (id === shopTab ? ' on' : ''); b.textContent = label;
-    b.addEventListener('click', () => { shopTab = id; sfx.click(); renderShop(); });
+    b.addEventListener('click', () => { shopTab = id; sfx.click(); setTryOn(null); renderShop(); });
     $('shopTabs').appendChild(b);
   }
   const box = $('shopItems'); box.innerHTML = '';
-  const card = (swatch, name, desc, extra, btnText, btnCls, onClick) => {
+  const card = (swatch, name, desc, extra, btnText, btnCls, onClick, pic, tryIt) => {
     const d = document.createElement('div'); d.className = 'item';
-    d.innerHTML = '<div class="nm">' + (swatch ? '<span class="sw" style="background:' + swatch + '"></span>' : '') + name + '</div>' +
-      (desc ? '<div class="ds">' + desc + '</div>' : '') + (extra || '');
+    if (tryIt && tryOn && tryOn.kind === tryIt.kind && tryOn.id === tryIt.id) d.classList.add('trying');
+    d.innerHTML = (pic ? '<img class="th" alt="" src="' + pic + '">' : '') +
+      '<div class="nm">' + (swatch ? '<span class="sw" style="background:' + swatch + '"></span>' : '') + name + '</div>' +
+      (desc ? '<div class="ds">' + desc + '</div>' : '') + (extra || '') +
+      (tryIt ? '<div class="try">' + (d.classList.contains('trying') ? 'Trying it on' : 'Tap to try it on') + '</div>' : '');
     const b = document.createElement('button'); b.className = btnCls; b.innerHTML = btnText;
-    if (onClick) b.addEventListener('click', onClick);
+    if (onClick) b.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+    if (tryIt) d.addEventListener('click', () => {
+      sfx.click();
+      setTryOn(tryOn && tryOn.kind === tryIt.kind && tryOn.id === tryIt.id ? null : tryIt);
+      renderShop();
+    });
     d.appendChild(b); box.appendChild(d);
   };
   const price = n => '<span class="coin-ic"></span>' + n;
@@ -1696,18 +1838,24 @@ function renderShop(){
     for (const u of UPGRADES){
       const lv = up(u.id), max = lv >= u.costs.length, cost = u.costs[lv];
       const pips = '<div class="pips">' + '●'.repeat(lv) + '<span style="opacity:.3">' + '●'.repeat(u.costs.length - lv) + '</span></div>';
-      if (max) card(null, u.name, u.desc, pips, 'MAXED', 'max');
+      // head and arm cards show (and let you try on) the next size up
+      const next = Math.min(lv + 1, u.costs.length);
+      const pic = itemThumb(u.sizes ? u.id : u.id, next);
+      const tryIt = u.sizes && !max ? { kind: u.id, id: next } : null;
+      if (max) card(null, u.name, u.desc, pips, 'MAXED', 'max', null, pic);
       else card(null, u.name, u.desc, pips, price(cost), save.coins >= cost ? '' : 'poor', () => {
         if (save.coins < cost) return;
         save.coins -= cost; save.up[u.id] = lv + 1;
+        if (u.sizes) setTryOn(null);
         if (u.sizes){ save.eq[u.id] = lv + 1; rebuildPreview(); heroInBarrel(); }
         writeSave(); sfx.buy(); renderShop();
-      });
+      }, pic, tryIt);
       if (u.sizes && lv > 0){
         const names = u.id === 'head' ? HEAD_NAMES : ARM_NAMES;
         const w = document.createElement('button'); w.className = 'own';
         w.textContent = 'Wearing: ' + names[save.eq[u.id]] + ' ▸';
-        w.addEventListener('click', () => {
+        w.addEventListener('click', e => {
+          e.stopPropagation(); setTryOn(null);
           save.eq[u.id] = (save.eq[u.id] + 1) % (lv + 1);
           writeSave(); sfx.click(); rebuildPreview(); heroInBarrel(); renderShop();
         });
@@ -1720,17 +1868,19 @@ function renderShop(){
     const owned = save.owned[shopTab].includes(c.id), on = save.eq[shopTab] === c.id;
     const sw = c.shirt != null ? '#' + c.shirt.toString(16).padStart(6, '0') : c.color != null ? '#' + c.color.toString(16).padStart(6, '0') : SWATCH[c.id];
     const equip = () => {
+      tryOn = null; setTryOn(null);
       save.eq[shopTab] = c.id; writeSave();
       if (shopTab === 'cannon') cannonMetal.color.setHex(c.color);
       if (shopTab === 'outfit' || shopTab === 'hat'){ rebuildPreview(); heroInBarrel(); }
       renderShop();
     };
-    if (on) card(sw, c.name, '', '', 'WEARING', 'on');
-    else if (owned) card(sw, c.name, '', '', 'USE', 'own', () => { sfx.click(); equip(); });
+    const pic = itemThumb(shopTab, c.id), tryIt = on ? null : { kind: shopTab, id: c.id };
+    if (on) card(sw, c.name, '', '', 'WEARING', 'on', null, pic);
+    else if (owned) card(sw, c.name, '', '', 'USE', 'own', () => { sfx.click(); equip(); }, pic, tryIt);
     else card(sw, c.name, '', '', price(c.cost), save.coins >= c.cost ? '' : 'poor', () => {
       if (save.coins < c.cost) return;
       save.coins -= c.cost; save.owned[shopTab].push(c.id); sfx.buy(); equip();
-    });
+    }, pic, tryIt);
   }
 }
 
