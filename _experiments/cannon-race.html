@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "4.1"
+version: "4.2"
 layout: null
 ---
 {% raw %}
@@ -159,6 +159,21 @@ layout: null
   .item button.own{background:#3d8bff;}
   .item button.on,.item button.max{background:#9aa;cursor:default;}
   .item button.poor{background:#c9c2b0;color:#6a6458;}
+  /* ---------- the boss ---------- */
+  #bossBar{display:flex;align-items:center;gap:8px;margin-top:6px;font-weight:900;font-size:15px;color:#ff6b5a;}
+  #bossHp{width:min(40vw,260px);height:14px;border-radius:8px;background:rgba(0,0,0,.45);border:2px solid #fff;overflow:hidden;}
+  #bossHp i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#e8483b,#ff8a2b);transition:width .3s;}
+  #goo{position:fixed;inset:0;z-index:8;pointer-events:none;transition:opacity 2.5s;
+    background:radial-gradient(circle at 30% 35%,rgba(120,200,40,.92) 0 9%,transparent 10%),
+      radial-gradient(circle at 62% 28%,rgba(140,215,50,.9) 0 12%,transparent 13%),
+      radial-gradient(circle at 48% 62%,rgba(110,190,30,.92) 0 15%,transparent 16%),
+      radial-gradient(circle at 78% 70%,rgba(150,220,60,.88) 0 8%,transparent 9%),
+      radial-gradient(circle at 18% 75%,rgba(120,200,40,.9) 0 10%,transparent 11%),
+      radial-gradient(circle at 85% 20%,rgba(130,205,45,.85) 0 6%,transparent 7%);}
+  #flash{position:fixed;inset:0;z-index:7;pointer-events:none;background:#fff;opacity:0;}
+  .lv.boss{background:linear-gradient(135deg,#3a1030,#7a1d14);color:#fff;grid-column:1/-1;}
+  .lv.boss .st{color:var(--sun);}
+  .lv.locked{opacity:.6;}
   #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:30;transition:opacity .3s;}
   #fade.on{opacity:1;}
 </style>
@@ -173,6 +188,7 @@ layout: null
     <div>
       <div id="lvlName"></div>
       <div id="people"></div>
+      <div id="bossBar" class="hidden"><b>BOSS</b><div id="bossHp"><i></i></div></div>
     </div>
     <div class="right">
       <div class="row"><div id="timer">0:00.0</div><button id="pauseBtn" aria-label="Pause">II</button></div>
@@ -219,7 +235,7 @@ layout: null
 </div>
 
 <div class="screen hidden" id="win">
-  <h1>EVERYBODY DOWN!<span id="winSub"></span></h1>
+  <h1 id="winTitle">EVERYBODY DOWN!<span id="winSub"></span></h1>
   <div class="stars" id="winStars"></div>
   <div class="stat" id="winStat"></div>
   <div class="stat" id="winCoins"></div>
@@ -250,6 +266,8 @@ layout: null
   </div>
 </div>
 
+<div id="goo" class="hidden"></div>
+<div id="flash"></div>
 <div id="fade"></div>
 
 <script src="/experiments/cannon-race/three.min.js"></script>
@@ -487,6 +505,7 @@ Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, n
 sun.shadow.bias = -0.0005;
 scene.add(sun, sun.target);
 
+function barfM2(){ return new THREE.MeshLambertMaterial({ color: 0x8fd23a, emissive: 0x1a3000 }); }
 /* ---------- canvas textures ---------- */
 function canvasMat(size, draw, color){
   const c = document.createElement('canvas'); c.width = c.height = size;
@@ -724,6 +743,349 @@ function splashFx(p){
   popText('SPLASH!', p, 1.3);
 }
 function heroBodies(){ return heroRag ? heroRag.bodies : playerBody ? [playerBody] : []; }
+
+/* ================= the boss ================= */
+// Drawn by one of the kids: three heads on long necks (spiral eyes; the middle one angry, with
+// zigzag teeth), a big spotted round body, two huge striped wings, little arms with fists, and a
+// black cage underneath. It breathes fire out of its mouth, shoots lightning out of its eyes and
+// barfs. Knock all three heads off to beat it. Every attack winds up first (the mouth or eyes glow)
+// so you can steer out of the way; if one hits you in the air, you're knocked out of the sky.
+const BS = 1.35;   // how huge: everything below is multiplied by this
+let boss = null;
+const bossMats = {};
+function spiralTex(){
+  return canvasMat(128, (c, n) => {
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(n / 2, n / 2, n / 2 - 2, 0, 7); c.fill();
+    c.strokeStyle = '#111'; c.lineWidth = 7; c.beginPath();
+    for (let a = 0; a < Math.PI * 7; a += .1){ const r = 3 + a * 2.6; c.lineTo(n / 2 + Math.cos(a) * r, n / 2 + Math.sin(a) * r); }
+    c.stroke();
+  });
+}
+function bossMaterials(){
+  if (bossMats.body) return bossMats;
+  bossMats.body = canvasMat(256, (c, n) => {
+    c.fillStyle = '#f2ead8'; c.fillRect(0, 0, n, n); c.fillStyle = '#1d1d1d';
+    for (let i = 0; i < 60; i++){ c.beginPath(); c.arc(Math.random() * n, Math.random() * n, 4 + Math.random() * 7, 0, 7); c.fill(); }
+  });
+  bossMats.skin = new THREE.MeshLambertMaterial({ color: 0xb8e08a, emissive: 0x000000 });
+  bossMats.wing = canvasMat(256, (c, n) => {
+    c.fillStyle = '#ffd23f'; c.fillRect(0, 0, n, n); c.fillStyle = '#222';
+    for (let i = 0; i < 9; i++) c.fillRect(i * n / 9 + 6, 0, 7, n);
+  });
+  bossMats.wing.side = THREE.DoubleSide;
+  bossMats.dark = new THREE.MeshLambertMaterial({ color: 0x1b1b1f });
+  bossMats.bar = new THREE.MeshPhongMaterial({ color: 0x55585f, shininess: 60 });
+  bossMats.spiral = spiralTex();
+  bossMats.mouth = new THREE.MeshBasicMaterial({ color: 0x3a0d12 });
+  bossMats.tooth = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  bossMats.glow = new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0 });
+  return bossMats;
+}
+function buildBoss(){
+  const M = bossMaterials(), oz = -level.D;
+  const g = new THREE.Group(); g.position.set(0, 0, oz); levelGroup.add(g);
+  const put = (parent, geo, m, x, y, z, sx, sy, sz) => {
+    const o = new THREE.Mesh(geo, m); o.position.set(x * BS, y * BS, z * BS); o.scale.set(sx * BS, sy * BS, sz * BS);
+    o.castShadow = true; parent.add(o); return o;
+  };
+  const solid = (shape, x, y, z) => {
+    const b = new CANNON.Body({ mass: 0 }); b.addShape(shape); b.position.set(x * BS, y * BS, z * BS + oz);
+    b.isBoss = true; addSolid(b); obstacleBodies.push(b); return b;
+  };
+  // the black cage it sits on
+  put(g, boxG, M.dark, 0, 4, 0, 16, .8, 12);
+  put(g, boxG, M.dark, 0, .3, 0, 16, .6, 12);
+  for (let i = 0; i < 9; i++) for (const z of [-5.8, 5.8]) put(g, cylG, M.bar, -7 + i * 1.75, 2.2, z, .18, 3.6, .18);
+  for (let i = 0; i < 6; i++) for (const x of [-7.8, 7.8]) put(g, cylG, M.bar, x, 2.2, -4.5 + i * 1.8, .18, 3.6, .18);
+  solid(new CANNON.Box(new CANNON.Vec3(8 * BS, 2.2 * BS, 6 * BS)), 0, 2.2, 0);
+  // the spotted body
+  const dome = put(g, new THREE.SphereGeometry(1, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2), M.body, 0, 4.4, 0, 7.5, 7.5, 7.5);
+  dome.material.map.wrapS = dome.material.map.wrapT = THREE.RepeatWrapping; dome.material.map.repeat.set(3, 2);
+  solid(new CANNON.Sphere(7.5 * BS), 0, 4.4, 0);
+  // little arms
+  const arms = [];
+  for (const s2 of [-1, 1]){
+    const a = new THREE.Group(); a.position.set(s2 * 6.6 * BS, 7 * BS, 2.5 * BS); g.add(a);
+    put(a, cylG, M.skin, s2 * 1.1, -.4, 0, .3, 2.4, .3).rotation.z = s2 * 1.2;
+    put(a, sphereG, M.skin, s2 * 2.2, -.9, 0, .55, .55, .55);
+    for (let k = 0; k < 3; k++) put(a, sphereG, M.skin, s2 * 2.5, -.6 - k * .3, .35, .2, .2, .2);   // knuckles
+    arms.push(a);
+  }
+  // huge striped wings
+  const wings = [];
+  for (const s2 of [-1, 1]){
+    const w = new THREE.Group(); w.position.set(s2 * 5.5 * BS, 9 * BS, -1.5 * BS); g.add(w);
+    const blade = put(w, sphereG, M.wing, s2 * 8, 3, 0, 9, 3, .35);   // upright, facing you
+    blade.rotation.z = s2 * .35;
+    wings.push({ w, s: s2 });
+  }
+  // necks and heads: middle (fire and barf), left and right (lightning eyes)
+  const heads = [];
+  const HEADS = [
+    { x: 0,    y: 21,   z: .5, r: 3.4, kind: 'mouth', hp: 160, nx: 0,    ny: 11 },
+    { x: -8.5, y: 17.5, z: 0,  r: 2.6, kind: 'eyes',  hp: 110, nx: -3,   ny: 10.5 },
+    { x: 8.8,  y: 18,   z: 0,  r: 2.6, kind: 'eyes',  hp: 110, nx: 3,    ny: 10.5 }
+  ];
+  HEADS.forEach((H, i) => {
+    const hg = new THREE.Group(); g.add(hg);
+    put(hg, sphereG, M.skin, 0, 0, 0, H.r, H.r * .95, H.r);
+    const eyes = [];
+    for (const s2 of [-1, 1]){
+      const spiral = i === 0 || s2 === (i === 1 ? -1 : 1);   // side heads: one spiral eye, one normal eye
+      const e = put(hg, new THREE.CircleGeometry(1, 24), spiral ? M.spiral : whiteM, s2 * H.r * .4, H.r * .2, H.r * .93, H.r * .26, H.r * .26, 1);
+      e.rotation.y = s2 * .4;
+      if (!spiral) put(hg, sphereG, blackM, s2 * H.r * .41, H.r * .2, H.r * .99, H.r * .09, H.r * .11, .05);
+      const glow = put(hg, sphereG, M.glow.clone(), s2 * H.r * .4, H.r * .2, H.r * .95, H.r * .3, H.r * .3, H.r * .12);
+      eyes.push(glow);
+    }
+    // the angry eyebrows from the drawing
+    for (const s2 of [-1, 1]) put(hg, boxG, M.dark, s2 * H.r * .38, H.r * .56, H.r * .82, H.r * .38, H.r * .08, .1).rotation.z = s2 * (i === 0 ? -.45 : .2);
+    let mouthGlow;
+    if (i === 0){
+      const mo = put(hg, new THREE.CircleGeometry(1, 28), M.mouth, 0, -H.r * .35, H.r * .94, H.r * .6, H.r * .3, 1);
+      mo.rotation.x = -.25;
+      for (let k = 0; k < 9; k++){
+        const x = (k - 4) * H.r * .13;
+        put(hg, coneG, M.tooth, x, -H.r * .22, H.r * .95, .22, .45, .12).rotation.x = Math.PI;   // top teeth
+        put(hg, coneG, M.tooth, x + H.r * .06, -H.r * .5, H.r * .9, .2, .4, .12);               // bottom teeth
+      }
+    } else {
+      put(hg, new THREE.TorusGeometry(1, .12, 6, 16, Math.PI), M.mouth, 0, -H.r * .35, H.r * .92, H.r * .22, H.r * .14, 1).rotation.z = Math.PI;
+    }
+    mouthGlow = put(hg, sphereG, M.glow.clone(), 0, -H.r * .35, H.r * .95, H.r * .5, H.r * .3, H.r * .15);
+    const neck = new THREE.Mesh(cylG, M.skin); neck.castShadow = true; g.add(neck);
+    const body = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC });
+    body.addShape(new CANNON.Sphere(H.r * BS));
+    body.isBoss = true; body.allowSleep = false;
+    addSolid(body); obstacleBodies.push(body);
+    const h = { i, g: hg, neck, body, H, hp: H.hp, max: H.hp, alive: true, eyes, mouthGlow, hurt: 0, phase: i * 2.1 };
+    body.addEventListener('collide', e => bossHit(h, e));
+    heads.push(h);
+  });
+  boss = { g, heads, wings, arms, t: 0, attackT: 3.5, windup: null, fx: [], fxGroup: new THREE.Group(), dead: false, deadT: 0, oz };
+  levelGroup.add(boss.fxGroup);
+  updateBoss(0);
+  updateBossHud();
+}
+const nv = new THREE.Vector3(), nq = new THREE.Quaternion(), YV = new THREE.Vector3(0, 1, 0);
+function placeNeck(h){
+  const a = vF.set(h.H.nx * BS, h.H.ny * BS, 0).add(boss.g.position);
+  const b = h.g.getWorldPosition(vG);
+  h.neck.position.copy(a).add(b).multiplyScalar(.5).sub(boss.g.position);
+  nv.subVectors(b, a);
+  const len = nv.length();
+  h.neck.scale.set(.8 * BS, len, .8 * BS);
+  h.neck.quaternion.setFromUnitVectors(YV, nv.normalize());
+}
+const vF = new THREE.Vector3(), vG = new THREE.Vector3();
+function bossTotal(){ return boss.heads.reduce((n, h) => n + Math.max(0, h.hp), 0); }
+function updateBossHud(){
+  const on = !!(level && level.boss);
+  $('bossBar').classList.toggle('hidden', !on);
+  $('people').classList.toggle('hidden', on);
+  if (on && boss) $('bossHp').firstChild.style.width = (bossTotal() / boss.heads.reduce((n, h) => n + h.max, 0) * 100) + '%';
+}
+// You (or your ammo) hit a head: the harder, the more it hurts.
+let bossQueue = [];
+function bossHit(h, e){
+  if (!h.alive || !e.body.isHero) return;
+  const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
+  if (v < 3) return;
+  const dmg = Math.round(clamp(v * 2.6 * (e.body.hitMult || 1), 10, 95));
+  h.hp -= dmg; h.hurt = .5;
+  noteImpact();
+  const p = h.g.getWorldPosition(new THREE.Vector3());
+  replayEvent('bosshit', p);
+  popText('-' + dmg, { x: p.x, y: p.y + h.H.r * BS, z: p.z }, 1.2, 'coin');
+  earn(20, 'bonus', p);
+  sfx.roar();
+  if (h.hp <= 0){ h.alive = false; bossQueue.push(h); }
+  updateBossHud();
+}
+function headOff(h){
+  const p = h.g.getWorldPosition(new THREE.Vector3());
+  world.remove(h.body);
+  h.g.visible = false; h.neck.visible = false;
+  for (let k = 0; k < 3; k++) spawnConfetti({ x: p.x + rand(-2, 2), y: p.y + rand(-2, 2), z: p.z + rand(-1, 1) });
+  spawnPuff(p);
+  sfx.pop(); sfx.roar();
+  popText(boss.heads.some(o => o.alive) ? 'HEAD OFF!' : 'YOU BEAT THE BOSS!', p, 2, 'coin');
+  earn(50, 'bonus', p);
+  replayEvent('pop', p);
+  if (!boss.heads.some(o => o.alive)){
+    boss.dead = true; boss.deadT = 0;
+    earn(200, 'bonus', { x: 0, y: 10, z: boss.oz });
+    sfx.fanfare();
+  }
+}
+function bossAimAt(out){
+  // at you if you're gliding (with a little lead and a little miss), otherwise at the cannon
+  if (S.mode === 'fly' && S.gliding && playerBody){
+    const b = playerBody.position, v = playerBody.velocity;
+    return out.set(b.x + v.x * .5 + rand(-2.5, 2.5), b.y + v.y * .3 + rand(-1.5, 1.5), b.z + v.z * .5 + rand(-2.5, 2.5));
+  }
+  return out.set(rand(-3, 3), rand(.3, 1.5), rand(-5, -1.5));
+}
+function bossKnock(word){
+  if (S.mode !== 'fly' || !S.gliding || !playerBody) return false;
+  S.gliding = false; S.toRag = true;
+  preVel.set(rand(-4, 4), 7, 9);   // knocked back toward the cannon
+  popText(word, playerBody.position, 1.4);
+  S.shake = 1;
+  noteImpact();
+  return true;
+}
+function startAttack(){
+  const alive = boss.heads.filter(h => h.alive);
+  const opts = [];
+  for (const h of alive){ if (h.H.kind === 'mouth'){ opts.push(['fire', h], ['barf', h]); } else opts.push(['zap', h]); }
+  if (!opts.length) return;
+  const [kind, h] = pick(opts);
+  boss.windup = { kind, h, t: .9 };
+  if (kind === 'zap') sfx.charge(); else if (kind === 'fire') sfx.growl(); else sfx.gurgle();
+}
+const ZAPM = new THREE.LineBasicMaterial({ color: 0xcfe9ff });
+const fireM = new THREE.MeshBasicMaterial({ color: 0xff7a1a });
+const fireCoreM = new THREE.MeshBasicMaterial({ color: 0xffe066 });
+const barfM = new THREE.MeshLambertMaterial({ color: 0x8fd23a, emissive: 0x1a3000 });
+function releaseAttack(w){
+  const h = w.h;
+  if (!h.alive) return;
+  const target = bossAimAt(new THREE.Vector3());
+  if (w.kind === 'fire'){
+    const from = h.mouthGlow.getWorldPosition(new THREE.Vector3());
+    const m = new THREE.Mesh(sphereG, fireM); m.scale.setScalar(1.1);
+    const core = new THREE.Mesh(sphereG, fireCoreM); core.scale.setScalar(.6); m.add(core);
+    m.position.copy(from); boss.fxGroup.add(m);
+    const v = target.clone().sub(from).normalize().multiplyScalar(30);
+    boss.fx.push({ kind: 'fire', m, v, life: 5, target });
+    sfx.whoosh();
+  } else if (w.kind === 'barf'){
+    const from = h.mouthGlow.getWorldPosition(new THREE.Vector3());
+    const aimCam = S.mode !== 'fly' || !S.gliding;
+    if (aimCam) target.copy(camera.position);   // right at the screen
+    const T = 1.5;
+    for (let k = 0; k < 9; k++){
+      const m = new THREE.Mesh(sphereG, barfM); m.scale.setScalar(rand(.35, .8));
+      m.position.copy(from); boss.fxGroup.add(m);
+      const tgt = target.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(-1, 1), rand(-1.5, 1.5)));
+      const v = tgt.sub(from).divideScalar(T); v.y += .5 * 9.8 * T;
+      boss.fx.push({ kind: 'barf', m, v, life: T + 1.5, aimCam });
+    }
+    sfx.barf();
+    popText('BLAAARGH!', from, 1.3);
+  } else {
+    // lightning out of both eyes
+    for (const e of h.eyes){
+      const from = e.getWorldPosition(new THREE.Vector3());
+      const pts = [];
+      for (let k = 0; k <= 14; k++){
+        const u = k / 14, p = from.clone().lerp(target, u);
+        if (k > 0 && k < 14){ p.x += rand(-1.6, 1.6); p.y += rand(-1.6, 1.6); p.z += rand(-1.6, 1.6); }
+        pts.push(p);
+      }
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ZAPM);
+      boss.fxGroup.add(line);
+      boss.fx.push({ kind: 'zap', m: line, life: .35 });
+    }
+    flash(.85);
+    sfx.zap();
+    if (S.mode === 'fly' && playerBody && playerBody.position.distanceTo(target) < 3.2) bossKnock('ZAPPED!');
+    else if (S.mode === 'aim'){ spawnPuff({ x: target.x, y: .3, z: target.z }); S.shake = Math.max(S.shake, .5); }
+  }
+}
+let flashT = 0;
+function flash(k){ flashT = k; }
+function gooOnScreen(){
+  const g = $('goo');
+  g.classList.remove('hidden'); g.style.transition = 'none'; g.style.opacity = 1;
+  void g.offsetWidth;
+  g.style.transition = 'opacity 2.5s ease-in 1.2s'; g.style.opacity = 0;
+  clearTimeout(gooOnScreen.t); gooOnScreen.t = setTimeout(() => g.classList.add('hidden'), 3800);
+  sfx.splat(); popText('EWWW!', camera.position.clone().add(new THREE.Vector3(0, -1, -4).applyQuaternion(camera.quaternion)), 1.2);
+}
+function updateBoss(dt){
+  if (!boss) return;
+  boss.t += dt;
+  const t = boss.t;
+  // breathing, bobbing heads, flapping wings, waving arms
+  for (const h of boss.heads){
+    if (!h.alive) continue;
+    const ph = t + h.phase;
+    h.g.position.set(h.H.x * BS + Math.sin(ph * .7) * .8, h.H.y * BS + Math.sin(ph * 1.1) * .9, h.H.z * BS + Math.sin(ph * .5) * .5);
+    h.g.rotation.set(Math.sin(ph * .9) * .12, Math.sin(ph * .6) * .25, Math.sin(ph * .8) * .1);
+    const w = h.g.getWorldPosition(vG);
+    h.body.position.set(w.x, w.y, w.z);
+    h.hurt = Math.max(0, h.hurt - dt);
+    h.g.children[0].material = h.hurt > 0 ? hurtM : bossMats.skin;
+    placeNeck(h);
+  }
+  for (const w of boss.wings) w.w.rotation.z = w.s * (Math.sin(t * 2.2) * .25 + .1);
+  boss.arms.forEach((a, i) => { a.rotation.z = Math.sin(t * 3 + i * 3) * .3; });
+  if (boss.dead){
+    boss.deadT += dt;
+    if (boss.deadT > .6 && boss.g.visible){
+      boss.g.visible = false;
+      for (let k = 0; k < 6; k++) spawnConfetti({ x: rand(-8, 8) * BS, y: rand(3, 14) * BS, z: boss.oz + rand(-4, 4) });
+      spawnPuff({ x: 0, y: 6 * BS, z: boss.oz });
+      for (const b of obstacleBodies) if (b.isBoss) world.remove(b);
+      sfx.boom();
+      S.shake = 1;
+    }
+    return;
+  }
+  // attacks, only while you aim or fly
+  if (S.mode === 'aim' || S.mode === 'fly'){
+    if (boss.windup){
+      const wu = boss.windup;
+      wu.t -= dt;
+      const glow = Math.min(1, (.9 - wu.t) / .9) * (.6 + .4 * Math.sin(t * 40));
+      const parts = wu.kind === 'zap' ? wu.h.eyes : [wu.h.mouthGlow];
+      for (const gp of parts){ gp.material.opacity = glow; gp.material.color.setHex(wu.kind === 'zap' ? 0x9fe0ff : wu.kind === 'fire' ? 0xff7a1a : 0x8fd23a); }
+      if (wu.t <= 0){
+        for (const gp of parts) gp.material.opacity = 0;
+        boss.windup = null;
+        releaseAttack(wu);
+        const left = boss.heads.filter(h => h.alive).length;
+        boss.attackT = rand(4, 6) * (.65 + .35 * left / 3);   // angrier with fewer heads
+      }
+    } else {
+      boss.attackT -= dt;
+      if (boss.attackT <= 0) startAttack();
+    }
+  }
+  // fireballs, barf and lightning in the air
+  for (let i = boss.fx.length - 1; i >= 0; i--){
+    const f = boss.fx[i];
+    f.life -= dt;
+    let done = f.life <= 0;
+    if (f.kind === 'fire'){
+      f.m.position.addScaledVector(f.v, dt);
+      f.m.rotation.y += dt * 8;
+      if (Math.random() < .7) emitTrail(f.m.position, 'smoke', t);
+      const hitYou = S.mode === 'fly' && playerBody && f.m.position.distanceTo(vF.set(playerBody.position.x, playerBody.position.y, playerBody.position.z)) < 2;
+      if (hitYou || f.m.position.y < .5 || f.m.position.distanceTo(f.target) < 1.2){
+        if (hitYou) bossKnock('TOASTED!');
+        spawnDebris(f.m.position, 'fire', 2.5); spawnPuff(f.m.position);
+        sfx.boom();
+        if (f.m.position.distanceTo(camera.position) < 14){ S.shake = Math.max(S.shake, .8); flash(.35); }
+        done = true;
+      }
+    } else if (f.kind === 'barf'){
+      f.v.y -= 9.8 * dt;
+      f.m.position.addScaledVector(f.v, dt);
+      if (f.aimCam && f.m.position.distanceTo(camera.position) < 3){ if (!boss.gooed){ boss.gooed = true; gooOnScreen(); setTimeout(() => { if (boss) boss.gooed = false; }, 600); } done = true; }
+      else if (S.mode === 'fly' && playerBody && f.m.position.distanceTo(vF.set(playerBody.position.x, playerBody.position.y, playerBody.position.z)) < 1.8){
+        if (bossKnock('BARFED ON!')) gooOnScreen();
+        done = true;
+      } else if (f.m.position.y < .2){ spawnDebris(f.m.position, 'barf', 1); done = true; }
+    } else if (f.kind === 'zap'){
+      f.m.visible = Math.random() < .7;
+    }
+    if (done){ boss.fxGroup.remove(f.m); if (f.kind === 'zap') f.m.geometry.dispose(); boss.fx.splice(i, 1); }
+  }
+}
+const hurtM = new THREE.MeshLambertMaterial({ color: 0xff6b5a, emissive: 0x551100 });
 
 /* ================= levels ================= */
 // Coordinates are relative to the middle of each structure, which stands D metres in
@@ -1050,11 +1412,15 @@ function genLevel(n){
     }
   }};
 }
+// Level 101: the boss. It unlocks once level 100 is beaten.
+const BOSS_LEVEL = { name: 'THE BOSS', D: 66, shots: 15, boss: true, build(){ buildBoss(); } };
+const bossLocked = () => !(save.levels[99] && save.levels[99].stars);
 for (let n = 0; n < 60; n++){
   const L = genLevel(n);
   while (LEVELS.some(o => o.name === L.name)) L.name += ' Too';   // no two levels share a name
   LEVELS.push(L);
 }
+LEVELS.push(BOSS_LEVEL);
 
 
 /* ================= people ================= */
@@ -1380,6 +1746,7 @@ let obstacleBodies = [], mountains = [], lakes = [], cars = [];
 function clearLevel(){
   for (const b of obstacleBodies) world.remove(b);
   obstacleBodies = []; mountains = []; lakes = []; cars = [];
+  boss = null; bossQueue = [];
   for (const o of blocks) world.remove(o.body);
   for (const o of people){ if (o.rag) removeRag(o.rag); else world.remove(o.body); }
   removeHeroPhysics();
@@ -1519,7 +1886,9 @@ function buildLevel(i){
   if (level.gen && !level.shots) level.shots = Math.min(8, Math.max(3, Math.round(people.length * .55) + 2));
   if (bottom === Infinity) bottom = 0;
   center.set(0, bottom + (top - bottom) * .45, oz);
+  if (level.boss){ center.set(0, 11 * BS, oz); top = 27 * BS; }
   placeCoins(i, top);
+  updateBossHud();
   sun.position.set(center.x + 35, 55, center.z + 30);
   sun.target.position.copy(center);
   syncMeshes();
@@ -1623,7 +1992,7 @@ function breakBlock(o){
 
 /* ================= particles ================= */
 const debris = [];
-const debrisMats = { water: new THREE.MeshPhongMaterial({ color: 0x5fb4f0, transparent: true, opacity: .8 }), foam: lam(0xffffff), melon: lam(0xe8483b), rind: lam(0x3f8f2f), wood: lam(0xb27a45), stone: lam(0x8d8b86), glass: new THREE.MeshPhongMaterial({ color: 0xd8f3ff, transparent: true, opacity: .7 }) };
+const debrisMats = { fire: new THREE.MeshBasicMaterial({ color: 0xff8a2b }), barf: barfM2(), water: new THREE.MeshPhongMaterial({ color: 0x5fb4f0, transparent: true, opacity: .8 }), foam: lam(0xffffff), melon: lam(0xe8483b), rind: lam(0x3f8f2f), wood: lam(0xb27a45), stone: lam(0x8d8b86), glass: new THREE.MeshPhongMaterial({ color: 0xd8f3ff, transparent: true, opacity: .7 }) };
 function spawnDebris(p, type, size){
   const n = type === 'glass' ? 16 : 10;
   for (let i = 0; i < n; i++){
@@ -1972,6 +2341,13 @@ const sfx = (function(){
     honk(){ tone('square', 392, 392, .12, .25); tone('square', 494, 494, .1, .25); tone('square', 392, 392, .12, .3, .32); tone('square', 494, 494, .1, .3, .32); },
     splash(){ burst('lowpass', 900, .6, 1, .6); burst('highpass', 2500, .5, .4, .5, .05); tone('sine', 300, 80, .3, .3); },
     pop(){ tone('square', 900, 120, .25, .12); burst('highpass', 1800, .6, .7, .2); tone('sawtooth', 300, 700, .1, .45, .08); tone('sawtooth', 380, 820, .08, .45, .08); },
+    roar(){ tone('sawtooth', 120, 60, .3, .7); burst('lowpass', 400, 1, .5, .6); tone('square', 90, 50, .15, .8, .05); },
+    growl(){ tone('sawtooth', 70, 110, .2, .9); burst('lowpass', 250, 1, .3, .9); },
+    charge(){ tone('sawtooth', 200, 1600, .08, .9); tone('square', 250, 2000, .04, .9); },
+    zap(){ burst('highpass', 2000, .5, 1, .3); burst('lowpass', 300, .7, .9, .7, .05); tone('square', 1800, 90, .15, .25); },
+    gurgle(){ for (let k = 0; k < 6; k++) tone('sine', rand(120, 260), rand(60, 120), .18, .14, k * .14); },
+    barf(){ tone('sawtooth', 220, 70, .3, .8); burst('lowpass', 500, .8, .7, .8); },
+    whoosh(){ burst('bandpass', 600, .8, .7, .8); },
     quack(){ tone('square', 520, 330, .12, .16); tone('square', 480, 300, .12, .2, .2); },
     squeak(){ tone('sine', 1300, 2400, .2, .18); tone('sine', 1500, 2700, .2, .22, .22); tone('sine', 900, 600, .12, .35, .5); },
     splat(){ burst('lowpass', 700, .8, 1, .35); tone('sine', 220, 50, .5, .3); },
@@ -2067,7 +2443,7 @@ function startLevel(i){
   $('hud').classList.remove('hidden');
   $('lvlName').textContent = (i + 1) + ' · ' + level.name;
   $('bannerName').textContent = level.name;
-  $('bannerSub').textContent = people.length + ' people · ' + S.maxShots + ' shots';
+  $('bannerSub').textContent = level.boss ? 'Knock off all three heads · ' + S.maxShots + ' shots' : people.length + ' people · ' + S.maxShots + ' shots';
   const rec = save.levels[i];
   $('best').textContent = rec && rec.best ? 'best ' + fmtTime(rec.best) : '';
   $('hint').textContent = 'Drag to aim · hold FIRE, let go to launch';
@@ -2121,10 +2497,12 @@ function fire(){
   setMode('fly');
 }
 
+// How many targets are left: people, or on the boss level the boss itself.
+function targetsLeft(){ return level && level.boss ? (boss && boss.dead ? 0 : 1) : people.filter(p => !p.out).length; }
 function endShot(){
   sfx.wind(0);
   writeSave();
-  const left = people.filter(p => !p.out).length;
+  const left = targetsLeft();
   if (left === 0) return win();
   if (S.shotsLeft <= 0) return fail();
   setMode('reset');
@@ -2150,7 +2528,8 @@ function win(){
   writeSave();
   updateCoinsHud();
   $('winCoins').innerHTML = coinLines();
-  $('winSub').textContent = level.name + ' is clear';
+  $('winTitle').firstChild.textContent = level.boss ? 'BOSS DEFEATED!' : 'EVERYBODY DOWN!';
+  $('winSub').textContent = level.boss ? 'all three heads knocked off!' : level.name + ' is clear';
   $('winStars').innerHTML = [0, 1, 2].map(i => i < stars ? '★' : '<span class="off">★</span>').join('');
   $('winStat').innerHTML = 'Time <b>' + fmtTime(S.time) + '</b>' + (newBest ? ' · new best!' : ' · best ' + fmtTime(rec.best)) +
     '<br>' + S.shotsUsed + (S.shotsUsed === 1 ? ' shot' : ' shots');
@@ -2163,8 +2542,8 @@ function fail(){
   S.timing = false;
   setMode('done');
   sfx.sad();
-  const left = people.filter(p => !p.out).length;
-  $('failSub').textContent = left + (left === 1 ? ' person is' : ' people are') + ' still standing';
+  const left = targetsLeft();
+  $('failSub').textContent = level.boss ? 'the boss is still standing' : left + (left === 1 ? ' person is' : ' people are') + ' still standing';
   writeSave();
   $('failCoins').innerHTML = coinLines();
   setTimeout(() => { if (S.mode === 'done') $('fail').classList.remove('hidden'); }, 600);
@@ -2473,6 +2852,14 @@ function renderLevels(){
     const r = save.levels[i] || {};
     const b = document.createElement('button');
     b.className = 'lv';
+    if (L.boss){
+      const lock = bossLocked();
+      b.className = 'lv boss' + (lock ? ' locked' : '');
+      b.innerHTML = 'BOSS<small>' + (lock ? 'Beat level 100 to unlock' : 'Knock off all three heads') + '</small><div class="st">' + '★★★'.slice(0, r.stars || 0) + '</div>';
+      b.addEventListener('click', () => { if (lock) return; sfx.init(); sfx.click(); startLevel(i); });
+      el.appendChild(b);
+      return;
+    }
     b.innerHTML = (i + 1) + '<small>' + L.name + '</small><div class="st">' + '★★★'.slice(0, r.stars || 0) +
       '<span style="opacity:.25">' + '★★★'.slice(r.stars || 0) + '</span></div><small>' + (r.best ? fmtTime(r.best) : '–') + '</small>';
     b.addEventListener('click', () => { sfx.init(); sfx.click(); startLevel(i); });
@@ -2587,7 +2974,7 @@ $('againBtn').addEventListener('click', () => startLevel(S.levelIdx));
 $('retryBtn').addEventListener('click', () => startLevel(S.levelIdx));
 $('playBtn').addEventListener('click', () => {
   sfx.init(); sfx.click();
-  let i = LEVELS.findIndex((L, k) => !(save.levels[k] && save.levels[k].stars));
+  let i = LEVELS.findIndex((L, k) => !(save.levels[k] && save.levels[k].stars) && !(L.boss && bossLocked()));
   if (i < 0) i = 0;
   startLevel(i);
 });
@@ -2636,6 +3023,7 @@ function stepWorld(dt){
   if (S.toRag && playerBody && playerBody.heroBall){ S.toRag = false; heroToRagdoll(); }
   while (ragQueue.length) personToRagdoll(ragQueue.shift());
   while (popQueue.length) headshot(popQueue.shift());
+  while (bossQueue.length) headOff(bossQueue.shift());
   for (const p of people){
     if (p.gone) continue;
     if (!p.out && p.body.sleepState !== CANNON.Body.SLEEPING){
@@ -2663,16 +3051,19 @@ function update(dt, now){
   if (m === 'title'){
     S.titleT += dt;
     const a = S.titleT * .12;
-    camera.position.set(center.x + Math.sin(a) * 26, 9 + Math.sin(S.titleT * .3) * 2, center.z + Math.cos(a) * 26);
+    const rad = level && level.boss ? 70 : 26;
+    camera.position.set(center.x + Math.sin(a) * rad, 9 + Math.sin(S.titleT * .3) * 2, center.z + Math.cos(a) * rad);
     camera.lookAt(center);
     return;
   }
   if (S.paused) return;
 
+  flashT = Math.max(0, flashT - dt * 3); $('flash').style.opacity = flashT;
   if (m === 'replay'){ updateReplay(dt); return; }
 
   stepWorld(dt);
   updateCoins(dt);
+  updateBoss(dt);
   animatePeople(dt, now / 1000);
   updateDebris(dt);
   if (S.timing){ S.time += dt; updateTimer(); }
@@ -2683,7 +3074,7 @@ function update(dt, now){
     S.introT += dt;
     barrelPose();
     const t = S.introT / 3.2;
-    const p0 = vA.set(center.x + 14, center.y + 7, center.z + 15);
+    const p0 = level.boss ? vA.set(center.x + 30, center.y + 6, center.z + 48) : vA.set(center.x + 14, center.y + 7, center.z + 15);
     lookQuat(p0, center, qA);
     if (t >= 1){ camera.position.copy(barrelPos); camera.quaternion.copy(barrelQuat); setMode('aim'); }
     else if (t < .35){ camera.position.copy(p0); camera.quaternion.copy(qA); }
@@ -2761,7 +3152,7 @@ function update(dt, now){
       }
       S.quietT = maxV < .4 ? S.quietT + dt : 0;
       const pending = people.some(p => p.out && !p.gone);
-      const left = people.filter(p => !p.out).length;
+      const left = targetsLeft();
       if (!pending && ((S.quietT > .5 && S.settleT > 1.2) || S.settleT > 6 || (left === 0 && S.settleT > .9))){
         if (!startReplay()) endShot();
       }
@@ -2816,6 +3207,7 @@ function startRecording(){
   for (const c of coins) if (!c.got) trackObj(c.g);
   for (const c of cars) trackObj(c.g);
   if (heroBody) trackPerson(heroBody); else if (heroProp) trackObj(heroProp);
+  if (boss) for (const h of boss.heads){ trackObj(h.g); trackObj(h.neck); }
 }
 function noteImpact(){ if (S.impactT == null && (S.mode === 'fly' || S.mode === 'settle')) S.impactT = S.shotT; }
 function replayEvent(kind, pos, type, size){
@@ -2871,10 +3263,11 @@ function frameAt(t, out){
   if (out && a.focus && b.focus) out.lerpVectors(a.focus, b.focus, u);
 }
 function startReplay(){
-  if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break' || e.kind === 'splash' || e.kind === 'pop')) return false;
+  if (S.impactT == null || frames.length < 6 || !events.some(e => e.kind === 'oof' || e.kind === 'break' || e.kind === 'splash' || e.kind === 'pop' || e.kind === 'bosshit')) return false;
   const t0 = Math.max(frames[0].t, S.impactT - .8), t1 = Math.min(frames[frames.length - 1].t, S.impactT + 1.7);
   if (t1 - t0 < .5) return false;
-  liveSnap = track.map(o => ({ parent: o.parent, p: o.position.clone(), q: o.quaternion.clone(), v: o.visible }));
+  liveSnap = track.map(o => ({ parent: o.parent, p: o.position.clone(), q: o.quaternion.clone(), v: o.visible, s: o.scale.clone() }));
+  if (boss) boss.fxGroup.visible = false;
   clearDebris(); clearPops();
   sfx.wind(0);
   // a camera off to the side of the hit, swinging slowly round as it plays
@@ -2907,6 +3300,7 @@ function updateReplay(dt){
     else if (e.kind === 'ammo') ammoNoise(ammoDef(e.type), e.p);
     else if (e.kind === 'splash') splashFx(e.p);
     else if (e.kind === 'pop') popFx(e.p);
+    else if (e.kind === 'bosshit') sfx.roar();
   }
   while (rp.screams.length && rp.screams[0].t <= rp.t){ const sc = rp.screams.shift(); popText(pick(SCREAMS), sc.p, 1.4); sfx.oof(); }
   frameAt(rp.t, rp.focus);
@@ -2924,8 +3318,9 @@ function endReplay(){
   track.forEach((o, i) => {
     const L = liveSnap[i];
     if (o.parent !== L.parent) L.parent.add(o);
-    o.position.copy(L.p); o.quaternion.copy(L.q); o.visible = L.v;
+    o.position.copy(L.p); o.quaternion.copy(L.q); o.visible = L.v; o.scale.copy(L.s);
   });
+  if (boss) boss.fxGroup.visible = true;
   clearDebris(); clearPops();
   $('replayUI').classList.add('hidden');
   camera.fov = 70; camera.updateProjectionMatrix();
