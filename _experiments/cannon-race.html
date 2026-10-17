@@ -2,7 +2,7 @@
 title: Cannon Race
 description: Climb into the cannon and fire yourself at wobbly towers full of people. Knock everybody down in as few shots, and as little time, as you can.
 date: 2026-10-15
-version: "4.2"
+version: "4.3"
 layout: null
 ---
 {% raw %}
@@ -170,6 +170,12 @@ layout: null
       radial-gradient(circle at 78% 70%,rgba(150,220,60,.88) 0 8%,transparent 9%),
       radial-gradient(circle at 18% 75%,rgba(120,200,40,.9) 0 10%,transparent 11%),
       radial-gradient(circle at 85% 20%,rgba(130,205,45,.85) 0 6%,transparent 7%);}
+  #hearts{margin-top:6px;font-size:22px;letter-spacing:2px;text-shadow:0 2px 0 rgba(0,0,0,.35);}
+  #hearts .lost{filter:grayscale(1);opacity:.35;}
+  #warn{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 70px);transform:translateX(-50%);z-index:11;pointer-events:none;
+    background:#e8483b;color:#fff;font-weight:900;font-size:18px;padding:8px 18px;border-radius:20px;border:3px solid #fff;
+    white-space:nowrap;animation:warnPulse .3s ease-in-out infinite alternate;}
+  @keyframes warnPulse{to{transform:translateX(-50%) scale(1.08);}}
   #flash{position:fixed;inset:0;z-index:7;pointer-events:none;background:#fff;opacity:0;}
   .lv.boss{background:linear-gradient(135deg,#3a1030,#7a1d14);color:#fff;grid-column:1/-1;}
   .lv.boss .st{color:var(--sun);}
@@ -189,6 +195,7 @@ layout: null
       <div id="lvlName"></div>
       <div id="people"></div>
       <div id="bossBar" class="hidden"><b>BOSS</b><div id="bossHp"><i></i></div></div>
+      <div id="hearts" class="hidden"></div>
     </div>
     <div class="right">
       <div class="row"><div id="timer">0:00.0</div><button id="pauseBtn" aria-label="Pause">II</button></div>
@@ -246,7 +253,7 @@ layout: null
 </div>
 
 <div class="screen hidden" id="fail">
-  <h1>OUT OF SHOTS<span id="failSub"></span></h1>
+  <h1 id="failTitle">OUT OF SHOTS<span id="failSub"></span></h1>
   <div class="stat" id="failCoins"></div>
   <button class="go" id="retryBtn">TRY AGAIN</button>
   <button class="go alt" id="menuBtn3">ALL LEVELS</button>
@@ -267,6 +274,7 @@ layout: null
 </div>
 
 <div id="goo" class="hidden"></div>
+<div id="warn" class="hidden"></div>
 <div id="flash"></div>
 <div id="fade"></div>
 
@@ -822,9 +830,9 @@ function buildBoss(){
   // necks and heads: middle (fire and barf), left and right (lightning eyes)
   const heads = [];
   const HEADS = [
-    { x: 0,    y: 21,   z: .5, r: 3.4, kind: 'mouth', hp: 160, nx: 0,    ny: 11 },
-    { x: -8.5, y: 17.5, z: 0,  r: 2.6, kind: 'eyes',  hp: 110, nx: -3,   ny: 10.5 },
-    { x: 8.8,  y: 18,   z: 0,  r: 2.6, kind: 'eyes',  hp: 110, nx: 3,    ny: 10.5 }
+    { x: 0,    y: 21,   z: .5, r: 3.4, kind: 'mouth', hp: 300, nx: 0,    ny: 11 },
+    { x: -8.5, y: 17.5, z: 0,  r: 2.6, kind: 'eyes',  hp: 200, nx: -3,   ny: 10.5 },
+    { x: 8.8,  y: 18,   z: 0,  r: 2.6, kind: 'eyes',  hp: 200, nx: 3,    ny: 10.5 }
   ];
   HEADS.forEach((H, i) => {
     const hg = new THREE.Group(); g.add(hg);
@@ -862,7 +870,7 @@ function buildBoss(){
     body.addEventListener('collide', e => bossHit(h, e));
     heads.push(h);
   });
-  boss = { g, heads, wings, arms, t: 0, attackT: 3.5, windup: null, fx: [], fxGroup: new THREE.Group(), dead: false, deadT: 0, oz };
+  boss = { g, heads, wings, arms, t: 0, attackT: 4, windup: null, fx: [], fxGroup: new THREE.Group(), dead: false, deadT: 0, oz };
   levelGroup.add(boss.fxGroup);
   updateBoss(0);
   updateBossHud();
@@ -891,7 +899,7 @@ function bossHit(h, e){
   if (!h.alive || !e.body.isHero) return;
   const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
   if (v < 3) return;
-  const dmg = Math.round(clamp(v * 2.6 * (e.body.hitMult || 1), 10, 95));
+  const dmg = Math.round(clamp(v * 2.2 * (e.body.hitMult || 1), 10, 70));
   h.hp -= dmg; h.hurt = .5;
   noteImpact();
   const p = h.g.getWorldPosition(new THREE.Vector3());
@@ -924,15 +932,36 @@ function bossAimAt(out){
     const b = playerBody.position, v = playerBody.velocity;
     return out.set(b.x + v.x * .5 + rand(-2.5, 2.5), b.y + v.y * .3 + rand(-1.5, 1.5), b.z + v.z * .5 + rand(-2.5, 2.5));
   }
-  return out.set(rand(-3, 3), rand(.3, 1.5), rand(-5, -1.5));
+  return cannonTarget(out);
+}
+// In the boss fight you have hearts. Every attack that lands costs one; lose them all and you lose.
+function updateHearts(){
+  const el = $('hearts'), on = !!(level && level.boss);
+  el.classList.toggle('hidden', !on);
+  if (!on) return;
+  let h = '';
+  for (let i = 0; i < BOSS_HEARTS; i++) h += '<span class="' + (i < S.hearts ? '' : 'lost') + '">❤️</span>';
+  el.innerHTML = h;
+}
+function hurtYou(word){
+  if (!level || !level.boss || S.hearts <= 0 || S.mode === 'done') return;
+  S.hearts--;
+  updateHearts();
+  sfx.ouch();
+  flash(.7, '#ff2a1a');
+  S.shake = 1;
+  popText(word + ' -1 ❤️', camera.position.clone().add(new THREE.Vector3(0, -.6, -4).applyQuaternion(camera.quaternion)), 1.4);
+  if (S.hearts <= 0){
+    S.bossKO = true;
+    if (S.mode === 'aim'){ S.charging = false; $('fireBtn').classList.remove('charging'); fail(); }
+  }
 }
 function bossKnock(word){
   if (S.mode !== 'fly' || !S.gliding || !playerBody) return false;
   S.gliding = false; S.toRag = true;
   preVel.set(rand(-4, 4), 7, 9);   // knocked back toward the cannon
-  popText(word, playerBody.position, 1.4);
-  S.shake = 1;
   noteImpact();
+  hurtYou(word);
   return true;
 }
 function startAttack(){
@@ -941,24 +970,56 @@ function startAttack(){
   for (const h of alive){ if (h.H.kind === 'mouth'){ opts.push(['fire', h], ['barf', h]); } else opts.push(['zap', h]); }
   if (!opts.length) return;
   const [kind, h] = pick(opts);
-  boss.windup = { kind, h, t: .9 };
+  const T = WINDUP[kind];
+  boss.windup = { kind, h, t: T, T };
+  const w = $('warn');
+  w.textContent = S.mode === 'aim' ? WARN_AIM[kind] : WARN_FLY[kind];
+  w.classList.remove('hidden');
   if (kind === 'zap') sfx.charge(); else if (kind === 'fire') sfx.growl(); else sfx.gurgle();
 }
-const ZAPM = new THREE.LineBasicMaterial({ color: 0xcfe9ff });
+const WINDUP = { fire: 1, barf: 1.1, zap: 1.5 };
+const WARN_AIM = { fire: '🔥 FIRE INCOMING! Launch to dodge!', zap: '⚡ LIGHTNING! Launch to dodge!', barf: '🤢 BARF INCOMING! Launch to dodge!' };
+const WARN_FLY = { fire: '🔥 FIREBALL! Steer away!', zap: '⚡ LIGHTNING! Steer away!', barf: '🤢 BARF! Steer away!' };
+const boltCore = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const boltGlow = new THREE.MeshBasicMaterial({ color: 0x7fd0ff, transparent: true, opacity: .45, depthWrite: false });
+const fireGlowM = new THREE.MeshBasicMaterial({ color: 0xff4a10, transparent: true, opacity: .4, depthWrite: false });
+// A thick zig-zag bolt made of tubes, so it shows up from far away.
+function makeBolt(from, to){
+  const g = new THREE.Group(), pts = [];
+  for (let k = 0; k <= 12; k++){
+    const p = from.clone().lerp(to, k / 12);
+    if (k > 0 && k < 12){ p.x += rand(-1.8, 1.8); p.y += rand(-1.8, 1.8); p.z += rand(-1.8, 1.8); }
+    pts.push(p);
+  }
+  for (let k = 0; k < 12; k++){
+    const a = pts[k], b = pts[k + 1], len = a.distanceTo(b), mid = a.clone().add(b).multiplyScalar(.5);
+    const q = new THREE.Quaternion().setFromUnitVectors(YV, b.clone().sub(a).normalize());
+    const taper = 1 - k / 12 * .75;   // thinner toward the end, so it doesn't fill the screen up close
+    for (const [m, r] of [[boltCore, .22], [boltGlow, .7]]){
+      const c = new THREE.Mesh(cylG, m); c.scale.set(r * taper, len, r * taper); c.position.copy(mid); c.quaternion.copy(q); g.add(c);
+    }
+  }
+  return g;
+}
+// Where the boss aims when you're in the cannon: just in front of the aiming camera.
+function cannonTarget(out){ return out.copy(camera.position).add(new THREE.Vector3(rand(-.6, .6), rand(-.8, -.3), -3).applyQuaternion(camera.quaternion)); }
 const fireM = new THREE.MeshBasicMaterial({ color: 0xff7a1a });
 const fireCoreM = new THREE.MeshBasicMaterial({ color: 0xffe066 });
 const barfM = new THREE.MeshLambertMaterial({ color: 0x8fd23a, emissive: 0x1a3000 });
 function releaseAttack(w){
   const h = w.h;
   if (!h.alive) return;
+  const atCannon = S.mode === 'aim';
   const target = bossAimAt(new THREE.Vector3());
   if (w.kind === 'fire'){
     const from = h.mouthGlow.getWorldPosition(new THREE.Vector3());
-    const m = new THREE.Mesh(sphereG, fireM); m.scale.setScalar(1.1);
-    const core = new THREE.Mesh(sphereG, fireCoreM); core.scale.setScalar(.6); m.add(core);
+    // a big, bright fireball with a glow round it
+    const m = new THREE.Mesh(sphereG, fireM); m.scale.setScalar(1.8);
+    const core = new THREE.Mesh(sphereG, fireCoreM); core.scale.setScalar(.65); m.add(core);
+    const glow = new THREE.Mesh(sphereG, fireGlowM); glow.scale.setScalar(1.7); m.add(glow);
     m.position.copy(from); boss.fxGroup.add(m);
-    const v = target.clone().sub(from).normalize().multiplyScalar(30);
-    boss.fx.push({ kind: 'fire', m, v, life: 5, target });
+    const v = target.clone().sub(from).normalize().multiplyScalar(26);
+    boss.fx.push({ kind: 'fire', m, v, life: 6, target, atCannon });
     sfx.whoosh();
   } else if (w.kind === 'barf'){
     const from = h.mouthGlow.getWorldPosition(new THREE.Vector3());
@@ -969,8 +1030,8 @@ function releaseAttack(w){
       const m = new THREE.Mesh(sphereG, barfM); m.scale.setScalar(rand(.35, .8));
       m.position.copy(from); boss.fxGroup.add(m);
       const tgt = target.clone().add(new THREE.Vector3(rand(-1.5, 1.5), rand(-1, 1), rand(-1.5, 1.5)));
-      const v = tgt.sub(from).divideScalar(T); v.y += .5 * 9.8 * T;
-      boss.fx.push({ kind: 'barf', m, v, life: T + 1.5, aimCam });
+      const v = tgt.clone().sub(from).divideScalar(T); v.y += .5 * 9.8 * T;
+      boss.fx.push({ kind: 'barf', m, v, life: T + 1.5, aimCam, tgt: tgt.clone() });
     }
     sfx.barf();
     popText('BLAAARGH!', from, 1.3);
@@ -978,24 +1039,18 @@ function releaseAttack(w){
     // lightning out of both eyes
     for (const e of h.eyes){
       const from = e.getWorldPosition(new THREE.Vector3());
-      const pts = [];
-      for (let k = 0; k <= 14; k++){
-        const u = k / 14, p = from.clone().lerp(target, u);
-        if (k > 0 && k < 14){ p.x += rand(-1.6, 1.6); p.y += rand(-1.6, 1.6); p.z += rand(-1.6, 1.6); }
-        pts.push(p);
-      }
-      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ZAPM);
-      boss.fxGroup.add(line);
-      boss.fx.push({ kind: 'zap', m: line, life: .35 });
+      const bolt = makeBolt(from, target);
+      boss.fxGroup.add(bolt);
+      boss.fx.push({ kind: 'zap', m: bolt, life: .5 });
     }
-    flash(.85);
+    flash(.6, '#dff4ff');
     sfx.zap();
-    if (S.mode === 'fly' && playerBody && playerBody.position.distanceTo(target) < 3.2) bossKnock('ZAPPED!');
-    else if (S.mode === 'aim'){ spawnPuff({ x: target.x, y: .3, z: target.z }); S.shake = Math.max(S.shake, .5); }
+    if (S.mode === 'fly' && playerBody && playerBody.position.distanceTo(target) < 3.5) bossKnock('ZAPPED!');
+    else if (atCannon && S.mode === 'aim') hurtYou('ZAPPED!');
   }
 }
 let flashT = 0;
-function flash(k){ flashT = k; }
+function flash(k, color){ flashT = k; $('flash').style.background = color || '#fff'; }
 function gooOnScreen(){
   const g = $('goo');
   g.classList.remove('hidden'); g.style.transition = 'none'; g.style.opacity = 1;
@@ -1012,7 +1067,9 @@ function updateBoss(dt){
   for (const h of boss.heads){
     if (!h.alive) continue;
     const ph = t + h.phase;
-    h.g.position.set(h.H.x * BS + Math.sin(ph * .7) * .8, h.H.y * BS + Math.sin(ph * 1.1) * .9, h.H.z * BS + Math.sin(ph * .5) * .5);
+    // the heads weave about, more as they get angrier, so they're hard to hit
+    const rage = 1 + (3 - boss.heads.filter(o => o.alive).length) * .4;
+    h.g.position.set(h.H.x * BS + Math.sin(ph * .7 * rage) * 3, h.H.y * BS + Math.sin(ph * 1.1 * rage) * 2.2, h.H.z * BS + Math.sin(ph * .5) * 1.2);
     h.g.rotation.set(Math.sin(ph * .9) * .12, Math.sin(ph * .6) * .25, Math.sin(ph * .8) * .1);
     const w = h.g.getWorldPosition(vG);
     h.body.position.set(w.x, w.y, w.z);
@@ -1035,19 +1092,21 @@ function updateBoss(dt){
     return;
   }
   // attacks, only while you aim or fly
-  if (S.mode === 'aim' || S.mode === 'fly'){
+  if (boss.windup && S.mode !== 'aim' && S.mode !== 'fly'){ boss.windup = null; $('warn').classList.add('hidden'); for (const h of boss.heads){ for (const e of h.eyes) e.material.opacity = 0; h.mouthGlow.material.opacity = 0; } }
+  if ((S.mode === 'aim' || S.mode === 'fly') && !S.bossKO){
     if (boss.windup){
       const wu = boss.windup;
       wu.t -= dt;
-      const glow = Math.min(1, (.9 - wu.t) / .9) * (.6 + .4 * Math.sin(t * 40));
+      const glow = Math.min(1, (wu.T - wu.t) / wu.T) * (.6 + .4 * Math.sin(t * 40));
       const parts = wu.kind === 'zap' ? wu.h.eyes : [wu.h.mouthGlow];
       for (const gp of parts){ gp.material.opacity = glow; gp.material.color.setHex(wu.kind === 'zap' ? 0x9fe0ff : wu.kind === 'fire' ? 0xff7a1a : 0x8fd23a); }
       if (wu.t <= 0){
         for (const gp of parts) gp.material.opacity = 0;
         boss.windup = null;
+        $('warn').classList.add('hidden');
         releaseAttack(wu);
         const left = boss.heads.filter(h => h.alive).length;
-        boss.attackT = rand(4, 6) * (.65 + .35 * left / 3);   // angrier with fewer heads
+        boss.attackT = rand(3, 5) * (.6 + .4 * left / 3);   // angrier with fewer heads
       }
     } else {
       boss.attackT -= dt;
@@ -1062,10 +1121,12 @@ function updateBoss(dt){
     if (f.kind === 'fire'){
       f.m.position.addScaledVector(f.v, dt);
       f.m.rotation.y += dt * 8;
-      if (Math.random() < .7) emitTrail(f.m.position, 'smoke', t);
+      emitTrail(f.m.position, 'flame', t);
+      if (Math.random() < .5) emitTrail(f.m.position, 'smoke', t);
       const hitYou = S.mode === 'fly' && playerBody && f.m.position.distanceTo(vF.set(playerBody.position.x, playerBody.position.y, playerBody.position.z)) < 2;
       if (hitYou || f.m.position.y < .5 || f.m.position.distanceTo(f.target) < 1.2){
         if (hitYou) bossKnock('TOASTED!');
+        else if (f.atCannon && S.mode === 'aim' && f.m.position.distanceTo(f.target) < 1.5) hurtYou('TOASTED!');
         spawnDebris(f.m.position, 'fire', 2.5); spawnPuff(f.m.position);
         sfx.boom();
         if (f.m.position.distanceTo(camera.position) < 14){ S.shake = Math.max(S.shake, .8); flash(.35); }
@@ -1074,7 +1135,10 @@ function updateBoss(dt){
     } else if (f.kind === 'barf'){
       f.v.y -= 9.8 * dt;
       f.m.position.addScaledVector(f.v, dt);
-      if (f.aimCam && f.m.position.distanceTo(camera.position) < 3){ if (!boss.gooed){ boss.gooed = true; gooOnScreen(); setTimeout(() => { if (boss) boss.gooed = false; }, 600); } done = true; }
+      if (f.aimCam && f.m.position.distanceTo(f.tgt) < 2.2){
+        if (S.mode === 'aim' && !boss.gooed){ boss.gooed = true; gooOnScreen(); hurtYou('BARFED ON!'); setTimeout(() => { if (boss) boss.gooed = false; }, 900); }
+        done = true;
+      }
       else if (S.mode === 'fly' && playerBody && f.m.position.distanceTo(vF.set(playerBody.position.x, playerBody.position.y, playerBody.position.z)) < 1.8){
         if (bossKnock('BARFED ON!')) gooOnScreen();
         done = true;
@@ -1082,7 +1146,7 @@ function updateBoss(dt){
     } else if (f.kind === 'zap'){
       f.m.visible = Math.random() < .7;
     }
-    if (done){ boss.fxGroup.remove(f.m); if (f.kind === 'zap') f.m.geometry.dispose(); boss.fx.splice(i, 1); }
+    if (done){ boss.fxGroup.remove(f.m); boss.fx.splice(i, 1); }
   }
 }
 const hurtM = new THREE.MeshLambertMaterial({ color: 0xff6b5a, emissive: 0x551100 });
@@ -1413,7 +1477,8 @@ function genLevel(n){
   }};
 }
 // Level 101: the boss. It unlocks once level 100 is beaten.
-const BOSS_LEVEL = { name: 'THE BOSS', D: 66, shots: 15, boss: true, build(){ buildBoss(); } };
+const BOSS_LEVEL = { name: 'THE BOSS', D: 66, shots: 30, boss: true, build(){ buildBoss(); } };
+const BOSS_HEARTS = 5;
 const bossLocked = () => !(save.levels[99] && save.levels[99].stars);
 for (let n = 0; n < 60; n++){
   const L = genLevel(n);
@@ -1888,7 +1953,7 @@ function buildLevel(i){
   center.set(0, bottom + (top - bottom) * .45, oz);
   if (level.boss){ center.set(0, 11 * BS, oz); top = 27 * BS; }
   placeCoins(i, top);
-  updateBossHud();
+  updateBossHud(); if (typeof updateHearts === 'function' && S.hearts != null) updateHearts();
   sun.position.set(center.x + 35, 55, center.z + 30);
   sun.target.position.copy(center);
   syncMeshes();
@@ -2104,6 +2169,7 @@ function emitTrail(pos, kind, t){
   const d = { m, life: 1, max: 1, v: new THREE.Vector3(rand(-.4, .4), rand(-.2, .5), rand(-.4, .4)), s0: .2, s1: .2 };
   m.position.set(pos.x + rand(-.15, .15), pos.y + rand(-.15, .15), pos.z + rand(-.15, .15));
   if (kind === 'smoke'){ m.geometry = sphereG; m.material.color.setHex(0xd0d4da); d.s0 = .14; d.s1 = .55; d.life = d.max = 1; d.o = .45; }
+  else if (kind === 'flame'){ m.geometry = sphereG; m.material.color.setHex(Math.random() < .5 ? 0xff7a1a : 0xffd23f); d.s0 = .9; d.s1 = .1; d.life = d.max = .45; d.o = .9; }
   else if (kind === 'sparkle'){ m.geometry = boxG; m.material.color.setHex(Math.random() < .5 ? 0xfff3b0 : 0xffffff); d.s0 = .12; d.s1 = 0; d.life = d.max = .7; d.o = 1; d.v.multiplyScalar(3); d.spin = true; }
   else { m.geometry = sphereG; m.material.color.setHSL((t * .6) % 1, 1, .6); d.s0 = .17; d.s1 = .02; d.life = d.max = .9; d.o = .95; }
   m.material.opacity = d.o;
@@ -2345,6 +2411,7 @@ const sfx = (function(){
     growl(){ tone('sawtooth', 70, 110, .2, .9); burst('lowpass', 250, 1, .3, .9); },
     charge(){ tone('sawtooth', 200, 1600, .08, .9); tone('square', 250, 2000, .04, .9); },
     zap(){ burst('highpass', 2000, .5, 1, .3); burst('lowpass', 300, .7, .9, .7, .05); tone('square', 1800, 90, .15, .25); },
+    ouch(){ tone('square', 330, 110, .2, .35); burst('lowpass', 600, .8, .6, .3); },
     gurgle(){ for (let k = 0; k < 6; k++) tone('sine', rand(120, 260), rand(60, 120), .18, .14, k * .14); },
     barf(){ tone('sawtooth', 220, 70, .3, .8); burst('lowpass', 500, .8, .7, .8); },
     whoosh(){ burst('bandpass', 600, .8, .7, .8); },
@@ -2436,6 +2503,7 @@ function startLevel(i){
   clearPops();
   S.maxShots = level.shots + up('shots');   // Extra Shot
   S.shotsLeft = S.maxShots; S.shotsUsed = 0;
+  S.hearts = BOSS_HEARTS; S.bossKO = false;
   S.earned = { people: 0, blocks: 0, found: 0, bonus: 0 }; S.time = 0; S.timing = false;
   S.yaw = 0; S.pitch = 12 * D2R; S.power = 0; S.charging = false; S.lastPower = null;
   S.introT = 0; S.paused = false;
@@ -2449,7 +2517,7 @@ function startLevel(i){
   $('hint').textContent = 'Drag to aim · hold FIRE, let go to launch';
   $('hint').style.opacity = i === 0 ? 1 : 0;
   heroInBarrel();
-  updatePeopleHud(); updateShotsHud(); updateTimer();
+  updatePeopleHud(); updateShotsHud(); updateTimer(); updateHearts();
   $('meterLast').style.display = 'none';
   setMode('intro');
 }
@@ -2502,6 +2570,7 @@ function targetsLeft(){ return level && level.boss ? (boss && boss.dead ? 0 : 1)
 function endShot(){
   sfx.wind(0);
   writeSave();
+  if (S.bossKO) return fail();
   const left = targetsLeft();
   if (left === 0) return win();
   if (S.shotsLeft <= 0) return fail();
@@ -2512,6 +2581,7 @@ function endShot(){
 
 function win(){
   S.timing = false;
+  $('warn').classList.add('hidden');
   setMode('done');
   sfx.fanfare();
   const spare = S.shotsLeft;
@@ -2543,10 +2613,12 @@ function fail(){
   setMode('done');
   sfx.sad();
   const left = targetsLeft();
-  $('failSub').textContent = level.boss ? 'the boss is still standing' : left + (left === 1 ? ' person is' : ' people are') + ' still standing';
+  $('failTitle').firstChild.textContent = S.bossKO ? 'KNOCKED OUT!' : 'OUT OF SHOTS';
+  $('failSub').textContent = S.bossKO ? 'the boss got you. Try again!' : level.boss ? 'the boss is still standing' : left + (left === 1 ? ' person is' : ' people are') + ' still standing';
   writeSave();
   $('failCoins').innerHTML = coinLines();
-  setTimeout(() => { if (S.mode === 'done') $('fail').classList.remove('hidden'); }, 600);
+  $('warn').classList.add('hidden');
+  setTimeout(() => { if (S.mode === 'done') $('fail').classList.remove('hidden'); }, S.bossKO ? 1200 : 600);
 }
 
 /* ---------- the shop screen ---------- */

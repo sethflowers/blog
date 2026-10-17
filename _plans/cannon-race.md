@@ -251,3 +251,11 @@ huge yellow-and-black striped wings that flap, little arms with fists, and a bla
   - **Lightning** (side heads): bolts from both eyes with a white flash ("ZAPPED!").
   - **Barf** (middle head): a spray of green goo. Aimed at the cannon it splatters the screen
     ("EWWW!"), which drips away after a couple of seconds.
+
+**4.3: harder, and it fights back.** You get 5 hearts in the boss fight; every fireball, lightning
+bolt or barf that lands costs one, and losing all five is "KNOCKED OUT!". Attacks aimed at the cannon
+can be dodged by launching before they land; in the air you steer away. A red banner warns what's
+coming during each wind-up (fire 1 s, barf 1.1 s, lightning 1.5 s). Fireballs are big and flaming;
+lightning is thick tapered tubes rather than 1-pixel lines (which didn't show). Heads have 300 / 200 /
+200 health, take at most 70 a hit, and weave about more as heads fall. Attacks come every 3-5 s,
+quicker with fewer heads. 30 shots.
