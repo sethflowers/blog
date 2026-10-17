@@ -232,3 +232,22 @@ deck or an island, with up to three lakes, highways or mountains (sometimes a pa
 front, placed so they never overlap. Later levels are farther and busier. Names are made from a
 word list ("Windy Ridge", "Lucky Isle"), never repeated. Shots: about half the number of people,
 plus two (between 3 and 8).
+
+## The Boss (4.2)
+
+Level 101, drawn by one of the kids. It unlocks once level 100 is beaten (the level list shows a
+wide BOSS tile, locked until then). About 30 m tall: three heads on long necks (spiral eyes,
+angry eyebrows; the middle one has an open mouth full of zigzag teeth), a spotted round body, two
+huge yellow-and-black striped wings that flap, little arms with fists, and a black cage underneath.
+
+- **Beating it:** knock all three heads off. Each hit does damage by how hard you hit (and your
+  ammo / Big Belly multiplier); the middle head has 160 health, the side heads 110. A health bar
+  replaces the people icons. Each hit earns 20 coins, each head 50, and beating it 200. Heads burst
+  in confetti; when the last one goes the whole boss pops. 15 shots.
+- **Attacks** (one every 4-6 s, faster with fewer heads; only while you aim or fly). Each winds up
+  for 0.9 s with the mouth or eyes glowing, so you can steer away:
+  - **Fire** (middle head): a fireball at you (or at the cannon). Hitting you mid-glide knocks you
+    out of the sky ("TOASTED!").
+  - **Lightning** (side heads): bolts from both eyes with a white flash ("ZAPPED!").
+  - **Barf** (middle head): a spray of green goo. Aimed at the cannon it splatters the screen
+    ("EWWW!"), which drips away after a couple of seconds.
