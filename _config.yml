@@ -25,6 +25,9 @@ github_username:  sethflowers
 markdown: kramdown
 theme: minima
 include: ["_pages"]
+# GitHub Pages turns any Markdown file into a page (and the theme lists it in the header), so notes
+# meant for tools are kept out. Setting exclude replaces Jekyll's defaults, so they are repeated here.
+exclude: ["CLAUDE.md", "Gemfile", "Gemfile.lock", "node_modules", "vendor/bundle/", "vendor/cache/", "vendor/gems/", "vendor/ruby/"]
 
 repository: sethflowers/blog
 

@@ -7,3 +7,6 @@
   big one) so the user can tell when an update has reached their device. New experiments start at 1.0
   and must show the version somewhere on their title screen.
 - If a game has a service worker, also bump its `CACHE` name when its asset list changes.
+- `_tools/` holds build scripts and headless tests (Jekyll ignores underscore folders). The Undercroft
+  (`_tools/undercroft/test.mjs`) plays itself in headless Chromium with a fake controller and saves
+  screenshots: run it and look at them after every change to that game.
