@@ -136,6 +136,27 @@ for (let k = 2; k < route.length - 2; k += Math.max(3, Math.floor(route.length /
   await tab.evaluate(([x, z, yaw]) => { window.__uc.place(x, z, yaw, 0); window.__uc.advance(0.3); }, [x, z, Math.atan2(-(nx - x), -(nz - z))]);
   await shot('06-route-' + String(k).padStart(2, '0'));
 }
+// with the torch out, the corridors must still be visible: dim, but not black
+const brightness = () => tab.evaluate(() => {
+  const src = document.querySelector('canvas'), c = document.createElement('canvas');
+  c.width = 160; c.height = 90; const g = c.getContext('2d'); g.drawImage(src, 0, 0, 160, 90);
+  const d = g.getImageData(0, 0, 160, 90).data; let sum = 0;
+  for (let k = 0; k < d.length; k += 4) sum += 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2];
+  return sum / (d.length / 4);
+});
+const dark = [];
+await tab.evaluate(() => window.__uc.torch(false));
+for (const k of [2, Math.floor(route.length / 2)]){
+  const [x, z] = route[k], [nx, nz] = route[k + 1];
+  await tab.evaluate(([x, z, yaw]) => { window.__uc.place(x, z, yaw, 0); window.__uc.advance(0.3); }, [x, z, Math.atan2(-(nx - x), -(nz - z))]);
+  dark.push(await brightness());
+  await shot('07-no-torch-' + String(k).padStart(2, '0'));
+}
+await tab.evaluate(() => { window.__uc.torch(true); window.__uc.advance(0.1); });
+const lit = await brightness();
+check(Math.min(...dark) > 12, `without the torch you can still see (mean brightness ${dark.map((v) => v.toFixed(1)).join(', ')} of 255; torch lit ${lit.toFixed(1)})`);
+check(lit > Math.max(...dark) * 1.2, 'the torch still makes a clear difference');
+
 const info = await tab.evaluate(() => window.__uc.info());
 console.log('  render', JSON.stringify(info));
 check(errors.length === 0, 'no errors in the console' + (errors.length ? ':\n    ' + errors.slice(0, 5).join('\n    ') : ''));

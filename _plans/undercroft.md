@@ -18,7 +18,9 @@ lighting, shadows and post-processing. It also uses real surface textures in `ex
   physically based point lights, with tone mapping, bloom, a slight colour fringe, a vignette, film grain,
   and shadows pushed cold. Darkening where walls meet the floor, the ceiling and each other is baked into
   vertex colours. The floor has puddles that shine.
-- **Light**: the torch in your hand is a shadow-casting point light that flickers. There are wall torches
+- **Light**: a dim, cold fill light reaches everywhere, like moonlight leaking through cracks, so the
+  walls and the way ahead can be made out without the torch (1.1). The thin haze in the distance fades
+  to dark grey rather than black. The torch in your hand is a shadow-casting point light that flickers. There are wall torches
   every few corridors. Three lights are shared between the nearest wall torches you can see, and the
   nearest of them casts shadows. The number of lights never changes, so shaders never recompile while
   you play. Cold moonlight comes down the stairs from the way out.
@@ -43,7 +45,8 @@ Chromium with a fake standard controller. The game has a `?test` mode (fixed see
 real-time loop) and `window.__uc` hooks for stepping the simulation and placing the camera. The test
 checks that the page loads without errors, the version shows, A starts the game, the left stick walks,
 walls stop you and the right stick turns. Then it walks the shortest route to the way out using only the
-sticks and checks that you win. Finally it saves screenshots of the start, the stairs and points along
+sticks and checks that you win. It puts the torch out and measures the screen brightness to check you
+can still see, and that the torch still makes a clear difference. Finally it saves screenshots of the start, the stairs and points along
 the route, so they can be looked at.
 
 ```

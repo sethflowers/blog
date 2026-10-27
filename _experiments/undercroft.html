@@ -2,7 +2,7 @@
 title: The Undercroft
 description: A first-person walk through a pitch-dark stone maze with only a torch in your hand. Find the stairs up. Plays with a controller (Xbox, PlayStation, Switch), keyboard and mouse, or touch. A demo for a bigger game.
 date: 2026-10-27
-version: "1.0"
+version: "1.1"
 layout: null
 ---
 {% raw %}
@@ -244,7 +244,7 @@ const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
-scene.fog = new THREE.FogExp2(0x060403, 0.075);
+scene.fog = new THREE.FogExp2(0x0b0c0f, 0.045);
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.04, 80);
 camera.rotation.order = 'YXZ';
 scene.add(camera);
@@ -670,7 +670,10 @@ function dressWorld(){
    The torch in your hand, a pool of three lights handed to the nearest wall torches you can see,
    and the moonlight at the way out. The count never changes, so shaders never recompile.
    ================================================================ */
-scene.add(new THREE.HemisphereLight(0x1c2230, 0x0a0806, 0.12));
+// a dim, cold fill everywhere, as if a little moonlight leaks down through cracks: enough to make out
+// the walls and the way ahead without the torch, while the torch is still what really shows you things
+const fill = new THREE.HemisphereLight(0x8090b0, 0x6a5e50, 5.5);
+scene.add(fill);
 const handLight = new THREE.PointLight(0xffa767, 7, 16, 2);
 handLight.castShadow = true;
 handLight.shadow.mapSize.set(512, 512);
@@ -678,8 +681,8 @@ handLight.shadow.camera.near = 0.08; handLight.shadow.camera.far = 16;
 handLight.shadow.bias = -0.004; handLight.shadow.normalBias = 0.03;
 scene.add(handLight);
 const pool = [0, 1, 2].map((k) => {
-  const l = new THREE.PointLight(0xff9a55, 0, 13, 2);
-  if (k === 0){ l.castShadow = true; l.shadow.mapSize.set(512, 512); l.shadow.camera.near = 0.1; l.shadow.camera.far = 13;
+  const l = new THREE.PointLight(0xff9a55, 0, 18, 2);
+  if (k === 0){ l.castShadow = true; l.shadow.mapSize.set(512, 512); l.shadow.camera.near = 0.1; l.shadow.camera.far = 18;
     l.shadow.bias = -0.004; l.shadow.normalBias = 0.03; }
   scene.add(l); l.userData.owner = null; return l;
 });
@@ -1046,12 +1049,12 @@ function lineOfSight(ax, az, bx, bz){
 const chainM = new THREE.Matrix4(), chainQ = new THREE.Quaternion(), chainE = new THREE.Euler(), chainS = new THREE.Vector3(1, 1, 1);
 function updateWorld(dt, t){
   flameUniforms.time.value = t;
-  handLight.intensity = 7.5 * flicker(t, 0);
+  handLight.intensity = torchOn ? 7.5 * flicker(t, 0) : 0;
   ragMat.color.setScalar(0.5 + 0.6 * flicker(t, 3.1));
   // hand the pool of lights to the nearest wall torches you can actually see
   for (const s of sconces){
     const d = Math.hypot(s.pos.x - player.x, s.pos.z - player.z);
-    const vis = d < 16 && lineOfSight(player.x, player.z, s.pos.x + (player.x - s.pos.x) * 0.02, s.pos.z + (player.z - s.pos.z) * 0.02);
+    const vis = d < 20 && lineOfSight(player.x, player.z, s.pos.x + (player.x - s.pos.x) * 0.02, s.pos.z + (player.z - s.pos.z) * 0.02);
     s.score = vis ? 1 / (1 + d) : 0;
     s.w += ((vis ? 1 : 0) - s.w) * (1 - Math.exp(-dt * 4));
   }
@@ -1060,7 +1063,7 @@ function updateWorld(dt, t){
     const s = ranked[k];
     if (!s){ l.intensity = 0; return; }
     l.position.copy(s.pos);
-    l.intensity = 9 * flicker(t, s.phase) * s.w;
+    l.intensity = 12 * flicker(t, s.phase) * s.w;
   });
   // embers drift up from the flames near you
   emberNext -= dt;
@@ -1101,6 +1104,7 @@ function updateWorld(dt, t){
 /* ================================================================
    GAME STATE
    ================================================================ */
+let torchOn = true;
 let state = 'title', playTime = 0, last = performance.now(), simTime = 0;
 const $ = (id) => document.getElementById(id);
 const hintEl = $('hint');
@@ -1224,6 +1228,8 @@ window.__uc = {
     out.push(center(x, z));
     return out.reverse();
   },
+  // tests: put the torch out to see what the dungeon looks like by the fill light alone
+  torch(on){ torchOn = on; held.visible = heldFlame.visible = on; },
   tileAt, floorAt, TILE,
   timeRender(){ const t = performance.now(); composer.render(); renderer.getContext().finish(); return performance.now() - t; },
   info(){ return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures, frames }; }
