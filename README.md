@@ -61,3 +61,8 @@ Standalone pages (games, toys, demos) live in `_experiments/` and are listed at 
    its title screen. **Bump `version` every time the game changes**, so it's easy to tell an update has arrived
    (the service workers serve the cached copy first, so an update shows on the second open).
 4. Push. It's published at `/experiments/my-thing/` and appears on `/experiments/` automatically.
+
+## Tests
+
+`_tools/` holds scripts that aren't published. `_tools/undercroft/test.mjs` plays The Undercroft in headless
+Chromium with a fake controller and saves screenshots (`NODE_PATH=$(npm root -g) node _tools/undercroft/test.mjs out/`).
