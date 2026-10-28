@@ -1,8 +1,8 @@
 ---
 title: The Undercroft
-description: A first-person walk through a pitch-dark stone maze with only a torch in your hand. Find the stairs up. Plays with a controller (Xbox, PlayStation, Switch), keyboard and mouse, or touch. A demo for a bigger game.
+description: A first-person dungeon game designed by a young game designer. Free the prisoners from their cells, find the power gates, fight off the zombies and the monster with the spring feet, and lead everyone up the stairs. Plays with a controller (Xbox, PlayStation, Switch), keyboard and mouse, or touch.
 date: 2026-10-27
-version: "1.1"
+version: "2.0"
 layout: null
 ---
 {% raw %}
@@ -22,51 +22,118 @@ layout: null
 <title>The Undercroft</title>
 <style>
   :root{
-    --bone:#d8cfbd;
-    --bone-dim:rgba(216,207,189,.6);
-    --bone-faint:rgba(216,207,189,.25);
-    --ember:#e08a3c;
-    --ink:#000;
+    --bone:#d8cfbd; --bone-dim:rgba(216,207,189,.6); --bone-faint:rgba(216,207,189,.25);
+    --ember:#e08a3c; --blood:#a3170e; --ink:#000;
+    --serif:"Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--bone);
-    touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;
-    font-family:"Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;}
+    touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;font-family:var(--serif);}
   canvas{display:block;position:fixed;inset:0;width:100%;height:100%;}
   .hidden{display:none !important;}
 
-  .screen{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    text-align:center;padding:24px;background:radial-gradient(ellipse at 50% 60%,rgba(20,12,6,.55),rgba(0,0,0,.92) 70%);}
-  .screen h1{font-weight:400;font-size:clamp(34px,7vw,76px);letter-spacing:.32em;margin-right:-.32em;color:var(--bone);
-    text-shadow:0 0 30px rgba(224,138,60,.25);}
+  /* ---------- screens ---------- */
+  .screen{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;background:radial-gradient(ellipse at 50% 60%,rgba(20,12,6,.55),rgba(0,0,0,.9) 70%);overflow-y:auto;}
+  .screen h1{font-weight:400;font-size:clamp(34px,7vw,76px);letter-spacing:.32em;margin-right:-.32em;color:var(--bone);text-shadow:0 0 30px rgba(224,138,60,.25);}
   .screen h1 span{display:block;font-size:.24em;letter-spacing:.5em;margin-top:14px;color:var(--bone-dim);font-style:italic;}
-  .screen p{max-width:640px;margin:22px auto 0;line-height:1.7;color:var(--bone-dim);font-size:15px;}
+  .screen p{max-width:700px;margin:20px auto 0;line-height:1.7;color:var(--bone-dim);font-size:15px;}
   .screen p b{color:var(--bone);font-weight:400;}
-  .go{margin-top:30px;background:none;border:1px solid var(--bone-faint);color:var(--bone);font:inherit;font-size:17px;
+  .go{margin-top:26px;background:none;border:1px solid var(--bone-faint);color:var(--bone);font:inherit;font-size:17px;
     letter-spacing:.4em;padding:14px 34px 14px 40px;cursor:pointer;transition:border-color .3s,background .3s;}
-  .go:hover,.go.focus{border-color:var(--ember);background:rgba(224,138,60,.08);}
+  .go:hover,.go:focus-visible{border-color:var(--ember);background:rgba(224,138,60,.08);outline:none;}
+  .go:disabled{opacity:.35;cursor:default;}
   .go.alt{font-size:13px;margin-top:14px;padding:10px 26px 10px 30px;}
-  .stat{margin-top:18px;color:var(--bone-dim);letter-spacing:.2em;font-size:14px;}
-  .loading{margin-top:26px;font-size:12px;letter-spacing:.35em;color:var(--bone-faint);}
+  .stat{margin-top:18px;color:var(--bone-dim);letter-spacing:.15em;font-size:14px;}
+  .loading{margin-top:22px;font-size:12px;letter-spacing:.35em;color:var(--bone-faint);}
   .keys .touchonly{display:none;}
   body.touch .keys .desk{display:none;}
   body.touch .keys .touchonly{display:inline;}
+  #dead{background:radial-gradient(ellipse at 50% 50%,rgba(60,0,0,.5),rgba(0,0,0,.95) 70%);}
+  #dead h1{color:#c9a59a;}
 
-  #hint{position:fixed;left:0;right:0;bottom:12%;z-index:10;text-align:center;font-style:italic;letter-spacing:.3em;
-    font-size:15px;color:var(--bone-dim);opacity:0;transition:opacity 2.5s;pointer-events:none;}
-  #hint.show{opacity:1;}
-  #fade{position:fixed;inset:0;z-index:15;background:#000;opacity:1;transition:opacity 2.5s;pointer-events:none;}
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none;}
+  body.playing #hud{display:block;}
+  #hearts{position:absolute;left:calc(env(safe-area-inset-left) + 18px);top:calc(env(safe-area-inset-top) + 16px);display:flex;gap:6px;}
+  .heart{width:30px;height:28px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8));}
+  #objective{position:absolute;right:calc(env(safe-area-inset-right) + 70px);top:calc(env(safe-area-inset-top) + 18px);text-align:right;
+    font-size:13px;letter-spacing:.22em;color:var(--bone-dim);text-shadow:0 1px 4px #000;}
+  #objective b{display:block;font-size:22px;letter-spacing:.1em;color:var(--bone);font-weight:400;}
+  #slots{position:absolute;right:calc(env(safe-area-inset-right) + 18px);bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;gap:10px;align-items:flex-end;}
+  .hslot{width:92px;padding:6px 4px 6px;border:1px solid var(--bone-faint);background:rgba(0,0,0,.45);text-align:center;}
+  .hslot .ic{width:56px;height:56px;margin:0 auto;background:center/contain no-repeat;}
+  .hslot .ic svg{width:100%;height:100%;}
+  .hslot .nm{font-size:11px;letter-spacing:.12em;margin-top:3px;color:var(--bone);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hslot .st{font-size:10px;letter-spacing:.1em;color:var(--bone-dim);min-height:12px;}
+  .hslot .k{font-size:9px;letter-spacing:.2em;color:var(--bone-faint);}
+  .hslot.empty .ic{opacity:.2;}
+  #foodSlot{width:64px;}
+  #foodSlot .ic{width:40px;height:40px;font-size:30px;line-height:40px;}
+  #hint{position:fixed;left:0;right:0;top:20%;z-index:11;text-align:center;font-style:italic;letter-spacing:.3em;
+    font-size:15px;color:var(--bone);text-shadow:0 1px 6px #000;opacity:0;transition:opacity 1s;pointer-events:none;padding:0 20px;}
+  #hint.show{opacity:1;transition:opacity .25s;}
+  #say{position:fixed;left:0;right:0;bottom:24%;z-index:11;text-align:center;font-style:italic;font-size:18px;color:#efe6d2;
+    text-shadow:0 1px 6px #000;opacity:0;transition:opacity .6s;pointer-events:none;padding:0 30px;}
+  #say.show{opacity:1;}
+  #banner{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%) scale(.96);z-index:12;text-align:center;opacity:0;transition:opacity .5s,transform .5s;
+    pointer-events:none;background:radial-gradient(ellipse,rgba(0,0,0,.75),rgba(0,0,0,0) 70%);padding:40px 70px;max-width:92vw;}
+  #banner.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+  #bannerTitle{font-size:clamp(20px,3.6vw,34px);letter-spacing:.28em;color:#f3e6c8;text-shadow:0 0 20px rgba(224,138,60,.5);}
+  #bannerText{margin-top:12px;font-size:15px;line-height:1.6;color:var(--bone-dim);max-width:560px;}
+  #prompt{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 120px);transform:translateX(-50%);z-index:11;opacity:0;transition:opacity .2s;pointer-events:none;
+    font-size:13px;letter-spacing:.25em;color:var(--bone);text-shadow:0 1px 5px #000;text-align:center;}
+  #prompt.show{opacity:1;}
+  #promptTrack{height:3px;margin-top:8px;background:var(--bone-faint);}
+  #promptBar{height:100%;width:0;background:var(--ember);}
+  #bossBar{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 22px);transform:translateX(-50%);width:min(440px,60vw);z-index:11;opacity:0;transition:opacity .6s;pointer-events:none;text-align:center;}
+  #bossBar.show{opacity:1;}
+  #bossBar .lbl{font-size:11px;letter-spacing:.45em;color:#d9a294;margin-bottom:6px;}
+  #bossTrack{height:7px;border:1px solid rgba(216,150,140,.45);background:rgba(0,0,0,.5);}
+  #bossFill{height:100%;width:100%;background:linear-gradient(90deg,#5a0a05,#b2210f);transition:width .25s;}
+  #crosshair{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:rgba(216,207,189,.35);z-index:10;pointer-events:none;display:none;}
+  body.playing #crosshair{display:block;}
+  #debug{position:fixed;left:10px;bottom:6px;z-index:40;font:11px ui-monospace,Menlo,monospace;color:#9f9;pointer-events:none;}
 
-  /* touch: a stick appears where the left thumb lands, the right half of the screen looks */
-  #stick{position:fixed;z-index:12;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;
-    border:1px solid var(--bone-faint);pointer-events:none;opacity:0;transition:opacity .2s;}
+  /* ---------- the bag ---------- */
+  #inv{background:rgba(0,0,0,.82);}
+  #inv .panel{width:min(760px,94vw);border:1px solid var(--bone-faint);padding:26px 28px 22px;background:linear-gradient(rgba(30,22,14,.85),rgba(10,8,6,.92));text-align:left;}
+  #inv h2{font-weight:400;letter-spacing:.4em;font-size:20px;text-align:center;margin-bottom:6px;}
+  #inv .top{display:flex;justify-content:space-between;align-items:center;margin:8px 0 14px;font-size:13px;letter-spacing:.15em;color:var(--bone-dim);}
+  #invHearts .heart{width:24px;height:22px;}
+  #invHearts{display:flex;gap:4px;}
+  #inv h3{font-weight:400;font-size:11px;letter-spacing:.4em;color:var(--bone-dim);margin:14px 0 8px;}
+  #inv .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .slot{position:relative;width:84px;height:84px;border:1px solid var(--bone-faint);background:rgba(0,0,0,.4);cursor:pointer;color:var(--bone-faint);font:24px var(--serif);}
+  .slot .pic{position:absolute;inset:8px;background:center/contain no-repeat;display:flex;align-items:center;justify-content:center;}
+  .slot .pic svg{width:80%;height:80%;}
+  .slot .n{position:absolute;right:5px;bottom:3px;font-size:13px;color:var(--bone);}
+  .slot.none{opacity:.45;}
+  .slot.on{border-color:rgba(224,138,60,.7);}
+  .slot.focus{outline:2px solid var(--ember);outline-offset:2px;background:rgba(224,138,60,.12);}
+  #invName{margin-top:18px;font-size:17px;letter-spacing:.2em;}
+  #invDesc{margin-top:6px;font-size:14px;line-height:1.6;color:var(--bone-dim);min-height:46px;}
+  #inv .foot{margin-top:12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.2em;color:var(--bone-faint);}
+  #invClose{margin:0;padding:8px 18px 8px 22px;font-size:12px;}
+
+  /* ---------- touch ---------- */
+  #stick{position:fixed;z-index:12;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:1px solid var(--bone-faint);pointer-events:none;opacity:0;transition:opacity .2s;}
   #stick.on{opacity:1;}
-  #knob{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;
-    background:rgba(216,207,189,.18);border:1px solid var(--bone-faint);}
-  #pauseBtn{position:fixed;z-index:12;top:calc(env(safe-area-inset-top) + 12px);right:calc(env(safe-area-inset-right) + 14px);
-    width:40px;height:40px;border:1px solid var(--bone-faint);border-radius:50%;background:rgba(0,0,0,.3);color:var(--bone-dim);
-    font:16px/38px Georgia,serif;letter-spacing:2px;display:none;}
-  body.touch.playing #pauseBtn{display:block;}
+  #knob{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(216,207,189,.18);border:1px solid var(--bone-faint);}
+  #touchUI{display:none;}
+  body.touch.playing #touchUI{display:block;}
+  body.touch #slots{bottom:calc(env(safe-area-inset-bottom) + 230px);transform:scale(.8);transform-origin:right bottom;}
+  .tbtn{position:fixed;z-index:13;border-radius:50%;border:1px solid var(--bone-faint);background:rgba(0,0,0,.35);color:var(--bone);
+    font:11px var(--serif);letter-spacing:.15em;display:flex;align-items:center;justify-content:center;touch-action:none;}
+  .tbtn.down{background:rgba(224,138,60,.3);}
+  .tbtn.lit{border-color:var(--ember);color:#fff;box-shadow:0 0 12px rgba(224,138,60,.5);}
+  #atkBtn{width:92px;height:92px;right:calc(env(safe-area-inset-right) + 30px);bottom:calc(env(safe-area-inset-bottom) + 40px);font-size:13px;}
+  #powBtn{width:64px;height:64px;right:calc(env(safe-area-inset-right) + 140px);bottom:calc(env(safe-area-inset-bottom) + 30px);}
+  #useBtn{width:64px;height:64px;right:calc(env(safe-area-inset-right) + 128px);bottom:calc(env(safe-area-inset-bottom) + 112px);}
+  #eatBtn{width:54px;height:54px;right:calc(env(safe-area-inset-right) + 48px);bottom:calc(env(safe-area-inset-bottom) + 150px);}
+  #bagBtn{width:46px;height:46px;right:calc(env(safe-area-inset-right) + 14px);top:calc(env(safe-area-inset-top) + 12px);border-radius:8px;}
+  #pauseBtn{width:46px;height:46px;right:calc(env(safe-area-inset-right) + 70px);top:calc(env(safe-area-inset-top) + 12px);border-radius:8px;}
+  body.touch #objective{right:calc(env(safe-area-inset-right) + 130px);}
 </style>
 <script type="importmap">
 { "imports": { "three": "/experiments/undercroft/lib/three.module.min.js" } }
@@ -74,18 +141,41 @@ layout: null
 </head>
 <body>
 
+<div id="hud">
+  <div id="hearts"></div>
+  <div id="objective">PRISONERS FREED<b id="freed">0 / 3</b></div>
+  <div id="slots">
+    <div class="hslot" id="foodSlot"><div class="ic">&#127838;</div><div class="nm" id="foodCount">0</div><div class="k">X &middot; F</div></div>
+    <div class="hslot" id="pSlot"><div class="ic" id="pIcon"></div><div class="nm" id="pName">No power</div><div class="st" id="pState"></div><div class="k">LT &middot; Q</div></div>
+    <div class="hslot" id="wSlot"><div class="ic" id="wIcon"></div><div class="nm" id="wName">Sword</div><div class="st"></div><div class="k">RT &middot; CLICK</div></div>
+  </div>
+  <div id="prompt"><span id="promptText"></span><div id="promptTrack"><div id="promptBar"></div></div></div>
+  <div id="bossBar"><div class="lbl">THE MONSTER</div><div id="bossTrack"><div id="bossFill"></div></div></div>
+</div>
+<div id="crosshair"></div>
 <div id="hint"></div>
-<div id="fade"></div>
+<div id="say"></div>
+<div id="banner"><div id="bannerTitle"></div><div id="bannerText"></div></div>
+<div id="debug"></div>
 <div id="stick"><div id="knob"></div></div>
-<button id="pauseBtn" aria-label="Pause">II</button>
+<div id="touchUI">
+  <div class="tbtn" id="atkBtn" data-act="attack">ATTACK</div>
+  <div class="tbtn" id="powBtn" data-act="power">POWER</div>
+  <div class="tbtn" id="useBtn" data-act="interact">USE</div>
+  <div class="tbtn" id="eatBtn" data-act="eat">EAT</div>
+  <div class="tbtn" id="bagBtn" data-act="inventory">BAG</div>
+  <div class="tbtn" id="pauseBtn" data-act="pause">II</div>
+</div>
 
 <div class="screen" id="title">
-  <h1>UNDERCROFT<span>find the way up</span></h1>
+  <h1>UNDERCROFT<span>free them &middot; find the way up</span></h1>
+  <p>People are locked in cells deep under the ground. Zombies wander the dark, and something very tall lives in the great hall.
+    Walk through the <b>power gates</b> to take their powers. Deep water is death. You have <b>five hearts</b>; eat to get them back.</p>
   <p class="keys">
-    <span class="desk"><b>Controller</b> left stick walks, right stick looks, click the left stick or hold <b>RT</b> to hurry, <b>Start</b> pauses.<br>
-    <b>Keyboard</b> WASD walks, the mouse looks, <b>Shift</b> hurries, <b>Esc</b> pauses.</span>
-    <span class="touchonly">Left thumb walks, push to the edge to hurry. Right thumb looks.</span><br>
-    Sound on. Lights low.
+    <span class="desk"><b>Controller</b> left stick walks (click to hurry), right stick looks, <b>RT</b> attack, <b>LT</b> power, <b>LB</b> swap power, <b>RB</b> swap weapon,
+      <b>A</b> open / break a lock (hold), <b>X</b> eat, <b>Y</b> bag, <b>Start</b> pause.<br>
+      <b>Keyboard</b> WASD, mouse to look, <b>click</b> attack, <b>right-click</b> or <b>Q</b> power, <b>R</b> swap power, <b>1&ndash;4</b> weapons, <b>E</b> use, <b>F</b> eat, <b>Tab</b> bag, <b>Shift</b> hurry.</span>
+    <span class="touchonly">Left thumb walks (push to the edge to hurry), right thumb looks. Buttons on the right attack, use powers, open things and eat.</span>
   </p>
   <button class="go" id="startBtn" disabled>DESCEND</button>
   <div class="loading" id="loading">LIGHTING THE TORCHES</div>
@@ -96,1145 +186,34 @@ layout: null
   <h1>PAUSED</h1>
   <button class="go" id="resumeBtn">RESUME</button>
   <button class="go alt" id="muteBtn">SOUND ON</button>
-  <button class="go alt" id="restartBtn">A NEW MAZE</button>
+  <button class="go alt" id="restartBtn">START THIS LEVEL AGAIN</button>
+</div>
+
+<div class="screen hidden" id="inv">
+  <div class="panel">
+    <h2>BAG</h2>
+    <div class="top"><div id="invHearts"></div><div id="invFreed"></div></div>
+    <h3>WEAPONS</h3><div class="row" id="invWeapons"></div>
+    <h3>POWERS</h3><div class="row" id="invPowers"></div>
+    <h3>FOOD</h3><div class="row" id="invFood"></div>
+    <div id="invName"></div><div id="invDesc"></div>
+    <div class="foot"><span>MOVE WITH THE STICK &middot; A TO USE &middot; B TO CLOSE</span><button class="go alt" id="invClose">CLOSE</button></div>
+  </div>
 </div>
 
 <div class="screen hidden" id="won">
-  <h1>NIGHT AIR<span>you found the way up</span></h1>
+  <h1 id="wonTitle">LEVEL 1<span>you led them out</span></h1>
   <div class="stat" id="wonStat"></div>
-  <button class="go" id="againBtn">GO BACK DOWN</button>
+  <button class="go" id="againBtn">GO DEEPER</button>
 </div>
 
-<script type="module">
-import * as THREE from 'three';
-import { EffectComposer } from '/experiments/undercroft/lib/postprocessing/EffectComposer.js';
-import { RenderPass } from '/experiments/undercroft/lib/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from '/experiments/undercroft/lib/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from '/experiments/undercroft/lib/postprocessing/OutputPass.js';
-import { ShaderPass } from '/experiments/undercroft/lib/postprocessing/ShaderPass.js';
+<div class="screen hidden" id="dead">
+  <h1>YOU DIED<span>the dark takes another</span></h1>
+  <div class="stat" id="deadStat"></div>
+  <button class="go" id="retryBtn">TRY AGAIN</button>
+</div>
 
-const BASE = '/experiments/undercroft/';
-const params = new URLSearchParams(location.search);
-const TEST = params.has('test');            // automated runs: fixed seed, no sound, fixed resolution
-const DEBUG = params.has('debug');
-
-/* ================================================================
-   NUMBERS
-   ================================================================ */
-const TILE = 2.6;          // metres per maze tile (corridors and wall blocks alike)
-const CEIL = 3.2;          // ceiling height
-const STAIR_RISE = 1.5;    // the way out climbs this far
-const HIGH_CEIL = STAIR_RISE + CEIL;
-const CELLS = 8;           // maze is CELLS x CELLS rooms
-const PAD = 2;             // solid rock around the maze, room for the stairs to cut into
-const EYE = 1.62;
-const RADIUS = 0.36;
-const WALK = 1.7, HURRY = 3.4;   // m/s: a careful walk, a nervous hurry
-
-/* ================================================================
-   RANDOM
-   ================================================================ */
-function mulberry(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
-  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-let seed = params.has('seed') ? (parseInt(params.get('seed'), 10) || 1) : (TEST ? 1 : (Math.random() * 1e9) | 0);
-let rng = mulberry(seed);
-
-/* ================================================================
-   MAZE
-   Tile types: 0 rock, 1 floor, 2 stairs, 3 landing at the top of the stairs.
-   ================================================================ */
-const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
-let maze;
-
-function makeMaze(){
-  const n = CELLS, W = n * 2 + 1 + PAD * 2;
-  const g = new Uint8Array(W * W);
-  const T = (i) => PAD + 1 + i * 2;                  // cell index -> tile index
-  const seen = new Uint8Array(n * n);
-  const stack = [[0, 0]]; seen[0] = 1; g[T(0) * W + T(0)] = 1;
-  while (stack.length){
-    const [ci, cj] = stack[stack.length - 1];
-    const opts = DIRS.filter(([dx, dz]) => { const a = ci + dx, b = cj + dz; return a >= 0 && b >= 0 && a < n && b < n && !seen[b * n + a]; });
-    if (!opts.length){ stack.pop(); continue; }
-    const [dx, dz] = opts[(rng() * opts.length) | 0];
-    const a = ci + dx, b = cj + dz;
-    seen[b * n + a] = 1;
-    g[(T(cj) + dz) * W + T(ci) + dx] = 1;
-    g[T(b) * W + T(a)] = 1;
-    stack.push([a, b]);
-  }
-  const open = (x, z) => g[z * W + x] !== 0;
-  // knock through some dead ends so there are loops to get lost in
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++){
-    const x = T(i), z = T(j);
-    const exits = DIRS.filter(([dx, dz]) => open(x + dx, z + dz)).length;
-    if (exits === 1 && rng() < 0.3 && !(i === 0 && j === 0)){
-      const opts = DIRS.filter(([dx, dz]) => { const a = i + dx, b = j + dz; return a >= 0 && b >= 0 && a < n && b < n && !open(x + dx, z + dz); });
-      if (opts.length){ const [dx, dz] = opts[(rng() * opts.length) | 0]; g[(z + dz) * W + x + dx] = 1; }
-    }
-  }
-  // the way out: the boundary room furthest (by walking) from the start, stairs cut outward from it
-  const start = [T(0), T(0)];
-  const dist = bfs(g, W, start);
-  let best = null, bestScore = -1;
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++){
-    const x = T(i), z = T(j);
-    for (const [dx, dz] of DIRS){
-      const a = i + dx, b = j + dz;
-      if (a >= 0 && b >= 0 && a < n && b < n) continue;          // must face out of the maze
-      const deadEnd = DIRS.filter(([ex, ez]) => open(x + ex, z + ez)).length === 1;
-      const score = dist[z * W + x] + (deadEnd ? 6 : 0);
-      if (score > bestScore){ bestScore = score; best = { x, z, dx, dz }; }
-    }
-  }
-  const stairs = [best.x + best.dx, best.z + best.dz], landing = [best.x + best.dx * 2, best.z + best.dz * 2];
-  g[stairs[1] * W + stairs[0]] = 2;
-  g[landing[1] * W + landing[0]] = 3;
-  // start facing down the open corridor
-  const sd = DIRS.find(([dx, dz]) => open(start[0] + dx, start[1] + dz));
-  return { g, W, start, startDir: sd, exitRoom: [best.x, best.z], exitDir: [best.dx, best.dz], stairs, landing,
-    pathLength: dist[best.z * W + best.x] };
-}
-
-function bfs(g, W, from){
-  const dist = new Int32Array(W * W).fill(-1);
-  const q = [from]; dist[from[1] * W + from[0]] = 0;
-  for (let k = 0; k < q.length; k++){
-    const [x, z] = q[k];
-    for (const [dx, dz] of DIRS){
-      const a = x + dx, b = z + dz, id = b * W + a;
-      if (a < 0 || b < 0 || a >= W || b >= W || !g[id] || dist[id] >= 0) continue;
-      dist[id] = dist[z * W + x] + 1; q.push([a, b]);
-    }
-  }
-  return dist;
-}
-
-const tileAt = (x, z) => { const i = Math.floor(x / TILE), j = Math.floor(z / TILE);
-  return (i < 0 || j < 0 || i >= maze.W || j >= maze.W) ? 0 : maze.g[j * maze.W + i]; };
-const tileType = (i, j) => (i < 0 || j < 0 || i >= maze.W || j >= maze.W) ? 0 : maze.g[j * maze.W + i];
-const center = (i, j) => [(i + 0.5) * TILE, (j + 0.5) * TILE];
-
-function floorAt(x, z){
-  const t = tileAt(x, z);
-  if (t === 3) return STAIR_RISE;
-  if (t !== 2) return 0;
-  const [sx, sz] = maze.stairs, [dx, dz] = maze.exitDir;
-  // 0 at the edge with the exit room, 1 at the landing
-  const along = dx ? (x / TILE - sx) : (z / TILE - sz);
-  const p = (dx + dz) > 0 ? along : 1 - along;
-  const steps = 8, k = Math.min(steps - 1, Math.max(0, Math.floor(p * steps)));
-  return (k + 1) * STAIR_RISE / steps;
-}
-const ceilOf = (t) => (t === 2 || t === 3) ? HIGH_CEIL : CEIL;
-const floorOf = (t) => t === 3 ? STAIR_RISE : 0;
-
-/* ================================================================
-   RENDERER
-   ================================================================ */
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', preserveDrawingBuffer: TEST });
-renderer.setPixelRatio(1);
-renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFShadowMap;
-document.body.prepend(renderer.domElement);
-const maxAniso = renderer.capabilities.getMaxAnisotropy();
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
-scene.fog = new THREE.FogExp2(0x0b0c0f, 0.045);
-const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.04, 80);
-camera.rotation.order = 'YXZ';
-scene.add(camera);
-
-const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 });
-const composer = new EffectComposer(renderer, rt);
-composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.6, 1.1);
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
-// film: a little grain, a vignette, lenses that are not perfect, shadows pushed cold
-const grade = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, time: { value: 0 }, aspect: { value: 1 }, fear: { value: 0 } },
-  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float time; uniform float aspect; uniform float fear;
-    varying vec2 vUv;
-    float hash(vec2 p){ p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
-    void main(){
-      vec2 c = vUv - 0.5;
-      float r2 = dot(c * vec2(aspect, 1.0), c * vec2(aspect, 1.0));
-      vec2 off = c * (0.0035 + fear * 0.004);
-      vec3 col = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
-      float lum = dot(col, vec3(0.299, 0.587, 0.114));
-      col = mix(col * vec3(0.86, 0.94, 1.1), col, smoothstep(0.0, 0.35, lum));   // cold in the dark, warm in the light
-      col = mix(vec3(lum), col, 0.88);
-      col *= mix(1.0, smoothstep(1.05, 0.12, r2), 0.82);
-      float g = hash(vUv * 1000.0 + fract(time * 7.13) * 100.0) - 0.5;
-      col += g * 0.05 * (1.0 - lum * 0.6);
-      gl_FragColor = vec4(max(col, 0.0), 1.0);
-    }`
-});
-composer.addPass(grade);
-
-let pixelRatio = TEST ? 1 : Math.min(devicePixelRatio || 1, 1.5);
-function resize(){
-  const w = innerWidth, h = innerHeight;
-  camera.aspect = w / h; camera.updateProjectionMatrix();
-  renderer.setPixelRatio(pixelRatio); renderer.setSize(w, h);
-  composer.setPixelRatio(pixelRatio); composer.setSize(w, h);
-  grade.uniforms.aspect.value = w / h;
-}
-addEventListener('resize', resize);
-resize();
-
-/* ================================================================
-   MATERIALS
-   ================================================================ */
-const loader = new THREE.TextureLoader();
-let pending = 0;
-const ready = new Promise((resolve) => { loader.manager.onLoad = resolve; });
-function tex(name, srgb, repeat){
-  pending++;
-  const t = loader.load(BASE + 'tex/' + name);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = maxAniso;
-  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-function stone(name, normalScale, extra){
-  return new THREE.MeshStandardMaterial(Object.assign({
-    map: tex(name + '_albedo.jpg', true), normalMap: tex(name + '_normal.jpg'), roughnessMap: tex(name + '_rough.jpg'),
-    normalScale: new THREE.Vector2(normalScale, normalScale), roughness: 1, metalness: 0, vertexColors: true
-  }, extra || {}));
-}
-const wallMat = stone('wall', 1.6);
-const floorMat = stone('floor', 1.3);
-const ceilMat = stone('ceil', 1.4);
-const woodMat = new THREE.MeshStandardMaterial({ map: tex('wood_albedo.jpg', true), roughness: 0.9 });
-const clothMat = new THREE.MeshStandardMaterial({ color: 0x1a120c, roughness: 1 });
-const ironMat = new THREE.MeshStandardMaterial({ color: 0x2e2a26, roughness: 0.55, metalness: 0.85 });
-const webMat = new THREE.MeshStandardMaterial({ map: tex('cobweb.png', true), transparent: true, depthWrite: false,
-  side: THREE.DoubleSide, roughness: 1, opacity: 0.85 });
-const rockMat = new THREE.MeshStandardMaterial({ map: wallMat.map, normalMap: wallMat.normalMap, roughness: 0.92, color: 0x9a9690 });
-
-/* ================================================================
-   THE MAZE AS GEOMETRY
-   Every face is cut into a small grid so ambient occlusion can be baked into vertex colours:
-   darker where walls meet the floor, the ceiling and each other.
-   ================================================================ */
-class Builder {
-  constructor(){ this.p = []; this.n = []; this.uv = []; this.c = []; this.i = []; }
-  // a quad from o along A and B (normal is A x B), split segA x segB, uv(x,y,z) and ao(x,y,z) per vertex
-  quad(o, A, B, segA, segB, uvf, aof){
-    const base = this.p.length / 3;
-    const nx = A[1] * B[2] - A[2] * B[1], ny = A[2] * B[0] - A[0] * B[2], nz = A[0] * B[1] - A[1] * B[0];
-    const nl = Math.hypot(nx, ny, nz);
-    for (let b = 0; b <= segB; b++) for (let a = 0; a <= segA; a++){
-      const s = a / segA, t = b / segB;
-      const x = o[0] + A[0] * s + B[0] * t, y = o[1] + A[1] * s + B[1] * t, z = o[2] + A[2] * s + B[2] * t;
-      this.p.push(x, y, z); this.n.push(nx / nl, ny / nl, nz / nl);
-      const [u, v] = uvf(x, y, z); this.uv.push(u, v);
-      const k = aof(x, y, z); this.c.push(k, k, k);
-    }
-    for (let b = 0; b < segB; b++) for (let a = 0; a < segA; a++){
-      const i0 = base + b * (segA + 1) + a, i1 = i0 + 1, i2 = i0 + segA + 1, i3 = i2 + 1;
-      this.i.push(i0, i1, i3, i0, i3, i2);
-    }
-  }
-  mesh(mat){
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
-    g.setIndex(this.i);
-    g.computeBoundingSphere();
-    const m = new THREE.Mesh(g, mat);
-    m.castShadow = true; m.receiveShadow = true;
-    return m;
-  }
-}
-
-// distance in the floor plan from (x, z) to the nearest rock tile around tile (ti, tj), optionally skipping one
-function rockDist(x, z, ti, tj, skipI, skipJ){
-  let d = 9;
-  for (let j = tj - 1; j <= tj + 1; j++) for (let i = ti - 1; i <= ti + 1; i++){
-    if (tileType(i, j) !== 0 || (i === skipI && j === skipJ)) continue;
-    const ex = Math.max(i * TILE - x, 0, x - (i + 1) * TILE), ez = Math.max(j * TILE - z, 0, z - (j + 1) * TILE);
-    d = Math.min(d, Math.hypot(ex, ez));
-  }
-  return d;
-}
-
-let world = null;           // everything built for the current maze, thrown away on restart
-const sconces = [];
-const flames = [];
-
-function buildWorld(){
-  if (world){ scene.remove(world); world.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
-  world = new THREE.Group(); scene.add(world);
-  sconces.length = 0; flames.length = 0;
-  const walls = new Builder(), floors = new Builder(), ceils = new Builder();
-  const W = maze.W, S = 6;
-  const wallUV = (rx, rz) => (x, y, z) => [(x * rx + z * rz) / CEIL, y / CEIL];
-  for (let j = 0; j < W; j++) for (let i = 0; i < W; i++){
-    const t = tileType(i, j); if (!t) continue;
-    const x0 = i * TILE, z0 = j * TILE, fh = floorOf(t), ch = ceilOf(t);
-    // floor (the stairs build their own)
-    if (t !== 2){
-      floors.quad([x0, fh, z0 + TILE], [TILE, 0, 0], [0, 0, -TILE], S, S, (x, y, z) => [x / 3, -z / 3],
-        (x, y, z) => { const d = rockDist(x, z, i, j); return 1 - 0.62 * Math.exp(-d / 0.32) - 0.18 * Math.exp(-d / 1.1); });
-    }
-    ceils.quad([x0, ch, z0], [TILE, 0, 0], [0, 0, TILE], S, S, (x, y, z) => [x / CEIL, z / CEIL],
-      (x, y, z) => { const d = rockDist(x, z, i, j); return 1 - 0.5 * Math.exp(-d / 0.45); });
-    for (const [dx, dz] of DIRS){
-      const ni = i + dx, nj = j + dz, nt = tileType(ni, nj);
-      const right = [-dz, 0, dx];
-      const cx = x0 + TILE / 2 + dx * TILE / 2, cz = z0 + TILE / 2 + dz * TILE / 2;
-      const o = [cx - right[0] * TILE / 2, 0, cz - right[2] * TILE / 2];
-      let y0, y1;
-      if (!nt){ y0 = fh; y1 = ch; }                         // solid rock: a full wall
-      else if (ceilOf(nt) < ch){ y0 = ceilOf(nt); y1 = ch; }  // a lower opening: the wall above it
-      else continue;
-      o[1] = y0;
-      walls.quad(o, [right[0] * TILE, 0, right[2] * TILE], [0, y1 - y0, 0], S, Math.max(2, Math.round((y1 - y0) * 2)),
-        wallUV(right[0], right[2]),
-        (x, y, z) => {
-          const d = rockDist(x - dx * 0.02, z - dz * 0.02, i, j, ni, nj);
-          const fl = floorAt(x - dx * 0.05, z - dz * 0.05);
-          return (1 - 0.5 * Math.exp(-d / 0.4)) * (1 - 0.55 * Math.exp(-Math.max(0, y - fl) / 0.3)) * (1 - 0.35 * Math.exp(-(ch - y) / 0.4));
-        });
-    }
-  }
-  // the stairs: eight steps climbing out of the last room
-  {
-    const [si, sj] = maze.stairs, [dx, dz] = maze.exitDir, right = [-dz, 0, dx];
-    const steps = 8, run = TILE / steps, rise = STAIR_RISE / steps;
-    const startX = (si + 0.5) * TILE - dx * TILE / 2, startZ = (sj + 0.5) * TILE - dz * TILE / 2;
-    for (let k = 0; k < steps; k++){
-      const bx = startX + dx * run * k, bz = startZ + dz * run * k;
-      const o = [bx - right[0] * TILE / 2, rise * k, bz - right[2] * TILE / 2];
-      // riser faces back down the stairs
-      walls.quad(o, [right[0] * TILE, 0, right[2] * TILE], [0, rise, 0], 4, 1, wallUV(right[0], right[2]), () => 0.75);
-      // tread: normal must point up, so pick the axis order that makes A x B = +y
-      const top = [o[0], rise * (k + 1), o[2]];
-      const A = [right[0] * TILE, 0, right[2] * TILE], B = [dx * run, 0, dz * run];
-      const up = A[2] * B[0] - A[0] * B[2];
-      if (up > 0) floors.quad(top, A, B, 4, 1, (x, y, z) => [x / 3, -z / 3], () => 0.85);
-      else floors.quad([top[0] + B[0], top[1], top[2] + B[2]], A, [-B[0], 0, -B[2]], 4, 1, (x, y, z) => [x / 3, -z / 3], () => 0.85);
-    }
-  }
-  world.add(walls.mesh(wallMat), floors.mesh(floorMat), ceils.mesh(ceilMat));
-  dressWorld();
-}
-
-/* ================================================================
-   FLAMES
-   A camera-facing card with flame noise, bright enough to bloom.
-   ================================================================ */
-const flameGeo = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
-const flameUniforms = { time: { value: 0 } };
-function flameMaterial(seedValue, size){
-  return new THREE.ShaderMaterial({
-    uniforms: { time: flameUniforms.time, seed: { value: seedValue }, size: { value: size } },
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-    vertexShader: `
-      uniform float size; varying vec2 vUv;
-      void main(){
-        vUv = uv;
-        vec3 c = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-        vec3 toCam = cameraPosition - c; toCam.y = 0.0; toCam = normalize(toCam + vec3(1e-4, 0.0, 0.0));
-        vec3 right = vec3(toCam.z, 0.0, -toCam.x);
-        vec3 p = c + right * position.x * size * 0.75 + vec3(0.0, 1.0, 0.0) * position.y * size;
-        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
-      }`,
-    fragmentShader: `
-      uniform float time; uniform float seed; varying vec2 vUv;
-      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-      float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-        return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
-      float fbm(vec2 p){ return n(p) * 0.55 + n(p * 2.1 + 3.1) * 0.3 + n(p * 4.3 + 7.7) * 0.15; }
-      void main(){
-        float y = vUv.y, x = (vUv.x - 0.5) * 2.0;
-        float t = time * 2.4 + seed * 13.0;
-        // turbulence rising through the flame, stronger toward the top
-        float q = fbm(vec2(x * 2.2 + seed, y * 2.6 - t * 1.2));
-        float r = fbm(vec2(x * 4.5 - seed, y * 5.0 - t * 1.9));
-        x += ((q - 0.5) * 0.9 + (r - 0.5) * 0.35) * y + sin(t * 0.8 + y * 2.5) * 0.08 * y;
-        float w = mix(0.8, 0.1, pow(y, 0.6));
-        float body = 1.0 - smoothstep(w * 0.15, w, abs(x));
-        // tongues licking up: the flame tears into separate wisps near the top
-        float tear = smoothstep(0.25, 0.75, fbm(vec2(x * 3.0 + seed * 3.0, y * 3.5 - t * 1.6)) + 0.55 - y * 0.75);
-        body *= smoothstep(0.0, 0.14, y) * tear;
-        body = pow(body, 1.4);
-        float core = (1.0 - smoothstep(0.08, 0.38, y)) * (1.0 - smoothstep(0.0, w * 0.5, abs(x))) * smoothstep(0.0, 0.1, y);
-        vec3 col = mix(vec3(0.65, 0.09, 0.01), vec3(1.0, 0.5, 0.13), smoothstep(0.0, 0.8, body)) * body * 2.4;
-        col += vec3(1.0, 0.82, 0.5) * core * 2.6;
-        // a faint glow around the whole flame, so it lights the smoke and air near it
-        float halo = exp(-dot(vec2(x * 1.3, (y - 0.3) * 1.6), vec2(x * 1.3, (y - 0.3) * 1.6)) * 3.0);
-        col += vec3(1.0, 0.45, 0.12) * halo * 0.12;
-        gl_FragColor = vec4(col, 1.0);
-      }`
-  });
-}
-function addFlame(parent, pos, size){
-  const f = new THREE.Mesh(flameGeo, flameMaterial(Math.random() * 10, size));
-  f.position.copy(pos); f.frustumCulled = false; f.renderOrder = 5;
-  parent.add(f); flames.push(f);
-  return f;
-}
-
-// a torch: a charred wooden stick with a rag head. Returns the group and where the flame sits.
-const handleGeo = new THREE.CylinderGeometry(0.022, 0.016, 0.5, 10).translate(0, 0.25, 0);
-// the rag head: a lumpy wad of pitch-soaked cloth, glowing where it is burning
-const ragGeo = (() => {
-  const g = new THREE.IcosahedronGeometry(1, 2), p = g.attributes.position, r = mulberry(7);
-  const bumps = Array.from({ length: 9 }, () => [r() * 2 - 1, r() * 2 - 1, r() * 2 - 1, r() * 0.25]);
-  for (let k = 0; k < p.count; k++){
-    const x = p.getX(k), y = p.getY(k), z = p.getZ(k);
-    let s = 1; for (const b of bumps) s += b[3] * Math.max(0, x * b[0] + y * b[1] + z * b[2]);
-    // wrapped bands of cloth: ridges around the head, plus ragged noise
-    s += 0.12 * Math.sin(y * 9 + Math.atan2(z, x) * 1.5) + 0.08 * Math.sin(x * 17 + z * 13 + y * 7);
-    p.setXYZ(k, x * s * 0.034, y * s * 0.062, z * s * 0.034);
-  }
-  g.computeVertexNormals();
-  // glowing embers in the folds: emissive brightness per vertex, baked as a colour
-  const col = [];
-  // (colour comes from the position, so the copies of a corner shared by several faces agree)
-  for (let k = 0; k < p.count; k++){
-    const h = Math.abs(Math.sin(p.getX(k) * 912.3 + p.getY(k) * 431.7 + p.getZ(k) * 277.1) * 4375.85) % 1;
-    const v = Math.pow(h, 6) * (p.getY(k) > 0 ? 0.5 : 0.15);
-    col.push(0.006 + v, 0.004 + v * 0.35, 0.003 + v * 0.06);
-  }
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  return g.translate(0, 0.49, 0);
-})();
-// black char lit only by its own embers (the flame's light would turn it into an orange lump)
-const ragMat = new THREE.MeshBasicMaterial({ vertexColors: true });
-const heldWoodMat = new THREE.MeshStandardMaterial({ map: woodMat.map, color: 0x2c2c2c, roughness: 0.95 });
-function torchModel(mat){
-  const g = new THREE.Group();
-  const h = new THREE.Mesh(handleGeo, mat || woodMat), r = new THREE.Mesh(ragGeo, ragMat);
-  h.castShadow = r.castShadow = true;
-  g.add(h, r);
-  return g;
-}
-
-/* ================================================================
-   SET DRESSING: wall torches, chains, cobwebs, rubble, the way out
-   ================================================================ */
-const linkGeo = new THREE.TorusGeometry(0.036, 0.009, 6, 14);
-const chains = [];
-const rockGeo = (() => {
-  const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position, r = mulberry(99);
-  for (let k = 0; k < p.count; k++){ const s = 0.75 + r() * 0.45; p.setXYZ(k, p.getX(k) * s, p.getY(k) * s * 0.7, p.getZ(k) * s); }
-  // keep shared corners together: icosahedron vertices are split per face, so snap duplicates
-  const map = new Map();
-  g.computeVertexNormals();
-  return g;
-})();
-let exitLight, exitGlow;
-
-function dressWorld(){
-  const W = maze.W;
-  const faces = [];   // every wall face along a corridor: [i, j, dx, dz]
-  for (let j = 0; j < W; j++) for (let i = 0; i < W; i++){
-    if (tileType(i, j) !== 1) continue;
-    for (const [dx, dz] of DIRS) if (!tileType(i + dx, j + dz)) faces.push([i, j, dx, dz]);
-  }
-  // wall torches, spread out so most corridors have darkness between them
-  const shuffled = faces.slice().sort(() => rng() - 0.5);
-  const lit = [];
-  for (const f of shuffled){
-    if (lit.some((o) => Math.abs(o[0] - f[0]) + Math.abs(o[1] - f[1]) < 7)) continue;
-    if (f[0] === maze.start[0] && f[1] === maze.start[1]) continue;
-    lit.push(f);
-  }
-  for (const [i, j, dx, dz] of lit){
-    const [cx, cz] = center(i, j);
-    const wx = cx + dx * TILE / 2, wz = cz + dz * TILE / 2;
-    const g = new THREE.Group();
-    g.position.set(wx, 1.75, wz);
-    g.rotation.y = Math.atan2(-dx, -dz);   // local +z points out of the wall
-    const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.22).translate(0, 0, 0.11), ironMat);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.008, 6, 12), ironMat);
-    ring.rotation.x = Math.PI / 2; ring.position.set(0, 0.03, 0.2);
-    const t = torchModel(); t.position.set(0, -0.12, 0.2); t.rotation.x = 0.28; t.scale.setScalar(1.05);
-    bracket.castShadow = ring.castShadow = true;
-    g.add(bracket, ring, t);
-    world.add(g);
-    g.updateMatrixWorld(true);
-    const tip = new THREE.Vector3(0, 0.53, 0).applyMatrix4(t.matrixWorld);
-    const flame = addFlame(world, tip.clone().add(new THREE.Vector3(0, -0.02, 0)), 0.34);
-    sconces.push({ pos: tip.clone().add(new THREE.Vector3(-dx * 0.18, 0.12, -dz * 0.18)), flame, w: 0, phase: rng() * 100 });
-  }
-  // cobwebs in the top corners where two walls meet
-  for (let j = 0; j < W; j++) for (let i = 0; i < W; i++){
-    if (tileType(i, j) !== 1) continue;
-    for (const [ax, az, bx, bz] of [[1,0,0,1],[0,1,-1,0],[-1,0,0,-1],[0,-1,1,0]]){
-      if (tileType(i + ax, j + az) || tileType(i + bx, j + bz) || rng() > 0.35) continue;
-      const [cx, cz] = center(i, j);
-      const corner = new THREE.Vector3(cx + (ax + bx) * TILE / 2, CEIL - 0.02, cz + (az + bz) * TILE / 2);
-      const s = 0.7 + rng() * 0.7;
-      // a sheet from one wall to the other, sagging down from the corner
-      const pA = corner.clone().add(new THREE.Vector3(-ax * s, 0, -az * s));
-      const pB = corner.clone().add(new THREE.Vector3(-bx * s, 0, -bz * s));
-      const low = corner.clone().add(new THREE.Vector3(-(ax + bx) * s * 0.25, -s * 0.9, -(az + bz) * s * 0.25));
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute([...corner.toArray(), ...pA.toArray(), ...pB.toArray(), ...low.toArray()], 3));
-      geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 0, 0, 0.75, 0.25], 2));
-      geo.setIndex([0, 1, 3, 0, 3, 2]);
-      geo.computeVertexNormals();
-      const m = new THREE.Mesh(geo, webMat); m.renderOrder = 3;
-      world.add(m);
-    }
-  }
-  // chains hanging from the ceiling, some long enough to brush past
-  chains.length = 0;
-  const chainCount = 14, linksPer = 30;
-  const links = new THREE.InstancedMesh(linkGeo, ironMat, chainCount * linksPer);
-  links.castShadow = true; links.count = 0;
-  const floorTiles = [];
-  for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) if (tileType(i, j) === 1) floorTiles.push([i, j]);
-  for (let c = 0; c < chainCount; c++){
-    const [i, j] = floorTiles[(rng() * floorTiles.length) | 0];
-    if (i === maze.start[0] && j === maze.start[1]) continue;
-    const [cx, cz] = center(i, j);
-    const n = 8 + ((rng() * (linksPer - 8)) | 0);
-    chains.push({ x: cx + (rng() - 0.5) * 1.4, z: cz + (rng() - 0.5) * 1.4, n, first: links.count, phase: rng() * 10, amp: 0.02 + rng() * 0.05 });
-    links.count += n;
-  }
-  world.add(links);
-  world.userData.links = links;
-  // loose stones along the foot of the walls
-  const rocks = new THREE.InstancedMesh(rockGeo, rockMat, 260);
-  rocks.castShadow = rocks.receiveShadow = true;
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-  let rc = 0;
-  for (const [i, j, dx, dz] of faces){
-    const k = (rng() * 4) | 0;
-    for (let r = 0; r < k && rc < 260; r++){
-      const [cx, cz] = center(i, j);
-      const along = (rng() - 0.5) * TILE * 0.95, off = TILE / 2 - 0.05 - rng() * 0.25;
-      const x = cx + dx * off + (-dz) * along, z = cz + dz * off + dx * along;
-      const s = 0.03 + Math.pow(rng(), 3) * 0.16;
-      e.set(rng() * 6, rng() * 6, rng() * 6); q.setFromEuler(e);
-      m4.compose(new THREE.Vector3(x, s * 0.35, z), q, new THREE.Vector3(s, s, s));
-      rocks.setMatrixAt(rc++, m4);
-    }
-  }
-  rocks.count = rc;
-  world.add(rocks);
-  // the way out: a doorway at the top of the stairs, cold moonlight pouring down
-  {
-    const [li, lj] = maze.landing, [dx, dz] = maze.exitDir, [cx, cz] = center(li, lj);
-    const doorX = cx + dx * (TILE / 2 - 0.02), doorZ = cz + dz * (TILE / 2 - 0.02);
-    const skyMat = new THREE.ShaderMaterial({ fog: false, uniforms: { time: flameUniforms.time },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform float time; varying vec2 vUv;
-        float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-        float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-          return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
-        void main(){
-          // moonlit cloud low in the doorway, darker sky above, a black line of ground at the bottom
-          float y = vUv.y;
-          vec3 sky = mix(vec3(0.75, 0.85, 1.2), vec3(0.18, 0.24, 0.45), smoothstep(0.1, 1.0, y));
-          float c = n(vec2(vUv.x * 3.0 + time * 0.03, y * 6.0)) * 0.6 + n(vec2(vUv.x * 7.0 - time * 0.02, y * 13.0)) * 0.4;
-          sky *= 0.75 + 0.5 * c;
-          float ground = smoothstep(0.1, 0.07, y + (n(vec2(vUv.x * 9.0, 1.0)) - 0.5) * 0.05);
-          sky = mix(sky, vec3(0.01, 0.012, 0.02), ground);
-          gl_FragColor = vec4(sky * 0.75, 1.0);
-        }` });
-    const sky = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.3), skyMat);
-    sky.position.set(doorX, STAIR_RISE + 1.15, doorZ);
-    sky.rotation.y = Math.atan2(-dx, -dz);
-    world.add(sky);
-    // a heavy stone frame around the opening
-    const frameMat = rockMat;
-    for (const [w, h, ox, oy] of [[0.35, 2.6, -0.82, 1.3], [0.35, 2.6, 0.82, 1.3], [2.0, 0.4, 0, 2.5]]){
-      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.3), frameMat);
-      b.position.set(ox, oy, 0); sky.add(b); b.position.y -= 1.15; b.position.z = 0.1;
-      b.castShadow = b.receiveShadow = true;
-    }
-    exitLight.position.set(doorX - dx * 0.3, STAIR_RISE + 2.1, doorZ - dz * 0.3);
-    exitLight.target.position.set(doorX - dx * TILE * 2.2, 0, doorZ - dz * TILE * 2.2);
-    exitGlow.position.set(doorX - dx * 0.6, STAIR_RISE + 1.2, doorZ - dz * 0.6);
-  }
-}
-
-/* ================================================================
-   LIGHTS
-   The torch in your hand, a pool of three lights handed to the nearest wall torches you can see,
-   and the moonlight at the way out. The count never changes, so shaders never recompile.
-   ================================================================ */
-// a dim, cold fill everywhere, as if a little moonlight leaks down through cracks: enough to make out
-// the walls and the way ahead without the torch, while the torch is still what really shows you things
-const fill = new THREE.HemisphereLight(0x8090b0, 0x6a5e50, 5.5);
-scene.add(fill);
-const handLight = new THREE.PointLight(0xffa767, 7, 16, 2);
-handLight.castShadow = true;
-handLight.shadow.mapSize.set(512, 512);
-handLight.shadow.camera.near = 0.08; handLight.shadow.camera.far = 16;
-handLight.shadow.bias = -0.004; handLight.shadow.normalBias = 0.03;
-scene.add(handLight);
-const pool = [0, 1, 2].map((k) => {
-  const l = new THREE.PointLight(0xff9a55, 0, 18, 2);
-  if (k === 0){ l.castShadow = true; l.shadow.mapSize.set(512, 512); l.shadow.camera.near = 0.1; l.shadow.camera.far = 18;
-    l.shadow.bias = -0.004; l.shadow.normalBias = 0.03; }
-  scene.add(l); l.userData.owner = null; return l;
-});
-exitLight = new THREE.SpotLight(0x8aa6ff, 60, 22, 0.75, 0.9, 1.6);
-scene.add(exitLight, exitLight.target);
-exitGlow = new THREE.PointLight(0x7f98ff, 6, 9, 2);
-scene.add(exitGlow);
-
-// the torch in your hand, hung off the camera
-const held = new THREE.Group();
-const heldTorch = torchModel(heldWoodMat);
-heldTorch.children[0].castShadow = false;   // the burning head shades the stick below it
-held.add(heldTorch);
-heldTorch.rotation.set(-0.5, 0.2, 0.32);
-camera.add(held);
-held.position.set(0.34, -0.5, -0.46);
-const heldFlame = addFlame(held, new THREE.Vector3(), 0.27);
-flames.splice(flames.indexOf(heldFlame), 1);
-held.remove(heldFlame); scene.add(heldFlame);
-
-/* ================================================================
-   EMBERS AND DUST
-   ================================================================ */
-const EMBERS = 120;
-const emberGeo = new THREE.BufferGeometry();
-const emberPos = new Float32Array(EMBERS * 3), emberLife = new Float32Array(EMBERS);
-const emberVel = new Float32Array(EMBERS * 3);
-emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
-emberGeo.setAttribute('life', new THREE.BufferAttribute(emberLife, 1));
-const embers = new THREE.Points(emberGeo, new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-  vertexShader: `attribute float life; varying float vLife; uniform float scale;
-    void main(){ vLife = life; vec4 mv = modelViewMatrix * vec4(position, 1.0);
-      gl_PointSize = scale * 0.018 * life / -mv.z; gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: `varying float vLife; void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c));
-    gl_FragColor = vec4(vec3(1.0, 0.45, 0.1) * a * vLife * 3.0, 1.0); }`,
-  uniforms: { scale: { value: innerHeight } }
-}));
-embers.frustumCulled = false;
-scene.add(embers);
-let emberNext = 0;
-
-const DUST = 500, DUSTBOX = 7;
-const dustPos = new Float32Array(DUST * 3);
-for (let k = 0; k < DUST * 3; k++) dustPos[k] = Math.random() * DUSTBOX;
-const dustGeo = new THREE.BufferGeometry();
-dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-const dustMat = new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-  uniforms: { origin: { value: new THREE.Vector3() }, light: { value: new THREE.Vector3() }, time: flameUniforms.time, scale: { value: innerHeight } },
-  vertexShader: `uniform vec3 origin; uniform vec3 light; uniform float time; uniform float scale; varying float vB;
-    void main(){
-      vec3 p = position;
-      p.x += sin(time * 0.13 + position.y * 3.0) * 0.3; p.y += time * -0.02; p.z += cos(time * 0.11 + position.x * 2.0) * 0.3;
-      p = mod(p - origin, ${DUSTBOX.toFixed(1)}) + origin - ${(DUSTBOX / 2).toFixed(1)};
-      float d = distance(p, light);
-      vB = 1.0 / (1.0 + d * d * 0.9);
-      vec4 mv = viewMatrix * vec4(p, 1.0);
-      gl_PointSize = scale * 0.006 / -mv.z; gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: `varying float vB; void main(){ float a = smoothstep(0.5, 0.1, length(gl_PointCoord - 0.5));
-    gl_FragColor = vec4(vec3(1.0, 0.75, 0.5) * a * vB * 0.55, 1.0); }`
-});
-const dust = new THREE.Points(dustGeo, dustMat);
-dust.frustumCulled = false;
-scene.add(dust);
-
-/* ================================================================
-   SOUND — all synthesised: a low drone, dripping water, the torch, footsteps in a stone room,
-   and now and then something far away that you would rather not meet.
-   ================================================================ */
-const audio = { ctx: null, master: null, muted: TEST, verb: null };
-function initAudio(){
-  if (audio.ctx || TEST) return;
-  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  const ctx = new AC(); audio.ctx = ctx;
-  const master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination); audio.master = master;
-  // a long, dark stone reverb
-  const len = ctx.sampleRate * 3.2, ir = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let ch = 0; ch < 2; ch++){ const d = ir.getChannelData(ch);
-    for (let k = 0; k < len; k++){ const t = k / len; d[k] = (Math.random() * 2 - 1) * Math.pow(1 - t, 3.2) * (k < 400 ? k / 400 : 1); } }
-  const verb = ctx.createConvolver(); verb.buffer = ir;
-  const verbLP = ctx.createBiquadFilter(); verbLP.type = 'lowpass'; verbLP.frequency.value = 2400;
-  const verbGain = ctx.createGain(); verbGain.gain.value = 0.55;
-  verb.connect(verbLP); verbLP.connect(verbGain); verbGain.connect(master);
-  audio.verb = verb;
-  // noise buffer for everything breathy
-  const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0);
-  let last = 0; for (let k = 0; k < nd.length; k++){ const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; nd[k] = w; }
-  audio.noise = nb;
-  const brown = ctx.createBuffer(1, ctx.sampleRate * 4, ctx.sampleRate), bd = brown.getChannelData(0);
-  last = 0; for (let k = 0; k < bd.length; k++){ last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; bd[k] = last * 3.5; }
-  // room tone: brown noise, slowly breathing
-  const room = ctx.createBufferSource(); room.buffer = brown; room.loop = true;
-  const roomLP = ctx.createBiquadFilter(); roomLP.type = 'lowpass'; roomLP.frequency.value = 320;
-  const roomG = ctx.createGain(); roomG.gain.value = 0.22;
-  const lfo = ctx.createOscillator(), lfoG = ctx.createGain(); lfo.frequency.value = 0.07; lfoG.gain.value = 0.1;
-  lfo.connect(lfoG); lfoG.connect(roomG.gain); lfo.start();
-  room.connect(roomLP); roomLP.connect(roomG); roomG.connect(master); room.start();
-  // drone: two low tones a hair apart, beating against each other
-  for (const [f, v] of [[41.2, 0.05], [41.9, 0.05], [61.7, 0.018], [82.0, 0.008]]){
-    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 140; lp.Q.value = 0.3;
-    const g = ctx.createGain(); g.gain.value = v;
-    o.connect(lp); lp.connect(g); g.connect(master); g.connect(verb); o.start();
-  }
-  // the torch in your hand: a steady roar with crackles on top
-  const roar = ctx.createBufferSource(); roar.buffer = nb; roar.loop = true;
-  const roarBP = ctx.createBiquadFilter(); roarBP.type = 'lowpass'; roarBP.frequency.value = 500;
-  const roarG = ctx.createGain(); roarG.gain.value = 0.05;
-  roar.connect(roarBP); roarBP.connect(roarG); roarG.connect(master); roar.start();
-  audio.next = { drip: 1.5, crackle: 0.2, event: 25 + Math.random() * 20 };
-}
-function panner(x, y, z){
-  const ctx = audio.ctx, p = ctx.createPanner();
-  p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 2; p.rolloffFactor = 1.1;
-  p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z;
-  return p;
-}
-function voice(node, gain, at, wet){
-  const ctx = audio.ctx, g = ctx.createGain(); g.gain.value = gain;
-  node.connect(g);
-  const out = at ? panner(at[0], at[1], at[2]) : null;
-  if (out){ g.connect(out); out.connect(audio.master); if (wet) out.connect(audio.verb); }
-  else { g.connect(audio.master); if (wet){ const w = ctx.createGain(); w.gain.value = wet; g.connect(w); w.connect(audio.verb); } }
-  return g;
-}
-function drip(){
-  const ctx = audio.ctx, t = ctx.currentTime;
-  const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 10;
-  const at = [player.x + Math.cos(a) * r, 2.5, player.z + Math.sin(a) * r];
-  const o = ctx.createOscillator(); o.type = 'sine';
-  const f = 900 + Math.random() * 1400;
-  o.frequency.setValueAtTime(f * 0.6, t); o.frequency.exponentialRampToValueAtTime(f * 1.6, t + 0.05);
-  const g = voice(o, 0, at, true);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.25, t + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-  o.start(t); o.stop(t + 0.2);
-}
-function noiseBurst(t, dur, type, freq, q, gain, at, wet){
-  const ctx = audio.ctx, s = ctx.createBufferSource(); s.buffer = audio.noise;
-  const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
-  s.connect(f);
-  const g = voice(f, 0, at, wet);
-  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.005); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
-}
-function footstep(hurry){
-  const ctx = audio.ctx, t = ctx.currentTime;
-  noiseBurst(t, 0.12, 'bandpass', 700 + Math.random() * 300, 0.9, hurry ? 0.5 : 0.32, null, 0.5);
-  noiseBurst(t, 0.08, 'lowpass', 180, 0.7, hurry ? 0.6 : 0.4, null, 0.3);
-  if (Math.random() < 0.3) noiseBurst(t + 0.03, 0.05, 'highpass', 3500, 0.5, 0.06, null, 0.2);   // grit
-}
-function crackle(){
-  const t = audio.ctx.currentTime;
-  for (let k = 0; k < 1 + Math.random() * 3; k++) noiseBurst(t + Math.random() * 0.08, 0.02 + Math.random() * 0.03, 'highpass', 1500 + Math.random() * 3000, 0.7, 0.05 + Math.random() * 0.08, null, 0.05);
-}
-// something far off in the dark: a low groan, a dragged chain, slow heavy steps
-function distantEvent(){
-  const ctx = audio.ctx, t = ctx.currentTime;
-  const a = Math.random() * Math.PI * 2, r = 14 + Math.random() * 10;
-  const at = [player.x + Math.cos(a) * r, 1.5, player.z + Math.sin(a) * r];
-  const kind = Math.random();
-  if (kind < 0.4){
-    const o = ctx.createOscillator(), o2 = ctx.createOscillator(); o.type = 'sawtooth'; o2.type = 'sawtooth';
-    const base = 55 + Math.random() * 25;
-    o.frequency.setValueAtTime(base, t); o.frequency.linearRampToValueAtTime(base * 0.7, t + 3);
-    o2.frequency.setValueAtTime(base * 1.51, t); o2.frequency.linearRampToValueAtTime(base * 1.02, t + 3);
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 4;
-    const wob = ctx.createOscillator(), wg = ctx.createGain(); wob.frequency.value = 5.5; wg.gain.value = 140; wob.connect(wg); wg.connect(lp.frequency);
-    o.connect(lp); o2.connect(lp);
-    const g = voice(lp, 0, at, true);
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.5, t + 0.8); g.gain.linearRampToValueAtTime(0.3, t + 2.2); g.gain.linearRampToValueAtTime(0, t + 3.2);
-    o.start(t); o2.start(t); wob.start(t); o.stop(t + 3.3); o2.stop(t + 3.3); wob.stop(t + 3.3);
-  } else if (kind < 0.7){
-    for (let k = 0; k < 14; k++) noiseBurst(t + k * 0.09 + Math.random() * 0.05, 0.06, 'bandpass', 2500 + Math.random() * 2500, 6, 0.22, at, true);
-  } else {
-    for (let k = 0; k < 4; k++) noiseBurst(t + k * 0.95, 0.35, 'lowpass', 110, 1, 1.2, at, true);
-  }
-}
-function updateAudio(dt){
-  if (!audio.ctx || audio.ctx.state !== 'running') return;
-  const L = audio.ctx.listener, f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  if (L.positionX){ L.positionX.value = camera.position.x; L.positionY.value = camera.position.y; L.positionZ.value = camera.position.z;
-    L.forwardX.value = f.x; L.forwardY.value = f.y; L.forwardZ.value = f.z; L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0; }
-  const n = audio.next;
-  if ((n.drip -= dt) < 0){ drip(); n.drip = 0.8 + Math.random() * 4; }
-  if ((n.crackle -= dt) < 0){ crackle(); n.crackle = 0.1 + Math.random() * 0.6; }
-  if ((n.event -= dt) < 0){ distantEvent(); n.event = 30 + Math.random() * 50; }
-}
-function setMuted(m){
-  audio.muted = m;
-  if (audio.master) audio.master.gain.value = m ? 0 : 0.9;
-  document.getElementById('muteBtn').textContent = m ? 'SOUND OFF' : 'SOUND ON';
-}
-
-/* ================================================================
-   INPUT: controller, keyboard and mouse, touch
-   ================================================================ */
-// Edge on Xbox turns the controller into a mouse pointer unless the page asks for the gamepad
-try { if ('gamepadInputEmulation' in navigator) navigator.gamepadInputEmulation = 'gamepad'; } catch (e) {}
-const keys = {};
-const look = { dx: 0, dy: 0 };
-const touch = { move: null, look: null, mx: 0, my: 0 };
-let padPrev = [];
-
-addEventListener('keydown', (e) => {
-  keys[e.code] = true;
-  if (e.code === 'Escape' || e.code === 'KeyP'){ if (state === 'play') pause(); else if (state === 'pause') resume(); }
-  if ((e.code === 'Enter' || e.code === 'Space') && state !== 'play') confirmMenu();
-  if (e.code === 'KeyM') setMuted(!audio.muted);
-});
-addEventListener('keyup', (e) => { keys[e.code] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
-document.addEventListener('mousemove', (e) => {
-  if (document.pointerLockElement && state === 'play'){ look.dx += e.movementX; look.dy += e.movementY; }
-});
-document.addEventListener('pointerlockchange', () => {
-  if (!document.pointerLockElement && state === 'play' && !document.body.classList.contains('touch')) pause();
-});
-renderer.domElement.addEventListener('click', () => { if (state === 'play' && !document.body.classList.contains('touch')) lockPointer(); });
-function lockPointer(){ if (TEST || document.body.classList.contains('touch')) return; try { const p = renderer.domElement.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
-
-const stickEl = document.getElementById('stick'), knobEl = document.getElementById('knob');
-addEventListener('touchstart', (e) => {
-  document.body.classList.add('touch');
-  if (state !== 'play') return;
-  for (const t of e.changedTouches){
-    if (t.clientX < innerWidth * 0.45 && !touch.move){
-      touch.move = { id: t.identifier, x: t.clientX, y: t.clientY }; touch.mx = touch.my = 0;
-      stickEl.style.left = t.clientX + 'px'; stickEl.style.top = t.clientY + 'px'; stickEl.classList.add('on');
-    } else if (!touch.look){ touch.look = { id: t.identifier, x: t.clientX, y: t.clientY }; }
-  }
-}, { passive: true });
-addEventListener('touchmove', (e) => {
-  for (const t of e.changedTouches){
-    if (touch.move && t.identifier === touch.move.id){
-      let dx = (t.clientX - touch.move.x) / 50, dy = (t.clientY - touch.move.y) / 50;
-      const l = Math.hypot(dx, dy); if (l > 1.25){ dx *= 1.25 / l; dy *= 1.25 / l; }
-      touch.mx = dx; touch.my = dy;
-      knobEl.style.transform = `translate(${dx * 40}px, ${dy * 40}px)`;
-    } else if (touch.look && t.identifier === touch.look.id){
-      look.dx += (t.clientX - touch.look.x) * 1.6; look.dy += (t.clientY - touch.look.y) * 1.6;
-      touch.look.x = t.clientX; touch.look.y = t.clientY;
-    }
-  }
-}, { passive: true });
-function endTouch(e){
-  for (const t of e.changedTouches){
-    if (touch.move && t.identifier === touch.move.id){ touch.move = null; touch.mx = touch.my = 0; stickEl.classList.remove('on'); knobEl.style.transform = ''; }
-    if (touch.look && t.identifier === touch.look.id) touch.look = null;
-  }
-}
-addEventListener('touchend', endTouch); addEventListener('touchcancel', endTouch);
-document.getElementById('pauseBtn').addEventListener('click', () => pause());
-
-// B on an Xbox controller is "back" in the browser: keep a history entry to absorb it
-history.pushState({ uc: 1 }, '');
-addEventListener('popstate', () => { history.pushState({ uc: 1 }, ''); if (state === 'play') pause(); });
-
-function dead(v, d){ const a = Math.abs(v); return a < d ? 0 : Math.sign(v) * (a - d) / (1 - d); }
-function readPad(){
-  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-  let pad = null;
-  for (const p of pads) if (p && p.connected !== false){ pad = p; break; }
-  if (!pad) return null;
-  const btn = (i) => !!(pad.buttons[i] && (pad.buttons[i].pressed || pad.buttons[i].value > 0.5));
-  const pressed = (i) => btn(i) && !padPrev[i];
-  const out = {
-    lx: pad.axes[0] || 0, ly: pad.axes[1] || 0, rx: pad.axes[2] || 0, ry: pad.axes[3] || 0,
-    hurry: btn(10) || btn(7) || btn(5), a: pressed(0), start: pressed(9) || pressed(8), b: pressed(1)
-  };
-  const ll = Math.hypot(out.lx, out.ly), lk = ll > 0.15 ? (ll - 0.15) / 0.85 / ll : 0;
-  out.lx *= lk; out.ly *= lk;
-  out.rx = dead(out.rx, 0.12); out.ry = dead(out.ry, 0.12);
-  padPrev = pad.buttons.map((b) => !!(b && (b.pressed || b.value > 0.5)));
-  return out;
-}
-
-/* ================================================================
-   PLAYER
-   ================================================================ */
-const player = { x: 0, z: 0, y: EYE, yaw: 0, pitch: 0, bob: 0, speed: 0, stepSide: 0, vx: 0, vz: 0, hurry: false };
-function solid(x, z){ return tileAt(x, z) === 0; }
-function collide(){
-  const i0 = Math.floor((player.x - RADIUS) / TILE), i1 = Math.floor((player.x + RADIUS) / TILE);
-  const j0 = Math.floor((player.z - RADIUS) / TILE), j1 = Math.floor((player.z + RADIUS) / TILE);
-  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++){
-    if (tileType(i, j)) continue;
-    const nx = Math.max(i * TILE, Math.min(player.x, (i + 1) * TILE)), nz = Math.max(j * TILE, Math.min(player.z, (j + 1) * TILE));
-    const dx = player.x - nx, dz = player.z - nz, d = Math.hypot(dx, dz);
-    if (d < RADIUS && d > 1e-6){ player.x = nx + dx / d * RADIUS; player.z = nz + dz / d * RADIUS; }
-  }
-}
-
-function updatePlayer(dt, pad){
-  // look
-  let yawRate = 0, pitchRate = 0;
-  if (pad){ const k = (v) => Math.sign(v) * Math.pow(Math.abs(v), 1.7);
-    yawRate -= k(pad.rx) * 2.6; pitchRate -= k(pad.ry) * 1.9; }
-  player.yaw += yawRate * dt - look.dx * 0.0022;
-  player.pitch += pitchRate * dt - look.dy * 0.0022;
-  look.dx = look.dy = 0;
-  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch));
-  // walk
-  let mx = 0, mz = 0;
-  if (keys.KeyW || keys.ArrowUp) mz -= 1;
-  if (keys.KeyS || keys.ArrowDown) mz += 1;
-  if (keys.KeyA || keys.ArrowLeft) mx -= 1;
-  if (keys.KeyD || keys.ArrowRight) mx += 1;
-  if (pad){ mx += pad.lx; mz += pad.ly; }
-  mx += touch.mx; mz += touch.my;
-  let m = Math.hypot(mx, mz);
-  if (m > 1){ mx /= m; mz /= m; }
-  const touchHurry = Math.hypot(touch.mx, touch.my) > 1.1;
-  player.hurry = !!(keys.ShiftLeft || keys.ShiftRight || (pad && pad.hurry) || touchHurry);
-  const speed = player.hurry ? HURRY : WALK;
-  const s = Math.sin(player.yaw), c = Math.cos(player.yaw);
-  const tx = (mx * c + mz * s) * speed, tz = (-mx * s + mz * c) * speed;
-  const acc = 1 - Math.exp(-dt * 9);
-  player.vx += (tx - player.vx) * acc; player.vz += (tz - player.vz) * acc;
-  // move in small steps so nothing tunnels through a corner
-  const steps = Math.ceil(Math.hypot(player.vx, player.vz) * dt / 0.1) || 1;
-  for (let k = 0; k < steps; k++){ player.x += player.vx * dt / steps; player.z += player.vz * dt / steps; collide(); }
-  player.speed = Math.hypot(player.vx, player.vz);
-  // feet and head
-  const prev = player.bob;
-  player.bob += dt * player.speed * (player.hurry ? 2.4 : 2.9);
-  if (Math.floor(prev / Math.PI) !== Math.floor(player.bob / Math.PI) && player.speed > 0.4 && audio.ctx) footstep(player.hurry);
-  const ground = floorAt(player.x, player.z) + EYE;
-  player.y += (ground - player.y) * (1 - Math.exp(-dt * 10));
-}
-
-const tmpV = new THREE.Vector3();
-function placeCamera(t){
-  const bobAmt = Math.min(1, player.speed / WALK);
-  const by = Math.abs(Math.sin(player.bob)) * 0.045 * bobAmt, bx = Math.cos(player.bob) * 0.025 * bobAmt;
-  const breathe = Math.sin(t * 1.3) * 0.006;
-  camera.position.set(player.x + Math.cos(player.yaw) * bx, player.y + by + breathe, player.z - Math.sin(player.yaw) * bx);
-  camera.rotation.set(player.pitch + Math.sin(t * 0.7) * 0.004, player.yaw + Math.sin(t * 0.43) * 0.005, Math.cos(player.bob) * 0.006 * bobAmt);
-  // the torch sways with the walk and lags the look a little
-  held.position.set(0.34 + bx * 0.6, -0.5 + by * 0.5 + Math.sin(t * 1.1) * 0.006, -0.46);
-  held.rotation.set(Math.sin(player.bob * 2) * 0.02 * bobAmt, 0, 0);
-  camera.updateMatrixWorld(true);
-  heldTorch.updateMatrixWorld(true);
-  const tip = tmpV.set(0, 0.53, 0).applyMatrix4(heldTorch.matrixWorld);
-  heldFlame.position.copy(tip).add(new THREE.Vector3(0, -0.04, 0));
-  // the light sits just above the flame, pulled back toward your face if the flame is inside rock
-  const lp = tip.clone().add(new THREE.Vector3(0, 0.22, 0));
-  for (let k = 0; k < 6 && solid(lp.x, lp.z); k++) lp.lerp(camera.position, 0.35);
-  handLight.position.copy(lp);
-}
-
-/* ================================================================
-   WORLD TICK: flicker, which wall torches get real lights, embers, chains
-   ================================================================ */
-function flicker(t, phase){
-  return 0.82 + 0.1 * Math.sin(t * 7.3 + phase) + 0.06 * Math.sin(t * 13.1 + phase * 2.3) + 0.05 * Math.sin(t * 23.7 + phase * 0.7);
-}
-// can you see from one point to another without rock in between? (walks the grid)
-function lineOfSight(ax, az, bx, bz){
-  const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.25);
-  for (let k = 1; k < n; k++){ const s = k / n; if (solid(ax + (bx - ax) * s, az + (bz - az) * s)) return false; }
-  return true;
-}
-const chainM = new THREE.Matrix4(), chainQ = new THREE.Quaternion(), chainE = new THREE.Euler(), chainS = new THREE.Vector3(1, 1, 1);
-function updateWorld(dt, t){
-  flameUniforms.time.value = t;
-  handLight.intensity = torchOn ? 7.5 * flicker(t, 0) : 0;
-  ragMat.color.setScalar(0.5 + 0.6 * flicker(t, 3.1));
-  // hand the pool of lights to the nearest wall torches you can actually see
-  for (const s of sconces){
-    const d = Math.hypot(s.pos.x - player.x, s.pos.z - player.z);
-    const vis = d < 20 && lineOfSight(player.x, player.z, s.pos.x + (player.x - s.pos.x) * 0.02, s.pos.z + (player.z - s.pos.z) * 0.02);
-    s.score = vis ? 1 / (1 + d) : 0;
-    s.w += ((vis ? 1 : 0) - s.w) * (1 - Math.exp(-dt * 4));
-  }
-  const ranked = sconces.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, pool.length);
-  pool.forEach((l, k) => {
-    const s = ranked[k];
-    if (!s){ l.intensity = 0; return; }
-    l.position.copy(s.pos);
-    l.intensity = 12 * flicker(t, s.phase) * s.w;
-  });
-  // embers drift up from the flames near you
-  emberNext -= dt;
-  const near = [heldFlame, ...flames.filter((f) => Math.hypot(f.position.x - player.x, f.position.z - player.z) < 9)];
-  if (emberNext < 0 && near.length){
-    emberNext = 0.05;
-    for (let k = 0; k < EMBERS; k++) if (emberLife[k] <= 0){
-      const f = near[(Math.random() * near.length) | 0];
-      emberPos[k * 3] = f.position.x + (Math.random() - 0.5) * 0.05; emberPos[k * 3 + 1] = f.position.y + 0.08; emberPos[k * 3 + 2] = f.position.z + (Math.random() - 0.5) * 0.05;
-      emberVel[k * 3] = (Math.random() - 0.5) * 0.3; emberVel[k * 3 + 1] = 0.4 + Math.random() * 0.6; emberVel[k * 3 + 2] = (Math.random() - 0.5) * 0.3;
-      emberLife[k] = 0.6 + Math.random() * 0.8; break;
-    }
-  }
-  for (let k = 0; k < EMBERS; k++){
-    if (emberLife[k] <= 0) continue;
-    emberLife[k] -= dt * 0.9;
-    emberVel[k * 3] += (Math.random() - 0.5) * dt * 2; emberVel[k * 3 + 2] += (Math.random() - 0.5) * dt * 2;
-    for (let a = 0; a < 3; a++) emberPos[k * 3 + a] += emberVel[k * 3 + a] * dt;
-  }
-  emberGeo.attributes.position.needsUpdate = true; emberGeo.attributes.life.needsUpdate = true;
-  dustMat.uniforms.origin.value.copy(camera.position);
-  dustMat.uniforms.light.value.copy(handLight.position);
-  // chains sway a little, as if something passed by
-  const links = world.userData.links;
-  for (const ch of chains){
-    const sw = Math.sin(t * 0.9 + ch.phase) * ch.amp, sw2 = Math.cos(t * 0.6 + ch.phase) * ch.amp;
-    for (let k = 0; k < ch.n; k++){
-      const y = CEIL - 0.03 - k * 0.058;
-      const off = (k * 0.058);
-      chainE.set(0, (k % 2) * Math.PI / 2, Math.PI / 2); chainQ.setFromEuler(chainE);
-      chainM.compose(tmpV.set(ch.x + sw * off, y, ch.z + sw2 * off), chainQ, chainS);
-      links.setMatrixAt(ch.first + k, chainM);
-    }
-  }
-  links.instanceMatrix.needsUpdate = true;
-}
-
-/* ================================================================
-   GAME STATE
-   ================================================================ */
-let torchOn = true;
-let state = 'title', playTime = 0, last = performance.now(), simTime = 0;
-const $ = (id) => document.getElementById(id);
-const hintEl = $('hint');
-function hint(text, secs){
-  hintEl.textContent = text; hintEl.classList.add('show');
-  clearTimeout(hint.t); hint.t = setTimeout(() => hintEl.classList.remove('show'), secs * 1000);
-}
-
-function newMaze(){
-  rng = mulberry(seed);
-  maze = makeMaze();
-  buildWorld();
-  const [sx, sz] = center(maze.start[0], maze.start[1]);
-  player.x = sx; player.z = sz; player.y = EYE; player.pitch = 0; player.vx = player.vz = 0;
-  player.yaw = Math.atan2(-maze.startDir[0], -maze.startDir[1]);
-  playTime = 0;
-}
-
-function show(id){ for (const s of ['title', 'pause', 'won']) $(s).classList.toggle('hidden', s !== id); }
-function start(){
-  initAudio(); if (audio.ctx && audio.ctx.state !== 'running') audio.ctx.resume();
-  state = 'play'; show(null); document.body.classList.add('playing');
-  $('fade').style.opacity = 0; if (TEST) $('fade').style.transition = 'none';
-  lockPointer();
-  hint('find the way up', 5);
-}
-function pause(){ if (state !== 'play') return; state = 'pause'; show('pause'); document.body.classList.remove('playing');
-  if (document.pointerLockElement) document.exitPointerLock(); }
-function resume(){ state = 'play'; show(null); document.body.classList.add('playing'); lockPointer();
-  if (audio.ctx) audio.ctx.resume(); }
-function win(){
-  state = 'won'; document.body.classList.remove('playing');
-  if (document.pointerLockElement) document.exitPointerLock();
-  const m = Math.floor(playTime / 60), s = Math.floor(playTime % 60);
-  $('wonStat').textContent = `${m}:${String(s).padStart(2, '0')} IN THE DARK`;
-  show('won');
-}
-function restart(){ seed = (Math.random() * 1e9) | 0; newMaze(); $('fade').style.opacity = 1; start(); setTimeout(() => { $('fade').style.opacity = 0; }, 50); }
-function confirmMenu(){
-  if (state === 'title' && !$('startBtn').disabled) start();
-  else if (state === 'pause') resume();
-  else if (state === 'won') restart();
-}
-$('startBtn').addEventListener('click', start);
-$('resumeBtn').addEventListener('click', resume);
-$('restartBtn').addEventListener('click', restart);
-$('againBtn').addEventListener('click', restart);
-$('muteBtn').addEventListener('click', () => setMuted(!audio.muted));
-
-/* ================================================================
-   LOOP
-   ================================================================ */
-let frameAvg = 16, frames = 0, resTimer = 0;
-function step(dt){
-  simTime += dt;
-  const pad = readPad();
-  if (pad){
-    if (pad.start){ if (state === 'play') pause(); else if (state === 'pause') resume(); }
-    else if (pad.a && state !== 'play') confirmMenu();
-  }
-  if (state === 'play'){
-    playTime += dt;
-    updatePlayer(dt, pad);
-    if (tileAt(player.x, player.z) === 3 || (tileAt(player.x, player.z) === 2 && floorAt(player.x, player.z) > STAIR_RISE * 0.8)) win();
-  }
-  placeCamera(simTime);
-  updateWorld(dt, simTime);
-  grade.uniforms.time.value = simTime;
-  updateAudio(dt);
-}
-function frame(now){
-  requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (!loaded) return;
-  if (TEST) return;            // tests step and draw through window.__uc instead
-  step(dt);
-  composer.render();
-  frames++;
-  // keep it smooth: drop the resolution when frames run long, raise it again when there is room
-  frameAvg += (dt * 1000 - frameAvg) * 0.05;
-  if (!TEST && (resTimer += dt) > 1.5){
-    resTimer = 0;
-    const max = Math.min(devicePixelRatio || 1, 1.5);
-    if (frameAvg > 22 && pixelRatio > 0.5){ pixelRatio = Math.max(0.5, pixelRatio - 0.1); resize(); }
-    else if (frameAvg < 14 && pixelRatio < max){ pixelRatio = Math.min(max, pixelRatio + 0.05); resize(); }
-  }
-  if (DEBUG) hintEl.textContent = `${Math.round(1000 / frameAvg)} fps  x${pixelRatio.toFixed(2)}  ${renderer.info.render.calls} calls`, hintEl.classList.add('show');
-}
-
-let loaded = false;
-newMaze();
-ready.then(() => {
-  // compile every shader before the first real frame so nothing hitches on the way in
-  placeCamera(0); updateWorld(0.016, 0);
-  renderer.compile(scene, camera);
-  loaded = true;
-  $('startBtn').disabled = false; $('loading').classList.add('hidden');
-  if (TEST) window.__uc.ready = true;
-});
-requestAnimationFrame(frame);
-
-if ('serviceWorker' in navigator && !TEST){
-  navigator.serviceWorker.register(BASE + 'sw.js').catch(() => {});
-}
-
-/* ================================================================
-   HOOKS FOR AUTOMATED TESTS
-   ================================================================ */
-window.__uc = {
-  ready: false,
-  get state(){ return state; }, get player(){ return player; }, get maze(){ return maze; }, get seed(){ return seed; },
-  start, pause, resume,
-  // run the simulation for a while in fixed steps (reading the controller each step), then draw once
-  advance(seconds, draw = true){ const n = Math.round(seconds * 60); for (let k = 0; k < n; k++) step(1 / 60); if (draw) composer.render(); return { x: player.x, z: player.z, state }; },
-  place(x, z, yaw, pitch){ player.x = x; player.z = z; player.y = floorAt(x, z) + EYE; if (yaw !== undefined) player.yaw = yaw; if (pitch !== undefined) player.pitch = pitch; player.vx = player.vz = 0; step(1 / 60); composer.render(); },
-  path(){ // shortest route from the start to the landing, as tile centres
-    const g = maze.g, W = maze.W, d = bfs(g, W, maze.start), out = [];
-    let [x, z] = maze.landing;
-    if (d[z * W + x] < 0) return null;
-    while (d[z * W + x] > 0){ out.push(center(x, z)); const n = DIRS.map(([a, b]) => [x + a, z + b]).find(([a, b]) => d[b * W + a] === d[z * W + x] - 1); [x, z] = n; }
-    out.push(center(x, z));
-    return out.reverse();
-  },
-  // tests: put the torch out to see what the dungeon looks like by the fill light alone
-  torch(on){ torchOn = on; held.visible = heldFlame.visible = on; },
-  tileAt, floorAt, TILE,
-  timeRender(){ const t = performance.now(); composer.render(); renderer.getContext().finish(); return performance.now() - t; },
-  info(){ return { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures, frames }; }
-};
-</script>
+<script type="module" src="/experiments/undercroft/js/game.js"></script>
 </body>
 </html>
 {% endraw %}
