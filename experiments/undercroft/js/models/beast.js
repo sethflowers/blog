@@ -424,7 +424,6 @@ function addSculpt(B, prims, lo, hi, cell, soft, shade){
     B.vert(x, y, z, nx, ny, nz, s[3], s[4], s[0], s[1], s[2], sdfWeights(prims, x, y, z, soft));
   }
   for (const i of M.idx) B.i.push(base + i);
-  if (globalThis.__beastLog) console.log('sculpt', cell, M.idx.length / 3);
 }
 // how the hide is coloured: dark grey-brown, a little lighter underneath, blotchy, darker in creases,
 // scaly on the back and legs, wrinkled hide elsewhere; wetter round the mouth and underneath
@@ -515,7 +514,7 @@ function addWings(B){
     const S = s > 0 ? 'L' : 'R', M = (p) => [p[0] * s, p[1], p[2]];
     const root = M(WING_ROOT), wrist = M(WRIST);
     const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-    const armCtrl = add(M([(WING_ROOT[0] + WRIST[0]) / 2 + 0.1, (WING_ROOT[1] + WRIST[1]) / 2, (WING_ROOT[2] + WRIST[2]) / 2 + 0.22]), [0, 0, 0]);
+    const armCtrl = M([(WING_ROOT[0] + WRIST[0]) / 2 + 0.1, (WING_ROOT[1] + WRIST[1]) / 2, (WING_ROOT[2] + WRIST[2]) / 2 + 0.22]);   // bows forward
     const arm = (t) => bez(root, armCtrl, wrist, t);
     const fing = FINGERS.map(([c, tip]) => (t) => bez(wrist, add(wrist, M(c)), add(wrist, M(tip)), t));
     const backEdge = (t) => [root[0] + BACK_EDGE[0] * s * t, root[1] + BACK_EDGE[1] * t - 0.05 * Math.sin(t * Math.PI), root[2] + BACK_EDGE[2] * t];
@@ -851,6 +850,7 @@ function makeMaterials(env){
 
 /* ---------------- the beast ---------------- */
 // how much of the aim each neck bone takes (the head takes the rest), and how the neck lies when dead
+const NO_STATE = {};
 const NECK_AIM = [0.12, 0.22, 0.3, 0.36], NECK_DEAD_X = [0.45, 0.25, -0.1, -0.2], NECK_DEAD_Z = [0.05, 0.04, 0.03, 0.03];
 export function createBeast(opts = {}){
   if (!GEO) GEO = buildGeometry();
@@ -884,8 +884,12 @@ export function createBeast(opts = {}){
   part('head', [0, 5.65, 2.45], 0.42, 'head');
   for (const S of ['L', 'R']){
     const s = S === 'L' ? 1 : -1;
-    part('w' + S + 'wrist', [WRIST[0] * s, WRIST[1] - 0.3, WRIST[2] - 0.4], 0.6, 'wing');
-    part('w' + S + 'f0', [(WRIST[0] + 0.15) * s, WRIST[1] - 0.2, WRIST[2] - 1.6], 0.65, 'wing');
+    // along the top finger (the spiked back of the arch) and in the middle of the membrane
+    const f0 = (t) => { const p = bez([0, 0, 0], FINGERS[0][0], FINGERS[0][1], t); return [(WRIST[0] + p[0]) * s, WRIST[1] + p[1], WRIST[2] + p[2]]; };
+    part('w' + S + 'wrist', [WRIST[0] * s, WRIST[1] - 0.25, WRIST[2] - 0.35], 0.55, 'wing');
+    part('w' + S + 'f0', f0(0.45), 0.6, 'wing');
+    part('w' + S + 'f0', f0(0.82), 0.55, 'wing');
+    part('w' + S + 'f1', [(WRIST[0] + 0.12) * s, WRIST[1] - 1.1, WRIST[2] - 1.3], 0.6, 'wing');
   }
   for (const L of LEGS) part(L.n + 'lo', [L.knee[0], (L.knee[1] + L.ankle[1]) / 2 - 0.1, L.knee[2]], 0.42, 'leg');
 
@@ -903,7 +907,8 @@ export function createBeast(opts = {}){
   const st = { t: 0, phase: 0, beat: 0, bob: 0, swayV: 0, sway: 0 };
   const BODY_Y = 2.49;   // standing body height: legs a little bent so the springs carry the weight
 
-  function update(dt, s = {}){
+  function update(dt, s){
+    s = s || NO_STATE;
     dt = Math.min(dt || 0, 0.1);
     const speed = s.speed || 0, crouch = s.crouch || 0, air = s.airborne || 0, flap = s.flap || 0;
     const yaw = s.aimYaw || 0, pitch = s.aimPitch || 0, mo = s.mouth || 0, glow = s.eyeGlow || 0, hurt = s.hurt || 0, dead = s.dead || 0;
@@ -928,7 +933,8 @@ export function createBeast(opts = {}){
     // legs: two-bone IK keeps the feet on the ground while standing and walking
     const amp = clamp(speed * 0.12, 0, 0.5) * live;
     const duty = lerp(0.62, 0.42, gal);
-    for (const g of legs){
+    for (let li = 0; li < legs.length; li++){
+      const g = legs[li];
       const off = lerp(g.walk, g.bound, gal);
       const p = (st.phase + off) % 1;
       let swing, lift, comp;
@@ -965,20 +971,21 @@ export function createBeast(opts = {}){
     const nodY = -pitC - mo * 0.25 - hurt * 0.3;
     for (let i = 0; i < 4; i++){
       neck[i].rotation.set(nodY * NECK_AIM[i] * 0.6 + breath * 0.012 + (1 - live) * NECK_DEAD_X[i] - bodyPitch * (i === 0 ? 0.8 : 0),
-        yawC * NECK_AIM[i] * live, (1 - live) * NECK_DEAD_Z[i] * dRoll);
+        yawC * NECK_AIM[i] * 0.8 * live, (1 - live) * NECK_DEAD_Z[i] * dRoll);
     }
-    head.rotation.set(nodY * 0.4 + Math.sin(st.t * 0.7) * 0.03 + (1 - live) * 0.3, yawC * 0.25 * live, 0);
+    head.rotation.set(nodY * 0.4 + Math.sin(st.t * 0.7) * 0.03 + (1 - live) * 0.3, yawC * 0.2 * live, 0);
     jaw.rotation.x = Math.max(mo * 0.62, dead * 0.25) + Math.sin(st.t * 23) * 0.03 * mo;
     // tail: swings with the gait and hangs heavy; streams back in a leap
     st.swayV += (-(st.sway) * 6 - st.swayV * 2.2 + Math.sin(ph) * speed * 0.6) * dt; st.sway += st.swayV * dt;
-    tail[0].rotation.set(-air * 0.6 + speed * 0.015, 0, st.sway * 0.1);
-    for (let i = 1; i < 4; i++) tail[i].rotation.set(-air * 0.35 - speed * 0.025 * i * gal, Math.sin(st.t * 0.9 - i) * 0.03, st.sway * 0.12 * i + dRoll * 0.3);
+    tail[0].rotation.set(air * 0.6 + speed * 0.015, 0, st.sway * 0.1);
+    for (let i = 1; i < 4; i++) tail[i].rotation.set(air * 0.35 + speed * 0.025 * i * gal, Math.sin(st.t * 0.9 - i) * 0.03, st.sway * 0.12 * i + dRoll * 0.3);
 
     // wings: folded up into arches at rest; spread wide and beat with flap
     const spread = sstep(0, 1, flap);
     st.beat += dt * lerp(0.8, 9.5, flap);
     const beat = Math.sin(st.beat) * 0.5 * spread, lag = Math.sin(st.beat - 0.9) * 0.4 * spread;
-    for (const w of wings){
+    for (let wi = 0; wi < 2; wi++){
+      const w = wings[wi];
       const out = (0.12 + spread * 1.25 + beat + Math.sin(st.t * 0.6) * 0.015) * live;
       // dead: the lower (right) wing lies open on the floor, the upper one flops over
       const deadZ = w.s > 0 ? 0.55 * dRoll : 0.18 * dRoll;

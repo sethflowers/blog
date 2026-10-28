@@ -11,6 +11,16 @@ export default async function (ctx){
   ctx.scene.add(beast.group);
   let meshes = 0; beast.group.traverse((o) => { if (o.isMesh) meshes++; });
   console.log(`beast: ${beast.triangles} triangles, ${meshes} mesh(es), ${beast.mesh.geometry.groups.length} draw groups, built in ${beast.buildMs} ms, height ${beast.height.toFixed(2)} m`);
+  // check that the eyes really look where they're aimed, and what update() costs
+  const dir = new T.Vector3(), q = new T.Quaternion();
+  for (const [yaw, pitch] of [[0, 0], [0.6, 0], [-0.6, 0.3], [0.3, -0.4]]){
+    run({ aimYaw: yaw, aimPitch: pitch }, 1.5);
+    beast.group.updateMatrixWorld(true);
+    beast.eyes[0].getWorldQuaternion(q); dir.set(0, 0, 1).applyQuaternion(q);
+    console.log(`aim ${yaw.toFixed(2)},${pitch.toFixed(2)} -> eyes look ${Math.atan2(dir.x, dir.z).toFixed(2)},${Math.asin(dir.y).toFixed(2)}`);
+  }
+  const t0 = performance.now(); for (let i = 0; i < 2000; i++) beast.update(1 / 60, { speed: 6, flap: 0.5, aimYaw: 0.3, mouth: 0.5 });
+  console.log(`update(): ${((performance.now() - t0) / 2000 * 1000).toFixed(1)} us per call (without the skinning upload)`);
   // show the hit spheres in the 'parts' view
   ctx.partsViz = beast.parts.map((p) => {
     const m = new T.Mesh(new T.SphereGeometry(p.radius, 16, 10), new T.MeshBasicMaterial({ color: { body: 0xff4040, neck: 0x40ff40, head: 0x4080ff, wing: 0xffff40, leg: 0xff40ff }[p.kind], wireframe: true }));
@@ -32,8 +42,6 @@ const ALL_VIEWS = [
   { name: 'lit-closed', state: {}, cam: [0, 0, 0, 2.2, 60, 15], focus: true, torchAt: null, lit: true },
   { name: 'lit-body', state: {}, cam: [0, 2.8, 0, 6, 60, 5], torchAt: null, lit: true },
   { name: 'nohurt', state: { aimYaw: -0.3 }, secs: 0.2, cam: [0, 0, -0.3, 3.2, 300, 5], focus: true, torchAt: null },
-  { name: 'dbg-yaw', state: { aimYaw: 0.4 }, cam: [0, 4.95, 2.1, 1.6, 60, 0], torchAt: null, lit: true },
-  { name: 'dbg-noyaw', state: {}, cam: [0, 4.95, 2.1, 1.6, 60, 0], torchAt: null, lit: true },
   { name: 'hurt', state: { hurt: 1, aimYaw: -0.3 }, secs: 0.2, cam: [0, 0, -0.3, 3.2, 300, 5], focus: true, torchAt: null },
   { name: 'walk1', state: { speed: 2 }, secs: 1.1, cam: [0, 3.0, 0, 12, 90, 3] },
   { name: 'walk2', state: { speed: 2 }, secs: 0.55, cam: [0, 3.0, 0, 12, 90, 3] },
@@ -52,7 +60,7 @@ const ALL_VIEWS = [
 ];
 
 // while working on one thing, list just the views you want here
-const ONLY = ['deadhead', 'dead', 'deadother', 'walk1', 'walk2', 'gallop'];
+const ONLY = null;
 export const views = ONLY ? ALL_VIEWS.filter((v) => ONLY.includes(v.name)) : ALL_VIEWS;
 
 export function show(ctx, v){

@@ -64,7 +64,7 @@ const ironMat = (env) => mat('iron' + envKey(env), () => new THREE.MeshStandardM
   roughnessMap: tex('props_iron_rm.jpg'), metalnessMap: tex('props_iron_rm.jpg'), roughness: 1, metalness: 1,
   envMap: env || null, envMapIntensity: 1.0, vertexColors: true }));
 // one oak texture, tinted per wood: old oak (chest), pale ash (spear), walnut (crossbow), hickory (hammer)
-const WOODS = { oak: [0.8, 0.76, 0.7], ash: [1.4, 1.3, 1.12], walnut: [0.66, 0.52, 0.44], hickory: [1.1, 0.96, 0.8] };
+const WOODS = { oak: [0.8, 0.76, 0.7], ash: [1.12, 1.05, 0.94], walnut: [0.66, 0.52, 0.44], hickory: [0.95, 0.85, 0.74] };
 const woodMat = (kind) => mat('wood-' + kind, () => new THREE.MeshStandardMaterial({
   color: new THREE.Color().setRGB(...WOODS[kind]), map: tex('props_wood_albedo.jpg', true),
   normalMap: tex('props_wood_normal.jpg'), normalScale: new V2(0.6, 0.6), roughnessMap: tex('props_wood_rough.jpg'),
@@ -775,7 +775,7 @@ function symbolShapes(kind){
 const GATE_KINDS = {
   magnet: { a: [0.85, 0.04, 0.03], b: [1.0, 0.32, 0.22], spark: [0.85, 0.9, 1.0], sym: [1.0, 0.16, 0.1], kind: 0 },
   bomb:   { a: [1.0, 0.22, 0.02], b: [1.0, 0.62, 0.14], spark: [1.0, 0.7, 0.3], sym: [1.0, 0.45, 0.08], kind: 1 },
-  freeze: { a: [0.18, 0.45, 1.0], b: [0.8, 0.92, 1.0], spark: [1.0, 1.0, 1.0], sym: [0.45, 0.75, 1.0], kind: 2 },
+  freeze: { a: [0.08, 0.3, 1.0], b: [0.55, 0.82, 1.0], spark: [0.9, 0.97, 1.0], sym: [0.3, 0.6, 1.0], kind: 2 },
   shield: { a: [0.9, 0.5, 0.06], b: [1.0, 0.82, 0.38], spark: [1.0, 0.95, 0.7], sym: [1.0, 0.7, 0.2], kind: 3 },
 };
 
@@ -865,7 +865,7 @@ export function createPowerGate(kind, opts = {}){
   function apply(t){
     uniforms.uPower.value = 0.04 + 0.96 * power;
     const pulse = 1 + 0.12 * Math.sin(t * 2.3);
-    symMat.color.copy(ember).lerp(symCol, power).multiplyScalar((0.6 + 3.4 * power) * pulse);
+    symMat.color.copy(ember).lerp(symCol, power).multiplyScalar((0.5 + 2.1 * power) * pulse);
     if (light) light.intensity = (0.15 + 2.85 * power) * pulse;
   }
   apply(0);
@@ -1202,37 +1202,42 @@ export function createCrackedWall(opts = {}){
 // A human skull from a sphere (its pole at the face, where the detail is): ellipsoid cranium, narrow
 // face, deep sockets and nose, cheekbones, brow. Vertex colours sink the holes into darkness.
 function skullGeo(){
-  const g = new THREE.SphereGeometry(1, 24, 18).rotateX(Math.PI / 2);
+  const g = new THREE.SphereGeometry(1, 26, 18).rotateX(Math.PI / 2);
   const p = g.attributes.position, col = new Float32Array(p.count * 3);
-  const gauss = (x, y, z, c, w) => Math.exp(-((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2) / (w * w));
+  const gauss = (x, y, c, w) => Math.exp(-((x - c[0]) ** 2 + (y - c[1]) ** 2) / (w * w));
   for (let i = 0; i < p.count; i++){
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const front = smooth(0.25, 0.85, z), low = smooth(0.15, -0.6, y), back = smooth(0.2, -0.6, z);
-    // cranium: a long dome, highest behind the middle, the back bulging; the face hangs below the front
-    let X = x * 0.07 * (1 - 0.32 * front * low) * (1 - 0.12 * smooth(0.4, 1, y));
-    let Y = y * (y > 0 ? 0.08 : 0.066) * (1 + 0.08 * back * smooth(-0.2, 0.4, y));
-    let Z = z * (z > 0 ? 0.088 : 0.1);
-    Z -= 0.018 * front * smooth(0.45, -0.1, y);                 // flatten the face under the brow
-    const jaw = front * smooth(-0.45, -0.85, y);
-    Z += 0.008 * jaw; Y -= 0.012 * jaw;                          // upper jaw and teeth jut down and forward
-    if (Y < -0.05) Y = -0.05 + (Y + 0.05) * 0.3;                 // flat underside
+    const front = smooth(0.3, 0.8, z), low = smooth(0.25, -0.5, y);
+    // cranium: a long dome, wider at the back; the face narrows below the brow
+    let X = x * 0.069 * (1 - 0.3 * front * low) * (1 + 0.06 * smooth(0.3, -0.7, z) * smooth(-0.6, 0.2, y));
+    let Y = y * (y > 0 ? 0.078 : 0.07);
+    let Z = z * (z > 0 ? 0.09 : 0.1);
+    // the face is a nearly flat, upright plane under the brow, the upper jaw a little forward of it
+    const plane = 0.071 + 0.004 * smooth(-0.4, -0.75, y) - 0.012 * smooth(-0.75, -0.95, y);
+    if (z > 0 && y < 0.38){ const k = smooth(0.38, 0.1, y); Z = Z * (1 - k) + Math.min(Z, plane) * k; }
+    if (Y < -0.054) Y = -0.054 + (Y + 0.054) * 0.25;            // flat underside
     let dark = 0;
     for (const s of [-1, 1]){
-      const k = gauss(x, y, z, [0.36 * s, 0.02, 0.92], 0.27);
-      Z -= 0.034 * k; X -= s * 0.006 * k; dark = Math.max(dark, smooth(0.18, 0.6, k));        // eye sockets
-      X += s * 0.01 * gauss(x, y, z, [0.78 * s, -0.3, 0.45], 0.28);                            // cheekbones
-      const tf = gauss(x, y, z, [0.9 * s, -0.15, 0.05], 0.3);
-      X -= s * 0.008 * tf; dark = Math.max(dark, tf * 0.35);                                     // temples
+      // eye sockets: deep round pits with a crisp rim, set in the face plane
+      const e = Math.hypot((x - 0.36 * s) / 0.25, (y - 0.04) / 0.22);
+      const pit = smooth(1.05, 0.55, e) * front;
+      Z -= 0.04 * pit; X -= s * 0.008 * pit; dark = Math.max(dark, smooth(0.75, 0.95, 1 - e * 0.55) * front);
+      Z += 0.004 * smooth(1.3, 1.05, e) * smooth(0.9, 1.1, e) * front;  // the rim stands proud
+      X += s * 0.011 * gauss(x, y, [0.8 * s, -0.28], 0.25) * smooth(-0.2, 0.5, z);   // cheekbones
+      X -= s * 0.009 * gauss(x, y, [0.95 * s, -0.12], 0.35) * smooth(0.6, -0.1, z) * smooth(-0.6, 0.2, z); // temples
     }
-    const nose = Math.exp(-((x / (0.07 + 0.08 * smooth(-0.15, -0.45, y))) ** 2 + ((y + 0.3) / 0.15) ** 2)) * front;
-    Z -= 0.024 * nose; dark = Math.max(dark, smooth(0.3, 0.75, nose));
-    Z += 0.006 * Math.exp(-(((y - 0.28) / 0.1) ** 2)) * front * smooth(0.75, 0.2, Math.abs(x));  // brow ridge
-    const teeth = front * smooth(-0.6, -0.68, y);
-    const gaps = teeth * smooth(0.3, 0.95, Math.cos(Math.atan2(x, z) * 30)) * 0.75;
-    const under = smooth(-0.55, -0.95, y) * (1 - front) * 0.4;  // shadowed hollows under the skull
+    // the nose: an inverted heart-shaped hole between and below the eyes
+    const nw = 0.06 + 0.07 * smooth(-0.2, -0.45, y);
+    const nose = smooth(1, 0.45, Math.hypot(x / nw, (y + 0.32) / 0.15)) * front;
+    Z -= 0.026 * nose; dark = Math.max(dark, smooth(0.15, 0.6, nose));
+    Z += 0.006 * Math.exp(-(((y - 0.3) / 0.09) ** 2)) * front * smooth(0.8, 0.3, Math.abs(x));  // brow ridge
+    // the upper teeth along the bottom of the face, with dark gaps between them
+    const teeth = front * smooth(-0.62, -0.7, y);
+    const gaps = teeth * smooth(0.2, 0.95, Math.cos(Math.atan2(x, z) * 32)) * 0.8;
+    const under = smooth(-0.6, -0.95, y) * 0.45 + dark * 0;
     p.setXYZ(i, X, Y, Z);
-    const v = (1 - 0.94 * dark) * (1 - gaps) * (1 - under) * (0.8 + 0.2 * smooth(-1, 0.3, y));
-    col[i * 3] = v; col[i * 3 + 1] = v * 0.97; col[i * 3 + 2] = v * 0.93;
+    const v = (1 - 0.95 * dark) * (1 - gaps) * (1 - under);
+    col[i * 3] = v; col[i * 3 + 1] = v * 0.97; col[i * 3 + 2] = v * 0.92;
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.computeVertexNormals();
@@ -1250,9 +1255,9 @@ export function createSkullPile(opts = {}){
     parts.push(place(bone, [0.02, 0, 0.05], [Math.PI / 2, 0, 1.1]));
     parts.push(place(bone, [-0.05, 0.0, -0.03], [Math.PI / 2, 0, -0.5], 0.92));
     parts.push(place(bone, [0.07, 0.03, -0.06], [Math.PI / 2 + 0.15, 0, 0.2], 0.85));
-    parts.push(place(skull, [0.12, 0, 0.12], [0.05, 0.5, 0.0]));
-    parts.push(place(skull, [-0.13, 0, 0.1], [0.1, -0.6, -0.15], 0.96));
-    parts.push(place(skull, [0.0, 0.035, -0.07], [-0.35, 0.15, 0.25], 0.98));
+    parts.push(place(skull, [0.1, 0, 0.13], [-0.08, 0.35, 0.03]));
+    parts.push(place(skull, [-0.12, 0, 0.09], [0.0, -0.45, -0.06], 0.96));
+    parts.push(place(skull, [-0.01, 0.05, -0.07], [0.32, 0.1, 0.22], 0.98));
     const g = merge(parts);
     g.computeBoundingBox();
     const c = g.boundingBox.getCenter(new V3());

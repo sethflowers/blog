@@ -179,7 +179,9 @@ function burst(kind, p, n, dir){
     const a = R() * Math.PI * 2, s = R();
     if (kind === 'blood') emit(gunk, p.x, p.y, p.z, (dir ? dir.x * 2 : 0) + Math.cos(a) * 1.5 * s, 1 + R() * 2, (dir ? dir.z * 2 : 0) + Math.sin(a) * 1.5 * s, 0.6 + R() * 0.5, 0.025 + R() * 0.03, 0.18, 0.01, 0.0, 9.8, 0.5);
     else if (kind === 'spark') emit(glow, p.x, p.y, p.z, Math.cos(a) * 4 * s, R() * 3, Math.sin(a) * 4 * s, 0.2 + R() * 0.3, 0.015, 3, 1.6, 0.6, 9.8, 1);
-    else if (kind === 'fire') emit(glow, p.x, p.y, p.z, Math.cos(a) * 9 * s, R() * 7, Math.sin(a) * 9 * s, 0.3 + R() * 0.5, 0.12 + R() * 0.2, 3, 1.1, 0.25, 2, 3);
+    else if (kind === 'fire'){ const h = R();   // a hot core fading through orange to dull red, small flecks rather than balls
+      emit(glow, p.x + (R() - 0.5) * 0.3, p.y + (R() - 0.5) * 0.3, p.z + (R() - 0.5) * 0.3, Math.cos(a) * 7 * s, (R() - 0.2) * 6, Math.sin(a) * 7 * s,
+        0.15 + R() * 0.35, 0.03 + R() * 0.05, 1.6 + h, 0.45 + h * 0.6, 0.08 + h * 0.15, -1.5, 4); }
     else if (kind === 'smoke') emit(gunk, p.x, p.y, p.z, Math.cos(a) * 3 * s, 0.5 + R() * 2, Math.sin(a) * 3 * s, 1.5 + R() * 1.5, 0.4 + R() * 0.5, 0.06, 0.055, 0.05, -0.3, 1.5);
     else if (kind === 'dust') emit(gunk, p.x, p.y, p.z, Math.cos(a) * 2.5 * s, R() * 1.2, Math.sin(a) * 2.5 * s, 1 + R(), 0.25 + R() * 0.3, 0.16, 0.14, 0.12, 0.3, 2);
     else if (kind === 'barf') emit(gunk, p.x, p.y, p.z, dir.x * (3 + R() * 3) + (R() - 0.5), dir.y * 3 + R(), dir.z * (3 + R() * 3) + (R() - 0.5), 0.9 + R() * 0.4, 0.06 + R() * 0.06, 0.12, 0.16, 0.03, 9.8, 0.3);
@@ -907,7 +909,7 @@ function usePower(pressedNow, held){
 function explodeBomb(){
   const b = pw.bomb, p = b.pos.clone(); p.y = Math.max(p.y, 0.3);
   scene.remove(b.m.group); pw.bomb = null; pw.bombCool = 2.5;
-  sfx.explosion([p.x, p.y, p.z]); flash(p, 0xff8a30, 160); burst('fire', p, 70); burst('smoke', p, 40); burst('spark', p, 40);
+  sfx.explosion([p.x, p.y, p.z]); flash(p, 0xff8a30, 160); burst('fire', p, 220); burst('smoke', p, 50); burst('spark', p, 60); burst('dust', p, 30);
   decal(p.x, p.z, 2.4, 0x050403, 60, 0.95);
   player.shake = Math.max(player.shake, Math.max(0.15, 1 - p.distanceTo(camera.position) / 12));
   for (const z of zombies){ if (z.state !== 'dead' && Math.hypot(z.x - p.x, z.z - p.z) < 3.8) hurtZombie(z, 10, p, 8); }

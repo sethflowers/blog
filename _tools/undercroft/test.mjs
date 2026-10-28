@@ -163,7 +163,8 @@ async function walkTo(target, opts){
     const near = Math.hypot(tx - st.x, tz - st.z);
     if (near < (wp === pts.length - 1 ? 0.35 : 0.6)){ wp++; continue; }
     const b = none(); let fwd = -1;
-    if (st.zx !== null){ tx = st.zx; tz = st.zz; b[B.RT] = 1; fwd = 0; }      // a zombie in the way: turn and fight
+    if (st.zx !== null){ tx = st.zx; tz = st.zz; b[B.RT] = 1; fwd = 0;          // a zombie in the way: turn and fight it with the sword
+      if (await ev(() => window.__uc.inv.weapon !== 'sword')) await ev(() => window.__uc.setWeapon('sword')); }
     const want = Math.atan2(-(tx - st.x), -(tz - st.z));
     let diff = want - st.yaw; while (diff > Math.PI) diff -= 2 * Math.PI; while (diff < -Math.PI) diff += 2 * Math.PI;
     if (Math.abs(diff) > 0.5) fwd = 0;

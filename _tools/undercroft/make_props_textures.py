@@ -157,7 +157,7 @@ def iron(seed):
     lump = fbm(n, n, 8, 8, 5, rng)
     rustf = fbm(n, n, 6, 6, 6, rng) + (fbm(n, n, 40, 40, 2, rng) - 0.5) * 0.25
     speck = fbm(n, n, 48, 48, 3, rng)
-    rust = ss(0.5, 0.72, rustf * 0.75 + speck * 0.35) * 0.8
+    rust = ss(0.55, 0.76, rustf * 0.75 + speck * 0.35) * 0.8
     heavy = ss(0.62, 0.8, rustf) * rust
     pits = ss(0.65, 0.8, fbm(n, n, 64, 64, 2, rng)) * (0.3 + rust)
     height = lump * 0.4 - dent * 0.35 - pits * 0.3 + heavy * 0.25 * fbm(n, n, 90, 90, 2, rng)
@@ -214,7 +214,7 @@ def food(seed):
     a = a * (1 - lent[..., None] * 0.5) + col([0.55, 0.48, 0.30]) * lent[..., None] * 0.5
     bruise = ss(0.7, 0.85, fbm(q, q, 5, 5, 4, rng))
     a *= 1 - bruise[..., None] * 0.3
-    put(0, 1, a, fbm(q, q, 20, 20, 3, rng) * 0.3 + lent * 0.2 - bruise * 0.3, 0.42 + 0.15 * fbm(q, q, 10, 10, 3, rng) + lent * 0.2 + pole * 0.3)
+    put(0, 1, a, fbm(q, q, 20, 20, 3, rng) * 0.3 + lent * 0.2 - bruise * 0.3, 0.5 + 0.15 * fbm(q, q, 10, 10, 3, rng) + lent * 0.2 + pole * 0.3)
 
     # bread crust (1, 1): u round the loaf (top 0.25, bottom 0.75), v along it
     top = np.cos((xx - 0.25) * 2 * np.pi) * 0.5 + 0.5  # 1 on top, 0 underneath
@@ -307,7 +307,7 @@ def misc(seed):
 
     # bone (1, 1): old, stained bone, pores and hairline cracks
     stain = fbm(q, q, 5, 5, 5, rng)
-    a = col([0.50, 0.47, 0.40]) * (0.75 + 0.35 * fbm(q, q, 20, 20, 3, rng)[..., None])
+    a = col([0.44, 0.41, 0.35]) * (0.75 + 0.35 * fbm(q, q, 20, 20, 3, rng)[..., None])
     a = a * (1 - ss(0.5, 0.8, stain)[..., None] * 0.45 * np.array([0.6, 0.8, 1.0]))
     pores = dots(q, q, 300, 0.4, 0.9, rng)
     crk = lines(q, q, 25, (6, 30), 0.3, 0.8, (1, 1), rng)

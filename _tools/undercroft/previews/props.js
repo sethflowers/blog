@@ -78,16 +78,16 @@ export async function show(ctx, view){
   else if (n === 'sword-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.sword, V(0.2, -0.26, -0.5), [-0.75, 0.5, 0.35]); }
   else if (n === 'crossbow-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.crossbow, V(0.14, -0.2, -0.42), [0.05, 0.1, 0]); }
   else if (n === 'hammer-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.hammer, V(0.22, -0.5, -0.78), [-0.2, -1.3, 0.3]); }
-  else if (n === 'food'){ S.food.visible = true; setView(V(0.02, 0.03, -0.02), 0.62, 15, 38); }
+  else if (n === 'food'){ S.food.visible = true; setView(V(0.02, 0.03, -0.02), 0.85, 15, 40); }
   else if (n.startsWith('chest')){ S.chest.group.visible = true; S.chest.setOpen(n === 'chest-open' ? 1 : 0); setView(V(0, 0.3, 0), 1.55, 30, 28); }
   else if (n.startsWith('gate') && n !== 'gate-wide'){
     const k = n === 'gate-spent' ? 'magnet' : n.slice(5), g = S.gates[k];
     g.group.visible = true;
     g.setActive(n !== 'gate-spent');
     for (let t = 0; t < 6; t += 0.05) g.update(2 + t);
-    setView(V(0, 1.5, 0), 4.0, 22, 6);
+    setView(V(0, 1.95, 0), 4.3, 22, -6);
   }
-  else if (n === 'gate-wide'){ const g = S.gates.freeze; g.group.visible = true; g.setActive(true); g.update(9); setView(V(0, 1.7, 0), 5.2, -15, 12); }
+  else if (n === 'gate-wide'){ const g = S.gates.freeze; g.group.visible = true; g.setActive(true); g.update(9); setView(V(0, 1.9, 0), 5.4, -15, -3); }
   else if (n === 'cell-lock'){ S.cell.group.visible = true; S.cell.setOpen(0); setView(V(0.5, 1.0, 0), 0.75, 25, 10); }
   else if (n.startsWith('cell')){ S.cell.group.visible = true; S.cell.setOpen(n === 'cell-open' ? 1 : 0); setView(V(0, 1.4, 0), 3.9, 25, 8); }
   else if (n === 'portcullis'){ S.port.group.visible = true; S.port.setRaised(0.35); setView(V(0, 1.6, 0), 4.0, 18, 6); }
