@@ -136,13 +136,15 @@ function particleSystem(max, additive){
     uniforms: Object.assign({ scale: { value: innerHeight } }, additive ? {} : THREE.UniformsUtils.clone(THREE.UniformsLib.fog)),
     vertexShader: `attribute vec3 color; attribute float size; attribute float alpha; varying vec3 vC; varying float vA; uniform float scale;
       #include <fog_pars_vertex>
-      void main(){ vC = color; vA = alpha; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = scale * size / -mvPosition.z; gl_Position = projectionMatrix * mvPosition;
+      void main(){ vC = color; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        // fade out anything right in front of the lens, and never let one point fill the screen
+        vA = alpha * smoothstep(0.35, 1.1, -mvPosition.z);
+        gl_PointSize = min(scale * size / -mvPosition.z, scale * 0.09); gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
       }`,
     fragmentShader: `varying vec3 vC; varying float vA;
       #include <fog_pars_fragment>
-      void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, ${additive ? '0.0' : '0.25'}, d) * vA;
+      void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, d) * vA;
         if (a < 0.01) discard; gl_FragColor = vec4(vC * ${additive ? 'a' : '1.0'}, ${additive ? '1.0' : 'a'});
         #include <fog_fragment>
       }`
