@@ -305,7 +305,7 @@ function buildLevel(){
   world.cells.forEach((c, k) => {
     const p = peopleKit.makePrisoner(seed * 13 + k * 7 + 1);
     const [dx, dz] = c.dir, atBars = k % 2 === 0;
-    const pos = atBars ? c.door.clone().addScaledVector(new THREE.Vector3(dx, 0, dz), 0.45) : c.pos.clone().addScaledVector(new THREE.Vector3(dx, 0, dz), 0.55);
+    const pos = atBars ? c.door.clone().addScaledVector(new THREE.Vector3(dx, 0, dz), 0.33) : c.pos.clone().addScaledVector(new THREE.Vector3(dx, 0, dz), 0.55);
     if (!atBars) pos.add(new THREE.Vector3(-dz, 0, dx).multiplyScalar(0.5));
     p.group.position.copy(pos); p.group.rotation.y = Math.atan2(-dx, -dz);
     levelRoot.add(p.group);

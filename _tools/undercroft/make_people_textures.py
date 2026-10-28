@@ -835,6 +835,10 @@ def build_body(name, sh, o, cell=0.0095, tris=4200):
     def reg(me, *others):
         return np.clip((np.minimum.reduce(others) - me) / 0.012, -1, 1)
     W = np.c_[reg(t, s, b, l), reg(b, s, t, l), reg(l, s, t, b), -np.ones(len(V))]
+    # anything standing off the skin is cloth (the cut edge of a hem is nearer the skin than any cloth surface)
+    off = s > 0.003
+    near = np.argmin(np.c_[t, b, l], 1)
+    W[off, :3] = -1; W[off, near[off]] = 1
     dist = np.array([fn_(V) for _, fn_, _ in parts]).T
     bids = [BI[bn] for bn, _, _ in parts]
     sidx, sw = skin_weights(dist, bids)

@@ -31,7 +31,7 @@ const ONLY = new URL(import.meta.url).searchParams.get('v');
 const ALL = [
   { name: 'zgroup' }, { name: 'zface' }, { name: 'zattack' }, { name: 'zdead' }, { name: 'zemerge' },
   { name: 'psit' }, { name: 'pbars' }, { name: 'pcheer' }, { name: 'pface' }, { name: 'pwalk' },
-  { name: 'xneck' }, { name: 'xbody' }, { name: 'xscalp' }, { name: 'xsit' }, { name: 'xhair' }, { name: 'xzhair' },
+  { name: 'xneck' }, { name: 'xbody' }, { name: 'xscalp' }, { name: 'xsit' }, { name: 'xhair' }, { name: 'xzhair' }, { name: 'xhurt' }, { name: 'xjaw' },
 ];
 export const views = ONLY ? ALL.filter((v) => ONLY.split(',').includes(v.name)) : ALL.filter((v) => !v.name.startsWith('x'));
 
@@ -45,7 +45,7 @@ export async function show(ctx, v){
   ctx.wallTorch.position.set(-2.5, 2.3, 1.5);
   if (v.name === 'zgroup'){
     Z.forEach((z, i) => { z.group.visible = true; z.group.position.set((i - 1) * 0.95, 0, -0.3 * Math.abs(i - 1)); z.group.rotation.y = (i - 1) * -0.25; run(z, { speed: [0.8, 1.2, 1.6][i] }, 1.3 + i * 0.37); });
-    ctx.setView(V(0, 1.0, 0), 3.6, 8, 4);
+    ctx.setView(V(0, 1.0, 0), 3.4, 35, 4);
   } else if (v.name === 'zface'){
     const z = Z[0]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0; run(z, { speed: 0 }, 1);
     ctx.setView(V(0, 1.62, 0.05), 1.0, 15, 2);
@@ -57,20 +57,34 @@ export async function show(ctx, v){
     });
     ctx.setView(V(0, 1.1, 0), 3.0, 20, 5);
   } else if (v.name === 'zdead'){
-    const z = Z[2]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0.6;
-    for (let d = 0; d <= 1; d += 1 / 40) z.update(1 / 30, { dead: d });
+    // two corpses: one fell back, one pitched forward onto its face
+    [[Z[2], -0.5, 0.6], [Z[0], 0.6, -0.4]].forEach(([z, x, ry]) => { z.group.visible = true; z.group.position.set(x, 0, 0); z.group.rotation.y = ry;
+      for (let d = 0; d <= 1; d += 1 / 40) z.update(1 / 30, { dead: d }); });
     ctx.setView(V(0, 0.3, 0), 2.6, 60, 30);
   } else if (v.name === 'zemerge'){
-    const z = Z[0]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0;
-    for (let e = 0; e <= 0.5; e += 1 / 60) z.update(1 / 30, { emerge: e });
-    ctx.setView(V(0, 0.4, 0), 2.6, 20, 12);
+    // climbing out of the floor at three moments: hands breaking the surface, hauling out, standing up
+    [[Z[0], 0.3, -1.0], [Z[1], 0.6, 0], [Z[2], 0.85, 1.0]].forEach(([z, at, x]) => {
+      z.group.visible = true; z.group.position.set(x, 0, 0); z.group.rotation.y = 0.3;
+      for (let e = 0; e <= at; e += 1 / 60) z.update(1 / 30, { emerge: e });
+    });
+    ctx.setView(V(0, 0.5, 0), 3.4, 25, 12);
+  } else if (v.name === 'xjaw'){
+    const z = Z[0], p = Pr[2];
+    z.group.visible = p.group.visible = true;
+    z.group.position.set(-0.2, 0, 0); z.group.rotation.y = 0.3; for (let a = 0; a <= 0.3; a += 1 / 60) z.update(1 / 60, { attack: a });
+    p.group.position.set(0.25, 0, 0.1); p.group.rotation.y = -0.3; run(p, { pose: 'cheer' }, 0.4);
+    ctx.setView(V(0, 1.62, 0), 1.0, 0, 0);
+  } else if (v.name === 'xhurt'){
+    const z = Z[1]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0.4;
+    run(z, { speed: 1 }, 0.5); z.update(1 / 30, { speed: 1, hurt: 0.9 });
+    ctx.setView(V(0, 1.1, 0), 2.6, 40, 5);
   } else if (v.name === 'psit'){
     Pr.forEach((p, i) => { p.group.visible = i < 2; p.group.position.set(i * 0.9 - 0.4, 0, -5.4); p.group.rotation.y = 0; run(p, { pose: 'sit' }, 1.5 + i); });
-    ctx.setView(V(0.05, 0.55, -5.2), 2.5, 10, 12);
+    ctx.setView(V(0.05, 0.5, -5.4), 2.1, 25, 14);
   } else if (v.name === 'pbars'){
     bars.visible = true; bars.position.set(0, 0, 0.3);
     const p = Pr[1]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'bars' }, 2);
-    ctx.setView(V(0, 1.35, 0.3), 2.0, 20, 4);
+    ctx.setView(V(0, 1.25, 0.3), 1.9, 25, 4);
   } else if (v.name === 'pcheer'){
     const p = Pr[2]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'cheer' }, 1.1);
     ctx.setView(V(0, 1.2, 0), 3.0, 15, 4);

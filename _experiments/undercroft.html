@@ -45,6 +45,7 @@ layout: null
   .go:disabled{opacity:.35;cursor:default;}
   .go.alt{font-size:13px;margin-top:14px;padding:10px 26px 10px 30px;}
   .stat{margin-top:18px;color:var(--bone-dim);letter-spacing:.15em;font-size:14px;}
+  .credit{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 8px);font-size:10px;letter-spacing:.08em;color:var(--bone-faint);padding:0 60px;}
   .loading{margin-top:22px;font-size:12px;letter-spacing:.35em;color:var(--bone-faint);}
   .keys .touchonly{display:none;}
   body.touch .keys .desk{display:none;}
@@ -179,6 +180,7 @@ layout: null
   </p>
   <button class="go" id="startBtn" disabled>DESCEND</button>
   <div class="loading" id="loading">LIGHTING THE TORCHES</div>
+  <div class="credit">Faces from Lee Perry-Smith’s head scan (Infinite Realities, CC BY 3.0). Game design by a young designer with a pencil.</div>
   <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 

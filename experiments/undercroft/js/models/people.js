@@ -19,6 +19,7 @@ const TEX = new URL('../../tex/', import.meta.url).href;
 const ZOMBIE_OUTFITS = ['z_shirt', 'z_tee', 'z_vest'];
 const PRISONER_OUTFITS = ['p_tunic', 'p_shirt', 'p_thin'];
 const TAU = Math.PI * 2;
+const NONE = Object.freeze({});
 
 // ---------- small helpers ----------
 
@@ -66,7 +67,7 @@ uniform vec3 uSkin, uTop, uBot, uLea, uGrime;
 uniform float uZombie, uBlood, uDirt, uWear, uSeed;
 varying vec3 vBP; varying vec3 vBN; varying vec4 vW; varying vec4 vS;
 vec3 triDetail(vec3 p, vec3 n){
-  vec3 w = pow(abs(n), vec3(4.0)); w /= (w.x + w.y + w.z);
+  vec3 w = pow(abs(n), vec3(4.0)) + 1e-5; w /= (w.x + w.y + w.z);
   return texture2D(uDetail, p.zy).rgb * w.x + texture2D(uDetail, p.xz + 0.37).rgb * w.y + texture2D(uDetail, p.xy + 0.71).rgb * w.z;
 }
 // bump from a height that only exists per pixel (Mikkelsen's surface gradient, unnormalised so it holds up close)
@@ -82,13 +83,15 @@ float gTop, gBot, gLea, gCloth, gBlood, gH, gNail;
 `;
 const BODY_FRAG_COLOR = `
   vec3 dS = triDetail(vBP * 17.0 + uSeed, vBN);          // skin pores and blotches, ~6 cm tiles
-  vec3 dC = triDetail(vBP * 13.0 + uSeed * 0.7, vBN);    // the weave, ~8 cm tiles
+  vec3 dC = triDetail(vBP * 24.0 + uSeed * 0.7, vBN);    // the weave, ~4 cm tiles (threads about a millimetre)
   vec3 dL = triDetail(vBP * 3.1 + uSeed * 0.3, vBN);     // large: stains, wear, mottling
   float blot = dC.b - 0.5;
-  gTop = smoothstep(-0.12, 0.12, vW.x + blot * 0.25);
-  gBot = smoothstep(-0.12, 0.12, vW.y + blot * 0.25);
+  // cloth or skin first, then which cloth: so the seam where shirt meets trousers never passes through skin
+  gCloth = smoothstep(-0.12, 0.12, max(vW.x, vW.y) + blot * 0.25);
+  float tb = smoothstep(-0.06, 0.06, vW.x - vW.y);
+  gTop = gCloth * tb;
+  gBot = gCloth * (1.0 - tb);
   gLea = smoothstep(-0.1, 0.1, vW.z);
-  gCloth = max(gTop, gBot);
   gNail = vS.w;
   float ao = vS.x;
   // skin: mottled, darker in creases; the dead are blotched with bruising and greened patches
@@ -101,8 +104,8 @@ const BODY_FRAG_COLOR = `
   // cloth: the weave, faded where worn, darker stains
   float weave = dC.g;
   float wear = smoothstep(0.55, 0.85, dL.g) * uWear;
-  vec3 top = uTop * (0.7 + 0.45 * weave) * (0.8 + 0.4 * dL.b) * (1.0 + 0.35 * wear);
-  vec3 bot = uBot * (0.7 + 0.45 * weave) * (0.8 + 0.4 * dL.b) * (1.0 + 0.35 * wear);
+  vec3 top = uTop * (0.84 + 0.25 * weave) * (0.8 + 0.4 * dL.b) * (1.0 + 0.35 * wear);
+  vec3 bot = uBot * (0.84 + 0.25 * weave) * (0.8 + 0.4 * dL.b) * (1.0 + 0.35 * wear);
   vec3 lea = uLea * (0.75 + 0.5 * dS.b) * (vBP.y < 0.024 ? 0.55 : 1.0);
   vec3 col = skin;
   col = mix(col, bot, gBot);
@@ -115,7 +118,7 @@ const BODY_FRAG_COLOR = `
   gBlood = smoothstep(1.0 - uBlood, 1.0 - uBlood + 0.15, vS.z + blot * 0.35 + (dL.b - 0.5) * 0.3);
   vec3 bl = mix(vec3(0.12, 0.012, 0.008), vec3(0.05, 0.012, 0.006), smoothstep(0.3, 0.7, dS.b));
   col = mix(col, bl, gBlood * 0.85);
-  col *= mix(1.0, ao, 0.8);
+  col *= mix(1.0, ao, mix(0.55, 0.8, gCloth));
   diffuseColor.rgb = col;
   // bumps: fine detail fades out once a pixel is bigger than it (no shimmer), cloth crumples at mid scale
   float px = length(fwidth(vBP));
@@ -154,7 +157,7 @@ function bodyMaterial(env, detail){
 const HEAD_FRAG_PARS = `
 uniform sampler2D uDat, uDetail;
 uniform vec3 uTint, uIris, uGlow, uGrime, uHairCol;
-uniform float uZombie, uBlood, uDirt, uDesat, uHairCap, uSeed;
+uniform float uZombie, uBlood, uDirt, uDesat, uHairCap, uSeed, uBeard;
 varying float vK; varying vec3 vBP2;
 float gEye, gBlood2;
 `;
@@ -175,6 +178,15 @@ const HEAD_FRAG_COLOR = `
   float hb = texture2D(uDetail, hq.zy).b * hw.x + texture2D(uDetail, hq.xz).b * hw.y + texture2D(uDetail, hq.xy).b * hw.z;
   float blotch = smoothstep(0.55, 0.78, hb) * (1.0 - step(0.5, vK));
   c = mix(c, c * mix(vec3(0.7, 0.62, 0.55), vec3(0.55, 0.5, 0.56), uZombie), blotch * mix(0.35, 0.8, uZombie));
+  // beard: a mask round the jaw, chin and upper lip in the head's own space, broken up into short hairs
+  vec3 hl = vBP2 - vec3(0.0, 1.58, -0.01);
+  float ax = abs(hl.x);
+  float top = min(0.047 + 0.7 * max(ax - 0.025, 0.0), 0.088);
+  float beard = smoothstep(top, top - 0.012, hl.y) * smoothstep(-0.05, -0.03, hl.y) * smoothstep(-0.005, 0.015, hl.z);
+  beard *= 1.0 - smoothstep(0.004, 0.0, max(abs(hl.y - 0.031) - 0.009, ax - 0.026)) * step(0.06, hl.z);   // not over the lips
+  float strands = texture2D(uDetail, vec2(hl.x * 9.0 + hl.z * 4.0, hl.y * 2.5) + uSeed).g;
+  beard *= uBeard * smoothstep(0.25, 0.6, strands + uBeard * 0.4) * (1.0 - step(0.5, vK));
+  c = mix(c, uHairCol * (0.5 + 0.5 * strands), beard * 0.9);
   float grime = clamp((dat.b - 0.35) * 1.6 * uDirt, 0.0, 1.0);
   c = mix(c, c * uGrime * 2.0, grime * 0.7);
   gBlood2 = smoothstep(1.0 - uBlood, 1.0 - uBlood + 0.12, dat.b);
@@ -206,7 +218,7 @@ function headMaterial(env, maps, zombie){
   const U = {
     uDat: { value: maps.dat }, uDetail: { value: maps.detail }, uTint: { value: new THREE.Color(1, 1, 1) }, uIris: { value: new THREE.Color() },
     uGlow: { value: new THREE.Color(0, 0, 0) }, uGrime: { value: srgb(0.32, 0.27, 0.2) }, uZombie: { value: zombie ? 1 : 0 },
-    uBlood: { value: 0 }, uDirt: { value: 1 }, uDesat: { value: 0 }, uHairCol: { value: new THREE.Color() }, uHairCap: { value: 0 }, uSeed: { value: 0 },
+    uBlood: { value: 0 }, uDirt: { value: 1 }, uDesat: { value: 0 }, uHairCol: { value: new THREE.Color() }, uHairCap: { value: 0 }, uSeed: { value: 0 }, uBeard: { value: 0 },
   };
   const m = new THREE.MeshStandardMaterial({ map: zombie ? maps.zom : maps.col, normalMap: maps.nrm, roughness: 1, metalness: 0,
     envMap: env || null, envMapIntensity: 0.4 });
@@ -246,9 +258,16 @@ function makeSkeletonFactory(boneDefs){
 function makePoser(SK){
   const n = SK.count, N = n * 3 + 3;
   const I = SK.index;
-  const B = (name) => I[name] * 3;
+  const B = (name) => I[name] * 3;     // a bone's first slot
   const HP = n * 3;
-  const fingers = ['idx', 'mid', 'rng', 'pky'];
+  // per side, the bone slots the limb helpers write (looked up once, so posing never builds strings)
+  const SIDE = {};
+  for (const sd of ['L', 'R']){
+    SIDE[sd] = { s: sd === 'L' ? 1 : -1, arm: B('arm' + sd), fore: B('fore' + sd), hand: B('hand' + sd), thumb: B('thumb' + sd),
+      thigh: B('thigh' + sd), shin: B('shin' + sd), foot: B('foot' + sd),
+      f1: ['idx', 'mid', 'rng', 'pky'].map((f) => B(f + '1' + sd)), f2: ['idx', 'mid', 'rng', 'pky'].map((f) => B(f + '2' + sd)) };
+  }
+  const put = (P, k, x, y, z) => { P[k] = x; P[k + 1] = y; P[k + 2] = z; };
   const api = {
     N, HP,
     rest(P){
@@ -256,29 +275,31 @@ function makePoser(SK){
       for (let i = 0; i < n; i++) P[i * 3 + 2] = SK.rest[i];
       P[HP] = 0; P[HP + 1] = SK.restPos[0][1]; P[HP + 2] = 0;
     },
-    set(P, name, x, y, z){ const k = B(name); P[k] = x; P[k + 1] = y; P[k + 2] = z; },
+    set(P, name, x, y, z){ put(P, B(name), x, y, z); },
     add(P, name, x, y, z){ const k = B(name); P[k] += x; P[k + 1] += y; P[k + 2] += z; },
-    // side s = 1 (left, +x) or -1. raise: forward swing (+ = forward/up); out: extra spread; bend: elbow
+    // side 'L' (+x) or 'R'. raise: forward swing (+ = forward/up); out: extra spread; twist; bend: elbow; pron: forearm roll
     arm(P, side, raise, out, twist, bend, pron){
-      const s = side === 'L' ? 1 : -1;
-      api.set(P, 'arm' + side, -raise, twist * s, s * (0.3 + out));
-      api.set(P, 'fore' + side, -bend, pron * s, 0);
+      const S = SIDE[side];
+      put(P, S.arm, -raise, twist * S.s, S.s * (0.3 + out));
+      put(P, S.fore, -bend, pron * S.s, 0);
     },
+    // swing: thigh forward; out: spread; knee: bend; ankle: toes down
     leg(P, side, swing, out, knee, ankle){
-      const s = side === 'L' ? 1 : -1;
-      api.set(P, 'thigh' + side, -swing, 0, s * (0.04 + out));
-      api.set(P, 'shin' + side, knee, 0, 0);
-      api.set(P, 'foot' + side, ankle, 0, -s * 0.04);
+      const S = SIDE[side];
+      put(P, S.thigh, -swing, 0, S.s * (0.04 + out));
+      put(P, S.shin, knee, 0, 0);
+      put(P, S.foot, ankle, 0, -S.s * 0.04);
     },
+    // curl: fingers toward the palm (0 open .. 1.5 fist); thumb across; flex: wrist
     hand(P, side, curl, thumb, flex){
-      const s = side === 'L' ? 1 : -1;
-      api.set(P, 'hand' + side, 0, 0, -s * flex);
+      const S = SIDE[side];
+      put(P, S.hand, 0, 0, -S.s * flex);
       for (let f = 0; f < 4; f++){
         const c = curl * (1 + (f - 1.5) * 0.08);
-        api.set(P, fingers[f] + '1' + side, 0, 0, -s * c);
-        api.set(P, fingers[f] + '2' + side, 0, 0, -s * c * 1.25);
+        put(P, S.f1[f], 0, 0, -S.s * c);
+        put(P, S.f2[f], 0, 0, -S.s * c * 1.25);
       }
-      api.set(P, 'thumb' + side, 0, -s * thumb, -s * thumb * 0.3);
+      put(P, S.thumb, 0, -S.s * thumb, -S.s * thumb * 0.3);
     },
     apply(P, bones, hips){
       for (let i = 0; i < n; i++) bones[i].rotation.set(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
@@ -356,7 +377,7 @@ export async function createPeopleKit(opts = {}){
       const tones = [[1, 1, 1], [0.92, 0.84, 0.76], [0.78, 0.62, 0.5], [0.58, 0.42, 0.32], [0.4, 0.28, 0.21]];
       const t = pick(r, tones);
       H.uTint.value.setRGB(t[0], t[1], t[2]);
-      const base = srgb(0.64, 0.53, 0.48);      // the scan's own skin, so face and body match
+      const base = srgb(0.7, 0.59, 0.54);      // the scan's own skin, so face and body match
       skinTone = new THREE.Color(base.r * t[0], base.g * t[1], base.b * t[2]);
       U.uBlood.value = r() * 0.15; U.uDirt.value = 0.8 + r() * 0.5;
       H.uBlood.value = r() * 0.08; H.uDirt.value = 0.7 + r() * 0.6; H.uDesat.value = 0.1;
@@ -368,6 +389,8 @@ export async function createPeopleKit(opts = {}){
     // hair: a style built on the scan's scalp, tinted per person
     const style = zombie ? pick(r, ['thin', 'bald', 'thin', 'messy', 'thin']) : pick(r, ['short', 'messy', 'long', 'short', 'cropped']);
     let hair = null;
+    // some of the men have let a beard grow in the cells; a few zombies keep a ragged one
+    H.uBeard.value = zombie ? (r() < 0.25 ? 0.5 : 0) : pick(r, [0, 0, 0.45, 0.7, 1]);
     H.uHairCol.value.copy(hairCol); H.uHairCap.value = zombie ? 0.2 : 0.35;
     if (hairs[style]){
       const hmat = new THREE.MeshStandardMaterial({ map: hairTex, color: hairCol, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.62, metalness: 0,
@@ -429,7 +452,8 @@ export async function createPeopleKit(opts = {}){
       PO.set(P, 'head', -0.15 + Math.sin(ph * 0.5) * 0.05, loll * 0.5, ind.tilt * 0.6 + Math.sin(time * 0.53 + ind.twitch) * 0.08);
       PO.set(P, 'jaw', ind.jaw + Math.max(0, Math.sin(time * 1.1 + ind.twitch)) * 0.15, 0, 0);
       // arms reach for you, sway with the gait; one may hang dead
-      for (const [side, sg] of [['L', 1], ['R', -1]]){
+      for (let k = 0; k < 2; k++){
+        const side = k ? 'R' : 'L', sg = k ? -1 : 1;
         if (ind.armDown === side){
           PO.arm(P, side, 0.05 + sg * s * 0.25 * move, -0.22, 0, 0.15, 0.2);
           PO.hand(P, side, 0.35, 0.2, 0.1);
@@ -470,9 +494,8 @@ export async function createPeopleKit(opts = {}){
       PO.set(P, 'neck', mix(0.5 * k, 0.0, f), 0.0, 0.4 * f);
       PO.set(P, 'head', mix(0.2, dir > 0 ? -0.2 : 0.15, f), 0.6 * f, 0.3 * f);
       PO.set(P, 'jaw', mix(0.2, 0.45, f), 0, 0);
-      const kb = dir > 0 ? 0.15 : 0.0;
-      PO.leg(P, 'L', mix(1.1 * k, dir > 0 ? -0.1 : 0.35, f), mix(0, 0.15, f), mix(1.5 * k, dir > 0 ? 0.2 : 0.6, f) + kb, mix(0, 0.5, f));
-      PO.leg(P, 'R', mix(0.8 * k, dir > 0 ? 0.0 : 0.1, f), mix(0, 0.25, f), mix(1.2 * k, dir > 0 ? 0.1 : 0.2, f), mix(0, 0.4, f));
+      PO.leg(P, 'L', mix(1.1 * k, dir > 0 ? -0.1 : 0.2, f), mix(0, 0.15, f), mix(1.5 * k, dir > 0 ? 0.12 : 0.35, f), mix(0, dir > 0 ? 0.9 : 0.5, f));
+      PO.leg(P, 'R', mix(0.8 * k, dir > 0 ? 0.0 : 0.04, f), mix(0, 0.25, f), mix(1.2 * k, dir > 0 ? 0.05 : 0.12, f), mix(0, dir > 0 ? 0.9 : 0.4, f));
       // arms flop out onto the floor beside it
       PO.arm(P, 'L', mix(0.6 * k + 0.2, dir > 0 ? 0.0 : -0.25, f), mix(-0.2, 1.05, f), 0, mix(0.6, 0.35, f), 0.6);
       PO.arm(P, 'R', mix(0.4 * k + 0.2, dir > 0 ? 0.1 : -0.2, f), mix(-0.25, 0.45, f), 0, mix(0.5, 0.7, f), 0.2);
@@ -485,7 +508,8 @@ export async function createPeopleKit(opts = {}){
       P[PO.HP + 1] = y;
       P[PO.HP + 2] = mix(-0.25, 0, stand);
       const reachUp = 1 - climb;
-      for (const [side, sg] of [['L', 1], ['R', -1]]){
+      for (let k = 0; k < 2; k++){
+        const side = k ? 'R' : 'L', sg = k ? -1 : 1;
         const wav = Math.sin(time * 3 + sg * 1.3) * 0.15 * reachUp;
         // up overhead, then down onto the floor in front, then back to the reach
         PO.arm(P, side, mix(mix(2.7 + wav, 0.75, climb), ind.reach, stand), mix(mix(0.15, -0.1, climb), -0.38, stand), 0, mix(mix(0.3, 0.1, climb), 0.35, stand), mix(0.3, 1.1, stand));
@@ -500,7 +524,7 @@ export async function createPeopleKit(opts = {}){
       PO.leg(P, 'L', mix(0.1, 1.5, crouch), 0.05, mix(0.2, 2.1, crouch), mix(0.3, -0.5, crouch));
       PO.leg(P, 'R', mix(-0.1, 1.2, crouch), 0.05, mix(0.3, 1.9, crouch), mix(0.3, -0.4, crouch));
     }
-    function update(dt, s = {}){
+    function update(dt, s = NONE){
       dt = Math.min(dt || 0, 0.1);
       time += dt;
       const speed = s.speed || 0, attack = s.attack || 0, hurt = s.hurt || 0, dead = s.dead || 0;
@@ -519,7 +543,7 @@ export async function createPeopleKit(opts = {}){
       if (dead > 0){ Q.set(P); deadPose(Q, dead); PO.lerp(P, P, Q, sstep(0, 0.12, dead)); }
       PO.apply(P, F.bones, F.hipsBone);
     }
-    update(0, {});
+    update(0);
     return { group: F.group, update, parts: F.parts, height: F.height, dispose: F.dispose };
   }
 
@@ -550,9 +574,10 @@ export async function createPeopleKit(opts = {}){
       PO.set(P, 'jaw', 0.03, 0, 0);
       PO.leg(P, 'L', 2.0, 0.1, 2.36, 0.0);
       PO.leg(P, 'R', 1.95, 0.05, 2.3, 0.05);
-      PO.arm(P, 'L', 0.95, -0.2, 0.0, 1.0 + tremble * 3, 1.2);
-      PO.arm(P, 'R', 0.9, -0.22, 0.0, 1.05 - tremble * 3, 1.2);
-      PO.hand(P, 'L', 0.8, 0.4, 0.4); PO.hand(P, 'R', 0.85, 0.4, 0.4);
+      // forearms crossed over the shins, hands holding the opposite arm
+      PO.arm(P, 'L', 0.62, -0.12, 0.25, 0.75 + tremble * 3, 1.3);
+      PO.arm(P, 'R', 0.58, -0.14, 0.25, 0.8 - tremble * 3, 1.3);
+      PO.hand(P, 'L', 0.9, 0.5, 0.5); PO.hand(P, 'R', 0.95, 0.5, 0.5);
     }
     function bars(P){
       PO.rest(P);
@@ -567,9 +592,10 @@ export async function createPeopleKit(opts = {}){
       PO.set(P, 'head', -0.12 + Math.sin(time * 1.7) * 0.05, plead * 0.15, -plead * 0.08);
       PO.set(P, 'jaw', 0.08 + Math.max(0, Math.sin(time * 4.1)) * 0.1, 0, 0);
       // hands on two bars at shoulder height, about 0.3 m in front
-      PO.arm(P, 'L', 1.25 + rattle * 0.06, -0.38, 0.15, 1.2 - rattle * 0.15, 1.3);
-      PO.arm(P, 'R', 1.3 - rattle * 0.06, -0.4, 0.15, 1.15 + rattle * 0.15, 1.3);
-      PO.hand(P, 'L', 1.45, 1.0, -0.2); PO.hand(P, 'R', 1.45, 1.0, -0.2);
+      // elbows down, forearms up: two-bone solution for a hand on a bar at shoulder height, 0.3 m ahead
+      PO.arm(P, 'L', 0.62 + rattle * 0.05, -0.2, -0.3, 1.75 - rattle * 0.15, 1.2);
+      PO.arm(P, 'R', 0.55 - rattle * 0.05, -0.18, -0.3, 1.85 + rattle * 0.15, 1.2);
+      PO.hand(P, 'L', 1.4, 1.0, 0.3); PO.hand(P, 'R', 1.4, 1.0, 0.3);
       PO.leg(P, 'L', 0.05, 0.02, 0.12 + (ind.side > 0 ? 0.15 : 0), 0);
       PO.leg(P, 'R', -0.05, 0.02, 0.12 + (ind.side < 0 ? 0.15 : 0), 0);
     }
@@ -604,12 +630,13 @@ export async function createPeopleKit(opts = {}){
       PO.set(P, 'neck', -0.05, Math.sin(time * 0.9) * 0.25 * (1 - gait), 0);     // glancing back over the shoulder
       PO.set(P, 'head', -0.05 - 0.1 * gait, Math.sin(time * 0.9) * 0.2 * (1 - gait), 0);
       PO.set(P, 'jaw', 0.04 + 0.1 * gait, 0, 0);
-      for (const [side, sg] of [['L', 1], ['R', -1]]){
+      for (let k = 0; k < 2; k++){
+        const side = k ? 'R' : 'L', sg = k ? -1 : 1;
         PO.arm(P, side, -sg * s * (0.35 + 0.5 * gait) * move + 0.1 * gait, -0.22, 0, 0.25 + 1.0 * gait + Math.max(0, sg * s) * 0.3 * move, 0.4);
         PO.hand(P, side, 0.35 + 0.6 * gait, 0.3, 0);
       }
     }
-    function update(dt, s = {}){
+    function update(dt, s = NONE){
       dt = Math.min(dt || 0, 0.1);
       time += dt;
       const p = s.pose || 'sit';
@@ -620,7 +647,7 @@ export async function createPeopleKit(opts = {}){
       PO.lerp(out, from, P, sstep(0, 1, blend));
       PO.apply(out, F.bones, F.hipsBone);
     }
-    update(0, {});
+    update(0);
     return { group: F.group, update, parts: F.parts, height: F.height, dispose: F.dispose };
   }
 
