@@ -105,9 +105,9 @@ def in_almond(x, y, c, side):
     dx = (x - c[0]) * side            # + toward the outer corner
     t = dx / w
     if abs(t) >= 1: return False
-    yc = c[1] + 0.035 + 0.06 * t      # tilt: the outer corner sits higher
-    up = 0.115 * (1 - t * t) ** 0.75 * (1 - 0.25 * t)
-    lo = 0.085 * (1 - t * t) ** 0.9
+    yc = c[1] + 0.03 + 0.06 * t       # tilt: the outer corner sits higher
+    up = 0.09 * (1 - t * t) ** 0.75 * (1 - 0.25 * t)
+    lo = 0.068 * (1 - t * t) ** 0.9
     return yc - lo < y < yc + up
 
 
@@ -122,7 +122,12 @@ def process_head(P, U, F):
             if z > c[2] and in_almond(x, y, c, side): keep[i] = False
     # trim the bust: keep the neck down to just above the collarbones (lower at the front)
     lowest = P[F][:, :, 1].min(1)
-    keep &= lowest > -2.25 - 0.35 * np.clip(cen[:, 2], -1, 1)
+    cut = lambda z: -1.45 - 0.25 * np.clip(z, -1, 1)
+    keep &= lowest > cut(cen[:, 2])
+    # taper the bottom of the neck in a little so its cut edge tucks inside the body's neck
+    t = np.clip((cut(P[:, 2]) + 0.4 - P[:, 1]) / 0.4, 0, 1)
+    ax = np.array([-0.07, -0.47])
+    P[:, [0, 2]] = ax + (P[:, [0, 2]] - ax) * (1 - 0.13 * t)[:, None]
     F = F[keep]
     # tuck the new lid edges onto the eyeball, so the lids hug it instead of ending in a paper edge
     for loop in boundary_loops(F):
@@ -284,7 +289,8 @@ def vertex_normals(P, F):
     _, inv = np.unique(key, axis=0, return_inverse=True); inv = inv.ravel()
     acc = np.zeros((inv.max() + 1, 3)); np.add.at(acc, inv, n)
     n = acc[inv]
-    return n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+    l = np.linalg.norm(n, axis=1, keepdims=True)
+    return np.where(l > 1e-12, n / np.maximum(l, 1e-12), 0.0)
 
 
 
@@ -513,12 +519,12 @@ def body_parts(sh):
     add('spine', lambda p: ell(p, (0, 1.12, 0.0), (0.13 + 0.03 * f - 0.012 * th, 0.1, 0.092 + 0.03 * f - 0.01 * th)), 0.06)
     add('chest', lambda p: ell(p, (0, 1.27, -0.012), (0.152 + 0.01 * f + 0.01 * br, 0.17, 0.103 + 0.01 * f)), 0.06)
     for s in (1, -1):
-        add('chest', lambda p, s=s: ell(p, (s * 0.066, 1.335, 0.062), (0.074 + 0.008 * br, 0.05, 0.034 + 0.006 * f - 0.008 * th)), 0.03)
+        add('chest', lambda p, s=s: ell(p, (s * 0.066, 1.34, 0.055), (0.074 + 0.008 * br, 0.05, 0.026 + 0.004 * f - 0.008 * th)), 0.03)
         add('chest', lambda p, s=s: ell(p, (s * 0.088, 1.29, -0.06), (0.07, 0.12, 0.055)), 0.05)
         add('chest', lambda p, s=s: ell(p, (s * 0.085, 1.37, -0.085), (0.066, 0.07, 0.03)), 0.04)
         # trapezius: a slope from the neck down to the shoulder
-        add('chest', lambda p, s=s: cap(p, (s * 0.02, 1.49, -0.045), (s * (0.15 + 0.01 * br), 1.445, -0.035), 0.043, 0.036), 0.04)
-    add('neck', lambda p: cap(p, (0, 1.43, -0.025), (0, 1.54, -0.01), 0.058, 0.045), 0.035)
+        add('chest', lambda p, s=s: cap(p, (s * 0.02, 1.485, -0.045), (s * (0.14 + 0.01 * br), 1.425, -0.035), 0.04, 0.032), 0.04)
+    add('neck', lambda p: cap(p, (0, 1.43, -0.022), (0, 1.55, -0.008), 0.068, 0.05), 0.035)
     for s, n in ((1, 'L'), (-1, 'R')):
         A, E, Wr = J['arm' + n], J['fore' + n], J['hand' + n]
         R = rotz(s * ARM_A)
@@ -769,7 +775,7 @@ def hand_mesh():
     if 'hand' not in _CACHE:
         print('  hand')
         HV, HF = mesh_part(hand_field, (-0.035, -0.2, -0.05), (0.035, 0.045, 0.085), 0.0028, 500)
-        HN = vertex_normals(HV, HF)
+        HN = sdf_normals(hand_field, HV, 0.0012)        # the field's own normals: smooth fingers at 500 triangles
         hao = bake_ao(hand_field, HV, HN, 0.006, 0.015)
         names, hd = hand_bones(HV)
         _CACHE['hand'] = (HV, HF, HN, hao, names, hd, nail_mask(HV, HN))
@@ -782,7 +788,7 @@ def foot_mesh(kind):
         print('  foot', kind)
         ff = foot_field(kind, 1)
         FV, FF = mesh_part(ff, (-0.07, 0.0, -0.1), (0.07, 0.24, 0.26), 0.0042, 300 if kind == 'bare' else 250)
-        FN = vertex_normals(FV, FF)
+        FN = sdf_normals(ff, FV, 0.002)
         _CACHE[kind] = (FV, FF, FN, bake_ao(ff, FV, FN, 0.008, 0.02))
     return _CACHE[kind]
 
@@ -822,6 +828,8 @@ def build_body(name, sh, o, cell=0.0095, tris=4200):
         return m
     V, F = mesh_part(fn, (-0.5, 0.02, -0.2), (0.5, 1.6, 0.22), cell, tris, imp)
     N = vertex_normals(V, F)
+    bad = np.abs(N).sum(1) < 0.5                 # degenerate fans: take the field's normal there
+    if bad.any(): N[bad] = sdf_normals(fn, V[bad], 0.004)
     s, t, b, l = fields(V)
     ao = bake_ao(fn, V, N, 0.02, 0.05)
     def reg(me, *others):
@@ -1064,7 +1072,7 @@ def build_hair(P, F, style):
                 nn = n * 0.7 + np.array([0, 0.3, 0]); nn /= np.linalg.norm(nn)
         for k in range(K):
             a = base + 2 * k
-            idx += [[a, a + 1, a + 3], [a, a + 3, a + 2]]
+            idx += [[a, a + 3, a + 1], [a, a + 2, a + 3]]      # facing out, away from the scalp
     P2 = (np.array(pos) - PIVOT) * SCALE
     print('   hair', style, len(idx), 'tris')
     return dict(position=P2, normal=np.array(nor), uv=np.array(uv), index=np.array(idx))
@@ -1142,7 +1150,7 @@ def hair_texture():
             c = rng.integers(0, clumps)
             x = np.clip(cx[c] + rng.normal(0, (x1 - x0) / clumps * 0.6), x0 + 2, x1 - 2)
             length = rng.uniform(0.55, 1.0) * H
-            lum = int(rng.uniform(110, 255))
+            lum = int(rng.uniform(170, 255))
             pts = []
             bend = rng.normal(0, 6); ph = rng.uniform(0, 6.28)
             for k in range(25):
@@ -1152,8 +1160,8 @@ def hair_texture():
                 t = k / 24
                 a = int(255 * min(1, (1 - t) * 1.6) * (0.75 + 0.25 * rng.random()))
                 d.line([pts[k], pts[k + 1]], fill=(lum, a), width=max(1, int(thick * S * (1 - 0.5 * t))))
-    strands(0, W // 2, 330, 8, 1.1)
-    strands(W // 2, W, 110, 5, 0.9)
+    strands(0, W // 2, 125, 8, 0.9)
+    strands(W // 2, W, 70, 4, 1.5)
     img = big.resize((W, H), Image.LANCZOS)
     la = np.asarray(img).astype(float)
     lum = la[..., 0] / np.maximum(la[..., 1] / 255, 1e-3); lum = np.clip(lum, 0, 255)
@@ -1220,29 +1228,30 @@ def head_textures(src):
     pc[..., 2] *= 0.97
     Image.fromarray((np.clip(pc, 0, 1) * 255).astype(np.uint8)).save(os.path.join(OUT, 'people_head_col.jpg'), quality=90)
     # zombies: dead grey-green skin, blotched and bruised, veins, dark cracked lips, sunken bruised sockets
-    base = np.array([0.42, 0.44, 0.37])
+    base = np.array([0.36, 0.38, 0.33])
     zc = base * (0.8 + 0.4 * n1)[..., None]
     zc = zc * (1 - 0.35 * smooth01(0.55, 0.75, n2))[..., None] + np.array([0.20, 0.13, 0.17]) * 0.35 * smooth01(0.55, 0.75, n2)[..., None]   # bruises
     zc = zc * (1 - smooth01(0.6, 0.8, n1) * 0.25)[..., None] + np.array([0.42, 0.40, 0.22]) * (smooth01(0.6, 0.8, n1) * 0.25)[..., None]
     zc *= np.clip(detail, 0.4, 1.6)[..., None] ** 1.3
     veins = np.exp(-((fbm(pp * 2.2 + 11, 3).reshape(S, S) - 0.5) / 0.012) ** 2) * smooth01(0.45, 0.7, n3)
+    veins *= 1 - smooth01(2.2, 2.9, pp[:, 1].reshape(S, S)) * smooth01(0.5, 1.2, pp[:, 2].reshape(S, S))   # not across the forehead
     zc = zc * (1 - 0.45 * veins)[..., None] + np.array([0.12, 0.16, 0.2]) * (0.45 * veins)[..., None]
     rot = smooth01(0.66, 0.74, n3) * smooth01(0.5, 0.7, n1)
     zc = zc * (1 - rot * 0.7)[..., None] + np.array([0.18, 0.12, 0.08]) * (rot * 0.7)[..., None]
     sock = 1 - smooth01(0.25, 0.75, d_eye)
     zc = zc * (1 - 0.72 * sock)[..., None] + np.array([0.16, 0.06, 0.08]) * (0.4 * sock * (1 - sock))[..., None]
     lips = 1 - smooth01(0.25, 0.7, d_lip)
-    zc = zc * (1 - 0.6 * lips)[..., None] + np.array([0.18, 0.1, 0.12]) * (0.35 * lips)[..., None]
+    zc = zc * (1 - 0.55 * lips)[..., None] + np.array([0.14, 0.09, 0.1]) * (0.3 * lips)[..., None]
     # dried blood round the mouth and down the chin
     drip = smooth01(0.0, 1.0, (0.33 - pp[:, 1].reshape(S, S)) / 1.4 + 0.3) * (1 - smooth01(0.4, 1.2, np.abs(pp[:, 0].reshape(S, S) + 0.07) - 0.3 * fbm(pp * np.array([6, 0.6, 6]), 2).reshape(S, S)))
-    blood = np.clip(np.maximum(lips * 0.35, drip * (pp[:, 2].reshape(S, S) > 0.8) * smooth01(0.45, 0.6, fbm(pp * np.array([5, 1, 5]) + 2, 3).reshape(S, S))), 0, 1)
+    blood = np.clip(np.maximum(lips * 0.15, drip * (pp[:, 2].reshape(S, S) > 0.8) * smooth01(0.45, 0.6, fbm(pp * np.array([5, 1, 5]) + 2, 3).reshape(S, S))), 0, 1)
     zc = zc * (1 - 0.7 * blood)[..., None] + np.array([0.13, 0.025, 0.018]) * (0.7 * blood)[..., None]
     zc[d_mouthz] *= 0.3
     Image.fromarray((np.clip(zc, 0, 1) * 255).astype(np.uint8)).save(os.path.join(OUT, 'people_head_zom.jpg'), quality=90)
     # data: roughness from the scan's specular, cavity from its colour detail, and a mask for extra grime and blood
     rough = np.clip(0.78 - 0.5 * spec, 0.25, 0.9)
     cav = np.clip(0.5 + (detail - pblur(detail, 6)) * 1.5, 0, 1)
-    mask = np.clip(0.55 * n3 + 0.45 * (1 - smooth01(0.3, 1.6, d_lip)) + 0.2 * (1 - smooth01(0.0, 1.0, (pp[:, 1].reshape(S, S) + 1.0))), 0, 1)
+    mask = np.clip(0.55 * n3 + 0.3 * (1 - smooth01(0.6, 1.8, d_lip)) + 0.2 * (1 - smooth01(0.0, 1.0, (pp[:, 1].reshape(S, S) + 1.0))), 0, 1)
     dat = np.stack([rough, cav, mask], -1)
     Image.fromarray((dat * 255).astype(np.uint8)).save(os.path.join(OUT, 'people_head_dat.jpg'), quality=92)
 

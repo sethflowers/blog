@@ -31,7 +31,7 @@ const ONLY = new URL(import.meta.url).searchParams.get('v');
 const ALL = [
   { name: 'zgroup' }, { name: 'zface' }, { name: 'zattack' }, { name: 'zdead' }, { name: 'zemerge' },
   { name: 'psit' }, { name: 'pbars' }, { name: 'pcheer' }, { name: 'pface' }, { name: 'pwalk' },
-  { name: 'xneck' }, { name: 'xbody' },
+  { name: 'xneck' }, { name: 'xbody' }, { name: 'xscalp' }, { name: 'xsit' }, { name: 'xhair' }, { name: 'xzhair' },
 ];
 export const views = ONLY ? ALL.filter((v) => ONLY.split(',').includes(v.name)) : ALL.filter((v) => !v.name.startsWith('x'));
 
@@ -50,9 +50,12 @@ export async function show(ctx, v){
     const z = Z[0]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0; run(z, { speed: 0 }, 1);
     ctx.setView(V(0, 1.62, 0.05), 1.0, 15, 2);
   } else if (v.name === 'zattack'){
-    const z = Z[1]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0;
-    run(z, { speed: 0.6 }, 0.5); for (let a = 0; a <= 0.47; a += 1 / 30) z.update(1 / 30, { speed: 0.6, attack: a });
-    ctx.setView(V(0, 1.1, 0), 2.8, 35, 5);
+    // the same swing at two moments: cocked back (0.28) and raking through (0.5)
+    [[Z[1], 0.28, -0.55], [Z[2], 0.5, 0.55]].forEach(([z, at, x]) => {
+      z.group.visible = true; z.group.position.set(x, 0, 0); z.group.rotation.y = 0.5;
+      run(z, { speed: 0.6 }, 0.5); for (let a = 0; a <= at; a += 1 / 60) z.update(1 / 60, { speed: 0.6, attack: a });
+    });
+    ctx.setView(V(0, 1.1, 0), 3.0, 20, 5);
   } else if (v.name === 'zdead'){
     const z = Z[2]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0.6;
     for (let d = 0; d <= 1; d += 1 / 40) z.update(1 / 30, { dead: d });
@@ -78,6 +81,22 @@ export async function show(ctx, v){
     const p = Pr[1]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'bars' }, 0.5);
     console.log('xneck', p.group.visible, p.group.position.toArray(), p.group.children.length);
     ctx.setView(V(0, 1.5, 0), 0.9, 60, 5);
+  } else if (v.name === 'xscalp'){
+    const p = Pr[1]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'bars' }, 0.5);
+    p.group.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh){ console.log('hair', o.material.color.getHexString(), o.geometry.attributes.position.count); o.visible = false; } if (o.isSkinnedMesh && o.material.userData.u.uHairCap) console.log('cap', o.material.userData.u.uHairCap.value, o.material.userData.u.uHairCol.value.getHexString()); });
+    ctx.setView(V(0, 1.6, 0), 0.8, 40, 30);
+  } else if (v.name === 'xsit'){
+    const p = Pr[0]; p.group.visible = true; p.group.position.set(0, 0, -5.4); p.group.rotation.y = 0; run(p, { pose: 'sit' }, 1);
+    ctx.setView(V(0, 0.5, -5.4), 2.2, 75, 8);
+  } else if (v.name === 'xhair' || v.name === 'xzhair'){
+    // a row of heads, one per seed, to judge hair and variety
+    const zs = v.name === 'xzhair';
+    if (!show.extra) show.extra = {};
+    const key = v.name;
+    if (!show.extra[key]){ show.extra[key] = []; for (let i = 0; i < 5; i++){ const f = zs ? kit.makeZombie(10 + i) : kit.makePrisoner(10 + i); ctx.scene.add(f.group); show.extra[key].push(f); } }
+    for (const k in show.extra) for (const f of show.extra[k]) f.group.visible = false;
+    show.extra[key].forEach((f, i) => { f.group.visible = true; f.group.position.set((i - 2) * 0.42, 0, 0); f.group.rotation.y = (i - 2) * -0.15; run(f, zs ? { speed: 0 } : { pose: 'bars' }, 0.5); });
+    ctx.setView(V(0, 1.6, 0), 1.8, 0, 3);
   } else if (v.name === 'xbody'){
     const z = Z[0]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0; run(z, { speed: 0 }, 0.5);
     ctx.setView(V(0, 1.1, 0), 1.9, 25, 0);
