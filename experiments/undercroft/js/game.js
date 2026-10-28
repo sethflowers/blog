@@ -922,7 +922,7 @@ function explodeBomb(){
     for (const panel of cw.panels){
       panel.group.updateMatrixWorld(true);
       for (const r of panel.debris()){
-        r.position.applyMatrix4(panel.group.matrixWorld); scene.add(r);
+        scene.add(r);                                    // debris() hands back pieces already placed in the world
         const v = new THREE.Vector3(r.position.x - p.x, 0, r.position.z - p.z).normalize().multiplyScalar(2 + Math.random() * 4);
         v.y = 2 + Math.random() * 4; debris.push({ o: r, v, spin: new THREE.Vector3(R() * 8, R() * 8, R() * 8), t: 0 });
       }

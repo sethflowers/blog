@@ -82,6 +82,7 @@ float gTop, gBot, gLea, gCloth, gBlood, gH, gNail;
 const BODY_FRAG_COLOR = `
   vec3 dS = triDetail(vBP * 17.0 + uSeed, vBN);          // skin pores and blotches, ~6 cm tiles
   vec3 dC = triDetail(vBP * 13.0 + uSeed * 0.7, vBN);    // the weave, ~8 cm tiles
+  vec3 dL = triDetail(vBP * 3.1 + uSeed * 0.3, vBN);     // large: stains, wear, mottling
   float blot = dC.b - 0.5;
   gTop = smoothstep(-0.12, 0.12, vW.x + blot * 0.25);
   gBot = smoothstep(-0.12, 0.12, vW.y + blot * 0.25);
@@ -89,30 +90,35 @@ const BODY_FRAG_COLOR = `
   gCloth = max(gTop, gBot);
   gNail = vS.w;
   float ao = vS.x;
-  // skin: blotchy, darker in creases, bruised and greyed for the dead
-  vec3 skin = uSkin * (0.82 + 0.36 * dS.b) * (0.9 + 0.2 * dS.r);
-  vec3 bruise = mix(vec3(0.20, 0.11, 0.16), vec3(0.14, 0.16, 0.08), step(0.5, fract(blot * 7.0)));
-  skin = mix(skin, skin * bruise * 3.0, uZombie * smoothstep(0.15, 0.35, blot) * 0.6);
-  skin = mix(skin, uSkin * vec3(1.08, 0.85, 0.82), gNail * 0.5);
-  // cloth: the weave, wear (lighter where rubbed) and stains
+  // skin: mottled, darker in creases; the dead are blotched with bruising and greened patches
+  vec3 skin = uSkin * (0.85 + 0.3 * dS.b) * (0.92 + 0.16 * dS.r) * (0.9 + 0.2 * dL.b);
+  float bru = smoothstep(0.55, 0.8, dL.b) * uZombie, grn = smoothstep(0.6, 0.85, dL.r) * uZombie;
+  skin = mix(skin, skin * vec3(0.62, 0.48, 0.58), bru * 0.8);
+  skin = mix(skin, skin * vec3(0.8, 0.88, 0.62), grn * 0.7);
+  skin = mix(skin, skin * vec3(1.05, 0.88, 0.85), gNail * 0.5);
+  // cloth: the weave, faded where worn, darker stains
   float weave = dC.g;
-  vec3 top = uTop * (0.62 + 0.55 * weave) * (0.85 + 0.3 * dC.b);
-  vec3 bot = uBot * (0.62 + 0.55 * weave) * (0.85 + 0.3 * dC.b);
+  float wear = smoothstep(0.55, 0.85, dL.g) * uWear;
+  vec3 top = uTop * (0.7 + 0.45 * weave) * (0.8 + 0.4 * dL.b) * (1.0 + 0.35 * wear);
+  vec3 bot = uBot * (0.7 + 0.45 * weave) * (0.8 + 0.4 * dL.b) * (1.0 + 0.35 * wear);
   vec3 lea = uLea * (0.75 + 0.5 * dS.b) * (vBP.y < 0.024 ? 0.55 : 1.0);
   vec3 col = skin;
   col = mix(col, bot, gBot);
   col = mix(col, top, gTop);
   col = mix(col, lea, gLea);
-  // grime: baked where it gathers, broken up by the detail texture
-  float grime = clamp(vS.y * uDirt * (0.7 + 0.8 * dC.b) + (1.0 - ao) * 0.3, 0.0, 1.0);
-  col = mix(col, col * uGrime * 2.2, grime * 0.75);
+  // grime: baked where it gathers, broken up by the stains
+  float grime = clamp(vS.y * uDirt * (0.6 + 0.9 * dL.b) + (1.0 - ao) * 0.3, 0.0, 1.0);
+  col = mix(col, uGrime * (0.6 + 0.5 * dC.b), grime * 0.6);
   // blood: the potential baked per vertex, how much shows is per person
-  gBlood = smoothstep(1.0 - uBlood, 1.0 - uBlood + 0.15, vS.z + blot * 0.35);
-  vec3 bl = mix(vec3(0.16, 0.012, 0.008), vec3(0.06, 0.012, 0.006), smoothstep(0.3, 0.7, dS.b));
-  col = mix(col, bl, gBlood * 0.9);
-  col *= mix(1.0, ao, 0.75);
+  gBlood = smoothstep(1.0 - uBlood, 1.0 - uBlood + 0.15, vS.z + blot * 0.35 + (dL.b - 0.5) * 0.3);
+  vec3 bl = mix(vec3(0.12, 0.012, 0.008), vec3(0.05, 0.012, 0.006), smoothstep(0.3, 0.7, dS.b));
+  col = mix(col, bl, gBlood * 0.85);
+  col *= mix(1.0, ao, 0.8);
   diffuseColor.rgb = col;
-  gH = mix(dS.r * 0.00035, weave * 0.0009, gCloth) + mix(0.0, (dS.b - 0.5) * 0.0006, gLea);
+  // bumps: fine detail fades out once a pixel is bigger than it (no shimmer), cloth crumples at mid scale
+  float px = length(fwidth(vBP));
+  float fine = 1.0 - smoothstep(0.0006, 0.002, px);
+  gH = mix(dS.r * 0.0003 * fine, weave * 0.0004 * fine + dC.b * 0.0018 + dL.r * 0.003, gCloth) + mix(0.0, (dS.b - 0.5) * 0.0006, gLea);
 `;
 const BODY_FRAG_ROUGH = `
   float roughnessFactor = mix(mix(0.5, 0.42, uZombie) + 0.15 * dS.b, 0.93, gCloth);
@@ -172,13 +178,13 @@ const HEAD_FRAG_COLOR = `
   float pupil = 1.0 - smoothstep(0.15, 0.18, r);
   float a = atan(e.y, e.x);
   float fib = 0.75 + 0.25 * sin(a * 37.0 + r * 9.0) * sin(a * 13.0);
-  vec3 sclera = mix(vec3(0.78, 0.74, 0.68), vec3(0.62, 0.36, 0.3), smoothstep(0.5, 0.95, r) * 0.6);
+  vec3 sclera = mix(mix(vec3(0.7, 0.66, 0.6), vec3(0.5, 0.46, 0.3), uZombie), vec3(0.55, 0.3, 0.26), smoothstep(0.5, 0.95, r) * 0.6);
   vec3 irisC = uIris * fib * (0.6 + 0.6 * smoothstep(0.42, 0.2, r));
   irisC = mix(irisC, irisC * 0.35, smoothstep(0.34, 0.43, r));          // dark limbal ring
   vec3 eye = mix(sclera, irisC, iris);
   eye = mix(eye, vec3(0.02), pupil * (1.0 - uZombie * 0.8));
   eye = mix(eye, mix(eye, vec3(0.62, 0.6, 0.5), 0.55), uZombie * iris);   // milky cataracts on the dead
-  c = mix(c, eye * (0.55 + 0.45 * smoothstep(1.0, 0.6, r)), gEye);
+  c = mix(c, eye * (0.45 + 0.4 * smoothstep(1.0, 0.6, r)), gEye);
   diffuseColor.rgb = c;
 `;
 const HEAD_FRAG_ROUGH = `
@@ -312,21 +318,23 @@ export async function createPeopleKit(opts = {}){
     const bone = (n) => bones[SK.index[n]];
     // looks: colours are sRGB picks, converted for the shader
     const U = bm.userData.u, H = hm.userData.u;
+    // undyed linen, grey wool, faded browns and a washed-out blue: all muted
     const cloth = zombie
-      ? [[0.36, 0.33, 0.28], [0.28, 0.27, 0.25], [0.3, 0.28, 0.22], [0.24, 0.24, 0.26], [0.33, 0.3, 0.25], [0.3, 0.22, 0.18]]
-      : [[0.45, 0.4, 0.32], [0.38, 0.35, 0.3], [0.42, 0.36, 0.28], [0.3, 0.3, 0.3], [0.4, 0.33, 0.25], [0.34, 0.3, 0.24]];
+      ? [[0.3, 0.28, 0.24], [0.22, 0.21, 0.2], [0.26, 0.24, 0.19], [0.2, 0.21, 0.23], [0.28, 0.25, 0.21], [0.25, 0.19, 0.15]]
+      : [[0.4, 0.36, 0.29], [0.31, 0.29, 0.26], [0.35, 0.3, 0.23], [0.25, 0.26, 0.27], [0.33, 0.28, 0.21], [0.24, 0.26, 0.3]];
     const shade = (c, k) => srgb(c[0] * k, c[1] * k, c[2] * k);
     U.uTop.value.copy(shade(pick(r, cloth), 0.85 + r() * 0.3));
     U.uBot.value.copy(shade(pick(r, cloth), 0.7 + r() * 0.25));
-    U.uLea.value.copy(srgb(0.2 + r() * 0.08, 0.14 + r() * 0.05, 0.1));
+    U.uLea.value.copy(srgb(0.14 + r() * 0.06, 0.1 + r() * 0.04, 0.07));
+    U.uWear.value = 0.3 + r() * 0.7;
     let skinTone, hairCol;
     if (zombie){
-      skinTone = srgb(0.5 + r() * 0.06, 0.53 + r() * 0.05, 0.44 + r() * 0.05);
+      skinTone = srgb(0.4 + r() * 0.06, 0.42 + r() * 0.05, 0.35 + r() * 0.05);
       U.uZombie.value = 1; U.uBlood.value = 0.35 + r() * 0.4; U.uDirt.value = 1.1 + r() * 0.4;
       H.uTint.value.setRGB(0.9 + r() * 0.15, 0.95 + r() * 0.1, 0.9 + r() * 0.1);
       H.uBlood.value = 0.2 + r() * 0.35; H.uDirt.value = 1.2;
       H.uIris.value.copy(srgb(0.55, 0.56, 0.5));
-      H.uGlow.value.copy(srgb(0.55, 0.6, 0.25)).multiplyScalar(0.35 + r() * 0.25);
+      H.uGlow.value.copy(srgb(0.55, 0.6, 0.25)).multiplyScalar(0.08 + r() * 0.06);
       hairCol = srgb(0.16 + r() * 0.1, 0.15 + r() * 0.08, 0.13 + r() * 0.06);
     } else {
       // from fair to dark: multiply the scan's (fair) colour by a tone

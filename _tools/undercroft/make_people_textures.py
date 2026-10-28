@@ -1220,7 +1220,7 @@ def head_textures(src):
     pc[..., 2] *= 0.97
     Image.fromarray((np.clip(pc, 0, 1) * 255).astype(np.uint8)).save(os.path.join(OUT, 'people_head_col.jpg'), quality=90)
     # zombies: dead grey-green skin, blotched and bruised, veins, dark cracked lips, sunken bruised sockets
-    base = np.array([0.50, 0.52, 0.44])
+    base = np.array([0.42, 0.44, 0.37])
     zc = base * (0.8 + 0.4 * n1)[..., None]
     zc = zc * (1 - 0.35 * smooth01(0.55, 0.75, n2))[..., None] + np.array([0.20, 0.13, 0.17]) * 0.35 * smooth01(0.55, 0.75, n2)[..., None]   # bruises
     zc = zc * (1 - smooth01(0.6, 0.8, n1) * 0.25)[..., None] + np.array([0.42, 0.40, 0.22]) * (smooth01(0.6, 0.8, n1) * 0.25)[..., None]
@@ -1235,8 +1235,8 @@ def head_textures(src):
     zc = zc * (1 - 0.6 * lips)[..., None] + np.array([0.18, 0.1, 0.12]) * (0.35 * lips)[..., None]
     # dried blood round the mouth and down the chin
     drip = smooth01(0.0, 1.0, (0.33 - pp[:, 1].reshape(S, S)) / 1.4 + 0.3) * (1 - smooth01(0.4, 1.2, np.abs(pp[:, 0].reshape(S, S) + 0.07) - 0.3 * fbm(pp * np.array([6, 0.6, 6]), 2).reshape(S, S)))
-    blood = np.clip(np.maximum(lips * 0.8, drip * (pp[:, 2].reshape(S, S) > 0.8) * smooth01(0.45, 0.6, fbm(pp * np.array([5, 1, 5]) + 2, 3).reshape(S, S))), 0, 1)
-    zc = zc * (1 - 0.75 * blood)[..., None] + np.array([0.2, 0.03, 0.02]) * (0.75 * blood)[..., None]
+    blood = np.clip(np.maximum(lips * 0.35, drip * (pp[:, 2].reshape(S, S) > 0.8) * smooth01(0.45, 0.6, fbm(pp * np.array([5, 1, 5]) + 2, 3).reshape(S, S))), 0, 1)
+    zc = zc * (1 - 0.7 * blood)[..., None] + np.array([0.13, 0.025, 0.018]) * (0.7 * blood)[..., None]
     zc[d_mouthz] *= 0.3
     Image.fromarray((np.clip(zc, 0, 1) * 255).astype(np.uint8)).save(os.path.join(OUT, 'people_head_zom.jpg'), quality=90)
     # data: roughness from the scan's specular, cavity from its colour detail, and a mask for extra grime and blood

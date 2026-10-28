@@ -55,7 +55,7 @@ const envKey = (env) => (env ? env.uuid : '');
 
 // forged steel: blades, heads, fittings. Vertex colours darken the forge-blackened parts.
 const steelMat = (env) => mat('steel' + envKey(env), () => new THREE.MeshStandardMaterial({
-  color: 0xa6a7a8, metalness: 1, roughness: 1, roughnessMap: tex('props_steel_rough.jpg'),
+  color: 0xa0a5ab, metalness: 1, roughness: 1, roughnessMap: tex('props_steel_rough.jpg'),
   normalMap: tex('props_steel_normal.jpg'), normalScale: new V2(0.35, 0.35),
   envMap: env || null, envMapIntensity: 1.4, vertexColors: true }));
 // wrought iron with rust: bands, bars, bombs. Roughness in G, metalness in B of the same map.
@@ -424,7 +424,7 @@ function crossbowGeos(){
     const place = (g) => g.clone().translate(0, 0.0422, -0.218);
     return {
       wood: merge([prep(stockW), place(bolt.wood)]),
-      steel: merge([place(bolt.steel)]),
+      steel: place(bolt.steel),
       iron: merge([prod, ...nocks, [nutG, [1.3, 1.2, 1.1]], ...pins, trig, stir, plate]),
       cord: merge([cord, place(bolt.cord)]),
     };
@@ -1223,7 +1223,7 @@ function skullGrid(na, np){
   return g;
 }
 function skullGeo(){
-  const g = skullGrid(26, 18);
+  const g = skullGrid(24, 18);
   const p = g.attributes.position, col = new Float32Array(p.count * 3);
   const gauss = (x, y, c, w) => Math.exp(-((x - c[0]) ** 2 + (y - c[1]) ** 2) / (w * w));
   for (let i = 0; i < p.count; i++){
@@ -1256,7 +1256,7 @@ function skullGeo(){
     // the upper teeth along the bottom of the face, with dark gaps between them
     const teeth = front * smooth(-0.5, -0.58, y);
     const gaps = teeth * smooth(0.2, 0.95, Math.cos(Math.atan2(x, z) * 32)) * 0.8;
-    const under = smooth(-0.6, -0.95, y) * 0.45 + dark * 0;
+    const under = smooth(-0.6, -0.95, y) * 0.45;
     p.setXYZ(i, X, Y, Z);
     const v = (1 - 0.95 * dark) * (1 - gaps) * (1 - under);
     col[i * 3] = v; col[i * 3 + 1] = v * 0.97; col[i * 3 + 2] = v * 0.92;
@@ -1277,8 +1277,8 @@ export function createSkullPile(opts = {}){
     parts.push(place(bone, [0.02, 0, 0.05], [Math.PI / 2, 0, 1.1]));
     parts.push(place(bone, [-0.05, 0.0, -0.03], [Math.PI / 2, 0, -0.5], 0.92));
     parts.push(place(bone, [0.07, 0.03, -0.06], [Math.PI / 2 + 0.15, 0, 0.2], 0.85));
-    parts.push(place(skull, [0.1, 0, 0.13], [-0.08, 0.25, 0.03]));
-    parts.push(place(skull, [-0.12, 0, 0.09], [0.0, -0.3, -0.06], 0.96));
+    parts.push(place(skull, [0.1, 0, 0.13], [-0.32, 0.25, 0.03]));
+    parts.push(place(skull, [-0.12, 0, 0.09], [-0.28, -0.3, -0.06], 0.96));
     parts.push(place(skull, [-0.01, 0.05, -0.07], [0.32, 0.1, 0.22], 0.98));
     const g = merge(parts);
     g.computeBoundingBox();

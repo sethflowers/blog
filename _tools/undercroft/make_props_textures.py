@@ -167,7 +167,7 @@ def iron(seed):
     rcol = rcol * (1 - heavy[..., None] * 0.35)
     alb = black * (1 - rust[..., None]) + rcol * rust[..., None]
     alb *= (0.6 + 0.4 * cavity(height, 3, 5)[..., None])
-    rough = 0.42 + 0.18 * lump + 0.4 * rust + 0.1 * pits
+    rough = 0.6 + 0.16 * lump + 0.28 * rust + 0.08 * pits
     metal = 0.6 * (1 - rust) + 0.02  # black mill scale is only half metallic; rust not at all
     rm = np.stack([np.zeros_like(rough), rough, metal], -1)
     save(alb, 'props_iron_albedo.jpg', 86)
