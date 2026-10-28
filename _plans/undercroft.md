@@ -1,67 +1,111 @@
 # The Undercroft
 
-A first-person walk through a dark stone maze, aiming for photorealism. This is the demo for a bigger
-game that will add monsters. It plays on an Xbox (in Edge, with the controller), an iPad (touch, or a
-paired Xbox, PlayStation or Switch controller), and a computer (keyboard and mouse).
+A first-person dungeon game, as photorealistic as we can make it in a browser. It was designed on paper
+by a young game designer (three pages: the monster, the power gates, and the rules), and started as a
+walk-through demo (1.x). It plays on an Xbox (Edge, with the controller), an iPad (touch, or a paired
+Xbox, PlayStation or Switch controller), and a computer (keyboard and mouse).
 
-It's built a little differently from the other experiments. It uses a current Three.js (r180, ES modules
-through an import map, in `experiments/undercroft/lib/`) instead of r128, because it needs the newer
-lighting, shadows and post-processing. It also uses real surface textures in `experiments/undercroft/tex/`.
+## The designer's rules (from the drawings)
 
-## What's in it
+- You're in a dungeon and **monsters are chasing you**.
+- **People are stuck in the dungeon's cells. You have to free them.**
+- **If you get in water you die.**
+- **You have five hearts.**
+- There are gateways in the dungeon (drawn as a stone slab with a wavy top and arches inside, one inside
+  another). **You go in them and each one gives you a super power. There are only four:**
+  1. grab stuff with a **big magnet**
+  2. a **remote bomb wand**: you hit a button that makes it explode
+  3. **freeze water** and walk on it
+  4. **can't be hurt for one minute** (read from "you canet it fore one minit")
+- **The monster**: a horse-like body on four legs, a long neck and a bird's head, two tall wings, a dark
+  tail. Powers: its **head shoots lasers and barfs zombies**, **spikes on its wings** can kill people,
+  it's **really tall**, and its **feet are like springs** that boost it faster.
 
-- **The maze**: 8 by 8 rooms on a grid of 2.6 m tiles, 3.2 m ceilings. It's a recursive-backtracker maze
-  with about 30% of the dead ends knocked through, so there are loops. You start in a corner. The way out
-  is the room on the edge that's furthest to walk to, and stairs climb out of it to a doorway with
-  moonlight beyond. Each game gets a new random seed; `?seed=N` replays one.
-- **The look**: the walls, floor and ceiling have colour, normal and roughness maps. The light comes from
-  physically based point lights, with tone mapping, bloom, a slight colour fringe, a vignette, film grain,
-  and shadows pushed cold. Darkening where walls meet the floor, the ceiling and each other is baked into
-  vertex colours. The floor has puddles that shine.
-- **Light**: a dim, cold fill light reaches everywhere, like moonlight leaking through cracks, so the
-  walls and the way ahead can be made out without the torch (1.1). The thin haze in the distance fades
-  to dark grey rather than black. The torch in your hand is a shadow-casting point light that flickers. There are wall torches
-  every few corridors. Three lights are shared between the nearest wall torches you can see, and the
-  nearest of them casts shadows. The number of lights never changes, so shaders never recompile while
-  you play. Cold moonlight comes down the stairs from the way out.
-- **Details**: flames drawn by a shader, embers rising from them, dust drifting through the torchlight,
-  chains swaying from the ceiling, cobwebs in the top corners, loose stones along the walls.
-- **Sound** (all synthesised): room tone, a low drone that beats against itself, dripping water, the torch
-  roaring and crackling, footsteps in a stone room, and a long reverb on everything. Every 30 to 80
-  seconds there's something far away: a groan, a dragged chain, or slow heavy steps. It's positioned in
-  3D so it comes from a direction.
-- **Controls**: controller (left stick walks, right stick looks, RT, RB or a left-stick click hurries,
-  A confirms, Start pauses). Keyboard and mouse (WASD, mouse look with pointer lock, Shift, Esc).
-  Touch (a stick appears under the left thumb and hurries at the edge, the right side looks). The page
-  asks Edge on Xbox for real controller input (`navigator.gamepadInputEmulation`) and keeps a spare
-  history entry so B doesn't navigate away.
-- **Keeping it smooth**: the resolution scales between 0.5x and 1.5x to hold about 50 to 60 fps.
-  `?debug` shows the frame rate.
+Added by request: you start with a **sword**, find **other weapons** and keep everything in a
+**Zelda-style bag**, **hearts** go down when you're hurt, and **food** brings them back.
+
+## How it plays
+
+- **A level** is a maze of 9 by 9 rooms (bigger on later levels). In the middle is the **great hall**:
+  3 by 3 rooms under one 8 m vault with four pillars and fire braziers. This is the monster's hall.
+  It's too tall for the corridors, so it never leaves.
+- **Prisoners**: three cells, each with iron bars. One is in the far reaches of the maze, one is past the
+  water, and one opens off the monster's hall. Hold A at the bars to break the lock. The prisoner cheers,
+  leaves, and waits for you on the stairs. When everyone is free, the portcullis at the foot of the stairs
+  rises. Walk up and out to finish the level. Each later level has one more prisoner, up to five.
+- **Water**: one branch of the maze is cut off by deep water (death if you step in). Freeze it (the gate
+  for it is always reachable without crossing water) and cross before it thaws after 45 s. It cracks
+  as a warning 6 s before. A flooded dead-end room has a roast chicken leg on a stone in the middle:
+  pull it with the magnet, or freeze and walk.
+- **Cracked wall**: a small branch is walled up behind a crumbling wall. Bomb it to get the war hammer.
+- **Power gates** (four, in quiet rooms): walk through for the power. LT / right-click / Q uses it,
+  LB / R swaps between powers.
+  - Magnet: hold to pull food and items to you, and drag zombies onto your blade.
+  - Bomb wand: the first press throws a bomb, the second blows it up. It kills zombies, hurts the
+    monster, breaks the cracked wall, and hurts you if you're too close.
+  - Freeze: freezes all water within 11 m for 45 s.
+  - Shield: nothing can hurt you for 60 s, then it recharges for 30 s.
+- **Weapons** (RT / click; RB, 1–4 or the mouse wheel to switch):
+  - sword: quick, wide
+  - spear: long reach, narrow
+  - war hammer: slow, crushing, knocks back
+  - crossbow: bolts, which you find in chests
+- **Hearts**: 5 hearts, counted in halves. A zombie hit takes half a heart. The monster's lasers, leap
+  and wing spikes take a whole heart. Water kills. After a hit you can't be hurt again for a moment.
+- **Food** (X / F eats whatever fits best, or pick one in the bag):
+  - apple: 1 heart
+  - bread: 1½ hearts
+  - cheese: 2 hearts
+  - roast chicken leg: 3 hearts
+- **Zombies**:
+  - A few wait in the maze. They notice you if you're close, in sight, or hurrying nearby.
+  - They follow a walking-distance map to you (so they come round corners) and never step into deep water.
+  - Three sword hits kill one.
+- **The monster** (40 hit points, a health bar while it's after you):
+  - stalks you around the hall
+  - charges its eyes for a second, then fires twin lasers at where you were (pillars block them)
+  - barfs up two zombies that climb out of the puddle
+  - crouches on its spring feet and leaps at you, with a shockwave where it lands
+  - its wing spikes hurt to touch
+  - when beaten, it drops a feast
+- **The bag** (Y / Tab / BAG): weapons, powers and food as rows of slots. Move with the stick, d-pad or
+  arrows; A or a click uses the slot.
+- **Dying** shows what killed you; TRY AGAIN restarts the level with what you carried into it.
+
+## How it's built
+
+- `_experiments/undercroft.html`: the page, HUD, menus and styles. The code is in ES modules in
+  `experiments/undercroft/js/`:
+  - `level.js`: maze generation and layout, as pure data
+  - `world.js`: geometry and set dressing
+  - `game.js`: everything else
+  - `audio.js`: all sound, synthesised
+  - `env.js`: a small generated environment map for shiny things
+  - `models/`: the monster (`beast.js`), zombies and prisoners (`people.js`), and weapons, food, chests,
+    gates, bars, portcullis, braziers, bombs, cracked walls and bones (`props.js`). If one fails to load,
+    `stubs.js` stands in so the game still runs.
+- Three.js r180 from `experiments/undercroft/lib/` through an import map. Generated textures are in
+  `tex/` (see `_tools/undercroft/make_textures.py`). The water normal map comes from the three.js
+  examples (MIT).
+- Light: a cold fill everywhere, the torch in your left hand (shadowed), and a pool of three lights.
+  Those three are handed each frame to the nearest wall torches, braziers and power gates you can see,
+  and the nearest one casts shadows. There's also one light for explosions and lasers, and the moonlight
+  at the way out. The light count never changes, so shaders never recompile mid-game.
 
 ## Testing without a person
 
-`_tools/undercroft/test.mjs` serves the repo the way Jekyll publishes it and opens the game in headless
-Chromium with a fake standard controller. The game has a `?test` mode (fixed seed, no sound, no
-real-time loop) and `window.__uc` hooks for stepping the simulation and placing the camera. The test
-checks that the page loads without errors, the version shows, A starts the game, the left stick walks,
-walls stop you and the right stick turns. Then it walks the shortest route to the way out using only the
-sticks and checks that you win. It puts the torch out and measures the screen brightness to check you
-can still see, and that the torch still makes a clear difference. Finally it saves screenshots of the start, the stairs and points along
-the route, so they can be looked at.
-
-```
-NODE_PATH=$(npm root -g) node _tools/undercroft/test.mjs /tmp/shots
-python3 _tools/undercroft/make_textures.py     # regenerate the textures
-```
-
-Rendering in the test is software-only (SwiftShader), so it checks what's drawn, not how fast it runs on
-a real device.
+- `_tools/undercroft/test.mjs` plays the game in headless Chromium with a fake standard controller.
+  - **Controls**: it checks the controls and the bag.
+  - **Fighting**: a zombie hurts you and the sword kills it, eating heals, and deep water kills you.
+  - **A full level**: a bot plays it with the sticks and buttons, with damage off so it can't lose. It
+    walks through every gate, freezes and crosses the water, frees every prisoner, bombs the cracked wall,
+    opens every chest, and leaves by the stairs.
+  - **Screenshots**: it saves screenshots of each step to look at.
+- `_tools/undercroft/preview.html` and `shoot.mjs` render a single model module lit like the game, for
+  working on models.
 
 ## Next
 
-- Swap the generated textures for photoscanned ones (Poly Haven / ambientCG, CC0) once those sites are
-  allowed in the environment's network settings.
-- Monsters: something that hunts by sound, so hurrying (louder footsteps) is a risk. The distant sounds
-  are already placed in 3D and can come from it.
-- Doors, side rooms, an iron gate that needs a key, the torch burning down.
+- More levels' worth of variety: different monsters, locked doors and keys, traps.
+- Photoscanned textures once Poly Haven / ambientCG are allowed in the environment's network settings.
 - If it gets too heavy for Edge on Xbox, package it as an app through Xbox Developer Mode.

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- Model previewer for the Undercroft. Lit like the game: torchlight, cold fill, ACES, bloom.
+     Open /_tools/undercroft/preview.html?m=/_tools/undercroft/previews/<name>.js
+     The preview module's default export receives ctx = { THREE, scene, camera, env, room, setView, render }
+     and builds whatever it wants to show. Screenshots: node _tools/undercroft/shoot.mjs (see there). -->
+<html><head><meta charset="utf-8"><title>preview</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "/experiments/undercroft/lib/three.module.min.js" } }</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from '/experiments/undercroft/lib/postprocessing/EffectComposer.js';
+import { RenderPass } from '/experiments/undercroft/lib/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '/experiments/undercroft/lib/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from '/experiments/undercroft/lib/postprocessing/OutputPass.js';
+import { makeEnvMap } from '/experiments/undercroft/js/env.js';
+
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0);
+scene.fog = new THREE.FogExp2(0x0b0c0f, 0.045);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.02, 100);
+const env = makeEnvMap(renderer);
+
+// a stone room like the dungeon's: 12 x 12 m, 9 m high, with the game's textures
+const tl = new THREE.TextureLoader();
+const tex = (n, srgb, r) => { const t = tl.load('/experiments/undercroft/tex/' + n); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(r, r); if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+const stone = (n, r) => new THREE.MeshStandardMaterial({ map: tex(n + '_albedo.jpg', true, r), normalMap: tex(n + '_normal.jpg', false, r), roughnessMap: tex(n + '_rough.jpg', false, r) });
+const room = new THREE.Group(); scene.add(room);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), stone('floor', 4)); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; room.add(floor);
+for (let k = 0; k < 4; k++){
+  const w = new THREE.Mesh(new THREE.PlaneGeometry(12, 9), stone('wall', 3.75)); w.receiveShadow = true;
+  w.position.set(Math.sin(k * Math.PI / 2) * -6, 4.5, Math.cos(k * Math.PI / 2) * -6); w.rotation.y = k * Math.PI / 2; room.add(w);
+}
+scene.add(new THREE.HemisphereLight(0x8090b0, 0x6a5e50, 5.5));
+// a hand torch near the camera and a wall torch off to the side, like in the game
+const torch = new THREE.PointLight(0xffa767, 7.5, 16, 2); torch.castShadow = true; torch.shadow.mapSize.set(1024, 1024); torch.shadow.bias = -0.003; scene.add(torch);
+const wallTorch = new THREE.PointLight(0xff9a55, 12, 18, 2); wallTorch.position.set(-5.4, 2.3, -2); wallTorch.castShadow = true; scene.add(wallTorch);
+
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }));
+composer.addPass(new RenderPass(scene, camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.5, 0.6, 1.1));
+composer.addPass(new OutputPass());
+
+// setView(target, distance, yawDegrees, pitchDegrees): orbit camera; the hand torch sits just right of the camera
+function setView(target, dist, yaw, pitch){
+  const y = THREE.MathUtils.degToRad(yaw), p = THREE.MathUtils.degToRad(pitch);
+  camera.position.set(target.x + Math.sin(y) * Math.cos(p) * dist, target.y + Math.sin(p) * dist, target.z + Math.cos(y) * Math.cos(p) * dist);
+  camera.lookAt(target);
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  torch.position.copy(camera.position).addScaledVector(right, 0.35).add(new THREE.Vector3(0, 0.15, 0));
+}
+const ctx = { THREE, scene, camera, env, room, renderer, torch, wallTorch, setView, render: () => composer.render() };
+window.ctx = ctx;
+const mod = await import(q.get('m'));
+await new Promise((r) => { THREE.DefaultLoadingManager.onLoad = r; setTimeout(r, 4000); });
+await mod.default(ctx);
+composer.render();
+window.ready = true;
+</script>
+</body></html>
