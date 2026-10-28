@@ -1194,7 +1194,8 @@ def head_textures(src):
     d_eye = np.minimum(*[np.linalg.norm((pp - (c + np.array([0, 0.05, 0.3]))) * np.array([1, 1.25, 1]), axis=1) for c in EYES]).reshape(S, S)
     lip = np.array([-0.07, 0.33, 1.95])
     d_lip = np.linalg.norm((pp - lip) * np.array([0.75, 2.2, 1]), axis=1).reshape(S, S)
-    d_mouthz = (pp[:, 2] < 1.6).reshape(S, S) & (d_lip < 1.4)                # inside the mouth
+    rows = np.arange(S)[:, None] * np.ones((1, S))
+    d_mouthz = (rows > 0.86 * S) & (np.abs(pp[:, 0].reshape(S, S) + 0.07) < 1.0) & (pp[:, 2].reshape(S, S) > 0.3)   # the mouth's inside (its own UV islands)
     n1 = fbm(pp * 1.3 + 1, 4).reshape(S, S); n2 = fbm(pp * 3.1 + 7, 4).reshape(S, S); n3 = fbm(pp * 7 + 3, 3).reshape(S, S)
     lum = col @ np.array([0.3, 0.55, 0.15])
     detail = lum / np.median(lum[cov])                     # the scan's own pores, stubble and creases
