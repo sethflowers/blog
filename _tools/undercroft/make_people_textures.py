@@ -24,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', '..', 'experiments', 'undercroft', 'tex')
 SCALE = 0.047                      # scan units to metres (vertex to chin is about 0.235 m)
 PIVOT = np.array([-0.07, -0.35, -0.35])   # the head's pivot (top of the neck) in scan units
-HEAD_TRIS = 5200                   # decimation target for the scanned surface
+HEAD_TRIS = 4500                   # decimation target for the scanned surface
 
 
 # ---------- loading ----------
@@ -122,7 +122,7 @@ def process_head(P, U, F):
             if z > c[2] and in_almond(x, y, c, side): keep[i] = False
     # trim the bust: keep the neck down to just above the collarbones (lower at the front)
     lowest = P[F][:, :, 1].min(1)
-    keep &= lowest > -1.95 - 0.28 * np.clip(cen[:, 2], -1, 1)
+    keep &= lowest > -2.25 - 0.35 * np.clip(cen[:, 2], -1, 1)
     F = F[keep]
     # tuck the new lid edges onto the eyeball, so the lids hug it instead of ending in a paper edge
     for loop in boundary_loops(F):
@@ -518,7 +518,7 @@ def body_parts(sh):
         add('chest', lambda p, s=s: ell(p, (s * 0.085, 1.37, -0.085), (0.066, 0.07, 0.03)), 0.04)
         # trapezius: a slope from the neck down to the shoulder
         add('chest', lambda p, s=s: cap(p, (s * 0.02, 1.49, -0.045), (s * (0.15 + 0.01 * br), 1.445, -0.035), 0.043, 0.036), 0.04)
-    add('neck', lambda p: cap(p, (0, 1.43, -0.025), (0, 1.555, -0.005), 0.064, 0.05), 0.035)
+    add('neck', lambda p: cap(p, (0, 1.43, -0.025), (0, 1.54, -0.01), 0.058, 0.045), 0.035)
     for s, n in ((1, 'L'), (-1, 'R')):
         A, E, Wr = J['arm' + n], J['fore' + n], J['hand' + n]
         R = rotz(s * ARM_A)
@@ -574,11 +574,16 @@ def outfit_fields(sh, o):
         top = bot = belt = big
         if o.get('top'):
             T = o['top']
-            body = drape(parts, p, TORSO_BONES, 0.07)
+            body = drape(parts, p, ('hips', 'spine', 'chest'), 0.045)
             n = fbm(p * 9 + seed, 2)
-            # drapes and creases: vertical folds hanging from the chest, a few diagonal pulls, slack at the belly
-            folds = 0.004 * np.sin(p[:, 0] * 70 + n * 6) * np.clip((1.3 - p[:, 1]) / 0.25, 0, 1)
-            folds += 0.003 * np.sin((p[:, 1] * 1.0 + np.abs(p[:, 0]) * 0.8) * 90 + n * 5)
+            # drapes and creases: soft vertical folds hanging from the chest and shoulder blades, pulls toward
+            # the armpits, slack bunched over the belt
+            hang = fbm(p * np.array([16, 2.5, 16]) + seed, 3)
+            pull = fbm(np.c_[p[:, 0] * 9 + p[:, 1] * 9 * np.sign(p[:, 0]), p[:, 1] * 3, p[:, 2] * 9] + seed + 4, 2)
+            bunch = fbm(p * np.array([10, 30, 10]) + seed + 8, 2)
+            folds = 0.011 * (hang - 0.5) * np.clip((1.36 - p[:, 1]) / 0.2, 0, 1)
+            folds += 0.008 * (pull - 0.5) * np.clip(1 - np.abs(p[:, 1] - 1.28) / 0.12, 0, 1)
+            folds += 0.008 * (bunch - 0.5) * np.clip(1 - np.abs(p[:, 1] - (T['hem'] + 0.06)) / 0.07, 0, 1)
             t = T['loose'] + 0.006 * n + folds
             top = body - t
             # sleeves
@@ -586,8 +591,9 @@ def outfit_fields(sh, o):
                 A, E, Wr = J_['arm' + nm], J_['fore' + nm], J_['hand' + nm]
                 along = (p - A) @ (rotz(s * ARM_A) @ np.array([0, -1.0, 0]))
                 arm = smin(cap(p, A, E, 0.05, 0.04), cap(p, E, Wr, 0.039, 0.028), 0.03)
-                sl = arm - (T['loose'] * 0.9 + 0.006 * np.clip(along / 0.4, 0, 1) + 0.004 * n
-                            + 0.003 * np.sin(along * 110 + n * 5))
+                ring = fbm(np.c_[along * 28, p[:, 0] * 4, p[:, 2] * 4] + seed + 2 * s, 2)
+                sl = arm - (T['loose'] * 0.9 + 0.008 * np.clip(along / 0.4, 0, 1) + 0.004 * n
+                            + 0.009 * (ring - 0.5) * (0.4 + np.exp(-((along - 0.29) / 0.07) ** 2)))   # creases bunch at the elbow
                 L = T['sleeve'] + (fbm(p * 30 + seed, 2) - 0.5) * T['rag'] * 0.6
                 sl = smax(sl, along - L, 0.004)
                 top = smin(top, sl, 0.02) if T['sleeve'] > 0.02 else top
@@ -597,7 +603,7 @@ def outfit_fields(sh, o):
             hem = T['hem'] + (fbm(p * np.array([25, 4, 25]) + seed, 2) - 0.5) * T['rag']
             top = smax(top, hem - p[:, 1], 0.004)
             # neckline: round, or a slit down the front
-            nk = ell(p, (0, 1.5, -0.01), (0.085, 0.07, 0.085))
+            nk = ell(p, (0, 1.49, -0.012), (0.078, 0.06, 0.075))
             if T.get('vneck'):
                 nk = smin(nk, cap(p, (0, 1.47, 0.07), (0, 1.36, 0.11), 0.02, 0.004), 0.02)
             top = smax(top, -nk, 0.008)
@@ -614,8 +620,12 @@ def outfit_fields(sh, o):
                 legs.append(drape(parts, p, ('hips', 'thigh' + nm, 'shin' + nm), 0.05))
             body = np.minimum(legs[0], legs[1])
             low = np.clip((0.55 - p[:, 1]) / 0.45, 0, 1)
-            folds = 0.004 * np.sin(p[:, 1] * 95 + n * 7) * (low ** 1.5 + 0.4 * np.clip((0.62 - np.abs(p[:, 1] - 0.47) * 6), 0, 1))
-            folds += 0.003 * np.sin((p[:, 1] - np.abs(p[:, 0]) * 0.6) * 75 + n * 4) * np.clip((p[:, 1] - 0.6) / 0.3, 0, 1)
+            rings = fbm(p * np.array([5, 26, 5]) + seed + 3, 2) - 0.5       # bunched above the ankle and behind the knee
+            hang = fbm(p * np.array([14, 2.5, 14]) + seed + 6, 2) - 0.5     # long folds down the shin
+            diag = fbm(np.c_[p[:, 0] * 10 - p[:, 1] * 8 * np.sign(p[:, 0]), p[:, 1] * 3, p[:, 2] * 10] + seed, 2) - 0.5
+            folds = 0.012 * rings * (low ** 1.5 + 0.6 * np.exp(-((p[:, 1] - 0.47) / 0.06) ** 2))
+            folds += 0.008 * hang * np.clip((0.75 - p[:, 1]) / 0.3, 0, 1)
+            folds += 0.008 * diag * np.clip(1 - np.abs(p[:, 1] - 0.85) / 0.15, 0, 1)
             t = B['loose'] + 0.012 * low * B.get('flare', 1) + 0.005 * n + folds
             bot = body - t
             bot = smax(bot, p[:, 1] - 1.035, 0.004)               # waistband
@@ -759,7 +769,7 @@ def hand_mesh():
     if 'hand' not in _CACHE:
         print('  hand')
         HV, HF = mesh_part(hand_field, (-0.035, -0.2, -0.05), (0.035, 0.045, 0.085), 0.0028, 500)
-        HN = sdf_normals(hand_field, HV, 0.0015)
+        HN = vertex_normals(HV, HF)
         hao = bake_ao(hand_field, HV, HN, 0.006, 0.015)
         names, hd = hand_bones(HV)
         _CACHE['hand'] = (HV, HF, HN, hao, names, hd, nail_mask(HV, HN))
@@ -772,7 +782,7 @@ def foot_mesh(kind):
         print('  foot', kind)
         ff = foot_field(kind, 1)
         FV, FF = mesh_part(ff, (-0.07, 0.0, -0.1), (0.07, 0.24, 0.26), 0.0042, 300 if kind == 'bare' else 250)
-        FN = sdf_normals(ff, FV, 0.002)
+        FN = vertex_normals(FV, FF)
         _CACHE[kind] = (FV, FF, FN, bake_ao(ff, FV, FN, 0.008, 0.02))
     return _CACHE[kind]
 
@@ -801,7 +811,7 @@ def to_world(P, M):
     return P @ M[:3, :3].T + M[:3, 3]
 
 
-def build_body(name, sh, o, cell=0.0105, tris=3600):
+def build_body(name, sh, o, cell=0.0095, tris=4200):
     print(' body', name)
     parts, fields = outfit_fields(sh, o)
     fn = body_field(fields)
@@ -811,7 +821,7 @@ def build_body(name, sh, o, cell=0.0105, tris=3600):
             m += 2.5 * np.exp(-np.sum((V - J[jn]) ** 2, 1) / 0.006)
         return m
     V, F = mesh_part(fn, (-0.5, 0.02, -0.2), (0.5, 1.6, 0.22), cell, tris, imp)
-    N = sdf_normals(fn, V, 0.004)
+    N = vertex_normals(V, F)
     s, t, b, l = fields(V)
     ao = bake_ao(fn, V, N, 0.02, 0.05)
     def reg(me, *others):
@@ -1002,11 +1012,11 @@ def hairline(P):
 
 HAIR_STYLES = {
     # cards, length (scan units), lift, gravity, randomness, atlas half (0 thick, 1 thin), width
-    'cropped': dict(n=150, L=(0.45, 0.7), lift=0.03, grav=0.3, mess=0.25, half=0, w=0.55, seed=1, cover=1.0),
-    'short': dict(n=140, L=(0.9, 1.4), lift=0.05, grav=0.45, mess=0.3, half=0, w=0.6, seed=2, cover=1.0),
-    'messy': dict(n=150, L=(1.2, 2.0), lift=0.09, grav=0.35, mess=0.8, half=0, w=0.6, seed=3, cover=1.0),
-    'long': dict(n=150, L=(2.6, 4.2), lift=0.07, grav=0.8, mess=0.35, half=0, w=0.7, seed=4, cover=1.0),
-    'thin': dict(n=60, L=(1.6, 3.4), lift=0.03, grav=0.85, mess=0.4, half=1, w=0.6, seed=5, cover=0.6),
+    'cropped': dict(n=90, L=(0.4, 0.65), lift=0.02, grav=0.3, mess=0.25, half=0, w=0.5, seed=1, cover=1.0, rise=0.03),
+    'short': dict(n=170, L=(0.8, 1.3), lift=0.03, grav=0.45, mess=0.3, half=0, w=0.5, seed=2, cover=1.0, rise=0.06),
+    'messy': dict(n=170, L=(1.1, 1.9), lift=0.04, grav=0.35, mess=0.7, half=0, w=0.55, seed=3, cover=1.0, rise=0.1),
+    'long': dict(n=180, L=(2.4, 4.0), lift=0.04, grav=0.8, mess=0.3, half=0, w=0.6, seed=4, cover=1.0, rise=0.08),
+    'thin': dict(n=55, L=(1.6, 3.2), lift=0.02, grav=0.85, mess=0.4, half=1, w=0.55, seed=5, cover=0.6, rise=0.03),
 }
 
 
@@ -1021,7 +1031,11 @@ def build_hair(P, F, style):
     w = area * (fm > 0.6); w /= w.sum()
     crown = np.array([-0.1, 3.3, -1.0])
     pos, nor, uv, idx = [], [], [], []
-    K = 4
+    K = 3
+    def keep_off(q, h):
+        i = np.argmin(np.sum((P - q) ** 2, 1))
+        d = (q - P[i]) @ N[i]
+        return q + N[i] * (h - d) if d < h else q
     for c in range(st['n']):
         f = rng.choice(len(F), p=w)
         b = rng.dirichlet([1, 1, 1])
@@ -1043,8 +1057,8 @@ def build_hair(P, F, style):
                 uv.append([u0 if e < 0 else u1, 1 - t * 0.98])
             if k < K:
                 q = q + d * (L / K)
-                # keep it off the scalp: push out along the root normal as it grows
-                q = q + n * (L / K) * (0.12 + st['lift'])
+                # lie along the skull, a little higher toward the tip, hanging free past it
+                q = keep_off(q, st['lift'] + st['rise'] * (k + 1))
                 d = d + np.array([0, -1.0, 0]) * st['grav'] * 0.35 + rng.normal(0, st['mess'] * 0.15, 3)
                 d /= np.linalg.norm(d)
                 nn = n * 0.7 + np.array([0, 0.3, 0]); nn /= np.linalg.norm(nn)
@@ -1138,8 +1152,8 @@ def hair_texture():
                 t = k / 24
                 a = int(255 * min(1, (1 - t) * 1.6) * (0.75 + 0.25 * rng.random()))
                 d.line([pts[k], pts[k + 1]], fill=(lum, a), width=max(1, int(thick * S * (1 - 0.5 * t))))
-    strands(0, W // 2, 900, 9, 1.4)
-    strands(W // 2, W, 220, 5, 1.0)
+    strands(0, W // 2, 330, 8, 1.1)
+    strands(W // 2, W, 110, 5, 0.9)
     img = big.resize((W, H), Image.LANCZOS)
     la = np.asarray(img).astype(float)
     lum = la[..., 0] / np.maximum(la[..., 1] / 255, 1e-3); lum = np.clip(lum, 0, 255)

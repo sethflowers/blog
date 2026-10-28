@@ -1240,29 +1240,33 @@ function padConnected(){ const ps = navigator.getGamepads ? navigator.getGamepad
 
 // icons for weapons and food: render each model once into a small transparent picture
 function renderIcons(){
-  const size = 160, rt = new THREE.WebGLRenderTarget(size, size, { samples: 4 });
+  // drawn at twice the size and scaled down, since a multisampled target can't be read back reliably
+  const size = 160, big = 320, rt = new THREE.WebGLRenderTarget(big, big);
   rt.texture.colorSpace = THREE.SRGBColorSpace;
   const isc = new THREE.Scene();
-  isc.add(new THREE.HemisphereLight(0xfff1dd, 0x302820, 2.2));
-  const key = new THREE.DirectionalLight(0xffd8a8, 3.5); key.position.set(2, 3, 4); isc.add(key);
+  isc.add(new THREE.HemisphereLight(0xfff1dd, 0x302820, 3.5));
+  const key = new THREE.DirectionalLight(0xffd8a8, 5); key.position.set(2, 3, 4); isc.add(key);
   const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 50);
+  isc.environment = env;
   const canvas = document.createElement('canvas'); canvas.width = canvas.height = size; const ctx = canvas.getContext('2d');
-  const pixels = new Uint8Array(size * size * 4), img = ctx.createImageData(size, size);
+  const tmpC = document.createElement('canvas'); tmpC.width = tmpC.height = big; const tctx = tmpC.getContext('2d');
+  const pixels = new Uint8Array(big * big * 4), img = tctx.createImageData(big, big);
   const snap = (obj, name, rot) => {
-    const g = new THREE.Group(); g.add(obj); if (rot) g.rotation.set(rot[0], rot[1], rot[2]); isc.add(g);
+    const g = new THREE.Group(); g.add(obj); if (rot){ g.rotation.order = 'ZYX'; g.rotation.set(rot[0], rot[1], rot[2]); } isc.add(g);
     g.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3()), r = box.getSize(new THREE.Vector3()).length() / 2;
     cam.position.copy(c).add(new THREE.Vector3(0, r * 0.3, r / Math.tan(THREE.MathUtils.degToRad(15)) * 1.02)); cam.lookAt(c);
     renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(isc, cam);
-    renderer.readRenderTargetPixels(rt, 0, 0, size, size, pixels);
-    for (let y = 0; y < size; y++) img.data.set(pixels.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
-    ctx.putImageData(img, 0, 0); icons[name] = canvas.toDataURL();
+    renderer.readRenderTargetPixels(rt, 0, 0, big, big, pixels);
+    for (let y = 0; y < big; y++) img.data.set(pixels.subarray((big - 1 - y) * big * 4, (big - y) * big * 4), y * big * 4);
+    tctx.putImageData(img, 0, 0); ctx.clearRect(0, 0, size, size); ctx.drawImage(tmpC, 0, 0, size, size); icons[name] = canvas.toDataURL();
     isc.remove(g);
   };
   try {
-    snap(props.createWeapon('sword', { env }), 'sword', [0, 0, -0.8]);
-    snap(props.createWeapon('spear', { env }), 'spear', [0, 0, -0.8]);
-    snap(props.createWeapon('hammer', { env }), 'hammer', [0, 0, -0.7]);
+    // weapons: turn the flat of the blade to the camera, then lay them across the picture
+    snap(props.createWeapon('sword', { env }), 'sword', [0, Math.PI / 2, -0.8]);
+    snap(props.createWeapon('spear', { env }), 'spear', [0, Math.PI / 2, -0.8]);
+    snap(props.createWeapon('hammer', { env }), 'hammer', [0, Math.PI / 2, -0.6]);
     snap(props.createWeapon('crossbow', { env }), 'crossbow', [0.3, -2.2, 0]);
     for (const f of Object.keys(FOOD)) snap(props.createFood(f), f, [0.5, 0.4, 0]);
   } catch (e){ console.warn('[undercroft] icons', e); }
@@ -1447,8 +1451,9 @@ async function boot(){
   try { peopleKit = await pe.createPeopleKit({ env }); } catch (e){ console.warn('[undercroft] people', e); peopleKit = await stubs.createPeopleKit({ env }); }
   for (const w of WEAPON_ORDER){ const m = props.createWeapon(w, { env }); m.visible = w === 'sword'; m.traverse((o) => { if (o.isMesh){ o.castShadow = false; } }); weaponModels[w] = m; weaponHolder.add(m); }
   // a title-screen backdrop: the first level, seen from the start
-  lv = null; buildLevel(); renderIcons(); updateHud();
+  lv = null; buildLevel(); updateHud();
   await new Promise((r) => { THREE.DefaultLoadingManager.onLoad = r; setTimeout(r, 8000); });
+  renderIcons(); updateHud();
   compileAll();
   state = 'title'; show('title');
   $('startBtn').disabled = false; $('loading').classList.add('hidden');
@@ -1479,6 +1484,7 @@ window.__uc = {
     while (d[z * W + x] > 0){ out.push([x, z]); const n = DIRS.map(([a, b]) => [x + a, z + b]).find(([a, b]) => d[b * W + a] === d[z * W + x] - 1); [x, z] = n; }
     out.push([x, z]); return out; },
   iceLeft(i, j){ const w = world.water.get(j * lv.W + i); return w ? Math.max(0, w.frozenUntil - simTime) : null; },
+  get icons(){ return icons; },
   tileOf(x, z){ return [Math.floor(x / TILE), Math.floor(z / TILE)]; },
   center, TILE, T, floorAt, solidAt: (x, z) => solidAt(x, z),
   timeRender(){ const t = performance.now(); composer.render(); renderer.getContext().finish(); return performance.now() - t; },

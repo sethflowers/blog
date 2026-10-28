@@ -28,8 +28,9 @@ export function makeMaterials(renderer, env){
   // dark, still, deadly water: almost black, mirror-smooth, a slow ripple
   m.water = new THREE.MeshStandardMaterial({ color: 0x020405, roughness: 0.04, metalness: 0.2, normalMap: wn, normalScale: new THREE.Vector2(0.35, 0.35),
     envMap: env, envMapIntensity: 1.2 });
-  m.ice = new THREE.MeshPhysicalMaterial({ color: 0x9fbccf, roughness: 0.18, metalness: 0, normalMap: m.floor.normalMap, normalScale: new THREE.Vector2(0.25, 0.25),
-    clearcoat: 1, clearcoatRoughness: 0.08, envMap: env, envMapIntensity: 1.4, transparent: true, opacity: 0.92 });
+  // ice: dark water seen through a glassy, slightly milky crust
+  m.ice = new THREE.MeshPhysicalMaterial({ color: 0x3d5566, roughness: 0.35, metalness: 0, normalMap: m.floor.normalMap, normalScale: new THREE.Vector2(0.35, 0.35),
+    clearcoat: 1, clearcoatRoughness: 0.05, envMap: env, envMapIntensity: 1.6, transparent: true, opacity: 0.88 });
   return m;
 }
 

@@ -609,7 +609,7 @@ function chestGeos(){
     const r = rng(7), j = () => (r() - 0.5);
     const centre = new V3(0, Y0 + H / 2, 0);
     const boards = [];
-    const board = (g, grain) => { g = projUV(g, 1, grain, r(), r()); boards.push(prep(g, 0.85 + 0.25 * r())); };
+    const board = (g, grain) => { g = projUV(g, 1, grain, r(), r()); const k = 0.68 + 0.4 * r(); boards.push(prep(g, [k, k * (0.96 + 0.06 * r()), k * (0.9 + 0.1 * r())])); };
     for (let k = 0; k < 3; k++){ // front, back and side boards, each a little uneven
       const y = Y0 + H / 6 + k * H / 3, bh = H / 3 - 0.004;
       for (const zs of [1, -1]) board(box(W, bh, T, j() * 0.002, y, zs * (D / 2 - T / 2) + j() * 0.003, 0, 0, j() * 0.004), 'x');
@@ -1199,10 +1199,31 @@ export function createCrackedWall(opts = {}){
 
 // ---------- skulls ----------
 
-// A human skull from a sphere (its pole at the face, where the detail is): ellipsoid cranium, narrow
-// face, deep sockets and nose, cheekbones, brow. Vertex colours sink the holes into darkness.
+// A human skull deformed from a sphere: long dome, upright face plane, deep sockets and nose, cheekbones,
+// brow and upper teeth. Its grid puts more columns round the face than the back of the head, and the
+// poles at crown and base, so the face has no pinch. Vertex colours sink the holes into darkness.
+function skullGrid(na, np){
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i <= np; i++){
+    const q = i / np, th = Math.PI * (q + 0.075 * Math.sin(TAU * q));  // rows bunched round the face
+    for (let j = 0; j <= na; j++){
+      const s = 2 * j / na - 1, a = Math.PI * (0.55 * s + 0.45 * s * s * s);
+      pos.push(Math.sin(th) * Math.sin(a), Math.cos(th), Math.sin(th) * Math.cos(a)); uv.push(j / na, 1 - i / np);
+    }
+  }
+  for (let i = 0; i < np; i++) for (let j = 0; j < na; j++){
+    const a = i * (na + 1) + j, b = a + na + 1, c = a + 1, d = b + 1;
+    if (i > 0) idx.push(a, b, c);
+    if (i < np - 1) idx.push(c, b, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
 function skullGeo(){
-  const g = new THREE.SphereGeometry(1, 26, 18).rotateX(Math.PI / 2);
+  const g = skullGrid(26, 18);
   const p = g.attributes.position, col = new Float32Array(p.count * 3);
   const gauss = (x, y, c, w) => Math.exp(-((x - c[0]) ** 2 + (y - c[1]) ** 2) / (w * w));
   for (let i = 0; i < p.count; i++){
@@ -1210,10 +1231,10 @@ function skullGeo(){
     const front = smooth(0.3, 0.8, z), low = smooth(0.25, -0.5, y);
     // cranium: a long dome, wider at the back; the face narrows below the brow
     let X = x * 0.069 * (1 - 0.3 * front * low) * (1 + 0.06 * smooth(0.3, -0.7, z) * smooth(-0.6, 0.2, y));
-    let Y = y * (y > 0 ? 0.078 : 0.07);
+    let Y = y * (y > 0 ? 0.078 : 0.07) * (y < 0 ? 1 - 0.38 * smooth(0.35, -0.45, z) : 1);  // the base rises behind the face
     let Z = z * (z > 0 ? 0.09 : 0.1);
     // the face is a nearly flat, upright plane under the brow, the upper jaw a little forward of it
-    const plane = 0.071 + 0.004 * smooth(-0.4, -0.75, y) - 0.012 * smooth(-0.75, -0.95, y);
+    const plane = 0.071 + 0.005 * smooth(-0.35, -0.6, y) - 0.014 * smooth(-0.62, -0.85, y);
     if (z > 0 && y < 0.38){ const k = smooth(0.38, 0.1, y); Z = Z * (1 - k) + Math.min(Z, plane) * k; }
     if (Y < -0.054) Y = -0.054 + (Y + 0.054) * 0.25;            // flat underside
     let dark = 0;
@@ -1221,18 +1242,19 @@ function skullGeo(){
       // eye sockets: deep round pits with a crisp rim, set in the face plane
       const e = Math.hypot((x - 0.36 * s) / 0.25, (y - 0.04) / 0.22);
       const pit = smooth(1.05, 0.55, e) * front;
-      Z -= 0.04 * pit; X -= s * 0.008 * pit; dark = Math.max(dark, smooth(0.75, 0.95, 1 - e * 0.55) * front);
+      Z -= 0.04 * pit; X -= s * 0.008 * pit; dark = Math.max(dark, smooth(1.0, 0.45, e) * front);
       Z += 0.004 * smooth(1.3, 1.05, e) * smooth(0.9, 1.1, e) * front;  // the rim stands proud
       X += s * 0.011 * gauss(x, y, [0.8 * s, -0.28], 0.25) * smooth(-0.2, 0.5, z);   // cheekbones
-      X -= s * 0.009 * gauss(x, y, [0.95 * s, -0.12], 0.35) * smooth(0.6, -0.1, z) * smooth(-0.6, 0.2, z); // temples
+      const tf = gauss(x, y, [0.95 * s, -0.15], 0.33) * smooth(0.65, 0.0, z) * smooth(-0.6, 0.15, z);
+      X -= s * 0.01 * tf; dark = Math.max(dark, tf * 0.4);                                        // temples, under the cheekbone arch
     }
     // the nose: an inverted heart-shaped hole between and below the eyes
     const nw = 0.06 + 0.07 * smooth(-0.2, -0.45, y);
     const nose = smooth(1, 0.45, Math.hypot(x / nw, (y + 0.32) / 0.15)) * front;
-    Z -= 0.026 * nose; dark = Math.max(dark, smooth(0.15, 0.6, nose));
+    Z -= 0.026 * nose; dark = Math.max(dark, smooth(0.0, 0.45, nose));
     Z += 0.006 * Math.exp(-(((y - 0.3) / 0.09) ** 2)) * front * smooth(0.8, 0.3, Math.abs(x));  // brow ridge
     // the upper teeth along the bottom of the face, with dark gaps between them
-    const teeth = front * smooth(-0.62, -0.7, y);
+    const teeth = front * smooth(-0.5, -0.58, y);
     const gaps = teeth * smooth(0.2, 0.95, Math.cos(Math.atan2(x, z) * 32)) * 0.8;
     const under = smooth(-0.6, -0.95, y) * 0.45 + dark * 0;
     p.setXYZ(i, X, Y, Z);
@@ -1245,7 +1267,7 @@ function skullGeo(){
 }
 function longBoneGeo(){
   return atlas(scaleUV(lathe([[0, -0.205], [0.016, -0.2], [0.024, -0.185], [0.022, -0.165], [0.013, -0.14], [0.011, -0.05], [0.0105, 0.05],
-    [0.012, 0.14], [0.02, 0.17], [0.025, 0.19], [0.015, 0.205], [0, 0.208]], 8), 1, 1), MISC.bone);
+    [0.012, 0.14], [0.02, 0.17], [0.025, 0.19], [0.015, 0.205], [0, 0.208]], 7), 1, 1), MISC.bone);
 }
 
 export function createSkullPile(opts = {}){
@@ -1255,8 +1277,8 @@ export function createSkullPile(opts = {}){
     parts.push(place(bone, [0.02, 0, 0.05], [Math.PI / 2, 0, 1.1]));
     parts.push(place(bone, [-0.05, 0.0, -0.03], [Math.PI / 2, 0, -0.5], 0.92));
     parts.push(place(bone, [0.07, 0.03, -0.06], [Math.PI / 2 + 0.15, 0, 0.2], 0.85));
-    parts.push(place(skull, [0.1, 0, 0.13], [-0.08, 0.35, 0.03]));
-    parts.push(place(skull, [-0.12, 0, 0.09], [0.0, -0.45, -0.06], 0.96));
+    parts.push(place(skull, [0.1, 0, 0.13], [-0.08, 0.25, 0.03]));
+    parts.push(place(skull, [-0.12, 0, 0.09], [0.0, -0.3, -0.06], 0.96));
     parts.push(place(skull, [-0.01, 0.05, -0.07], [0.32, 0.1, 0.22], 0.98));
     const g = merge(parts);
     g.computeBoundingBox();

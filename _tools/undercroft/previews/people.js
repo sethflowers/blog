@@ -26,10 +26,14 @@ export default async (ctx) => {
   scene.add(bars);
 };
 
-export const views = [
+// pick views with the module path: people.js?v=zface,xneck (x* views are diagnostics, left out by default)
+const ONLY = new URL(import.meta.url).searchParams.get('v');
+const ALL = [
   { name: 'zgroup' }, { name: 'zface' }, { name: 'zattack' }, { name: 'zdead' }, { name: 'zemerge' },
   { name: 'psit' }, { name: 'pbars' }, { name: 'pcheer' }, { name: 'pface' }, { name: 'pwalk' },
+  { name: 'xneck' }, { name: 'xbody' },
 ];
+export const views = ONLY ? ALL.filter((v) => ONLY.split(',').includes(v.name)) : ALL.filter((v) => !v.name.startsWith('x'));
 
 function hideAll(){ for (const f of [...Z, ...Pr]) f.group.visible = false; bars.visible = false; }
 function run(f, s, secs){ for (let t = 0; t < secs; t += 1 / 30) f.update(1 / 30, s); }
@@ -70,6 +74,13 @@ export async function show(ctx, v){
   } else if (v.name === 'pface'){
     const p = Pr[0]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'bars' }, 1);
     ctx.setView(V(0, 1.62, 0.05), 0.9, -15, 0);
+  } else if (v.name === 'xneck'){
+    const p = Pr[1]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'bars' }, 0.5);
+    console.log('xneck', p.group.visible, p.group.position.toArray(), p.group.children.length);
+    ctx.setView(V(0, 1.5, 0), 0.9, 60, 5);
+  } else if (v.name === 'xbody'){
+    const z = Z[0]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0; run(z, { speed: 0 }, 0.5);
+    ctx.setView(V(0, 1.1, 0), 1.9, 25, 0);
   } else if (v.name === 'pwalk'){
     Pr.forEach((p, i) => { p.group.visible = true; p.group.position.set((i - 1) * 1.1, 0, 0); p.group.rotation.y = 1.2; run(p, { pose: 'walk', speed: [1.2, 2.2, 3.5][i] }, 0.8 + i * 0.3); });
     ctx.setView(V(0, 1.0, 0), 3.8, 20, 4);

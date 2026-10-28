@@ -897,7 +897,7 @@ export function createBeast(opts = {}){
   const legs = LEGS.map((L) => ({
     L, up: B(L.n + 'up'), lo: B(L.n + 'lo'), spring: B(L.n + 'spring'), foot: B(L.n + 'foot'),
     a: Math.hypot(L.knee[1] - L.hip[1], L.knee[2] - L.hip[2]), b: Math.hypot(L.ankle[1] - L.knee[1], L.ankle[2] - L.knee[2]),
-    hipY: L.hip[1] - J.body[1], hipZ: L.hip[2], ankleLoY: L.ankle[1] - L.knee[1],
+    hipY: L.hip[1] - J.body[1], hipZ: L.hip[2], footRestY: rest[BI[L.n + 'foot']].y,
     // gait offsets: walk (lateral four-beat) and bound (front pair, then hind pair)
     walk: { HL: 0, FL: 0.25, HR: 0.5, FR: 0.75 }[L.n], bound: { FL: 0, FR: 0.06, HL: 0.5, HR: 0.56 }[L.n],
   }));
@@ -945,7 +945,7 @@ export function createBeast(opts = {}){
       let sc = 0.9 - comp - crouch * 0.5 + air * 0.4;
       sc = lerp(clamp(sc, 0.4, 1.35), 1.0, 1 - live);
       g.spring.scale.y = sc;
-      g.foot.position.y = rest[BI[g.L.n + 'foot']].y - (sc - 1) * SPRING_LEN;
+      g.foot.position.y = g.footRestY - (sc - 1) * SPRING_LEN;
       // hip height above the ground (body pitch moves front and back hips opposite ways)
       const hipY = by + g.hipY * Math.cos(bodyPitch) - g.hipZ * Math.sin(bodyPitch);
       const ankleH = FOOT_Y + SPRING_LEN * sc;
