@@ -1,25 +1,77 @@
-let head;
+// Preview of the zombies and prisoners (experiments/undercroft/js/models/people.js), lit like the game.
+//   NODE_PATH=$(npm root -g) node _tools/undercroft/shoot.mjs /_tools/undercroft/previews/people.js /tmp/people/shot
+import { createPeopleKit } from '/experiments/undercroft/js/models/people.js';
+
+let kit, Z = [], Pr = [], bars;
+
 export default async (ctx) => {
   const { THREE, scene } = ctx;
-  const buf = await (await fetch('/experiments/undercroft/tex/people_head.bin')).arrayBuffer();
-  const [nv, ni] = new Uint32Array(buf, 0, 2); let o = 8;
-  const pos = new Float32Array(buf, o, nv * 3); o += nv * 12;
-  const nor = new Int8Array(buf, o, nv * 3); o += nv * 3;
-  const uv = new Uint16Array(buf.slice(o, o + nv * 4)); o += nv * 4;
-  const w = new Uint8Array(buf, o, nv * 4); o += nv * 4;
-  const idx = new Uint16Array(buf.slice(o, o + ni * 2));
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3, true));
-  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2, true));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
-  const tl = new THREE.TextureLoader();
-  const col = await tl.loadAsync('/_tools/undercroft/previews/tmp/Map-COL.jpg'); col.colorSpace = THREE.SRGBColorSpace;
-  const nrm = await tl.loadAsync('/_tools/undercroft/previews/tmp/Infinite-Level_02_Tangent_SmoothUV.jpg');
-  head = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: col, normalMap: nrm, roughness: 0.5 }));
-  head.position.set(0, 1.6, 0); scene.add(head);
-  const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ wireframe: true, color: 0x00ff00 })); wire.position.set(0.35, 1.6, 0); scene.add(wire);
-  ctx.torch.intensity = 1.5;
+  const t0 = performance.now();
+  kit = await createPeopleKit({ env: ctx.env });
+  console.log(`kit built in ${(performance.now() - t0).toFixed(0)} ms (sync part ${kit.buildTime.toFixed(0)} ms incl. loads)`);
+  for (let i = 0; i < 3; i++){ const z = kit.makeZombie(i + 1); scene.add(z.group); Z.push(z); }
+  for (let i = 0; i < 3; i++){ const p = kit.makePrisoner(i + 1); scene.add(p.group); Pr.push(p); }
+  // count what one figure costs
+  let tris = 0, calls = 0;
+  Z[0].group.traverse((o) => { if (o.isMesh){ calls++; const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
+  console.log(`zombie: ${tris} triangles, ${calls} draw calls`);
+  tris = 0; calls = 0;
+  Pr[0].group.traverse((o) => { if (o.isMesh){ calls++; const g = o.geometry; tris += (g.index ? g.index.count : g.attributes.position.count) / 3; } });
+  console.log(`prisoner: ${tris} triangles, ${calls} draw calls`);
+  // a row of cell bars for the gripping pose
+  bars = new THREE.Group();
+  const iron = new THREE.MeshStandardMaterial({ color: 0x2a2826, roughness: 0.5, metalness: 0.8, envMap: ctx.env });
+  for (let i = -4; i <= 4; i++){ const b = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 2.4, 10), iron); b.position.set(i * 0.12, 1.2, 0); b.castShadow = true; bars.add(b); }
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.04, 0.04), iron); rail.position.y = 2.2; bars.add(rail);
+  scene.add(bars);
 };
-export const views = [{ name: 'front', yaw: 0, d: 0.45 }, { name: 'side', yaw: 35, d: 0.45 }, { name: 'wire', yaw: 0, d: 0.45, x: 0.35 }];
-export function show(ctx, v){ ctx.setView(new ctx.THREE.Vector3(v.x || 0, 1.7, 0.05), v.d, v.yaw, v.pitch || 0); }
+
+export const views = [
+  { name: 'zgroup' }, { name: 'zface' }, { name: 'zattack' }, { name: 'zdead' }, { name: 'zemerge' },
+  { name: 'psit' }, { name: 'pbars' }, { name: 'pcheer' }, { name: 'pface' }, { name: 'pwalk' },
+];
+
+function hideAll(){ for (const f of [...Z, ...Pr]) f.group.visible = false; bars.visible = false; }
+function run(f, s, secs){ for (let t = 0; t < secs; t += 1 / 30) f.update(1 / 30, s); }
+
+export async function show(ctx, v){
+  const { THREE } = ctx;
+  hideAll();
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  ctx.wallTorch.position.set(-2.5, 2.3, 1.5);
+  if (v.name === 'zgroup'){
+    Z.forEach((z, i) => { z.group.visible = true; z.group.position.set((i - 1) * 0.95, 0, -0.3 * Math.abs(i - 1)); z.group.rotation.y = (i - 1) * -0.25; run(z, { speed: [0.8, 1.2, 1.6][i] }, 1.3 + i * 0.37); });
+    ctx.setView(V(0, 1.0, 0), 3.6, 8, 4);
+  } else if (v.name === 'zface'){
+    const z = Z[0]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0; run(z, { speed: 0 }, 1);
+    ctx.setView(V(0, 1.62, 0.05), 1.0, 15, 2);
+  } else if (v.name === 'zattack'){
+    const z = Z[1]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0;
+    run(z, { speed: 0.6 }, 0.5); for (let a = 0; a <= 0.47; a += 1 / 30) z.update(1 / 30, { speed: 0.6, attack: a });
+    ctx.setView(V(0, 1.1, 0), 2.8, 35, 5);
+  } else if (v.name === 'zdead'){
+    const z = Z[2]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0.6;
+    for (let d = 0; d <= 1; d += 1 / 40) z.update(1 / 30, { dead: d });
+    ctx.setView(V(0, 0.3, 0), 2.6, 60, 30);
+  } else if (v.name === 'zemerge'){
+    const z = Z[0]; z.group.visible = true; z.group.position.set(0, 0, 0); z.group.rotation.y = 0;
+    for (let e = 0; e <= 0.5; e += 1 / 60) z.update(1 / 30, { emerge: e });
+    ctx.setView(V(0, 0.4, 0), 2.6, 20, 12);
+  } else if (v.name === 'psit'){
+    Pr.forEach((p, i) => { p.group.visible = i < 2; p.group.position.set(i * 0.9 - 0.4, 0, -5.4); p.group.rotation.y = 0; run(p, { pose: 'sit' }, 1.5 + i); });
+    ctx.setView(V(0.05, 0.55, -5.2), 2.5, 10, 12);
+  } else if (v.name === 'pbars'){
+    bars.visible = true; bars.position.set(0, 0, 0.3);
+    const p = Pr[1]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'bars' }, 2);
+    ctx.setView(V(0, 1.35, 0.3), 2.0, 20, 4);
+  } else if (v.name === 'pcheer'){
+    const p = Pr[2]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'cheer' }, 1.1);
+    ctx.setView(V(0, 1.2, 0), 3.0, 15, 4);
+  } else if (v.name === 'pface'){
+    const p = Pr[0]; p.group.visible = true; p.group.position.set(0, 0, 0); p.group.rotation.y = 0; run(p, { pose: 'bars' }, 1);
+    ctx.setView(V(0, 1.62, 0.05), 0.9, -15, 0);
+  } else if (v.name === 'pwalk'){
+    Pr.forEach((p, i) => { p.group.visible = true; p.group.position.set((i - 1) * 1.1, 0, 0); p.group.rotation.y = 1.2; run(p, { pose: 'walk', speed: [1.2, 2.2, 3.5][i] }, 0.8 + i * 0.3); });
+    ctx.setView(V(0, 1.0, 0), 3.8, 20, 4);
+  }
+}

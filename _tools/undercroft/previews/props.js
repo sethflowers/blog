@@ -5,11 +5,11 @@ import * as P from '/experiments/undercroft/js/models/props.js';
 let S = null;  // everything built, by name
 
 export const views = [
-  { name: 'weapons' }, { name: 'sword-vm' }, { name: 'crossbow-vm' }, { name: 'hammer-vm' }, { name: 'food' },
+  { name: 'weapons' }, { name: 'weapons-close' }, { name: 'sword-vm' }, { name: 'crossbow-vm' }, { name: 'hammer-vm' }, { name: 'food' },
   { name: 'chest-closed' }, { name: 'chest-open' },
   { name: 'gate-magnet' }, { name: 'gate-bomb' }, { name: 'gate-freeze' }, { name: 'gate-shield' }, { name: 'gate-spent' },
-  { name: 'cell-closed' }, { name: 'cell-open' }, { name: 'portcullis' }, { name: 'brazier' }, { name: 'bomb' },
-  { name: 'cracked-wall' }, { name: 'skulls' },
+  { name: 'cell-closed' }, { name: 'cell-lock' }, { name: 'cell-open' }, { name: 'portcullis' }, { name: 'brazier' }, { name: 'bomb' },
+  { name: 'gate-wide' }, { name: 'cracked-wall' }, { name: 'skulls' }, { name: 'skull-close' },
 ];
 
 function tris(o){
@@ -25,6 +25,8 @@ export default async function (ctx){
   S = {};
   // weapons laid out on the floor, flats up
   S.weapons = add(new THREE.Group());
+  // the crest must stay under the corridor's 3.2 m ceiling
+  { const g = P.createPowerGate('shield', { env }).group; const b = new THREE.Box3().setFromObject(g); console.log('gate bounds', b.min.toArray().map((v) => v.toFixed(2)), b.max.toArray().map((v) => v.toFixed(2))); }
   const lay = [['sword', -0.55, 0.0], ['spear', 0.0, 0.0], ['hammer', 0.45, 0.0], ['crossbow', 0.95, 0.0]];
   for (const [k, z] of lay.map(([k, z]) => [k, z])){
     const w = P.createWeapon(k, { env });
@@ -71,23 +73,27 @@ export async function show(ctx, view){
     o.quaternion.copy(camera.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)));
     o.visible = true;
   };
-  if (n === 'weapons'){ S.weapons.visible = true; setView(V(0.1, 0, 0.2), 2.1, 0, 62); }
+  if (n === 'weapons'){ S.weapons.visible = true; setView(V(0.15, 0, 0.22), 1.75, 0, 72); }
+  else if (n === 'weapons-close'){ S.weapons.visible = true; setView(V(0.3, 0, 0.28), 0.62, -20, 55); }
   else if (n === 'sword-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.sword, V(0.2, -0.26, -0.5), [-0.75, 0.5, 0.35]); }
-  else if (n === 'crossbow-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.crossbow, V(0.16, -0.2, -0.32), [0.05, 0.12, 0]); }
-  else if (n === 'hammer-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.hammer, V(0.24, -0.34, -0.55), [-0.55, -1.1, 0.25]); }
+  else if (n === 'crossbow-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.crossbow, V(0.14, -0.2, -0.42), [0.05, 0.1, 0]); }
+  else if (n === 'hammer-vm'){ setView(V(0, 1.6, -1), 1, 0, 0); held(S.vm.hammer, V(0.22, -0.5, -0.78), [-0.2, -1.3, 0.3]); }
   else if (n === 'food'){ S.food.visible = true; setView(V(0.02, 0.03, -0.02), 0.62, 15, 38); }
   else if (n.startsWith('chest')){ S.chest.group.visible = true; S.chest.setOpen(n === 'chest-open' ? 1 : 0); setView(V(0, 0.3, 0), 1.55, 30, 28); }
-  else if (n.startsWith('gate')){
+  else if (n.startsWith('gate') && n !== 'gate-wide'){
     const k = n === 'gate-spent' ? 'magnet' : n.slice(5), g = S.gates[k];
     g.group.visible = true;
     g.setActive(n !== 'gate-spent');
     for (let t = 0; t < 6; t += 0.05) g.update(2 + t);
     setView(V(0, 1.5, 0), 4.0, 22, 6);
   }
+  else if (n === 'gate-wide'){ const g = S.gates.freeze; g.group.visible = true; g.setActive(true); g.update(9); setView(V(0, 1.7, 0), 5.2, -15, 12); }
+  else if (n === 'cell-lock'){ S.cell.group.visible = true; S.cell.setOpen(0); setView(V(0.5, 1.0, 0), 0.75, 25, 10); }
   else if (n.startsWith('cell')){ S.cell.group.visible = true; S.cell.setOpen(n === 'cell-open' ? 1 : 0); setView(V(0, 1.4, 0), 3.9, 25, 8); }
   else if (n === 'portcullis'){ S.port.group.visible = true; S.port.setRaised(0.35); setView(V(0, 1.6, 0), 4.0, 18, 6); }
-  else if (n === 'brazier'){ S.brazier.group.visible = true; setView(V(0, 0.75, 0), 2.0, 20, 18); }
+  else if (n === 'brazier'){ S.brazier.group.visible = true; setView(V(0, 0.8, 0), 1.75, 20, 20); }
   else if (n === 'bomb'){ S.bombGroup.visible = true; S.bombs[0].update(3, 0.1); S.bombs[1].update(3.3, 0.8); setView(V(0, 0.12, 0), 0.85, 10, 20); }
   else if (n === 'cracked-wall'){ S.wall.group.visible = true; for (const d of S.debris) d.visible = true; setView(V(0, 1.5, -1.5), 3.9, 18, 4); }
   else if (n === 'skulls'){ S.skulls.visible = true; setView(V(0, 0.08, 0), 0.75, 20, 25); }
+  else if (n === 'skull-close'){ S.skulls.visible = true; setView(V(0.08, 0.06, 0.1), 0.42, 35, 8); }
 }

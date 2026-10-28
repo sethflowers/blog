@@ -1476,6 +1476,7 @@ window.__uc = {
     let [x, z] = from; if (d[z * W + x] < 0) return null;
     while (d[z * W + x] > 0){ out.push([x, z]); const n = DIRS.map(([a, b]) => [x + a, z + b]).find(([a, b]) => d[b * W + a] === d[z * W + x] - 1); [x, z] = n; }
     out.push([x, z]); return out; },
+  iceLeft(i, j){ const w = world.water.get(j * lv.W + i); return w ? Math.max(0, w.frozenUntil - simTime) : null; },
   tileOf(x, z){ return [Math.floor(x / TILE), Math.floor(z / TILE)]; },
   center, TILE, T, floorAt, solidAt: (x, z) => solidAt(x, z),
   timeRender(){ const t = performance.now(); composer.render(); renderer.getContext().finish(); return performance.now() - t; },

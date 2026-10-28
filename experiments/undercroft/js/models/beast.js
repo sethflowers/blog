@@ -91,7 +91,7 @@ function cap(bone, a, b, r1, r2, k, o = {}){
     return d;
   };
   const r = Math.max(r1, r2) + (o.amp || 0) + k;
-  return { op: o.sub ? 'sub' : 'add', bone, k, f, lbs: Math.min(1, sx, sy), box: [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, Math.min(a[2], b[2]) - r, Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, Math.max(a[2], b[2]) + r] };
+  return { op: o.sub ? 'sub' : 'add', bone, k, f, a, b, u: o.u, lbs: Math.min(1, sx, sy), box: [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, Math.min(a[2], b[2]) - r, Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, Math.max(a[2], b[2]) + r] };
 }
 // ellipsoid with optional tilt about X (pitch) and Z (roll), and an optional surface displacement
 function ell(bone, c, r, k, o = {}){
@@ -194,10 +194,10 @@ function bodyPrims(){
   // neck: deep and narrow, with a ridge of knuckled vertebrae along its back and the windpipe in front,
   // built from short capsules along a smooth curve so the S has no kinks
   neckPieces(0, 5, 0, (bn, a, b, ra, rb, ua, ub, fa, fb, ba, bb) => {
-    P.push(cap(bn, a, b, ra, rb, 0.1, { sx: 0.82 }));
+    P.push(cap(bn, a, b, ra, rb, 0.1, { sx: 0.82, u: [ua, ub] }));
     const bump = (x, y, z, t) => -0.02 * Math.pow(0.5 + 0.5 * Math.sin(lerp(ua, ub, t) * TAU * 1.6), 3);
-    P.push(cap(bn, ba, bb, 0.075 * ra / 0.3, 0.075 * rb / 0.3, 0.08, { disp: bump, amp: 0.02 }));
-    if (ua > 0.5) P.push(cap(bn, fa, fb, 0.055 * ra / 0.3, 0.055 * rb / 0.3, 0.1));
+    P.push(cap(bn, ba, bb, 0.075 * ra / 0.3, 0.075 * rb / 0.3, 0.08, { disp: bump, amp: 0.02, u: [ua, ub] }));
+    if (ua > 0.5) P.push(cap(bn, fa, fb, 0.055 * ra / 0.3, 0.055 * rb / 0.3, 0.1, { u: [ua, ub] }));
   });
   // tail dock
   P.push(cap('tail0', [0, 2.95, -1.6], J.tail1, 0.15, 0.1, 0.12));
@@ -210,7 +210,7 @@ function bodyPrims(){
 const EYE = [0.168, 5.705, 2.36], EYE_R = 0.05;
 function headPrims(){
   const P = [];
-  neckPieces(3.7, 5, 0.014, (bn, a, b, ra, rb) => P.push(cap(bn, a, b, ra, rb, 0.06, { sx: 0.82 })));
+  neckPieces(3.7, 5, 0.014, (bn, a, b, ra, rb, ua, ub) => P.push(cap(bn, a, b, ra, rb, 0.06, { sx: 0.82, u: [ua, ub] })));
   P.push(ell('head', [0, 5.67, 2.1], [0.205, 0.205, 0.29], 0.1));                     // cranium
   P.push(ell('head', [0, 5.72, 1.97], [0.12, 0.12, 0.13], 0.08));                   // back of the skull
   P.push(ell('head', [0, 5.665, 2.5], [0.115, 0.095, 0.3], 0.1));                   // face, running into the beak
@@ -381,14 +381,25 @@ const rigid = (b) => () => [BI[b], 1];
 
 // Skin weights for a sculpted mesh: find the nearest primitive's bone, then blend with its parent and
 // children by how close their own primitives are (`soft` metres of falloff).
+// Along the neck the weights follow the position on the neck's curve instead, so they change smoothly
+// from bone to bone however the pieces overlap.
+const NECK_CHAIN = ['body', 'neck0', 'neck1', 'neck2', 'neck3', 'head'];
 function sdfWeights(prims, x, y, z, soft){
   const best = new Float32Array(BONES.length).fill(1e9);
-  let bi = 0, bd = 1e9;
+  let bi = 0, bd = 1e9, bp = null;
   for (const P of prims){
     if (P.op !== 'add') continue;
     const d = P.f(x, y, z), b = BI[P.bone];
     if (d < best[b]) best[b] = d;
-    if (d < bd){ bd = d; bi = b; }
+    if (d < bd){ bd = d; bi = b; bp = P; }
+  }
+  if (bp && bp.u){
+    const a = bp.a, b = bp.b, ex = b[0] - a[0], ey = b[1] - a[1], ez = b[2] - a[2];
+    const t = clamp(((x - a[0]) * ex + (y - a[1]) * ey + (z - a[2]) * ez) / (ex * ex + ey * ey + ez * ez), 0, 1);
+    const u = clamp(lerp(bp.u[0], bp.u[1], t), 0, 5.4);
+    // joints sit at u = 1..5 (body|neck0 ... neck3|head); blend across +-0.35 of each
+    const j = clamp(Math.round(u), 1, 5), w = sstep(j - 0.35, j + 0.35, u);
+    return [BI[NECK_CHAIN[j - 1]], 1 - w + 1e-4, BI[NECK_CHAIN[j]], w + 1e-4];
   }
   const ws = [];
   for (const b of NEIGH[bi]){ const dd = best[b] - bd; if (dd < soft * 3) ws.push([b, Math.exp(-dd / soft)]); }
@@ -652,7 +663,7 @@ function buildGeometry(){
   const t0 = performance.now();
   const B = { skin: new Buf(), ivory: new Buf(), membrane: new Buf(), eye: new Buf(), hair: new Buf(), iron: new Buf() };
   const bp = bodyPrims();
-  addSculpt(B.skin, bp, [-0.75, 0.36, -2.4], [0.75, 5.6, 2.3], 0.062, 0.07, hideShade);
+  addSculpt(B.skin, bp, [-0.75, 0.36, -2.45], [0.75, 5.62, 2.6], 0.062, 0.07, hideShade);
   addSculpt(B.skin, headPrims(), [-0.27, 5.15, 1.62], [0.27, 6.05, 3.1], 0.026, 0.03, hideShade);
   addBeak(B); addHorn(B); addEyes(B.eye); addWings(B); addLegsBelowAnkle(B); addTail(B);
   // pack every buffer into one geometry, one group per material
@@ -758,6 +769,10 @@ function detailMaterial(Kind, params, d){
           float hx = detailH(triTex(dP + dpx, dW)) - dH, hy = detailH(triTex(dP + dpy, dW)) - dH;
           normal = bumpNormal(-vViewPosition, normal, hx * detailA.y, hy * detailA.y, faceDirection);
         }`)
+      .replace('#include <clearcoat_normal_fragment_begin>', `#include <clearcoat_normal_fragment_begin>
+        #ifdef USE_CLEARCOAT
+          clearcoatNormal = normalize(mix(clearcoatNormal, normal, 0.6));   // the wet film follows the wrinkles
+        #endif`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         totalEmissiveRadiance += flashColor * detailB.z;`);
     if (sh.fragmentShader.includes('#include <lights_physical_fragment>'))
@@ -836,7 +851,7 @@ function makeMaterials(env){
 
 /* ---------------- the beast ---------------- */
 // how much of the aim each neck bone takes (the head takes the rest), and how the neck lies when dead
-const NECK_AIM = [0.12, 0.22, 0.3, 0.36], NECK_DEAD_X = [0.45, 0.25, -0.1, -0.2], NECK_DEAD_Z = [0.25, 0.25, 0.2, 0.1];
+const NECK_AIM = [0.12, 0.22, 0.3, 0.36], NECK_DEAD_X = [0.45, 0.25, -0.1, -0.2], NECK_DEAD_Z = [0.05, 0.04, 0.03, 0.03];
 export function createBeast(opts = {}){
   if (!GEO) GEO = buildGeometry();
   const mats = makeMaterials(opts.env || null);
@@ -976,9 +991,9 @@ export function createBeast(opts = {}){
 
     // eyes and flashes: uniforms only
     mats.eye.emissiveIntensity = lerp(0.35 + glow * 14, 0.0, 1 - live);
-    mats.skin.userData.u.detailB.value.z = hurt * 0.6;
-    mats.ivory.userData.u.detailB.value.z = hurt * 0.3;
-    mats.membrane.userData.u.flashColor.value.setRGB(hurt * 0.25, hurt * 0.01, 0);
+    mats.skin.userData.u.detailB.value.z = hurt * 0.05;
+    mats.ivory.userData.u.detailB.value.z = hurt * 0.05;
+    mats.membrane.userData.u.flashColor.value.setRGB(hurt * 0.025, hurt * 0.002, 0);
   }
   update(0, {});
   group.updateMatrixWorld(true);

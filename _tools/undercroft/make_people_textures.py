@@ -910,7 +910,7 @@ def build_head_mesh(src):
     sidx = np.tile([BI['head'], BI['jaw'], BI['neck'], BI['chest']], (len(P), 1))
     low = np.clip((-1.75 - P[:, 1] + 0.3 * P[:, 2]) / 0.25, 0, 1)          # the very bottom of the neck rides the chest
     sw = np.c_[head, jaw, neck * (1 - low), neck * low]
-    parts = [(P, U, F2, N, sidx, sw, np.zeros(len(P)))]
+    parts = [(P, U, F2, N, sidx, sw, hairline(P) * 0.45)]
     for c, side, nm in zip(EYES, [1, -1], 'LR'):
         ep, eu, ef = eyeball(c, side)
         en = (ep - c) / np.linalg.norm(ep - c, axis=1, keepdims=True)
@@ -978,10 +978,82 @@ def write_bin(meshes, path):
 def build_meshes(src, only=None):
     meshes = {}
     meshes['head'] = build_head_mesh(src)
+    HP_, HU_, HF_ = load_glb(os.path.join(src, 'LeePerrySmith.glb'))
+    HP_, HU_, HF_ = process_head(HP_, HU_, HF_)
+    for st in HAIR_STYLES: meshes['hair_' + st] = build_hair(HP_, HF_, st)
     for name, (shape, o) in OUTFITS.items():
         if only and name not in only: continue
         meshes[name] = pack_body(build_body(name, SHAPES[shape], o))
     write_bin(meshes, os.path.join(OUT, 'people.bin'))
+
+
+# ---------- hair cards ----------
+# Grown on the scan's scalp: each card is a strip of strands, rooted just above the skin, combed away from the
+# crown and pulled by gravity. Cards live in the head bone's space (they ride on it, unskinned).
+
+def hairline(P):
+    """1 where hair grows on the scan (scan units), soft at the edge: above the forehead, temples and nape."""
+    zs = np.array([-2.2, -1.3, -0.6, 0.2, 0.9, 1.4, 2.2]); ys = np.array([0.15, 0.45, 1.5, 2.05, 2.35, 2.85, 3.0])
+    yl = np.interp(P[:, 2], zs, ys)
+    m = smooth01(-0.12, 0.12, P[:, 1] - yl)
+    ear = (np.abs(P[:, 0] + 0.07) > 1.45) & (P[:, 1] < 2.25) & (np.abs(P[:, 2] + 0.1) < 0.75)
+    return m * (~ear)
+
+
+HAIR_STYLES = {
+    # cards, length (scan units), lift, gravity, randomness, atlas half (0 thick, 1 thin), width
+    'cropped': dict(n=150, L=(0.45, 0.7), lift=0.03, grav=0.3, mess=0.25, half=0, w=0.55, seed=1, cover=1.0),
+    'short': dict(n=140, L=(0.9, 1.4), lift=0.05, grav=0.45, mess=0.3, half=0, w=0.6, seed=2, cover=1.0),
+    'messy': dict(n=150, L=(1.2, 2.0), lift=0.09, grav=0.35, mess=0.8, half=0, w=0.6, seed=3, cover=1.0),
+    'long': dict(n=150, L=(2.6, 4.2), lift=0.07, grav=0.8, mess=0.35, half=0, w=0.7, seed=4, cover=1.0),
+    'thin': dict(n=60, L=(1.6, 3.4), lift=0.03, grav=0.85, mess=0.4, half=1, w=0.6, seed=5, cover=0.6),
+}
+
+
+def build_hair(P, F, style):
+    st = HAIR_STYLES[style]; rng = np.random.default_rng(st['seed'])
+    N = vertex_normals(P, F)
+    mask = hairline(P)
+    # pick roots, area weighted, inside the hairline (patchy for the thin style)
+    tri = P[F]; area = np.linalg.norm(np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1) / 2
+    fm = mask[F].mean(1)
+    if st['cover'] < 1: fm *= fbm(tri.mean(1) * 0.9 + 4, 2) > 0.45
+    w = area * (fm > 0.6); w /= w.sum()
+    crown = np.array([-0.1, 3.3, -1.0])
+    pos, nor, uv, idx = [], [], [], []
+    K = 4
+    for c in range(st['n']):
+        f = rng.choice(len(F), p=w)
+        b = rng.dirichlet([1, 1, 1])
+        p0 = b @ tri[f]; n = b @ N[F[f]]; n /= np.linalg.norm(n)
+        comb = p0 - crown; comb -= n * (comb @ n)
+        down = np.array([0, -1.0, -0.15]); down -= n * (down @ n)
+        d = comb / (np.linalg.norm(comb) + 1e-9) * (1 - st['grav']) + down / (np.linalg.norm(down) + 1e-9) * st['grav']
+        d += rng.normal(0, st['mess'], 3); d -= n * (d @ n); d /= np.linalg.norm(d) + 1e-9
+        L = rng.uniform(*st['L']); wdt = st['w'] * rng.uniform(0.7, 1.2)
+        across = np.cross(n, d); across /= np.linalg.norm(across) + 1e-9
+        u0 = st['half'] * 0.5 + rng.uniform(0, 0.5 - 0.13); u1 = u0 + 0.13
+        base = len(pos)
+        q = p0 + n * st['lift']; nn = n
+        for k in range(K + 1):
+            t = k / K
+            # follow the skull: bend the direction toward the surface as it goes, droop past the head
+            for e in (-1, 1):
+                pos.append(q + across * wdt * 0.5 * e * (1 - 0.35 * t)); nor.append(nn)
+                uv.append([u0 if e < 0 else u1, 1 - t * 0.98])
+            if k < K:
+                q = q + d * (L / K)
+                # keep it off the scalp: push out along the root normal as it grows
+                q = q + n * (L / K) * (0.12 + st['lift'])
+                d = d + np.array([0, -1.0, 0]) * st['grav'] * 0.35 + rng.normal(0, st['mess'] * 0.15, 3)
+                d /= np.linalg.norm(d)
+                nn = n * 0.7 + np.array([0, 0.3, 0]); nn /= np.linalg.norm(nn)
+        for k in range(K):
+            a = base + 2 * k
+            idx += [[a, a + 1, a + 3], [a, a + 3, a + 2]]
+    P2 = (np.array(pos) - PIVOT) * SCALE
+    print('   hair', style, len(idx), 'tris')
+    return dict(position=P2, normal=np.array(nor), uv=np.array(uv), index=np.array(idx))
 
 
 # ---------- textures ----------

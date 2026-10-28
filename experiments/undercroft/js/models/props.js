@@ -55,7 +55,7 @@ const envKey = (env) => (env ? env.uuid : '');
 
 // forged steel: blades, heads, fittings. Vertex colours darken the forge-blackened parts.
 const steelMat = (env) => mat('steel' + envKey(env), () => new THREE.MeshStandardMaterial({
-  color: 0xb0aea9, metalness: 1, roughness: 1, roughnessMap: tex('props_steel_rough.jpg'),
+  color: 0xa6a7a8, metalness: 1, roughness: 1, roughnessMap: tex('props_steel_rough.jpg'),
   normalMap: tex('props_steel_normal.jpg'), normalScale: new V2(0.35, 0.35),
   envMap: env || null, envMapIntensity: 1.4, vertexColors: true }));
 // wrought iron with rust: bands, bars, bombs. Roughness in G, metalness in B of the same map.
@@ -64,7 +64,7 @@ const ironMat = (env) => mat('iron' + envKey(env), () => new THREE.MeshStandardM
   roughnessMap: tex('props_iron_rm.jpg'), metalnessMap: tex('props_iron_rm.jpg'), roughness: 1, metalness: 1,
   envMap: env || null, envMapIntensity: 1.0, vertexColors: true }));
 // one oak texture, tinted per wood: old oak (chest), pale ash (spear), walnut (crossbow), hickory (hammer)
-const WOODS = { oak: [1, 0.95, 0.88], ash: [1.55, 1.38, 1.1], walnut: [0.78, 0.6, 0.5], hickory: [1.3, 1.1, 0.85] };
+const WOODS = { oak: [0.8, 0.76, 0.7], ash: [1.4, 1.3, 1.12], walnut: [0.66, 0.52, 0.44], hickory: [1.1, 0.96, 0.8] };
 const woodMat = (kind) => mat('wood-' + kind, () => new THREE.MeshStandardMaterial({
   color: new THREE.Color().setRGB(...WOODS[kind]), map: tex('props_wood_albedo.jpg', true),
   normalMap: tex('props_wood_normal.jpg'), normalScale: new V2(0.6, 0.6), roughnessMap: tex('props_wood_rough.jpg'),
@@ -354,7 +354,7 @@ function hammerGeos(){
     const face = flat(lathe([[0, -0.089], [0.021, -0.089], [0.0262, -0.084], [0.0265, -0.064], [0.022, -0.056], [0.0172, -0.042],
       [0.0172, -0.026], [0.0215, -0.021], [0.0215, 0]], 8, Math.PI / 8).rotateX(Math.PI / 2).translate(0, 0.6, 0));
     const eye = flat(box(0.036, 0.074, 0.042, 0, 0.6, 0));
-    const sp = []; for (let i = 0; i <= 10; i++){ const s = i / 10; sp.push(new V3(0, 0.6 - 0.04 * Math.pow(s, 2.2), 0.02 + 0.13 * s)); }
+    const sp = []; for (let i = 0; i <= 10; i++){ const s = i / 10; sp.push(new V3(0, 0.6 - 0.022 * Math.pow(s, 2.2), 0.02 + 0.1 * s)); }
     const spike = flat(sweep(sp, (i, s) => { const r = (0.0165 * Math.pow(1 - s, 0.9) + 0.0012) * Math.SQRT2; return [r * 0.9, r]; }, 4, { phase: Math.PI / 4 }));
     const top = flat(new THREE.ConeGeometry(0.0115, 0.07, 4).rotateY(Math.PI / 4).translate(0, 0.672, 0));
     const langets = [1, -1].map((x) => box(0.003, 0.16, 0.013, x * 0.0143, 0.49, 0));
@@ -424,8 +424,8 @@ function crossbowGeos(){
     const place = (g) => g.clone().translate(0, 0.0422, -0.218);
     return {
       wood: merge([prep(stockW), place(bolt.wood)]),
-      steel: merge([prod, ...nocks.map((g) => [g, 0.6]), place(bolt.steel)]),
-      iron: merge([[nutG, [1.3, 1.2, 1.1]], ...pins, trig, stir, plate]),
+      steel: merge([place(bolt.steel)]),
+      iron: merge([prod, ...nocks, [nutG, [1.3, 1.2, 1.1]], ...pins, trig, stir, plate]),
       cord: merge([cord, place(bolt.cord)]),
     };
   });
@@ -641,10 +641,10 @@ function chestGeos(){
     const front = new V3(0, 0, 1), back = new V3(0, 0, -1);
     for (const x of [-0.3, 0.3]){ // straps over front, back, and the lid
       iron.push(box(0.044, H + 0.004, 0.004, x, Y0 + H / 2, D / 2 + 0.002), box(0.044, H + 0.004, 0.004, x, Y0 + H / 2, -D / 2 - 0.002));
-      for (let k = 0; k < 5; k++){ const y = Y0 + 0.03 + k * (H - 0.06) / 4; iron.push(rivet(new V3(x, y, D / 2 + 0.004), front), rivet(new V3(x, y, -D / 2 - 0.004), back)); }
+      for (let k = 0; k < 5; k++){ const y = Y0 + 0.03 + k * (H - 0.06) / 4; iron.push(rivet(new V3(x, y, D / 2 + 0.004), front, 1.4), rivet(new V3(x, y, -D / 2 - 0.004), back, 1.4)); }
       const ap = []; for (let i = 0; i <= 16; i++){ const [z, y] = arc(R + 0.002, -al - 0.03 + (2 * al + 0.06) * i / 16); ap.push(new V3(x, y, z)); }
       lidIron.push(flat(sweep(ap, () => [0.002 * Math.SQRT2, 0.022 * Math.SQRT2], 4, { up: new V3(1, 0, 0), phase: Math.PI / 4 })));
-      for (let i = 1; i < 6; i++){ const th = -al + 2 * al * i / 6, [z, y] = arc(R + 0.004, th); lidIron.push(rivet(new V3(x, y, z), new V3(0, Math.cos(th), Math.sin(th)))); }
+      for (let i = 1; i < 6; i++){ const th = -al + 2 * al * i / 6, [z, y] = arc(R + 0.004, th); lidIron.push(rivet(new V3(x, y, z), new V3(0, Math.cos(th), Math.sin(th)), 1.4)); }
     }
     for (const xs of [1, -1]) for (const zs of [1, -1]){ // corner brackets
       iron.push(box(0.05, H * 0.5, 0.004, xs * (W / 2 - 0.025), Y0 + H * 0.75, zs * (D / 2 + 0.002)));
@@ -705,7 +705,7 @@ function tentacle(cx, base, L, w0, curl){
   return [...right, ...tip, ...left];
 }
 const OPENINGS = [[1.72, 2.4], [1.48, 2.27], [1.26, 2.14], [1.06, 2.02]];  // [width, crown] slab hole and each inner order
-const SLAB_TOP = 2.68, MED_Y = 2.66;
+const SLAB_TOP = 2.6, MED_Y = 2.64;
 
 function gateStoneGeo(){
   return cached('gate-stone', () => {
@@ -713,24 +713,24 @@ function gateStoneGeo(){
     // the slab: outline drawn counter-clockwise with the doorway cut up from the ground
     const o = [[-1.15, 0], ...archPts(...OPENINGS[0], 20), [1.15, 0]];
     for (let k = 1; k <= 8; k++){ const y = SLAB_TOP * k / 8; o.push([1.15 - 0.03 * k / 8 + (noise3(k * 1.7, 0, 3) - 0.5) * 0.03, y]); }
-    const lobes = [[0.985, 0.2, 2.6], [0.715, 0.3, 2.1], [0.44, 0.27, 1.5]];
-    for (const [cx, L, curl] of lobes) o.push(...tentacle(cx, SLAB_TOP, L, 0.25, curl));
-    for (const [cx, L, curl] of lobes.slice().reverse()) o.push(...tentacle(-cx, SLAB_TOP, L, 0.25, -curl));
+    const lobes = [[0.99, 0.3, 2.6], [0.72, 0.4, 2.2], [0.445, 0.36, 1.7]];
+    for (const [cx, L, curl] of lobes) o.push(...tentacle(cx, SLAB_TOP, L, 0.24, curl));
+    for (const [cx, L, curl] of lobes.slice().reverse()) o.push(...tentacle(-cx, SLAB_TOP, L, 0.24, -curl));
     for (let k = 8; k >= 1; k--){ const y = SLAB_TOP * k / 8; o.push([-1.15 + 0.03 * k / 8 + (noise3(k * 1.3, 5, 1) - 0.5) * 0.03, y]); }
     const shape = (pts) => { const s = new THREE.Shape(); s.moveTo(...pts[0]); for (const p of pts.slice(1)) s.lineTo(...p); return s; };
     const ext = (pts, d, bev) => new THREE.ExtrudeGeometry(shape(pts), { depth: d - 2 * bev, bevelEnabled: true, bevelThickness: bev, bevelSize: bev * 0.9, bevelSegments: 2, curveSegments: 4 }).translate(0, 0, -(d - 2 * bev) / 2);
-    parts.push(ext(o, 0.6, 0.035));
+    parts.push(ext(o, 0.6, 0.016));
     // nested orders: each a thinner arch ring set into the one outside it, like doorways within doorways
     for (let k = 1; k < OPENINGS.length; k++){
       const [wo, to] = OPENINGS[k - 1], [wi, ti] = OPENINGS[k];
       const outer = archPts(wo + 0.12, to + 0.06, 20).reverse();
-      parts.push(ext([[-(wo + 0.12) / 2, 0], ...archPts(wi, ti, 20), ...outer.slice(0, -1)], 0.6 - 0.1 * k, 0.025));
+      parts.push(ext([[-(wo + 0.12) / 2, 0], ...archPts(wi, ti, 20), ...outer.slice(0, -1)], 0.6 - 0.13 * k, 0.03));
     }
     // the roundel at the crown that carries the power's sign
     const med = lathe([[0, -0.338], [0.16, -0.338], [0.168, -0.356], [0.2, -0.36], [0.222, -0.34], [0.226, 0], [0.222, 0.34], [0.2, 0.36], [0.168, 0.356], [0.16, 0.338], [0, 0.338]], 22, Math.PI / 22);
     parts.push(med.rotateX(Math.PI / 2).translate(0, MED_Y, 0));
     // rough-hewn: push the outlines about in the plane (the faces stay flat), facet the shading
-    const g = flat(merge(parts.map((p) => jitter(jitter(p.index ? p.toNonIndexed() : p, 0.018, 2.2, 3, [1, 1, 0]), 0.006, 9, 7, [1, 1, 0]))));
+    const g = flat(merge(parts.map((p) => jitter(jitter(p.index ? p.toNonIndexed() : p, 0.01, 2.2, 3, [1, 1, 0]), 0.004, 9, 7, [1, 1, 0]))));
     projUV(g, 1 / 3.2);
     const p = g.attributes.position, c = g.attributes.color;
     for (let i = 0; i < p.count; i++){ const y = p.getY(i), k = 0.6 + 0.4 * smooth(0, 0.6, y); c.setXYZ(i, k, k * 0.98, k * 0.96); }
@@ -808,20 +808,21 @@ void main(){
   float n = fbm(q * 3. + flow + (uKind == 1. ? vP * 2.5 : vec2(0.)));
   float arms = .5 + .5 * sin(a * 3. + log(r + .05) * 7. - t * 2.2 * spin);
   float core = exp(-r * 3.2);
-  float v = n * (.4 + .8 * arms) * (.3 + .7 * smoothstep(1.3, 0., r)) + core * 1.1;
+  float v = n * n * 1.8 * (.25 + .95 * arms * arms) * (.35 + .65 * smoothstep(1.3, 0., r)) + core * .8;
   float extra = 0.;
   if (uKind == 2.) extra = pow(abs(cos(a * 3. + n * 2.)), 24.) * smoothstep(1.1, .1, r) * .9;       // ice spikes
   if (uKind == 3.) extra = pow(.5 + .5 * sin(r * 26. - t * 4.), 6.) * smoothstep(1.2, .2, r) * .6;  // ripples
   v += extra;
-  vec3 col = mix(uColA, uColB, smoothstep(.35, 1., v)) * v * 2.6;
-  col += uColB * exp(-max(e, 0.) * 16.) * 1.4;  // bright rim where the magic meets the stone
+  vec3 col = mix(uColA * .7, uColB, smoothstep(.3, 1.1, v)) * v * 1.7;
+  col += mix(uColA, uColB, .5) * exp(-max(e, 0.) * 18.) * 1.1;  // bright rim where the magic meets the stone
   float sp;
   if (uKind == 1.) sp = sparks(vec2(vP.x * 16., vP.y * 9. - t * 2.2), t);
   else sp = sparks(vec2((a / 6.2832 + t * .08 * (1. + 1. / (r + .3))) * 26., r * 11.), t);
-  col += uSpark * sp * 5.;
-  vec3 ember = vec3(.3, .06, .015) * (.35 + .65 * n) * (core + .25);
+  col += uSpark * sp * 4.;
+  vec3 ember = vec3(.22, .045, .01) * (.3 + .7 * n) * (core + .2);
   col = mix(ember, col, uPower);
-  gl_FragColor = vec4(col * fade, 1.);
+  float alpha = mix(.1, .8, uPower) * smoothstep(-.1, .6, v + core);
+  gl_FragColor = vec4(col * fade, alpha * fade);
 }`;
 
 export function createPowerGate(kind, opts = {}){
@@ -843,7 +844,8 @@ export function createPowerGate(kind, opts = {}){
   });
   const magic = new THREE.Mesh(magicGeo, new THREE.ShaderMaterial({
     uniforms, vertexShader: MAGIC_VS, fragmentShader: MAGIC_FS,
-    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    transparent: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    depthWrite: false, side: THREE.DoubleSide }));
   magic.renderOrder = 2;
   group.add(magic);
   // the sign, inlaid in the roundel on both faces
@@ -967,7 +969,7 @@ function portcullisGeo(){
     }
     for (const y of ys) for (const zs of [1, -1]){
       parts.push(box(2.5, 0.058, 0.014, 0, y + j() * 0.008, zs * 0.03, 0, 0, j() * 0.003));
-      for (const x of xs) parts.push(rivet(new V3(x, y, zs * 0.037), new V3(0, 0, zs), 2.2));
+      for (const x of xs) parts.push(flat(new THREE.ConeGeometry(0.013, 0.008, 4, 1, true).rotateY(Math.PI / 4).rotateX(zs * Math.PI / 2).translate(x, y, zs * 0.041)));
     }
     return merge(parts.map((g) => projUV(g, 1.5, null, r(), r())));
   });
@@ -986,7 +988,7 @@ export function createPortcullis(opts = {}){
 function brazierGeos(){
   return cached('brazier', () => {
     const bowl = lathe([[0, 0.858], [0.07, 0.86], [0.15, 0.884], [0.21, 0.93], [0.25, 0.99], [0.27, 1.045], [0.284, 1.068], [0.292, 1.08],
-      [0.286, 1.09], [0.272, 1.084], [0.258, 1.062], [0.238, 1.0], [0.195, 0.946], [0.13, 0.905], [0, 0.89]], 28);
+      [0.286, 1.09], [0.272, 1.084], [0.258, 1.062], [0.238, 1.0], [0.195, 0.946], [0.13, 0.905], [0, 0.89]], 26);
     scaleUV(bowl, 3, 1.5);
     const parts = [bowl];
     for (let k = 0; k < 3; k++){ // twisted square legs ending in scrolled feet
@@ -998,8 +1000,8 @@ function brazierGeos(){
     parts.push(new THREE.TorusGeometry(0.243, 0.0075, 5, 30).rotateX(Math.PI / 2).translate(0, 0.45, 0));
     // the coals: a heap of broken lumps on a bed
     const r = rng(3), coal = [lathe([[0, 1.03], [0.1, 1.02], [0.2, 0.995], [0.252, 1.0], [0.24, 0.96]], 16)];
-    for (let k = 0; k < 15; k++){
-      const ang = r() * TAU, rho = Math.sqrt(r()) * 0.19, sz = 0.04 + r() * 0.03;
+    for (let k = 0; k < 13; k++){
+      const ang = r() * TAU, rho = Math.sqrt(r()) * 0.19, sz = 0.045 + r() * 0.03;
       const g = new THREE.IcosahedronGeometry(1, 1).scale(sz, sz * (0.6 + 0.3 * r()), sz * (0.8 + 0.3 * r()));
       g.rotateY(r() * TAU).rotateX(j(r) * 0.6);
       jitter(g, sz * 0.25, 30, k);
@@ -1056,7 +1058,7 @@ function bombGeos(){
     rune.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     rune.computeVertexNormals();
     const fusePts = curvePts([[0, yc + 0.012, 0], [0.003, yc + 0.04, 0.002], [0.016, yc + 0.064, 0.008], [0.036, yc + 0.074, 0.016], [0.05, yc + 0.07, 0.02]], 14);
-    return { body: prep(body, 0.6), rune, fusePts, top: yc };
+    return { body: prep(body, 0.55), rune, fusePts, top: yc };
   });
 }
 
@@ -1137,13 +1139,13 @@ function crackedGeos(){
       }
       // open the cracks: pull each corner toward the middle, more near the weak spot
       let cx = 0, cy = 0; for (const p of jag){ cx += p[0]; cy += p[1]; } cx /= jag.length; cy /= jag.length;
-      const near = Math.exp(-dist * dist / 0.5);
+      const near = Math.exp(-dist * dist / 0.6);
       const pts = jag.map((p) => {
         if (onEdge(p)) return p;
-        const dx = cx - p[0], dy = cy - p[1], l = Math.hypot(dx, dy) || 1, g = 0.004 + 0.016 * near;
+        const dx = cx - p[0], dy = cy - p[1], l = Math.hypot(dx, dy) || 1, g = 0.004 + 0.03 * near;
         return [p[0] + dx / l * g, p[1] + dy / l * g];
       });
-      if (dist < 0.3 && removed < 1){ removed++; continue; }  // one stone already fallen out
+      if (dist < 0.45 && removed < 2){ removed++; continue; }  // stones already fallen out
       const s = new THREE.Shape(); s.moveTo(...pts[0]); for (const p of pts.slice(1)) s.lineTo(...p);
       const g = new THREE.ExtrudeGeometry(s, { depth: D, bevelEnabled: false }).translate(0, 0, -D);
       // UVs: the wall texture on the face, at its place in the wall; the broken sides box-projected
@@ -1152,13 +1154,13 @@ function crackedGeos(){
       for (let k = 0; k < pp.count; k++){ const z = pp.getZ(k), v = 0.1 + 0.9 * Math.pow((z + D) / D, 4); col[k * 3] = v; col[k * 3 + 1] = v * 0.98; col[k * 3 + 2] = v * 0.96; }
       g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
       // loosened stones near the weak spot lean out of the wall
-      const push = near * (0.012 + 0.05 * r()), tilt = near * 0.06;
+      const push = near * (0.01 + 0.07 * r()), tilt = near * 0.12;
       g.translate(-cx, -cy, 0).rotateX((r() - 0.5) * tilt).rotateY((r() - 0.5) * tilt).rotateZ((r() - 0.5) * tilt * 0.5).translate(cx, cy, push);
       parts.push(g);
     }
     // rubble and grit fallen at the foot of the wall
-    for (let k = 0; k < 14; k++){
-      const sz = 0.025 + Math.pow(r(), 2) * 0.09;
+    for (let k = 0; k < 22; k++){
+      const sz = 0.02 + Math.pow(r(), 2) * 0.1;
       const g = jitter(new THREE.IcosahedronGeometry(sz, 0), sz * 0.3, 20, k);
       g.scale(1, 0.7, 1).translate(C[0] + (r() - 0.5) * 1.1, sz * 0.5, 0.04 + r() * 0.28);
       rubble.push([projUV(flat(g), 1), 0.8]);
@@ -1200,31 +1202,37 @@ export function createCrackedWall(opts = {}){
 // A human skull from a sphere (its pole at the face, where the detail is): ellipsoid cranium, narrow
 // face, deep sockets and nose, cheekbones, brow. Vertex colours sink the holes into darkness.
 function skullGeo(){
-  const g = new THREE.SphereGeometry(1, 22, 16).rotateX(Math.PI / 2);
+  const g = new THREE.SphereGeometry(1, 24, 18).rotateX(Math.PI / 2);
   const p = g.attributes.position, col = new Float32Array(p.count * 3);
   const gauss = (x, y, z, c, w) => Math.exp(-((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2) / (w * w));
   for (let i = 0; i < p.count; i++){
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    let X = x * 0.069, Y = y * 0.074, Z = z * 0.094, dark = 0;
-    const front = smooth(0.2, 0.9, z), low = smooth(0.1, -0.7, y);
-    X *= 1 - 0.3 * front * low;
-    const jaw = front * smooth(-0.3, -0.8, y);
-    Z += 0.012 * jaw; Y -= 0.008 * jaw;
-    if (Y < -0.046) Y = -0.046 + (Y + 0.046) * 0.3;
+    const front = smooth(0.25, 0.85, z), low = smooth(0.15, -0.6, y), back = smooth(0.2, -0.6, z);
+    // cranium: a long dome, highest behind the middle, the back bulging; the face hangs below the front
+    let X = x * 0.07 * (1 - 0.32 * front * low) * (1 - 0.12 * smooth(0.4, 1, y));
+    let Y = y * (y > 0 ? 0.08 : 0.066) * (1 + 0.08 * back * smooth(-0.2, 0.4, y));
+    let Z = z * (z > 0 ? 0.088 : 0.1);
+    Z -= 0.018 * front * smooth(0.45, -0.1, y);                 // flatten the face under the brow
+    const jaw = front * smooth(-0.45, -0.85, y);
+    Z += 0.008 * jaw; Y -= 0.012 * jaw;                          // upper jaw and teeth jut down and forward
+    if (Y < -0.05) Y = -0.05 + (Y + 0.05) * 0.3;                 // flat underside
+    let dark = 0;
     for (const s of [-1, 1]){
-      const k = gauss(x, y, z, [0.37 * s, 0.06, 0.93], 0.25);
-      Z -= 0.03 * k; X -= s * 0.004 * k; dark = Math.max(dark, smooth(0.25, 0.75, k));
-      X += s * 0.008 * gauss(x, y, z, [0.75 * s, -0.25, 0.55], 0.28);         // cheekbones
-      X -= s * 0.005 * gauss(x, y, z, [0.95 * s, -0.05, 0.1], 0.32);          // temples
+      const k = gauss(x, y, z, [0.36 * s, 0.02, 0.92], 0.27);
+      Z -= 0.034 * k; X -= s * 0.006 * k; dark = Math.max(dark, smooth(0.18, 0.6, k));        // eye sockets
+      X += s * 0.01 * gauss(x, y, z, [0.78 * s, -0.3, 0.45], 0.28);                            // cheekbones
+      const tf = gauss(x, y, z, [0.9 * s, -0.15, 0.05], 0.3);
+      X -= s * 0.008 * tf; dark = Math.max(dark, tf * 0.35);                                     // temples
     }
-    const nose = Math.exp(-((x / 0.11) ** 2 + ((y + 0.33) / 0.17) ** 2)) * front;
-    Z -= 0.022 * nose; dark = Math.max(dark, smooth(0.3, 0.8, nose));
-    Z += 0.004 * Math.exp(-(((y - 0.3) / 0.12) ** 2)) * front;              // brow ridge
-    const teeth = front * smooth(-0.62, -0.72, y) * smooth(-0.98, -0.85, y);
-    const gaps = teeth * smooth(0.4, 0.9, Math.cos(Math.atan2(x, z) * 34)) * 0.7;
+    const nose = Math.exp(-((x / (0.07 + 0.08 * smooth(-0.15, -0.45, y))) ** 2 + ((y + 0.3) / 0.15) ** 2)) * front;
+    Z -= 0.024 * nose; dark = Math.max(dark, smooth(0.3, 0.75, nose));
+    Z += 0.006 * Math.exp(-(((y - 0.28) / 0.1) ** 2)) * front * smooth(0.75, 0.2, Math.abs(x));  // brow ridge
+    const teeth = front * smooth(-0.6, -0.68, y);
+    const gaps = teeth * smooth(0.3, 0.95, Math.cos(Math.atan2(x, z) * 30)) * 0.75;
+    const under = smooth(-0.55, -0.95, y) * (1 - front) * 0.4;  // shadowed hollows under the skull
     p.setXYZ(i, X, Y, Z);
-    const v = (1 - 0.92 * dark) * (1 - gaps) * (0.75 + 0.25 * smooth(-1, 0.3, y));
-    col[i * 3] = v; col[i * 3 + 1] = v * 0.97; col[i * 3 + 2] = v * 0.92;
+    const v = (1 - 0.94 * dark) * (1 - gaps) * (1 - under) * (0.8 + 0.2 * smooth(-1, 0.3, y));
+    col[i * 3] = v; col[i * 3 + 1] = v * 0.97; col[i * 3 + 2] = v * 0.93;
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.computeVertexNormals();

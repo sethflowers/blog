@@ -111,17 +111,17 @@ def wood(seed):
     warp = (fbm(w, h, 3, 1, 4, rng) - 0.5) * 9 + (fbm(w, h, 8, 2, 3, rng) - 0.5) * 2.5
     u = np.arange(w)[None, :] / w
     rings = np.sin((u * 120 + warp * 2.2) * 2 * np.pi) * 0.5 + 0.5
-    late = ss(0.5, 1.0, rings) * (0.55 + 0.45 * fbm(w, h, 12, 3, 3, rng))                    # dark latewood bands
+    late = ss(0.45, 1.0, rings) * (0.4 + 0.6 * fbm(w, h, 12, 3, 3, rng))                    # dark latewood bands
     pores = ss(0.58, 0.8, fbm(w, h, 220, 10, 2, rng)) * (1 - late)  # open pores in the earlywood
     rays = ss(0.78, 0.9, fbm(w, h, 90, 30, 2, rng)) * 0.5          # oak's silvery medullary flecks
     streak = fbm(w, h, 24, 2, 4, rng)
     weather = fbm(w, h, 4, 4, 5, rng)
     height = 0.5 - late * 0.12 - pores * 0.35 + streak * 0.15 + rays * 0.08
-    base = col([0.42, 0.31, 0.20]) * (0.75 + 0.5 * streak[..., None])
-    alb = base * (1 - 0.22 * late[..., None]) * (1 - 0.45 * pores[..., None])
+    base = col([0.38, 0.31, 0.235]) * (0.8 + 0.32 * streak[..., None])
+    alb = base * (1 - 0.13 * late[..., None]) * (1 - 0.3 * pores[..., None])
     alb = alb * (1 + 0.25 * rays[..., None])
     grey = alb.mean(-1, keepdims=True)  # sun-less age: greyed, dirty patches
-    t = ss(0.45, 0.8, weather)[..., None] * 0.45
+    t = ss(0.35, 0.8, weather)[..., None] * 0.6
     alb = alb * (1 - t) + grey * 0.8 * t
     alb *= (0.75 + 0.35 * fbm(w, h, 6, 12, 4, rng)[..., None])
     alb *= (0.55 + 0.45 * cavity(height, 2, 6)[..., None])
@@ -140,9 +140,9 @@ def steel(seed):
     fine = lines(n, n, 900, (20, 160), 0, 0.03, (1, 1), rng, (40, 140))
     cross = lines(n, n, 120, (10, 70), 1.2, 0.6, (1, 1), rng, (60, 200))
     nicks = dots(n, n, 40, 0.8, 2.2, rng)
-    stain = ss(0.55, 0.8, fbm(n, n, 5, 5, 5, rng))
+    stain = ss(0.62, 0.85, fbm(n, n, 9, 9, 5, rng))
     height = grind * 0.3 - fine * 0.25 - cross * 0.4 - nicks * 0.6
-    rough = 0.22 + 0.1 * grind + 0.16 * fine + 0.22 * cross + 0.14 * stain + 0.25 * nicks
+    rough = 0.14 + 0.08 * grind + 0.14 * fine + 0.2 * cross + 0.16 * stain + 0.25 * nicks
     save(normal_map(height, 2.5), 'props_steel_normal.jpg', 88)
     save(rough, 'props_steel_rough.jpg', 86)
 
@@ -157,18 +157,18 @@ def iron(seed):
     lump = fbm(n, n, 8, 8, 5, rng)
     rustf = fbm(n, n, 6, 6, 6, rng) + (fbm(n, n, 40, 40, 2, rng) - 0.5) * 0.25
     speck = fbm(n, n, 48, 48, 3, rng)
-    rust = ss(0.42, 0.7, rustf * 0.75 + speck * 0.35) * 0.85
+    rust = ss(0.5, 0.72, rustf * 0.75 + speck * 0.35) * 0.8
     heavy = ss(0.62, 0.8, rustf) * rust
     pits = ss(0.65, 0.8, fbm(n, n, 64, 64, 2, rng)) * (0.3 + rust)
     height = lump * 0.4 - dent * 0.35 - pits * 0.3 + heavy * 0.25 * fbm(n, n, 90, 90, 2, rng)
-    black = col([0.075, 0.072, 0.07]) * (0.7 + 0.6 * lump[..., None])
+    black = col([0.2, 0.2, 0.205]) * (0.7 + 0.55 * lump[..., None])
     rc = fbm(n, n, 30, 30, 3, rng)[..., None]
-    rcol = col([0.19, 0.11, 0.06]) * (1 - rc) + col([0.32, 0.17, 0.08]) * rc
+    rcol = col([0.17, 0.11, 0.075]) * (1 - rc) + col([0.27, 0.16, 0.095]) * rc
     rcol = rcol * (1 - heavy[..., None] * 0.35)
     alb = black * (1 - rust[..., None]) + rcol * rust[..., None]
     alb *= (0.6 + 0.4 * cavity(height, 3, 5)[..., None])
-    rough = 0.5 + 0.15 * lump + 0.35 * rust + 0.1 * pits
-    metal = 0.85 * (1 - rust) + 0.05
+    rough = 0.42 + 0.18 * lump + 0.4 * rust + 0.1 * pits
+    metal = 0.6 * (1 - rust) + 0.02  # black mill scale is only half metallic; rust not at all
     rm = np.stack([np.zeros_like(rough), rough, metal], -1)
     save(alb, 'props_iron_albedo.jpg', 86)
     save(normal_map(height, 6), 'props_iron_normal.jpg', 86)
@@ -205,8 +205,8 @@ def food(seed):
     # apple (0, 1): u round, v pole to pole. Deep, slightly dull red over yellow-green, streaked.
     streak = fbm(q, q, 40, 3, 4, rng)
     blush = ss(0.15, 0.55, fbm(q, q, 3, 2, 4, rng) * 0.8 + streak * 0.35)
-    ground = col([0.40, 0.30, 0.10])
-    red = col([0.28, 0.03, 0.025]) * (0.8 + 0.4 * streak[..., None])
+    ground = col([0.36, 0.28, 0.13])
+    red = col([0.24, 0.035, 0.03]) * (0.75 + 0.45 * streak[..., None])
     a = ground * (1 - blush[..., None]) + red * blush[..., None]
     pole = ss(0.12, 0.0, v) + ss(0.85, 0.98, v)  # russet in the stem and calyx cavities
     a = a * (1 - pole[..., None] * 0.7) + col([0.22, 0.16, 0.07]) * pole[..., None] * 0.7
@@ -220,7 +220,7 @@ def food(seed):
     top = np.cos((xx - 0.25) * 2 * np.pi) * 0.5 + 0.5  # 1 on top, 0 underneath
     blist = ss(0.55, 0.75, fbm(q, q, 30, 30, 3, rng))
     mott = fbm(q, q, 8, 8, 5, rng)
-    a = col([0.62, 0.40, 0.18]) * (1 - top[..., None] * 0.45) * (0.75 + 0.5 * mott[..., None])
+    a = col([0.58, 0.40, 0.22]) * (1 - top[..., None] * 0.5) * (0.75 + 0.5 * mott[..., None])
     a *= 1 - blist[..., None] * 0.35 * top[..., None]
     flour = ss(0.45, 0.8, fbm(q, q, 12, 12, 4, rng)) * (0.25 + 0.75 * ss(0.5, 0.0, top))
     h = mott * 0.4 + blist * 0.3 + fbm(q, q, 60, 60, 2, rng) * 0.15
@@ -243,12 +243,12 @@ def food(seed):
 
     # cheese (0, 0): v 0..0.55 paste (cut faces), v 0.6..1 waxed rind
     eyes = ss(0.35, 0.8, dots(q, q, 90, 1.5, 5, rng)) * (v < 0.56)
-    paste = col([0.74, 0.60, 0.33]) * (0.88 + 0.2 * fbm(q, q, 10, 10, 4, rng)[..., None])
+    paste = col([0.72, 0.62, 0.42]) * (0.88 + 0.2 * fbm(q, q, 10, 10, 4, rng)[..., None])
     cryst = dots(q, q, 400, 0.5, 1.0, rng) * 0.4
     paste = paste * (1 + cryst[..., None] * 0.3)
     paste = paste * (1 - eyes[..., None] * 0.55)
     weave = (np.sin(xx * q * 0.9) * np.sin(yy * q * 0.9)) * 0.5 + 0.5  # cheesecloth imprint
-    rind = col([0.40, 0.28, 0.13]) * (0.7 + 0.5 * fbm(q, q, 6, 6, 5, rng)[..., None]) * (0.9 + 0.1 * weave[..., None])
+    rind = col([0.36, 0.27, 0.15]) * (0.7 + 0.5 * fbm(q, q, 6, 6, 5, rng)[..., None]) * (0.9 + 0.1 * weave[..., None])
     mould = ss(0.68, 0.8, fbm(q, q, 14, 14, 3, rng))
     rind = rind * (1 - mould[..., None] * 0.4) + col([0.45, 0.43, 0.36]) * mould[..., None] * 0.4
     m = ss(0.555, 0.6, v)[..., None]
@@ -261,10 +261,10 @@ def food(seed):
     edge = 0.74 + (fbm(q, q, 12, 1, 3, rng) - 0.5) * 0.06
     follicle = dots(q, q, 1400, 0.7, 1.6, rng)
     char = ss(0.62, 0.8, fbm(q, q, 10, 10, 4, rng))
-    skin = col([0.50, 0.25, 0.09]) * (0.75 + 0.5 * fbm(q, q, 7, 7, 5, rng)[..., None])
+    skin = col([0.44, 0.26, 0.13]) * (0.75 + 0.5 * fbm(q, q, 7, 7, 5, rng)[..., None])
     skin = skin * (1 - char[..., None] * 0.6) * (1 - follicle[..., None] * 0.25)
     meat = col([0.45, 0.30, 0.20]) * (0.8 + 0.4 * fbm(q, q, 80, 6, 2, rng)[..., None])
-    bone = col([0.70, 0.62, 0.48]) * (0.85 + 0.25 * fbm(q, q, 10, 10, 3, rng)[..., None])
+    bone = col([0.64, 0.58, 0.48]) * (0.85 + 0.25 * fbm(q, q, 10, 10, 3, rng)[..., None])
     knuckle = ss(0.9, 0.97, v)
     bone = bone * (1 - knuckle[..., None] * 0.15) + col([0.55, 0.42, 0.30]) * knuckle[..., None] * 0.15
     ms = ss(edge - 0.005, edge + 0.005, v)[..., None]
@@ -307,7 +307,7 @@ def misc(seed):
 
     # bone (1, 1): old, stained bone, pores and hairline cracks
     stain = fbm(q, q, 5, 5, 5, rng)
-    a = col([0.62, 0.56, 0.44]) * (0.75 + 0.35 * fbm(q, q, 20, 20, 3, rng)[..., None])
+    a = col([0.50, 0.47, 0.40]) * (0.75 + 0.35 * fbm(q, q, 20, 20, 3, rng)[..., None])
     a = a * (1 - ss(0.5, 0.8, stain)[..., None] * 0.45 * np.array([0.6, 0.8, 1.0]))
     pores = dots(q, q, 300, 0.4, 0.9, rng)
     crk = lines(q, q, 25, (6, 30), 0.3, 0.8, (1, 1), rng)

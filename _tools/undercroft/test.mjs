@@ -112,7 +112,7 @@ const startTile = await ev(() => window.__uc.level.start);
 const [sx, sz] = await ev((t) => window.__uc.center(t[0], t[1]), startTile);
 const dir = await ev(() => window.__uc.level.startDir);
 await ev(([x, z, d]) => { window.__uc.place(x, z, Math.atan2(-d[0], -d[1]), 0); }, [sx, sz, dir]);
-await ev(([x, z, d]) => { const zb = window.__uc.spawnZombie(x + d[0] * 1.6, z + d[1] * 1.6, false); zb.aware = true; zb.yaw = Math.atan2(-d[0], -d[1]); }, [sx, sz, dir]);
+await ev(([x, z, d]) => { const zb = window.__uc.spawnZombie(x + d[0] * 1.6, z + d[1] * 1.6, false); zb.aware = true; zb.yaw = Math.atan2(-d[0], -d[1]); window.__testZombie = zb; }, [sx, sz, dir]);
 const hp0 = await ev(() => window.__uc.player.hp);
 await adv(2.5);
 const hp1 = await ev(() => window.__uc.player.hp);
@@ -120,12 +120,12 @@ check(hp1 < hp0, `a zombie hurts you (${hp0} → ${hp1} half-hearts)`);
 await shot('04-zombie');
 let swings = 0;
 for (; swings < 12; swings++){
-  if (await ev(() => window.__uc.zombies.filter((z) => z.state !== 'dead').length === 0)) break;
+  if (await ev(() => window.__testZombie.state === 'dead')) break;
   // face it, then swing
-  await ev(() => { const z = window.__uc.zombies.find((z) => z.state !== 'dead'); const p = window.__uc.player; p.yaw = Math.atan2(-(z.x - p.x), -(z.z - p.z)); });
+  await ev(() => { const z = window.__testZombie; const p = window.__uc.player; p.yaw = Math.atan2(-(z.x - p.x), -(z.z - p.z)); });
   await press(B.RT); await adv(0.5);
 }
-check(await ev(() => window.__uc.zombies.filter((z) => z.state !== 'dead').length === 0), `the sword kills a zombie (${swings} swings)`);
+check(await ev(() => window.__testZombie.state === 'dead'), `the sword kills a zombie (${swings} swings)`);
 await adv(1.0);
 await shot('05-zombie-down');
 // eating
@@ -139,7 +139,7 @@ await ev(() => { window.__uc.god = true; window.__uc.tryAgain(); });
 await adv(0.2);
 const L = await ev(() => { const l = window.__uc.level; return { start: l.start, gates: l.gates, cells: l.cells, chests: l.chests, waterGate: l.waterGate, crackGate: l.crackGate, exit: l.exit, hall: l.hall }; });
 console.log(`  level: ${L.gates.length} gates, ${L.cells.length} cells, ${L.chests.length} chests, water ${!!L.waterGate}, cracked wall ${!!L.crackGate}`);
-let botTime = 0;
+let botTime = 0, botDied = false;
 const tileNow = () => ev(() => window.__uc.tileOf(window.__uc.player.x, window.__uc.player.z));
 // steer along the route with the sticks; fight anything that gets close
 async function walkTo(target, opts){
@@ -153,8 +153,13 @@ async function walkTo(target, opts){
   while (wp < pts.length && t < 120){
     const st = await ev(() => { const p = window.__uc.player; const z = window.__uc.zombies.find((z) => z.state !== 'dead' && z.state !== 'emerge' && Math.hypot(z.x - p.x, z.z - p.z) < 2.2);
       return { x: p.x, z: p.z, yaw: p.yaw, zx: z ? z.x : null, zz: z ? z.z : null, state: window.__uc.state }; });
-    if (st.state !== 'play') return false;
+    if (st.state !== 'play'){ console.log('  bot: the game is in state ' + st.state + ' (' + await ev(() => window.__uc.player.cause) + ')'); botDied = true; return false; }
     let [tx, tz] = pts[wp];
+    // about to step onto water that isn't frozen (or is about to thaw): freeze it first
+    if (wp < route.length && await ev((t) => { const left = window.__uc.iceLeft(t[0], t[1]); return left !== null && left < 10; }, route[wp])){
+      await pad([0, 0, 0, 0]);
+      if (await selectPower('freeze')){ await press(B.LT); await adv(0.3); }
+    }
     const near = Math.hypot(tx - st.x, tz - st.z);
     if (near < (wp === pts.length - 1 ? 0.35 : 0.6)){ wp++; continue; }
     const b = none(); let fwd = -1;
@@ -194,6 +199,7 @@ check(await ev(() => window.__uc.inv.powers.length) === L.gates.length, `walking
 // 2. the prisoners. The one past the water needs the ice.
 async function freeCell(c){
   const ok = await walkTo(c.from, { water: true });
+  if (botDied) return false;
   const door = await ev((c) => window.__uc.world.cells.find((w) => w.tile[0] === c.tile[0] && w.tile[1] === c.tile[1]).door, c);
   await face(door.x, door.z);
   const b = none(); b[B.A] = 1; await pad([0, 0, 0, 0], b); await adv(1.3); await pad([0, 0, 0, 0]); await adv(0.6);
@@ -234,6 +240,7 @@ if (L.crackGate){
 for (const ch of L.chests){
   await walkTo(ch.tile, { water: true, crack: true });
   const pos = await ev((t) => window.__uc.world.chests.find((c) => Math.floor(c.pos.x / window.__uc.TILE) === t[0] && Math.floor(c.pos.z / window.__uc.TILE) === t[1]).pos, ch.tile);
+  if (botDied) break;
   await face(pos.x, pos.z); await press(B.A); await adv(0.4);
 }
 const weapons = await ev(() => Object.keys(window.__uc.inv.weapons));
