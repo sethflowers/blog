@@ -15,6 +15,7 @@ const TAU = Math.PI * 2;
 
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const j = (r) => r() - 0.5;
 function rng(seed){ // mulberry32: the same props every load
   let a = seed >>> 0;
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -164,7 +165,7 @@ function jitter(g, amp, freq, seed = 0, axes = [1, 1, 1]){
 const lathe = (pts, segs, phiStart = 0, phiLen = TAU) => new THREE.LatheGeometry(pts.map(([r, y]) => new V2(r, y)), segs, phiStart, phiLen);
 function box(w, h, d, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0){
   const g = new THREE.BoxGeometry(w, h, d);
-  if (rx || ry || rz) g.applyEuler(new THREE.Euler(rx, ry, rz));
+  if (rx || ry || rz) g.applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)));
   return g.translate(x, y, z);
 }
 // a round rod between two points
@@ -691,13 +692,16 @@ function tentacle(cx, base, L, w0, curl){
   let x = cx, y = base;
   for (let i = 0; i <= n; i++){
     const t = i / n, th = curl * (0.15 * t + 0.85 * t * t * t);
-    C.push([x, y, th, w0 * (1 - 0.72 * t) + 0.018]); ang.push(th);
+    C.push([x, y, th, w0 * (1 - 0.72 * t) + 0.018]);
     x += Math.sin(th) * L / n; y += Math.cos(th) * L / n;
   }
   const right = C.map(([x, y, th, w]) => [x + Math.cos(th) * w / 2, y - Math.sin(th) * w / 2]);
   const left = C.map(([x, y, th, w]) => [x - Math.cos(th) * w / 2, y + Math.sin(th) * w / 2]).reverse();
   const [tx, ty, tth, tw] = C[n], tip = [];
-  for (let k = 1; k < 4; k++){ const a = -Math.PI / 2 + Math.PI * k / 4; tip.push([tx + Math.sin(tth + a) * tw / 2 * Math.sin(-a + Math.PI / 2) * 0 + Math.cos(tth) * Math.cos(a + Math.PI) * -tw / 2 * 0 + (Math.sin(tth) * Math.cos(a) + Math.cos(tth) * Math.sin(a)) * tw / 2, ty + (Math.cos(tth) * Math.cos(a) - Math.sin(tth) * Math.sin(a)) * tw / 2]); }
+  for (let k = 1; k < 4; k++){ // round the tip from the right side to the left
+    const ps = Math.PI * k / 4, c = Math.cos(ps) * tw / 2, f = Math.sin(ps) * tw / 2;
+    tip.push([tx + Math.cos(tth) * c + Math.sin(tth) * f, ty - Math.sin(tth) * c + Math.cos(tth) * f]);
+  }
   return [...right, ...tip, ...left];
 }
 const OPENINGS = [[1.72, 2.4], [1.48, 2.27], [1.26, 2.14], [1.06, 2.02]];  // [width, crown] slab hole and each inner order
@@ -1004,8 +1008,6 @@ function brazierGeos(){
     return { iron: merge(parts.map((g) => prep(g))), coal: merge(coal) };
   });
 }
-const j = (r) => r() - 0.5;
-
 export function createBrazier(opts = {}){
   const p = brazierGeos(), group = new THREE.Group(), flameAnchor = new THREE.Object3D();
   group.name = 'brazier';
@@ -1065,7 +1067,7 @@ export function createBomb(opts = {}){
   // each bomb burns its own fuse, so the fuse geometry and the glow materials are per instance
   const segs = 6, fuseGeo = atlas(sweep(p.fusePts, () => [0.0034, 0.0034], segs, { caps: false, vScale: 10 }), MISC.cord);
   addMesh(group, fuseGeo, miscMat('cord'));
-  const runeMat = new THREE.MeshBasicMaterial({ color: 0xff5a14, fog: false });
+  const runeMat = new THREE.MeshBasicMaterial({ color: 0xff5a14, fog: false, side: THREE.DoubleSide });
   addMesh(group, p.rune, runeMat, false);
   const sparkMat = new THREE.MeshBasicMaterial({ color: 0xffb060, fog: false });
   const spark = new THREE.Mesh(cached('bomb-spark', () => new THREE.IcosahedronGeometry(0.0085, 0)), sparkMat);
@@ -1236,7 +1238,7 @@ function longBoneGeo(){
 export function createSkullPile(opts = {}){
   const geo = cached('skulls', () => {
     const skull = skullGeo(), bone = longBoneGeo(), parts = [];
-    const place = (g, [x, y, z], [rx, ry, rz], s = 1) => { g = g.clone().scale(s, s, s).applyEuler(new THREE.Euler(rx, ry, rz)); g.computeBoundingBox(); return g.translate(x, y - g.boundingBox.min.y, z); };
+    const place = (g, [x, y, z], [rx, ry, rz], s = 1) => { g = g.clone().scale(s, s, s).applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz))); g.computeBoundingBox(); return g.translate(x, y - g.boundingBox.min.y, z); };
     parts.push(place(bone, [0.02, 0, 0.05], [Math.PI / 2, 0, 1.1]));
     parts.push(place(bone, [-0.05, 0.0, -0.03], [Math.PI / 2, 0, -0.5], 0.92));
     parts.push(place(bone, [0.07, 0.03, -0.06], [Math.PI / 2 + 0.15, 0, 0.2], 0.85));

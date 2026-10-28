@@ -112,8 +112,14 @@ function flash(pos, color, power){ fxLight.position.copy(pos); fx.color.set(colo
    MODELS (built by their own modules; plain stand-ins if one fails to load)
    ================================================================ */
 async function loadModule(path, needs){
-  try { const m = await import(path); for (const n of needs) if (typeof m[n] !== 'function') throw new Error('missing ' + n); return m; }
+  let m;
+  try { m = await import(path); for (const n of needs) if (typeof m[n] !== 'function') throw new Error('missing ' + n); }
   catch (e){ console.warn('[undercroft] using stand-in models for', path, e.message); return stubs; }
+  // if one model ever throws, use its stand-in rather than stop the game
+  const safe = {};
+  for (const n of Object.keys(m)) safe[n] = typeof m[n] !== 'function' ? m[n] : (...args) => {
+    try { return m[n](...args); } catch (e){ console.warn('[undercroft] stand-in for', n, e.message); return stubs[n](...args); } };
+  return safe;
 }
 let props, beastMod, peopleKit, mats;
 

@@ -120,12 +120,12 @@ def skin():
 
 def membrane():
     n = 512
-    # veins: ridged noise at three scales gives a branching network
+    # veins: thin ridges of stretched noise at three scales, so big vessels split into finer ones
     v = np.zeros((n, n))
-    for i, (f, w) in enumerate([(3, 1.0), (7, 0.6), (15, 0.35)]):
-        r = 1 - np.abs(fbm(n, f, 2, 70 + i * 7, gain=0.4))
-        v = np.maximum(v, smooth(0.86, 0.985, r) * w)
-    wr = norm01(1 - np.abs(fbm(n, 22, 3, 90, aniso=2.2, angle=0.4)))
+    for i, (f, w, th) in enumerate([(3, 1.0, 0.93), (6, 0.75, 0.95), (13, 0.5, 0.965)]):
+        r = 1 - np.abs(fbm(n, f, 3, 70 + i * 7, gain=0.45, aniso=1.6, angle=0.5))
+        v = np.maximum(v, smooth(th, 0.995, np.clip(r, 0, 1)) * w)
+    wr = norm01(fbm(n, 10, 3, 90))
     bl = norm01(fbm(n, 4, 3, 95))
     img = np.stack([v, wr, bl], -1)
     Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).save(os.path.join(OUT, 'beast_membrane.jpg'), quality=88)

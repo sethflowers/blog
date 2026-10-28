@@ -27,22 +27,22 @@ const J = {
   tail0: [0, 2.92, -1.72], tail1: [0, 2.56, -2.12], tail2: [0, 1.8, -2.3], tail3: [0, 1.05, -2.36],
 };
 // legs: hip/shoulder, knee, ankle. The spring hangs from the ankle; the foot sits under it.
-const SPRING_LEN = 0.32, FOOT_Y = 0.13;
+const SPRING_LEN = 0.43, FOOT_Y = 0.13;
 const LEGS = [
-  { n: 'FL', hip: [0.42, 2.3, 1.15], knee: [0.42, 1.32, 1.15], ankle: [0.42, 0.45, 1.15], front: true },
-  { n: 'FR', hip: [-0.42, 2.3, 1.15], knee: [-0.42, 1.32, 1.15], ankle: [-0.42, 0.45, 1.15], front: true },
-  { n: 'HL', hip: [0.4, 2.4, -1.32], knee: [0.42, 1.3, -1.32], ankle: [0.42, 0.45, -1.32], front: false },
-  { n: 'HR', hip: [-0.4, 2.4, -1.32], knee: [-0.42, 1.3, -1.32], ankle: [-0.42, 0.45, -1.32], front: false },
+  { n: 'FL', hip: [0.42, 2.3, 1.15], knee: [0.42, 1.32, 1.15], ankle: [0.42, 0.56, 1.15], front: true },
+  { n: 'FR', hip: [-0.42, 2.3, 1.15], knee: [-0.42, 1.32, 1.15], ankle: [-0.42, 0.56, 1.15], front: true },
+  { n: 'HL', hip: [0.4, 2.4, -1.32], knee: [0.42, 1.3, -1.32], ankle: [0.42, 0.56, -1.32], front: false },
+  { n: 'HR', hip: [-0.4, 2.4, -1.32], knee: [-0.42, 1.3, -1.32], ankle: [-0.42, 0.56, -1.32], front: false },
 ];
 // wings (left = +X; the right one is mirrored): root on the back, wrist high up, three fingers fanning back.
 // Finger curves are quadratic beziers relative to the wrist: [control, tip].
-const WING_ROOT = [0.3, 3.0, 0.72], WRIST = [0.52, 5.12, 0.55];
+const WING_ROOT = [0.3, 3.0, 0.72], WRIST = [0.6, 5.78, 0.5];
 const FINGERS = [
-  [[0.1, 0.95, -1.05], [0.3, -0.55, -2.7]],   // the long top finger: the back half of the arch
-  [[0.08, -0.15, -1.0], [0.22, -1.3, -2.2]],
-  [[0.05, -0.75, -0.55], [0.12, -1.78, -1.2]],
+  [[0.12, 1.2, -1.35], [0.38, -0.8, -3.4]],    // the long top finger: the back half of the arch
+  [[0.1, -0.2, -1.3], [0.28, -1.75, -2.75]],
+  [[0.06, -1.0, -0.7], [0.15, -2.4, -1.45]],
 ];
-const BACK_EDGE = [-0.03, 0.06, -1.75];       // where the membrane meets the back, relative to the root
+const BACK_EDGE = [-0.03, 0.06, -1.9];       // where the membrane meets the back, relative to the root
 
 const BONES = []; const BI = {};
 function bone(name, parent, pos){ BI[name] = BONES.length; BONES.push({ name, parent, pos }); }
@@ -91,7 +91,7 @@ function cap(bone, a, b, r1, r2, k, o = {}){
     return d;
   };
   const r = Math.max(r1, r2) + (o.amp || 0) + k;
-  return { op: o.sub ? 'sub' : 'add', bone, k, f, box: [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, Math.min(a[2], b[2]) - r, Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, Math.max(a[2], b[2]) + r] };
+  return { op: o.sub ? 'sub' : 'add', bone, k, f, lbs: Math.min(1, sx, sy), box: [Math.min(a[0], b[0]) - r, Math.min(a[1], b[1]) - r, Math.min(a[2], b[2]) - r, Math.max(a[0], b[0]) + r, Math.max(a[1], b[1]) + r, Math.max(a[2], b[2]) + r] };
 }
 // ellipsoid with optional tilt about X (pitch) and Z (roll), and an optional surface displacement
 function ell(bone, c, r, k, o = {}){
@@ -108,7 +108,7 @@ function ell(bone, c, r, k, o = {}){
     return d;
   };
   const m = Math.max(r[0], r[1], r[2]) + (o.amp || 0) + k;
-  return { op: o.sub ? 'sub' : 'add', bone, k, f, box: [c[0] - m, c[1] - m, c[2] - m, c[0] + m, c[1] + m, c[2] + m] };
+  return { op: o.sub ? 'sub' : 'add', bone, k, f, lbs: 0.6, box: [c[0] - m, c[1] - m, c[2] - m, c[0] + m, c[1] + m, c[2] + m] };
 }
 function field(prims){
   return (x, y, z) => {
@@ -116,7 +116,8 @@ function field(prims){
     for (let i = 0; i < prims.length; i++){
       const p = prims[i], b = p.box;
       const ox = Math.max(b[0] - x, 0, x - b[3]), oy = Math.max(b[1] - y, 0, y - b[4]), oz = Math.max(b[2] - z, 0, z - b[5]);
-      const lb = Math.sqrt(ox * ox + oy * oy + oz * oz);
+      // a lower bound on this primitive's (approximate) distance; squashed shapes under-report, hence lbs
+      const lb = Math.sqrt(ox * ox + oy * oy + oz * oz) * p.lbs;
       if (p.op === 'add'){ if (lb > d + p.k) continue; d = smin(d, p.f(x, y, z), p.k); }
       else { if (lb > 0) continue; d = smax(d, -p.f(x, y, z), p.k); }
     }
@@ -125,6 +126,28 @@ function field(prims){
 }
 const mirror = (fn) => [fn(1, 'L'), fn(-1, 'R')];
 const X = (s, p) => [p[0] * s, p[1], p[2]];
+
+// The neck's centre line: a Catmull-Rom curve from inside the chest through the neck joints to the head.
+const NECK_PTS = [[0, 2.6, 1.0], J.neck0, J.neck1, J.neck2, J.neck3, J.head], NECK_R = [0.46, 0.42, 0.33, 0.265, 0.215, 0.18];
+const NECK_BONE = ['neck0', 'neck0', 'neck1', 'neck2', 'neck3'];
+function neckAt(u){
+  const i = Math.min(4, Math.floor(u)), t = u - i, P = NECK_PTS;
+  const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(5, i + 2)];
+  const t2 = t * t, t3 = t2 * t;
+  const c = (k) => 0.5 * (2 * p1[k] + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3);
+  return [c(0), c(1), c(2)];
+}
+// calls fn(bone, a, b, radiusA, radiusB, uA, uB, frontA, frontB, backA, backB) for short pieces from u0 to u1;
+// front/back are points on the windpipe and the crest, offset square to the curve
+function neckPieces(u0, u1, shrink, fn){
+  const steps = Math.round((u1 - u0) * 3);
+  const off = (u, d) => { const p = neckAt(u), q = neckAt(Math.min(5, u + 0.02)), r = neckAt(Math.max(0, u - 0.02)); const ty = q[1] - r[1], tz = q[2] - r[2], l = Math.hypot(ty, tz); return [p[0], p[1] - tz / l * d, p[2] + ty / l * d]; };
+  const rad = (u) => { const i = Math.min(4, Math.floor(u)); return lerp(NECK_R[i], NECK_R[i + 1], sstep(0, 1, u - i)) - shrink; };
+  for (let k = 0; k < steps; k++){
+    const ua = lerp(u0, u1, k / steps), ub = lerp(u0, u1, (k + 1) / steps), ra = rad(ua), rb = rad(ub);
+    fn(NECK_BONE[Math.min(4, Math.floor((ua + ub) / 2))], neckAt(ua), neckAt(ub), ra, rb, ua, ub, off(ua, 0.72 * ra), off(ub, 0.72 * rb), off(ua, -0.66 * ra), off(ub, -0.66 * rb));
+  }
+}
 
 // The body: barrel, ribs, spine, shoulder blades, hip bones, haunches, legs, neck and tail dock.
 function bodyPrims(){
@@ -136,10 +159,10 @@ function bodyPrims(){
     const w = 0.5 + 0.5 * Math.sin((z + (3.0 - y) * 0.32) * TAU / 0.25);
     return -0.03 * m * w * w * w + 0.012 * m;
   };
-  P.push(ell('body', [0, 2.55, 0.5], [0.5, 0.62, 1.05], 0.3, { disp: ribs, amp: 0.03 }));      // ribcage
-  P.push(ell('body', [0, 2.66, -0.62], [0.42, 0.46, 0.95], 0.3));                            // loins, tucked-up belly
+  P.push(ell('body', [0, 2.5, 0.5], [0.53, 0.7, 1.08], 0.3, { disp: ribs, amp: 0.03 }));      // ribcage
+  P.push(ell('body', [0, 2.62, -0.62], [0.45, 0.5, 0.95], 0.3));                            // loins, tucked-up belly
   P.push(ell('body', [0, 2.68, -1.28], [0.46, 0.44, 0.6], 0.25));                            // croup
-  P.push(ell('body', [0, 2.38, 1.3], [0.4, 0.48, 0.38], 0.22));                              // breast
+  P.push(ell('body', [0, 2.36, 1.28], [0.43, 0.54, 0.42], 0.22));                              // breast
   P.push(ell('body', [0, 2.98, 0.95], [0.28, 0.24, 0.55], 0.2));                             // withers
   // spine: a row of knuckled vertebrae along the top line, from withers to tail
   const knuckles = (x, y, z, t) => -0.02 * Math.pow(0.5 + 0.5 * Math.sin(z * TAU / 0.21), 3);
@@ -168,19 +191,14 @@ function bodyPrims(){
     P.push(cap(lo, [L.knee[0], L.knee[1] - 0.1, L.knee[2] - 0.07], [L.ankle[0], L.ankle[1] + 0.12, L.ankle[2] - 0.065], 0.035, 0.03, 0.06));   // tendon
     P.push(ell(lo, [L.ankle[0], L.ankle[1] + 0.02, L.ankle[2] - 0.01], [0.085, 0.08, 0.09], 0.05));     // ankle knob
   }
-  // neck: deep and narrow, with a ridge of vertebrae along its back and the windpipe in front
-  const N = [J.neck0, J.neck1, J.neck2, J.neck3, J.head], R = [0.37, 0.3, 0.25, 0.21, 0.18];
-  const nb = ['neck0', 'neck1', 'neck2', 'neck3'];
-  P.push(cap('neck0', [0, 2.6, 1.0], J.neck0, 0.42, 0.37, 0.25, { sx: 0.85 }));
-  for (let i = 0; i < 4; i++){
-    const a = N[i], b = N[i + 1];
-    P.push(cap(nb[i], a, b, R[i], R[i + 1], 0.12, { sx: 0.82 }));
-    // the crest along the back of the neck (offset toward -Z, i.e. the outside of the S) and windpipe in front
-    const back = (p) => [p[0], p[1] + 0.02, p[2] - 0.62 * R[i]], front = (p) => [p[0], p[1] - 0.03, p[2] + 0.75 * R[i]];
-    const bump = (x, y, z, t) => -0.018 * Math.pow(0.5 + 0.5 * Math.sin(t * TAU * 3.5), 3);
-    P.push(cap(nb[i], back(a), back(b), 0.075, 0.06, 0.08, { disp: bump, amp: 0.02 }));
-    P.push(cap(nb[i], front(a), front(b), 0.06, 0.05, 0.1));
-  }
+  // neck: deep and narrow, with a ridge of knuckled vertebrae along its back and the windpipe in front,
+  // built from short capsules along a smooth curve so the S has no kinks
+  neckPieces(0, 5, 0, (bn, a, b, ra, rb, ua, ub, fa, fb, ba, bb) => {
+    P.push(cap(bn, a, b, ra, rb, 0.1, { sx: 0.82 }));
+    const bump = (x, y, z, t) => -0.02 * Math.pow(0.5 + 0.5 * Math.sin(lerp(ua, ub, t) * TAU * 1.6), 3);
+    P.push(cap(bn, ba, bb, 0.075 * ra / 0.3, 0.075 * rb / 0.3, 0.08, { disp: bump, amp: 0.02 }));
+    if (ua > 0.5) P.push(cap(bn, fa, fb, 0.055 * ra / 0.3, 0.055 * rb / 0.3, 0.1));
+  });
   // tail dock
   P.push(cap('tail0', [0, 2.95, -1.6], J.tail1, 0.15, 0.1, 0.12));
   P.push(cap('tail1', J.tail1, [0, 2.2, -2.24], 0.1, 0.06, 0.06));
@@ -192,8 +210,8 @@ function bodyPrims(){
 const EYE = [0.168, 5.705, 2.36], EYE_R = 0.05;
 function headPrims(){
   const P = [];
-  P.push(cap('neck3', J.neck3, J.head, 0.198, 0.168, 0.06, { sx: 0.82 }));
-  P.push(ell('head', [0, 5.66, 2.1], [0.19, 0.19, 0.27], 0.1));                     // cranium
+  neckPieces(3.7, 5, 0.014, (bn, a, b, ra, rb) => P.push(cap(bn, a, b, ra, rb, 0.06, { sx: 0.82 })));
+  P.push(ell('head', [0, 5.67, 2.1], [0.205, 0.205, 0.29], 0.1));                     // cranium
   P.push(ell('head', [0, 5.72, 1.97], [0.12, 0.12, 0.13], 0.08));                   // back of the skull
   P.push(ell('head', [0, 5.665, 2.5], [0.115, 0.095, 0.3], 0.1));                   // face, running into the beak
   P.push(cap('head', [0, 5.83, 1.98], [0, 5.79, 2.4], 0.035, 0.03, 0.06));           // ridge down the middle of the skull
@@ -395,6 +413,7 @@ function addSculpt(B, prims, lo, hi, cell, soft, shade){
     B.vert(x, y, z, nx, ny, nz, s[3], s[4], s[0], s[1], s[2], sdfWeights(prims, x, y, z, soft));
   }
   for (const i of M.idx) B.i.push(base + i);
+  if (globalThis.__beastLog) console.log('sculpt', cell, M.idx.length / 3);
 }
 // how the hide is coloured: dark grey-brown, a little lighter underneath, blotchy, darker in creases,
 // scaly on the back and legs, wrinkled hide elsewhere; wetter round the mouth and underneath
@@ -405,7 +424,7 @@ function hideShade(x, y, z, nx, ny, nz, ao){
   const crease = 1 - ao;
   let r = v * (1 + 0.25 * crease), g = v * (0.95 - 0.05 * crease), b = v * (0.92 - 0.1 * crease);
   // the gullet and gums: dark wet red
-  const mouth = Math.abs(x) < 0.13 && z > 2.05 && Math.abs(y - (5.565 - (z - 2.1) * 0.02)) < 0.05 ? 1 : 0;
+  const mouth = Math.abs(x) < 0.12 && z > 2.05 && Math.abs(ny) > 0.55 && Math.abs(y - (5.565 - (z - 2.1) * 0.02)) < 0.045 ? 1 : 0;
   if (mouth){ r = 0.55 * ao + 0.1; g = 0.12 * ao; b = 0.1 * ao; }
   const scaly = clamp(sstep(-0.1, 0.6, ny) * 0.8 + sstep(1.5, 0.6, y) + (y > 4.9 && ny > -0.2 ? 0.6 : 0) + (fbm(x * 3, y * 3, z * 3) - 0.5) * 0.8, 0, 1) * (1 - mouth);
   const wet = clamp(0.45 + under * 0.3 + (fbm(x * 2, y * 2 + 5, z * 2) - 0.5) + mouth + sstep(2.3, 2.9, z) * sstep(5.2, 5.6, y) * 0.5, 0, 1);
@@ -415,16 +434,16 @@ function hideShade(x, y, z, nx, ny, nz, ao){
 /* ---------------- the other pieces ---------------- */
 // hooked upper beak and the lower beak, with a row of serrated teeth along each cutting edge
 function addBeak(B){
-  const ivoryCol = (x, y, z, t) => { const d = 0.45 + 0.55 * sstep(0.0, 0.5, t); const n = 0.85 + 0.3 * fbm(x * 25, y * 25, z * 25); return [d * n * 1.02, d * n * 0.98, d * n * 0.9]; };
+  const ivoryCol = (x, y, z, t) => { const d = 0.22 + 0.78 * sstep(0.05, 0.75, t); const n = 0.7 + 0.5 * fbm(x * 18, y * 30, z * 9); return [d * n * 1.02, d * n * 0.97, d * n * 0.88]; };
   // upper: from inside the face, forward, then hooking down hard at the tip
-  const up = (t) => [0, 5.6 - 0.05 * t - 0.2 * Math.pow(sstep(0.55, 1, t), 1.6), 2.5 + 0.78 * t - 0.12 * Math.pow(sstep(0.7, 1, t), 2)];
-  const uw = (t) => 0.105 * Math.pow(1 - t, 0.55) + 0.004, uh = (t) => 0.1 * Math.pow(1 - t, 0.7) + 0.006;
+  const up = (t) => [0, 5.6 - 0.04 * t - 0.22 * Math.pow(sstep(0.5, 1, t), 1.5), 2.48 + 0.66 * t - 0.1 * Math.pow(sstep(0.7, 1, t), 2)];
+  const uw = (t) => 0.118 * Math.pow(1 - t, 0.5) + 0.004, uh = (t) => 0.15 * Math.pow(1 - t, 0.85) + 0.006;
   sweep(B.ivory, { path: up, n: 22, m: 14, up: [0, 1, 0], cap0: true,
     section: (a, t) => { const s = Math.sin(a); return [uw(t) * Math.cos(a), s > 0 ? uh(t) * s : 0.18 * uh(t) * s - 0.01 * (1 - t)]; },
     weights: rigid('head'), color: ivoryCol });
   // lower: under the upper one, a little shorter, tip turned up
-  const lp = (t) => [0, 5.555 - 0.06 * t + 0.03 * sstep(0.7, 1, t), 2.45 + 0.66 * t];
-  const lw = (t) => 0.095 * Math.pow(1 - t, 0.6) + 0.004, lh = (t) => 0.07 * Math.pow(1 - t, 0.7) + 0.005;
+  const lp = (t) => [0, 5.555 - 0.05 * t + 0.03 * sstep(0.7, 1, t), 2.42 + 0.58 * t];
+  const lw = (t) => 0.1 * Math.pow(1 - t, 0.6) + 0.004, lh = (t) => 0.08 * Math.pow(1 - t, 0.7) + 0.005;
   sweep(B.ivory, { path: lp, n: 18, m: 12, up: [0, 1, 0], cap0: true,
     section: (a, t) => { const s = Math.sin(a); return [lw(t) * Math.cos(a), s > 0 ? 0.15 * lh(t) * s : lh(t) * s]; },
     weights: rigid('jaw'), color: ivoryCol });
@@ -491,10 +510,10 @@ function addWings(B){
     const backEdge = (t) => [root[0] + BACK_EDGE[0] * s * t, root[1] + BACK_EDGE[1] * t - 0.05 * Math.sin(t * Math.PI), root[2] + BACK_EDGE[2] * t];
     const sparCol = (x, y, z, t) => { const v = 0.55 + 0.3 * fbm(x * 5, y * 5, z * 5); return [v, v * 0.95, v * 0.9]; };
     // arm and knuckle (hide covered, scaly)
-    sweep(B.skin, { path: arm, n: 14, m: 8, cap0: true, section: (a, t) => { const r = 0.085 - 0.03 * t + 0.03 * Math.exp(-(((t - 0.97) / 0.06) ** 2)); return [Math.cos(a) * r, Math.sin(a) * r * 1.2]; },
+    sweep(B.skin, { path: arm, n: 14, m: 8, cap0: true, section: (a, t) => { const r = 0.07 - 0.03 * t + 0.012 * Math.sin(t * 9) ** 8 + 0.03 * Math.exp(-(((t - 0.97) / 0.06) ** 2)); return [Math.cos(a) * r, Math.sin(a) * r * 1.2]; },
       weights: (x, y, z, t) => t > 0.9 ? [BI['w' + S + 'root'], 1 - (t - 0.9) * 5, BI['w' + S + 'wrist'], (t - 0.9) * 5] : [BI['w' + S + 'root'], 1], color: sparCol, uv: () => [0.9, 0.5] });
     fing.forEach((fp, f) => {
-      sweep(B.skin, { path: fp, n: 16, m: 7, section: (a, t) => { const r = 0.05 * (1 - t) + 0.008; return [Math.cos(a) * r, Math.sin(a) * r]; },
+      sweep(B.skin, { path: fp, n: 16, m: 7, section: (a, t) => { const r = 0.042 * (1 - t) + 0.007 + 0.008 * Math.exp(-(((t - 0.45) / 0.04) ** 2)); return [Math.cos(a) * r, Math.sin(a) * r]; },
         weights: rigid('w' + S + 'f' + f), color: sparCol, uv: () => [0.8, 0.5] });
       // a hooked claw at each finger tip
       const tip = fp(1), d = fp(0.97), dir = [tip[0] - d[0], tip[1] - d[1], tip[2] - d[2]], dl = Math.hypot(...dir);
@@ -540,8 +559,8 @@ function addWings(B){
           weights: rigid(bone), color: (x, y, z, u) => { const v = 0.35 + 0.65 * u; return [v, v * 0.93, v * 0.8]; } });
       }
     };
-    spikeRow(arm, 0.25, 0.95, 6, 0.26, 'w' + S + 'root');
-    spikeRow(fing[0], 0.05, 0.9, 8, 0.3, 'w' + S + 'f0');
+    spikeRow(arm, 0.22, 0.95, 7, 0.32, 'w' + S + 'root');
+    spikeRow(fing[0], 0.04, 0.92, 10, 0.38, 'w' + S + 'f0');
   }
 }
 // iron springs, the collars that hold them, and the flat ridged flipper feet with claws
@@ -554,15 +573,15 @@ function addLegsBelowAnkle(B){
       section: (ang, t) => { const r = 0.105 + 0.012 * Math.sin(t * Math.PI); return [Math.cos(ang) * r, Math.sin(ang) * r]; }, up: [0, 0, 1],
       weights: rigid(L.n + 'lo'), color: ironCol });
     // the coil: a heavy wire in a helix from just under the collar down to the foot plate
-    const turns = 4.5, top = a[1] - 0.035, bot = FOOT_Y + 0.025;
-    sweep(B.iron, { path: (t) => { const ang = t * turns * TAU; return [a[0] + Math.cos(ang) * 0.092, lerp(top, bot, t), a[2] + Math.sin(ang) * 0.092]; },
-      n: 72, m: 6, up: [0, 1, 0], section: (ang) => [Math.cos(ang) * 0.024, Math.sin(ang) * 0.024],
+    const turns = 3.6, top = a[1] - 0.035, bot = FOOT_Y + 0.025;
+    sweep(B.iron, { path: (t) => { const ang = t * turns * TAU; return [a[0] + Math.cos(ang) * 0.088, lerp(top, bot, t), a[2] + Math.sin(ang) * 0.088]; },
+      n: 58, m: 5, up: [0, 1, 0], section: (ang) => [Math.cos(ang) * 0.021, Math.sin(ang) * 0.021],
       weights: rigid(sb), color: ironCol });
     // foot plate the spring sits on
     sweep(B.iron, { path: (t) => [a[0], FOOT_Y + 0.03 - t * 0.04, a[2]], n: 2, m: 14, cap0: true, cap1: true,
       section: (ang) => [Math.cos(ang) * 0.115, Math.sin(ang) * 0.115], up: [0, 0, 1], weights: rigid(fb), color: ironCol });
     // the flipper: a fan from the heel to a scalloped front edge, thick ridges running out to three claws
-    const heel = [a[0], 0, a[2] - 0.16], toes = [-0.45, 0, 0.45], na = 18, nr = 9, start = B.skin.count, i0 = B.skin.i.length;
+    const heel = [a[0], 0, a[2] - 0.16], toes = [-0.45, 0, 0.45], na = 14, nr = 6, start = B.skin.count, i0 = B.skin.i.length;
     const R = (an) => { let sc = 1; for (let k = 0; k < 2; k++){ const m0 = (toes[k] + toes[k + 1]) / 2; sc -= 0.13 * Math.exp(-(((an - m0) / 0.17) ** 2)); } return 0.78 * sc / Math.cos(an * 0.8); };
     const ridge = (an) => { let r = 0; for (const t of toes) r = Math.max(r, Math.exp(-(((an - t) / 0.07) ** 2))); return r; };
     const padTop = (an, r) => lerp(0.115, 0.022, Math.pow(r, 0.8)) + ridge(an) * 0.04 * (1 - r * 0.6);
@@ -602,15 +621,15 @@ function addLegsBelowAnkle(B){
 }
 // tail hair: long cards hanging from the dock, fanned round it, each a little different
 function addTail(B){
-  const n = 18, segs = 12;
+  const n = 24, segs = 12;
   for (let k = 0; k < n; k++){
     const ang = (k / n) * Math.PI * 1.6 - Math.PI * 0.8 + Math.sin(k * 7.1) * 0.15;
-    const len = 2.05 + 0.4 * Math.sin(k * 3.7) ** 2, w0 = 0.12, w1 = 0.26 + 0.08 * Math.sin(k * 5.3) ** 2;
+    const len = 2.0 + 0.45 * Math.sin(k * 3.7) ** 2, w0 = 0.14, w1 = 0.36 + 0.12 * Math.sin(k * 5.3) ** 2;
     const root = [Math.sin(ang) * 0.06, 2.42 - 0.12 * (k % 3) * 0.3, -2.18 - Math.cos(ang) * 0.05];
     const sway = Math.sin(k * 2.3) * 0.12, start = B.hair.count, i0 = B.hair.i.length;
     for (let i = 0; i <= segs; i++){
       const t = i / segs;
-      const cx = root[0] + Math.sin(ang) * 0.12 * t + sway * t * t, cy = root[1] - len * t, cz = root[2] - 0.32 * Math.sin(t * 2.2) - 0.05 * t;
+      const cx = root[0] + Math.sin(ang) * 0.2 * t + sway * t * t, cy = root[1] - len * t, cz = root[2] - 0.32 * Math.sin(t * 2.2) - 0.05 * t - Math.cos(ang) * 0.12 * t;
       const w = lerp(w0, w1, Math.sin(Math.min(1, t * 1.4) * Math.PI * 0.5)) * (1 - 0.45 * t * t);
       // the card faces out from the tail's axis
       const ex = Math.cos(ang) * w * 0.5, ez = Math.sin(ang) * w * 0.5;
@@ -633,8 +652,8 @@ function buildGeometry(){
   const t0 = performance.now();
   const B = { skin: new Buf(), ivory: new Buf(), membrane: new Buf(), eye: new Buf(), hair: new Buf(), iron: new Buf() };
   const bp = bodyPrims();
-  addSculpt(B.skin, bp, [-0.72, 0.36, -2.4], [0.72, 5.6, 2.25], 0.05, 0.07, hideShade);
-  addSculpt(B.skin, headPrims(), [-0.27, 5.0, 1.62], [0.27, 6.0, 3.1], 0.019, 0.03, hideShade);
+  addSculpt(B.skin, bp, [-0.75, 0.36, -2.4], [0.75, 5.6, 2.3], 0.062, 0.07, hideShade);
+  addSculpt(B.skin, headPrims(), [-0.27, 5.15, 1.62], [0.27, 6.05, 3.1], 0.026, 0.03, hideShade);
   addBeak(B); addHorn(B); addEyes(B.eye); addWings(B); addLegsBelowAnkle(B); addTail(B);
   // pack every buffer into one geometry, one group per material
   const order = ['skin', 'ivory', 'membrane', 'eye', 'hair', 'iron'];
@@ -755,24 +774,27 @@ function makeMaterials(env){
   const T = textures();
   const envI = 0.55;
   const skin = detailMaterial(THREE.MeshPhysicalMaterial, {
-    color: new THREE.Color(0x4e4640), roughness: 0.62, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.22,
+    color: new THREE.Color(0x3b3532), roughness: 0.55, metalness: 0, clearcoat: 0.85, clearcoatRoughness: 0.16,
     sheen: 0.35, sheenColor: new THREE.Color(0x5a4a44), sheenRoughness: 0.5, envMap: env, envMapIntensity: envI,
   }, { a: [1.15, 0.006, 0.35, 0.75], b: [0.5, 0.35, 0, 0] });
   const ivory = detailMaterial(THREE.MeshPhysicalMaterial, {
-    color: new THREE.Color(0xb5a78a), roughness: 0.42, clearcoat: 0.3, clearcoatRoughness: 0.35, envMap: env, envMapIntensity: envI,
-  }, { a: [3.0, 0.0012, 0.25, 0.4], b: [0.35, 0.2, 0, 0] });
+    color: new THREE.Color(0x8a7d66), roughness: 0.45, clearcoat: 0.35, clearcoatRoughness: 0.3, envMap: env, envMapIntensity: envI,
+  }, { a: [2.2, 0.002, 0.3, 0.7], b: [0.45, 0.2, 0, 0] });
   const iron = detailMaterial(THREE.MeshStandardMaterial, {
     color: new THREE.Color(0x4a443d), roughness: 0.5, metalness: 0.85, envMap: env, envMapIntensity: 0.9,
   }, { a: [4.0, 0.0008, 0.5, 0.8], b: [0.4, 0.3, 0, 0] });
   // wing membrane: thin leathery skin with veins; light from behind glows through it, blood-red
-  const membrane = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(0x3d302c), roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.3,
+  const membrane = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(0x2c2422), roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.3,
     side: THREE.DoubleSide, vertexColors: true, envMap: env, envMapIntensity: envI });
-  const mu = { memMap: { value: T.membrane }, transColor: { value: new THREE.Color(1.0, 0.22, 0.08).multiplyScalar(0.6) }, flashColor: { value: new THREE.Color(0, 0, 0) } };
+  const mu = { memMap: { value: T.membrane }, transColor: { value: new THREE.Color(0.85, 0.24, 0.1).multiplyScalar(0.3) }, flashColor: { value: new THREE.Color(0, 0, 0) } };
   membrane.userData.u = mu;
   membrane.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, mu);
     sh.vertexShader = 'varying vec2 vMUv;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vMUv = uv;');
+    // a zero-thickness double-sided sheet shadows itself into moire, so the membrane casts shadows but
+    // takes none; the light glowing through it does the work instead
     sh.fragmentShader = 'uniform sampler2D memMap; uniform vec3 transColor; uniform vec3 flashColor; varying vec2 vMUv; float gTrans;\n' + sh.fragmentShader
+      .replace('#include <lights_pars_begin>', '#include <lights_pars_begin>\n#define receiveShadow false')
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>
         void RE_Direct_Membrane(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight){
           RE_Direct_Physical(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
@@ -789,9 +811,9 @@ function makeMaterials(env){
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         {
           vec2 ux = dFdx(vMUv), uy = dFdy(vMUv);
-          float h0 = mT.r * 0.8 + mT.g * 0.4;
+          float h0 = mT.r * 0.8 + mT.g * 0.15;
           vec4 tx = texture2D(memMap, vMUv + ux), ty = texture2D(memMap, vMUv + uy);
-          float hx = tx.r * 0.8 + tx.g * 0.4 - h0, hy = ty.r * 0.8 + ty.g * 0.4 - h0;
+          float hx = tx.r * 0.8 + tx.g * 0.15 - h0, hy = ty.r * 0.8 + ty.g * 0.15 - h0;
           vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
           vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
           float det = dot(sx, r1);
@@ -813,6 +835,8 @@ function makeMaterials(env){
 }
 
 /* ---------------- the beast ---------------- */
+// how much of the aim each neck bone takes (the head takes the rest), and how the neck lies when dead
+const NECK_AIM = [0.12, 0.22, 0.3, 0.36], NECK_DEAD_X = [0.45, 0.25, -0.1, -0.2], NECK_DEAD_Z = [0.25, 0.25, 0.2, 0.1];
 export function createBeast(opts = {}){
   if (!GEO) GEO = buildGeometry();
   const mats = makeMaterials(opts.env || null);
@@ -887,7 +911,7 @@ export function createBeast(opts = {}){
     body.rotation.set(lerp(bodyPitch, 0, dRoll) + 0.22 * dFall * (1 - dRoll) + hurt * 0.04 * Math.sin(st.t * 40), 0, dRoll * 1.42 + hurt * 0.05);
 
     // legs: two-bone IK keeps the feet on the ground while standing and walking
-    const amp = clamp(speed * 0.075, 0, 0.5) * live;
+    const amp = clamp(speed * 0.12, 0, 0.5) * live;
     const duty = lerp(0.62, 0.42, gal);
     for (const g of legs){
       const off = lerp(g.walk, g.bound, gal);
@@ -924,13 +948,12 @@ export function createBeast(opts = {}){
     // neck and head: aim, breathe, recoil when hurt, lift to barf; fall when dead
     const yawC = clamp(yaw, -1.3, 1.3), pitC = clamp(pitch, -0.9, 0.9);
     const nodY = -pitC - mo * 0.25 - hurt * 0.3;
-    const wN = [0.12, 0.22, 0.3, 0.36];
     for (let i = 0; i < 4; i++){
-      neck[i].rotation.set(nodY * wN[i] * 0.6 + breath * 0.012 + (1 - live) * [0.45, 0.25, -0.1, -0.2][i] - bodyPitch * (i === 0 ? 0.8 : 0),
-        yawC * wN[i] * live, (1 - live) * [0.25, 0.25, 0.2, 0.1][i] * dRoll);
+      neck[i].rotation.set(nodY * NECK_AIM[i] * 0.6 + breath * 0.012 + (1 - live) * NECK_DEAD_X[i] - bodyPitch * (i === 0 ? 0.8 : 0),
+        yawC * NECK_AIM[i] * live, (1 - live) * NECK_DEAD_Z[i] * dRoll);
     }
     head.rotation.set(nodY * 0.4 + Math.sin(st.t * 0.7) * 0.03 + (1 - live) * 0.3, yawC * 0.25 * live, 0);
-    jaw.rotation.x = Math.max(mo * 0.85, dead * 0.25) + Math.sin(st.t * 23) * 0.03 * mo;
+    jaw.rotation.x = Math.max(mo * 0.62, dead * 0.25) + Math.sin(st.t * 23) * 0.03 * mo;
     // tail: swings with the gait and hangs heavy; streams back in a leap
     st.swayV += (-(st.sway) * 6 - st.swayV * 2.2 + Math.sin(ph) * speed * 0.6) * dt; st.sway += st.swayV * dt;
     tail[0].rotation.set(-air * 0.6 + speed * 0.015, 0, st.sway * 0.1);
@@ -943,7 +966,7 @@ export function createBeast(opts = {}){
     for (const w of wings){
       const out = (0.12 + spread * 1.25 + beat + Math.sin(st.t * 0.6) * 0.015) * live;
       // dead: the lower (right) wing lies open on the floor, the upper one flops over
-      const deadZ = w.s > 0 ? -0.35 * dRoll : 0.45 * dRoll;
+      const deadZ = w.s > 0 ? 0.55 * dRoll : 0.18 * dRoll;
       w.root.rotation.set(-0.1 * spread * live, 0.12 * spread * w.s * live, -w.s * out * live + deadZ);
       w.wrist.rotation.set(0.1 * spread, 0, -w.s * lag * 0.6 + w.s * 0.25 * spread);
       w.f[0].rotation.x = 0.18 * spread + 0.1 * (1 - live);
@@ -952,7 +975,7 @@ export function createBeast(opts = {}){
     }
 
     // eyes and flashes: uniforms only
-    mats.eye.emissiveIntensity = lerp(0.35 + glow * 60, 0.0, 1 - live);
+    mats.eye.emissiveIntensity = lerp(0.35 + glow * 14, 0.0, 1 - live);
     mats.skin.userData.u.detailB.value.z = hurt * 0.6;
     mats.ivory.userData.u.detailB.value.z = hurt * 0.3;
     mats.membrane.userData.u.flashColor.value.setRGB(hurt * 0.25, hurt * 0.01, 0);
