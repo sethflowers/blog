@@ -1,0 +1,15 @@
+{
+  "name": "Wildcat",
+  "short_name": "Wildcat",
+  "description": "You are a wildcat in the wild. Fight the bears, wolves and boar that come for you, and catch rabbits to heal.",
+  "start_url": "/experiments/wildcat/",
+  "scope": "/experiments/wildcat/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#11140d",
+  "theme_color": "#11140d",
+  "icons": [
+    { "src": "/experiments/wildcat/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/experiments/wildcat/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

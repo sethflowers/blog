@@ -1,0 +1,167 @@
+---
+title: Wildcat
+description: You are a wildcat in a big, wild forest. Bears, wolves and wild boar roam the woods, and if you get too close they will fight you. Claw, pounce and dodge, catch rabbits to heal, and grow from a kitten into the king of the wild. Plays with a controller, keyboard and mouse, or touch.
+date: 2026-10-29
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#11140d">
+<meta name="apple-mobile-web-app-title" content="Wildcat">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/experiments/wildcat/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/wildcat/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/wildcat/icon-192.png">
+<title>Wildcat</title>
+<style>
+  :root{
+    --cream:#eae2cf; --cream-dim:rgba(234,226,207,.7); --cream-faint:rgba(234,226,207,.28);
+    --amber:#e2b44a; --blood:#a8241a; --moss:#7d9a52; --ink:#0b0d08;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--cream);
+    touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none;font-family:var(--serif);}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  .hidden{display:none !important;}
+
+  /* ---------- screens ---------- */
+  .screen{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:24px;background:linear-gradient(90deg,rgba(8,10,6,.82),rgba(8,10,6,.35) 60%,rgba(8,10,6,.1));overflow-y:auto;}
+  #title{align-items:flex-start;text-align:left;padding-left:max(6vw,24px);}
+  .screen h1{font-weight:400;font-size:clamp(44px,9vw,104px);letter-spacing:.18em;line-height:1;color:var(--cream);text-shadow:0 2px 30px rgba(0,0,0,.6);}
+  .screen h1 span{display:block;font-size:.2em;letter-spacing:.42em;margin-top:16px;color:var(--amber);font-style:italic;}
+  .screen p{max-width:560px;margin:22px 0 0;line-height:1.7;color:var(--cream-dim);font-size:15px;text-shadow:0 1px 6px rgba(0,0,0,.7);}
+  .screen p b{color:var(--cream);font-weight:400;}
+  #pause p,#dead p{margin:22px auto 0;}
+  .go{margin-top:28px;background:rgba(0,0,0,.25);border:1px solid var(--cream-faint);color:var(--cream);font:inherit;font-size:17px;
+    letter-spacing:.4em;padding:14px 34px 14px 40px;cursor:pointer;transition:border-color .3s,background .3s;}
+  .go:hover,.go:focus-visible{border-color:var(--amber);background:rgba(226,180,74,.1);outline:none;}
+  .go:disabled{opacity:.35;cursor:default;}
+  .go.alt{font-size:13px;margin-top:14px;padding:10px 26px 10px 30px;}
+  .stat{margin-top:18px;color:var(--cream-dim);letter-spacing:.12em;font-size:15px;max-width:560px;line-height:1.6;}
+  #best{font-size:13px;letter-spacing:.2em;color:var(--amber);}
+  .loading{margin-top:22px;font-size:12px;letter-spacing:.35em;color:var(--cream-faint);min-height:14px;}
+  .keys .touchonly{display:none;}
+  body.touch .keys .desk{display:none;}
+  body.touch .keys .touchonly{display:inline;}
+  #dead{background:radial-gradient(ellipse at 50% 50%,rgba(50,4,0,.55),rgba(0,0,0,.92) 75%);}
+  #pause,#dead{text-align:center;}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none;}
+  body.playing #hud{display:block;}
+  #me{position:absolute;left:calc(env(safe-area-inset-left) + 20px);top:calc(env(safe-area-inset-top) + 16px);width:min(300px,42vw);text-shadow:0 1px 4px #000;}
+  #rank{font-size:12px;letter-spacing:.3em;color:var(--amber);}
+  #lvl{font-size:11px;letter-spacing:.25em;color:var(--cream-dim);margin-top:2px;}
+  .bar{height:9px;margin-top:8px;border:1px solid rgba(234,226,207,.35);background:rgba(0,0,0,.45);position:relative;}
+  .bar i{display:block;height:100%;transition:width .2s;}
+  #hpFill{background:linear-gradient(90deg,#6e1209,#b8321f);}
+  #hpText{position:absolute;right:4px;top:-15px;font-size:10px;letter-spacing:.15em;color:var(--cream-dim);font-style:normal;}
+  #st{height:4px;margin-top:4px;}
+  #stFill{background:linear-gradient(90deg,#8a7a3a,#e2c46a);transition:width .08s;}
+  #xp{height:2px;margin-top:4px;border:none;background:rgba(234,226,207,.15);}
+  #xpFill{background:var(--amber);}
+  #winsBox{position:absolute;right:calc(env(safe-area-inset-right) + 22px);top:calc(env(safe-area-inset-top) + 16px);text-align:right;font-size:11px;letter-spacing:.3em;color:var(--cream-dim);text-shadow:0 1px 4px #000;}
+  #wins{display:block;font-size:26px;letter-spacing:.05em;color:var(--cream);}
+  body.touch #winsBox{right:calc(env(safe-area-inset-right) + 80px);}
+  #foeBar{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 20px);transform:translateX(-50%);width:min(440px,46vw);z-index:11;opacity:0;transition:opacity .5s;pointer-events:none;text-align:center;}
+  #foeBar.show{opacity:1;}
+  #foeName{font-size:12px;letter-spacing:.45em;color:#e7b9a6;margin-bottom:6px;text-shadow:0 1px 4px #000;}
+  #foeTrack{height:7px;border:1px solid rgba(231,185,166,.45);background:rgba(0,0,0,.5);}
+  #foeFill{height:100%;width:100%;background:linear-gradient(90deg,#5a0a05,#c2331a);transition:width .2s;}
+  #hint{position:fixed;left:0;right:0;top:22%;z-index:11;text-align:center;font-style:italic;letter-spacing:.3em;
+    font-size:14px;color:var(--cream);text-shadow:0 1px 6px #000;opacity:0;transition:opacity 1s;pointer-events:none;padding:0 20px;}
+  #hint.show{opacity:1;transition:opacity .25s;}
+  #banner{position:fixed;left:50%;top:32%;transform:translate(-50%,-50%) scale(.96);z-index:12;text-align:center;opacity:0;transition:opacity .5s,transform .5s;
+    pointer-events:none;background:radial-gradient(ellipse,rgba(0,0,0,.6),rgba(0,0,0,0) 70%);padding:40px 70px;max-width:92vw;}
+  #banner.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+  #bannerTitle{font-size:clamp(26px,4.4vw,46px);letter-spacing:.3em;color:#f6ecd4;text-shadow:0 0 24px rgba(0,0,0,.8);}
+  #bannerText{margin-top:12px;font-size:15px;line-height:1.6;color:var(--cream-dim);font-style:italic;max-width:520px;}
+  #hurt{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 50%,rgba(120,0,0,0) 45%,rgba(120,0,0,.55));}
+  #hurt.on{animation:hurt .6s ease-out;}
+  @keyframes hurt{0%{opacity:1}100%{opacity:0}}
+  #vignette{position:fixed;inset:0;z-index:8;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 55%,rgba(0,0,0,.35));}
+  #debug{position:fixed;left:10px;bottom:6px;z-index:40;font:11px ui-monospace,Menlo,monospace;color:#9f9;pointer-events:none;}
+
+  /* ---------- touch ---------- */
+  #stick{position:fixed;z-index:12;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:1px solid var(--cream-faint);pointer-events:none;opacity:0;transition:opacity .2s;}
+  #stick.on{opacity:1;}
+  #knob{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;background:rgba(234,226,207,.18);border:1px solid var(--cream-faint);}
+  #touchUI{display:none;}
+  body.touch.playing #touchUI{display:block;}
+  .tbtn{position:fixed;z-index:13;border-radius:50%;border:1px solid var(--cream-faint);background:rgba(0,0,0,.3);color:var(--cream);
+    font:11px var(--serif);letter-spacing:.15em;display:flex;align-items:center;justify-content:center;touch-action:none;}
+  .tbtn.down{background:rgba(226,180,74,.3);}
+  #swipeBtn{width:96px;height:96px;right:calc(env(safe-area-inset-right) + 28px);bottom:calc(env(safe-area-inset-bottom) + 36px);font-size:13px;}
+  #pounceBtn{width:70px;height:70px;right:calc(env(safe-area-inset-right) + 140px);bottom:calc(env(safe-area-inset-bottom) + 28px);}
+  #dodgeBtn{width:64px;height:64px;right:calc(env(safe-area-inset-right) + 54px);bottom:calc(env(safe-area-inset-bottom) + 150px);}
+  #pauseBtn{width:46px;height:46px;right:calc(env(safe-area-inset-right) + 18px);top:calc(env(safe-area-inset-top) + 14px);border-radius:8px;}
+</style>
+<script type="importmap">
+{ "imports": { "three": "/experiments/wildcat/lib/three.module.min.js" } }
+</script>
+</head>
+<body>
+
+<div id="vignette"></div>
+<div id="hurt"></div>
+<div id="hud">
+  <div id="me">
+    <div id="rank">KITTEN</div><div id="lvl">LEVEL 1</div>
+    <div class="bar"><i id="hpFill"></i><i id="hpText"></i></div>
+    <div class="bar" id="st"><i id="stFill"></i></div>
+    <div class="bar" id="xp"><i id="xpFill"></i></div>
+  </div>
+  <div id="winsBox">BEATEN<b id="wins">0</b></div>
+</div>
+<div id="foeBar"><div id="foeName"></div><div id="foeTrack"><div id="foeFill"></div></div></div>
+<div id="hint"></div>
+<div id="banner"><div id="bannerTitle"></div><div id="bannerText"></div></div>
+<div id="debug"></div>
+<div id="stick"><div id="knob"></div></div>
+<div id="touchUI">
+  <div class="tbtn" id="swipeBtn" data-act="swipe">CLAW</div>
+  <div class="tbtn" id="pounceBtn" data-act="pounce">POUNCE</div>
+  <div class="tbtn" id="dodgeBtn" data-act="dodge">DODGE</div>
+  <div class="tbtn" id="pauseBtn" data-act="pause">II</div>
+</div>
+
+<div class="screen" id="title">
+  <h1>WILDCAT<span>alone in the wild</span></h1>
+  <p>You are a wildcat, small and fierce, in a forest that goes on and on. <b>Brown bears</b>, <b>grey wolves</b> and <b>wild boar</b> live here too.
+    Get too close and they will come for you, and they won't let you run: you have to fight. Catch <b>rabbits</b> to get your strength back.</p>
+  <p class="keys">
+    <span class="desk"><b>Controller</b> left stick to move (click it to sprint), right stick to look, <b>X</b> or <b>RT</b> claw, <b>A</b> pounce, <b>B</b> dodge.<br>
+      <b>Keyboard</b> WASD to move, <b>Shift</b> to sprint, mouse to look, <b>click</b> to claw, <b>Space</b> to pounce, <b>right-click</b> or <b>Q</b> to dodge.</span>
+    <span class="touchonly">Left thumb moves (push to the edge to sprint), right thumb looks. Buttons on the right claw, pounce and dodge.</span>
+  </p>
+  <button class="go" id="startBtn" disabled>INTO THE WILD</button>
+  <div class="loading" id="loading">WAKING UP</div>
+  <div class="stat" id="best"></div>
+  <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+
+<div class="screen hidden" id="pause">
+  <h1>PAUSED</h1>
+  <button class="go" id="resumeBtn">CARRY ON</button>
+  <button class="go alt" id="muteBtn">SOUND ON</button>
+</div>
+
+<div class="screen hidden" id="dead">
+  <h1>YOU FELL<span>the wild is hard</span></h1>
+  <div class="stat" id="deadStat"></div>
+  <button class="go" id="retryBtn">GET UP AGAIN</button>
+</div>
+
+<script type="module" src="/experiments/wildcat/js/game.js"></script>
+</body>
+</html>
+{% endraw %}
