@@ -226,8 +226,8 @@ async function solveShrine(kind){
     await until(() => window.__uc.shrine.doorOpen > 0.95, null, 4);
     await walkXY([S.ox, S.oz + 11.8]);
   } else if (kind === 'freeze'){
-    await walkXY([S.ox, S.oz + 2.9]); await adv(4.6);                 // stand on the rune and watch
-    await shot('06-shrine-freeze-reveal');
+    await walkXY([S.ox, S.oz + 2.9]); await adv(2.7);                 // stand on the rune and watch
+    await shot('06-shrine-freeze-reveal'); await adv(2.0);
     for (let r = 0; r < 4; r++) await walkXY([S.ox + S.cols[S.path[r]], S.oz + S.rows[r]], { walk: true, near: 0.3 });
     await walkXY([S.ox, S.oz + 12.2]);
   } else {

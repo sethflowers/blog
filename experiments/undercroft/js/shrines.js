@@ -70,7 +70,7 @@ export function buildShrine(kind, index, ctx){
   const wallMat = mats.pillar;
   const floorMat = new THREE.MeshStandardMaterial({ map: mats.floor.map, normalMap: mats.floor.normalMap, roughnessMap: mats.floor.roughnessMap });
   const runeMat = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(1.6), fog: false });
-  const sh = { kind, group, ox, oz, start: { x: ox, z: oz + 2.4, yaw: Math.PI }, lights, flames, solved: false, taken: false, doorOpen: 0,
+  const sh = { kind, group, ox, oz, start: { x: ox, z: oz + 1.6, yaw: Math.PI }, lights, flames, solved: false, taken: false, doorOpen: 0,
     name: SHRINE_NAMES[kind], hint: HINTS[kind], color };
 
   // ---------- the chamber ----------
@@ -216,7 +216,7 @@ export function buildShrine(kind, index, ctx){
       const x = ox + cols[k], z = oz + rows[r];
       const g = new THREE.Group(); g.position.set(x, 0, z); add(g);
       const col = stoneBox(SZ - 0.1, 1.5, SZ - 0.1, wallMat); col.position.y = -0.81; g.add(col);
-      const topMat = new THREE.MeshStandardMaterial({ map: mats.floor.map, normalMap: mats.floor.normalMap, roughness: 0.8, emissive: color, emissiveIntensity: 0 });
+      const topMat = new THREE.MeshStandardMaterial({ map: mats.floor.map, normalMap: mats.floor.normalMap, roughness: 0.8, emissive: new THREE.Color(0x2f7dff), emissiveIntensity: 0 });
       const top = new THREE.Mesh(topGeo, topMat); top.position.y = -0.06; top.receiveShadow = top.castShadow = true; g.add(top);
       sh.stones.push({ g, topMat, x, z, r, k, safe: path[r] === k, sink: 0, stood: 0 });
     }
@@ -234,7 +234,7 @@ export function buildShrine(kind, index, ctx){
         let glow = 0;
         if (sh.reveal >= 0 && s.safe){ const on = sh.reveal - s.r * 0.75; glow = on > 0 && sh.reveal < 4.2 ? Math.min(1, on * 3) : 0; }
         if (sh.solved && s.safe) glow = 0.6;
-        s.topMat.emissiveIntensity = glow * 1.4;
+        s.topMat.emissiveIntensity = glow * 0.9;
         // the wrong ones give way under you
         const onIt = Math.abs(player.x - s.x) < SZ / 2 && Math.abs(player.z - s.z) < SZ / 2 && player.y - api.eye > -0.5;
         if (onIt && !s.safe){ s.stood += dt; if (s.stood > 0.25 && s.sink === 0){ s.sink = 0.001; api.sfx.crack([s.x, 0, s.z]); } }

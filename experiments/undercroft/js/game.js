@@ -302,6 +302,7 @@ function buildLevel(){
   for (const d of debris) scene.remove(d.o);
   zombies.length = 0; bolts.length = 0; prisoners.length = 0; debris.length = 0; beast = null;
   for (const p of firePatches) levelRoot.remove(p.f); firePatches.length = 0;
+  for (const f of jetCards) f.visible = false;
   for (const d of decals){ scene.remove(d.m); } decals.length = 0;
   pw.bomb = null; pw.bombCool = 0; pw.shieldT = 0; pw.shieldCool = 0;
   lv = generateLevel(seed, levelNo);
@@ -456,6 +457,8 @@ function hurtZombie(z, dmg, from, knock){
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
 const jetDir = new THREE.Vector3(), jetFrom = new THREE.Vector3();
 const firePatches = [];      // burning puddles of fire left on the floor
+const jetCards = [];         // the jet itself: a chain of flames along its path, growing as it spreads
+for (let k = 0; k < 18; k++){ const f = makeFlame(1, k * 1.7); f.visible = false; scene.add(f); jetCards.push(f); }
 const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.42, 0.35), transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 48).rotateX(-Math.PI / 2), ringMat); ring.visible = false; scene.add(ring);
 let ringT = 0;
@@ -503,7 +506,8 @@ function beastUpdate(dt){
       if (b.t > 0.8){
         b.state = 'breathe'; b.t = 0; sfx.fireBreath([b.x, 4, b.z]);
         b.m.mouth.getWorldPosition(jetFrom);
-        jetDir.set(player.x, player.y - 0.7, player.z).sub(jetFrom).normalize();
+        const aim = b.testAim || { x: player.x, y: player.y - 0.7, z: player.z };
+        jetDir.set(aim.x, aim.y, aim.z).sub(jetFrom).normalize();
       }
       break;
     }
@@ -568,6 +572,7 @@ function beastUpdate(dt){
     }
   }
   if (b.state !== 'inhale' && b.state !== 'breathe') s.eyeGlow = Math.max(0, s.eyeGlow - dt * 3);
+  if (b.state !== 'breathe') for (const f of jetCards) f.visible = false;
   if (b.state !== 'barf' && b.state !== 'inhale' && b.state !== 'breathe') s.mouth = Math.max(0, s.mouth - dt * 2);
   if (b.state !== 'leap' && b.state !== 'land') s.flap = Math.max(b.aware ? 0.15 : 0, s.flap - dt);
   // walk, staying inside the hall and clear of the pillars
@@ -604,17 +609,23 @@ function breathFire(dt){
   const b = beast;
   b.m.mouth.getWorldPosition(jetFrom);
   // the jet swings toward you, but slower than you can run
-  tmp.set(player.x, player.y - 0.7, player.z).sub(jetFrom).normalize();
+  const aim = b.testAim || { x: player.x, y: player.y - 0.7, z: player.z };      // (tests can point it elsewhere)
+  tmp.set(aim.x, aim.y, aim.z).sub(jetFrom).normalize();
   jetDir.lerp(tmp, Math.min(1, dt * 1.1)).normalize();
-  for (let k = 0; k < 16; k++){
-    const sp = 9 + R() * 4, spread = 0.9 + R() * 0.6;
+  for (let k = 0; k < 10; k++){
+    const sp = 9 + R() * 4, spread = 1.2 + R() * 0.8;
     const h = R();
     emit(glow, jetFrom.x, jetFrom.y, jetFrom.z, jetDir.x * sp + (R() - 0.5) * spread, jetDir.y * sp + (R() - 0.5) * spread, jetDir.z * sp + (R() - 0.5) * spread,
-      0.35 + R() * 0.35, 0.05 + R() * 0.07, 1.6 + h, 0.5 + h * 0.6, 0.08 + h * 0.15, -2, 1.6);
+      0.3 + R() * 0.4, 0.015 + R() * 0.025, 1.8 + h, 0.6 + h * 0.5, 0.1 + h * 0.15, -2, 1.6);
   }
   if (R() < 0.5) burst('smoke', tmp2.copy(jetFrom).addScaledVector(jetDir, 4 + R() * 4), 1);
   // where the jet meets the floor
   const t = jetDir.y < -0.05 ? Math.min(12, -jetFrom.y / jetDir.y) : 12;
+  jetCards.forEach((f, k) => {
+    const d = (k + 0.6) / jetCards.length * t, size = 0.7 + d * 0.3;
+    f.visible = true; f.material.uniforms.size.value = size * (0.85 + R() * 0.3);
+    f.position.copy(jetFrom).addScaledVector(jetDir, d).add(tmp.set((R() - 0.5) * 0.15, -size * 0.4, (R() - 0.5) * 0.15));
+  });
   const hit = tmp2.copy(jetFrom).addScaledVector(jetDir, t);
   flash(hit.clone().setY(1.2), 0xff7a28, 26);
   b.patchT = (b.patchT || 0) - dt;
@@ -650,7 +661,7 @@ function hurtBeast(dmg, at){
   b.hp -= dmg; b.s.hurt = 1; b.aware = true;
   burst('blood', at, 24); sfx.hitFlesh([at.x, at.y, at.z]);
   if (b.hp <= 0){
-    b.dead = true; b.t = 0;
+    b.dead = true; b.t = 0; for (const f of jetCards) f.visible = false;
     sfx.roar([b.x, 4, b.z]); hint('YOU BEAT THE MONSTER', 4);
     // it drops a feast
     for (const f of ['drumstick', 'bread', 'apple']){
