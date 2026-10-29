@@ -764,6 +764,14 @@ function symbolShapes(kind){
       }
     }
     const hx = new THREE.Shape(); for (let k = 0; k < 6; k++){ const a = TAU * k / 6 + Math.PI / 6, p = [Math.cos(a) * 0.026, Math.sin(a) * 0.026]; k ? hx.lineTo(...p) : hx.moveTo(...p); } S.push(hx);
+  } else if (kind === 'flight'){ // a spread wing: a curved shoulder and five feathers fanning down from it
+    const sh = new THREE.Shape(); sh.moveTo(-0.13, 0.06); sh.quadraticCurveTo(-0.02, 0.15, 0.13, 0.11); sh.lineTo(0.12, 0.07); sh.quadraticCurveTo(-0.02, 0.1, -0.12, 0.03); sh.closePath(); S.push(sh);
+    for (let k = 0; k < 5; k++){
+      const x = -0.1 + k * 0.055, l = 0.2 - k * 0.028, a = -0.25 + k * 0.12;
+      const f = new THREE.Shape(), c = Math.cos(a), n = Math.sin(a), w = 0.022;
+      const pt = (u, v) => [x + u * n + v * c, 0.07 - u * c + v * n];
+      f.moveTo(...pt(0, -w)); f.quadraticCurveTo(...pt(l * 0.6, -w * 1.3), ...pt(l, 0)); f.quadraticCurveTo(...pt(l * 0.6, w * 1.3), ...pt(0, w)); f.closePath(); S.push(f);
+    }
   } else { // a heater shield with a rim and a cross
     const outline = (k) => { const s = new THREE.Shape(); s.moveTo(-0.1 * k, 0.115 * k); s.lineTo(0.1 * k, 0.115 * k); s.quadraticCurveTo(0.105 * k, -0.04 * k, 0, -0.14 * k); s.quadraticCurveTo(-0.105 * k, -0.04 * k, -0.1 * k, 0.115 * k); return s; };
     const rim = outline(1); rim.holes.push(outline(0.8)); S.push(rim);
@@ -777,6 +785,7 @@ const GATE_KINDS = {
   bomb:   { a: [1.0, 0.22, 0.02], b: [1.0, 0.62, 0.14], spark: [1.0, 0.7, 0.3], sym: [1.0, 0.45, 0.08], kind: 1 },
   freeze: { a: [0.08, 0.3, 1.0], b: [0.55, 0.82, 1.0], spark: [0.9, 0.97, 1.0], sym: [0.3, 0.6, 1.0], kind: 2 },
   shield: { a: [0.9, 0.5, 0.06], b: [1.0, 0.82, 0.38], spark: [1.0, 0.95, 0.7], sym: [1.0, 0.7, 0.2], kind: 3 },
+  flight: { a: [0.1, 0.7, 0.55], b: [0.7, 1.0, 0.9], spark: [1.0, 1.0, 1.0], sym: [0.45, 1.0, 0.8], kind: 4 },
 };
 
 const MAGIC_VS = `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
@@ -812,6 +821,7 @@ void main(){
   float extra = 0.;
   if (uKind == 2.) extra = pow(abs(cos(a * 3. + n * 2.)), 24.) * smoothstep(1.1, .1, r) * .9;       // ice spikes
   if (uKind == 3.) extra = pow(.5 + .5 * sin(r * 26. - t * 4.), 6.) * smoothstep(1.2, .2, r) * .6;  // ripples
+  if (uKind == 4.) extra = pow(fbm(vec2(vP.x * 9., vP.y * 2. - t * 1.6)), 3.) * 1.2;                // gusts streaming up
   v += extra;
   vec3 col = mix(uColA * .7, uColB, smoothstep(.3, 1.1, v)) * v * 1.7;
   col += mix(uColA, uColB, .5) * exp(-max(e, 0.) * 18.) * 1.1;  // bright rim where the magic meets the stone

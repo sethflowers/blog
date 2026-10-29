@@ -6,6 +6,7 @@
 //   magnet  light four braziers with your torch before any burns out
 //   freeze  watch which stepping stones light up, then cross the water on them (wrong ones sink)
 //   shield  pull four levers in the order the mural shows
+//   flight  turn the wind wheels until every vent in the chasm blows, then ride the wind across
 //
 // Every shrine is 10 m wide and 20 m long. You arrive at the south end facing north (+z). The trial fills
 // the middle, a wall with a portcullis crosses it at z = 13, and the altar stands at z = 17.
@@ -13,13 +14,14 @@ import * as THREE from 'three';
 import { mulberry } from './level.js';
 
 const W = 10, L = 20, H = 6, DOOR_Z = 13;
-const COLORS = { magnet: 0xff4030, bomb: 0xff8a2a, freeze: 0x8cc8ff, shield: 0xffd24a };
-export const SHRINE_NAMES = { magnet: 'THE SHRINE OF THE MAGNET', bomb: 'THE SHRINE OF THE BOMB', freeze: 'THE SHRINE OF ICE', shield: 'THE SHRINE OF THE SHIELD' };
+const COLORS = { magnet: 0xff4030, bomb: 0xff8a2a, freeze: 0x8cc8ff, shield: 0xffd24a, flight: 0x7dffd4 };
+export const SHRINE_NAMES = { magnet: 'THE SHRINE OF THE MAGNET', bomb: 'THE SHRINE OF THE BOMB', freeze: 'THE SHRINE OF ICE', shield: 'THE SHRINE OF THE SHIELD', flight: 'THE SHRINE OF FLIGHT' };
 const HINTS = {
   bomb: 'Push the stone block onto the glowing plate.',
   magnet: 'Light all four fires with your torch before any goes out.',
   freeze: 'Step on the rune and watch the stones. Cross only on the ones that glow.',
   shield: 'Pull the levers in the order the mural above the door shows.',
+  flight: 'Each wind wheel blows two of the vents in the chasm. Make all four blow, then walk across on the wind.',
 };
 
 // a box whose texture is scaled to its size, so stone blocks look the same size on every face
@@ -57,6 +59,28 @@ function muralTexture(order){
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// rising air: faint streaks scrolling up a cylinder, brightest at its edges and fading out towards the top
+function windMat(color, seed){
+  return new THREE.ShaderMaterial({
+    uniforms: { on: { value: 0 }, time: { value: 0 }, col: { value: color.clone().lerp(new THREE.Color(0xffffff), 0.4) }, seed: { value: seed * 3.7 } },
+    vertexShader: `varying vec2 vUv; varying float vEdge;
+      void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vec3 n = normalize(normalMatrix * normal); vEdge = 1.0 - abs(dot(n, normalize(-mv.xyz)));
+        gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float on, time, seed; uniform vec3 col; varying vec2 vUv; varying float vEdge;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
+      float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+      void main(){
+        vec2 q = vec2(vUv.x * 9.0 + vUv.y * 2.0 + seed, vUv.y * 6.0 - time * 1.4);
+        float streak = pow(n2(q) * n2(q * vec2(2.0, 0.5) + 7.0), 1.5);
+        float a = on * (0.025 + 0.18 * streak) * (0.4 + vEdge) * smoothstep(1.0, 0.7, vUv.y) * smoothstep(0.0, 0.25, vUv.y);
+        gl_FragColor = vec4(col * a, 1.0);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  });
+}
+
 export function buildShrine(kind, index, ctx){
   const { mats, props, env, makeFlame, seed } = ctx;
   const rng = mulberry(seed * 977 + index * 131 + 7);
@@ -74,16 +98,24 @@ export function buildShrine(kind, index, ctx){
     name: SHRINE_NAMES[kind], hint: HINTS[kind], color };
 
   // ---------- the chamber ----------
-  const stones = kind === 'freeze';
-  const PIT0 = 3.5, PIT1 = 11.5;
-  if (stones){
+  const stones = kind === 'freeze', chasm = kind === 'flight';
+  const PIT0 = 3.5, PIT1 = 11.5, DEEP = 9;
+  if (chasm){
+    // two ledges with a deep chasm between them
+    for (const [z0, z1] of [[0, PIT0], [PIT1, L]]){
+      const f = add(stoneBox(W, 0.4, z1 - z0, floorMat, 3)); f.position.set(ox, -0.2, oz + (z0 + z1) / 2);
+      const cliff = add(stoneBox(W, DEEP - 0.4, z1 - z0 - 0.02, wallMat)); cliff.position.set(ox, -0.4 - (DEEP - 0.4) / 2, oz + (z0 + z1) / 2);
+    }
+    const bottom = add(stoneBox(W, 0.4, PIT1 - PIT0, floorMat, 3)); bottom.position.set(ox, -DEEP, oz + (PIT0 + PIT1) / 2);
+  } else if (stones){
     for (const [z0, z1] of [[0, PIT0], [PIT1, L]]){ const f = add(stoneBox(W, 0.4, z1 - z0, floorMat, 3)); f.position.set(ox, -0.2, oz + (z0 + z1) / 2); }
     const bottom = add(stoneBox(W, 0.2, PIT1 - PIT0, floorMat, 3)); bottom.position.set(ox, -1.5, oz + (PIT0 + PIT1) / 2);
     const water = add(new THREE.Mesh(new THREE.PlaneGeometry(W, PIT1 - PIT0).rotateX(-Math.PI / 2), mats.water)); water.position.set(ox, -0.35, oz + (PIT0 + PIT1) / 2);
   } else { const f = add(stoneBox(W, 0.4, L, floorMat, 3)); f.position.set(ox, -0.2, oz + L / 2); }
   const ceil = add(stoneBox(W + 1, 0.4, L + 1, wallMat)); ceil.position.set(ox, H + 0.2, oz + L / 2);
   for (const [x, z, w, d] of [[ox - W / 2 - 0.25, oz + L / 2, 0.5, L + 1], [ox + W / 2 + 0.25, oz + L / 2, 0.5, L + 1], [ox, oz - 0.25, W, 0.5], [ox, oz + L + 0.25, W, 0.5]]){
-    const wall = add(stoneBox(w, H + (stones ? 1.6 : 0), d, wallMat)); wall.position.set(x, (H - (stones ? 1.6 : 0)) / 2, z);
+    const below = stones ? 1.6 : chasm ? DEEP : 0;
+    const wall = add(stoneBox(w, H + below, d, wallMat)); wall.position.set(x, (H - below) / 2, z);
   }
   // the wall across the chamber, with a doorway and a portcullis in it
   for (const s of [-1, 1]){
@@ -126,7 +158,7 @@ export function buildShrine(kind, index, ctx){
 
   // ---------- the trials ----------
   const interact = [];      // { pos, label, hold, act, when }
-  if (kind === 'bomb') buildPush(); else if (kind === 'magnet') buildFires(); else if (kind === 'freeze') buildStones(); else buildLevers();
+  if (kind === 'bomb') buildPush(); else if (kind === 'magnet') buildFires(); else if (kind === 'freeze') buildStones(); else if (kind === 'flight') buildWind(); else buildLevers();
 
   function buildPush(){
     // a 10 x 8 grid of 1 m cells. The plate can't be reached by pushing straight east then north, or straight
@@ -236,7 +268,7 @@ export function buildShrine(kind, index, ctx){
         if (sh.solved && s.safe) glow = 0.6;
         s.topMat.emissiveIntensity = glow * 0.9;
         // the wrong ones give way under you
-        const onIt = Math.abs(player.x - s.x) < SZ / 2 && Math.abs(player.z - s.z) < SZ / 2 && player.y - api.eye > -0.5;
+        const onIt = Math.abs(player.x - s.x) < SZ / 2 && Math.abs(player.z - s.z) < SZ / 2 && player.y - api.eye > -0.5 && player.y - api.eye < 0.5;
         if (onIt && !s.safe){ s.stood += dt; if (s.stood > 0.25 && s.sink === 0){ s.sink = 0.001; api.sfx.crack([s.x, 0, s.z]); } }
         if (s.sink > 0 && s.sink < 1.6){ s.sink += dt; s.g.position.y = -Math.min(1.5, s.sink * 1.4); }
       }
@@ -282,6 +314,72 @@ export function buildShrine(kind, index, ctx){
     sh.reset = () => { for (const l of sh.levers) l.down = false; sh.wrong = 0; };
   }
 
+  function buildWind(){
+    // four vents in a line across the chasm. Each wheel switches two of them (on if off, off if on), so you
+    // have to find the pair of wheels that sets all four blowing. Standing over a blowing vent holds you up.
+    const VZ = [4.5, 6.5, 8.5, 10.5], VR = 1.25;
+    const pairs = [[0, 1], [1, 2], [2, 3], [3, 0]].sort(() => rng() - 0.5);
+    const dot = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+      const g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+    const offMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
+    sh.vents = VZ.map((z, k) => {
+      const at = new THREE.Vector3(ox, 0, oz + z);
+      // a grate at the bottom of the chasm that glows when it blows
+      const grate = add(new THREE.Mesh(new THREE.RingGeometry(0.5, 1.1, 32).rotateX(-Math.PI / 2), offMat)); grate.position.set(at.x, -DEEP + 0.22, at.z);
+      const core = add(new THREE.Mesh(new THREE.CircleGeometry(0.5, 24).rotateX(-Math.PI / 2), offMat)); core.position.set(at.x, -DEEP + 0.21, at.z);
+      // the rising air: a faint column and motes of dust swirling up
+      const col = add(new THREE.Mesh(new THREE.CylinderGeometry(VR * 0.85, VR, DEEP + 2.5, 24, 1, true), windMat(color, k)));
+      col.position.set(at.x, -DEEP / 2 + 1.25, at.z);
+      const N = 70, pos = new Float32Array(N * 3), seeds = [];
+      for (let i = 0; i < N; i++) seeds.push({ a: rng() * 6.28, r: 0.2 + rng() * (VR - 0.3), y: rng(), v: 0.5 + rng() * 0.5 });
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const motes = add(new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.09, map: dot, color: color.clone().lerp(new THREE.Color(0xffffff), 0.6), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })));
+      motes.frustumCulled = false;
+      return { at, on: false, grate, core, col, motes, seeds, pos, geo, k };
+    });
+    sh.wheels = pairs.map((pair, k) => {
+      const x = ox - 3 + k * 2, z = oz + 3.0;
+      const post = add(stoneBox(0.5, 1.0, 0.3, wallMat)); post.position.set(x, 0.5, z + 0.1);
+      const wheel = new THREE.Group(); wheel.position.set(x, 1.15, z - 0.12); add(wheel);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 8, 28), mats.iron); rim.castShadow = true; wheel.add(rim);
+      for (let a = 0; a < 4; a++){ const sp = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.04, 0.04), mats.iron); sp.rotation.z = a * Math.PI / 4; wheel.add(sp); }
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.12, 12).rotateX(Math.PI / 2), mats.wood); wheel.add(hub);
+      boxes.push([x - 0.25, x + 0.25, z - 0.05, z + 0.25]);
+      const w = { pair, wheel, spin: 0, turn: 0, pos: new THREE.Vector3(x, 0, z - 0.35) };
+      interact.push({ pos: w.pos, label: 'Turn the wind wheel', hold: 0, when: () => !sh.solved,
+        act: (api) => {
+          w.turn += Math.PI / 2; api.sfx.lever([x, 1, z]);
+          for (const v of pair){ const vent = sh.vents[v]; vent.on = !vent.on; api.sfx.gust([vent.at.x, -2, vent.at.z], vent.on ? 0.4 : 0.15); }
+          if (sh.vents.every((v) => v.on)) api.sfx.chime();
+        } });
+      return w;
+    });
+    sh.doorOpen = 1; door.setRaised(1); sh.doorBox = null;
+    sh.ventAt = (x, z) => sh.vents.find((v) => v.on && Math.hypot(x - v.at.x, z - v.at.z) < VR);
+    let gust = 0;
+    sh.updateTrial = (dt, player, api) => {
+      const t = sh.time || 0;
+      for (const w of sh.wheels){ w.spin += (w.turn - w.spin) * Math.min(1, dt * 6); w.wheel.rotation.z = w.spin; }
+      for (const v of sh.vents){
+        v.f = (v.f || 0) + ((v.on ? 1 : 0) - (v.f || 0)) * Math.min(1, dt * 3);
+        v.col.material.uniforms.on.value = v.f; v.col.material.uniforms.time.value = t; v.col.visible = v.f > 0.01;
+        v.motes.material.opacity = v.f;
+        v.grate.material = v.core.material = v.on ? runeMat : offMat;
+        if (v.f > 0.01){
+          for (let i = 0; i < v.seeds.length; i++){
+            const m = v.seeds[i]; m.y = (m.y + dt * 0.28 * m.v) % 1; m.a += dt * (1.5 + m.v);
+            v.pos[i * 3] = v.at.x + Math.cos(m.a) * m.r; v.pos[i * 3 + 1] = -DEEP + m.y * (DEEP + 3.5); v.pos[i * 3 + 2] = v.at.z + Math.sin(m.a) * m.r;
+          }
+          v.geo.attributes.position.needsUpdate = true;
+        }
+      }
+      if (sh.vents.some((v) => v.on) && player.z < oz + PIT1 + 2){ gust -= dt; if (gust <= 0){ gust = 1.6 + rng(); api.sfx.gust([ox, 0, oz + 7.5], 0.12); } }
+      if (player.z > oz + PIT1 + 0.3 && !sh.solved){ sh.solved = true; api.solved(); }
+    };
+    sh.reset = () => {};      // the wheels stay as you left them
+  }
+
   // ---------- what the game asks of a shrine ----------
   interact.push({ pos: new THREE.Vector3(ox, 0, oz + 16.2), label: 'Take the power', hold: 0, when: () => sh.solved && !sh.taken && sh.doorOpen > 0.8,
     act: (api) => { sh.taken = true; api.takePower(); } });
@@ -303,12 +401,14 @@ export function buildShrine(kind, index, ctx){
   };
   sh.contains = (x, z) => x > ox - W / 2 - 1 && x < ox + W / 2 + 1 && z > oz - 1 && z < oz + L + 1;
   sh.floorAt = (x, z) => {
-    if (!stones || z < oz + PIT0 || z > oz + PIT1) return 0;
+    if ((!stones && !chasm) || z < oz + PIT0 || z > oz + PIT1) return 0;
+    if (chasm){ const v = sh.ventAt(x, z); return v ? 0.3 + Math.sin((sh.time || 0) * 1.7 + v.k) * 0.08 : -DEEP; }
     const s = sh.stoneAt(x, z); return s ? s.g.position.y : -1.2;
   };
   sh.inWater = (x, z) => stones && z > oz + PIT0 + 0.15 && z < oz + PIT1 - 0.15 && !sh.stoneAt(x, z);
   sh.atExit = (x, z) => z < oz + 0.95 && Math.abs(x - ox) < 0.9;
   sh.update = (dt, t, player, api) => {
+    sh.time = t;
     gate.update(t);
     sh.updateTrial(dt, player, api);
     if (sh.solved && sh.doorOpen < 1){ sh.doorOpen = Math.min(1, sh.doorOpen + dt * 0.5); door.setRaised(sh.doorOpen); }

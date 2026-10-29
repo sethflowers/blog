@@ -184,7 +184,7 @@ async function face(x, z){
   await ev(([x, z]) => { const p = window.__uc.player; p.yaw = Math.atan2(-(x - p.x), -(z - p.z)); p.pitch = 0; }, [x, z]);
 }
 async function selectPower(kind){
-  for (let k = 0; k < 4; k++){ if (await ev((k) => window.__uc.inv.powers[window.__uc.inv.power] === k, kind)) return true; await press(B.LB); }
+  for (let k = 0; k < 5; k++){ if (await ev((k) => window.__uc.inv.powers[window.__uc.inv.power] === k, kind)) return true; await press(B.LB); }
   return false;
 }
 // steering inside a shrine: no tile grid, straight lines between points chosen to miss the furniture
@@ -205,7 +205,8 @@ async function walkXY(target, opts){
 const until = async (fn, arg, secs) => { for (let t = 0; t < secs; t += 0.2){ if (await ev(fn, arg)) return true; await adv(0.2); } return false; };
 async function solveShrine(kind){
   const S = await ev(() => { const s = window.__uc.shrine; return { ox: s.ox, oz: s.oz, path: s.path, cols: s.cols, rows: s.rows, order: s.order,
-    levers: s.levers && s.levers.map((l) => [l.pos.x, l.pos.z, l.sym]), fires: s.fires && s.fires.map((f) => [f.pos.x, f.pos.z]) }; });
+    levers: s.levers && s.levers.map((l) => [l.pos.x, l.pos.z, l.sym]), fires: s.fires && s.fires.map((f) => [f.pos.x, f.pos.z]),
+    wheels: s.wheels && s.wheels.map((w) => [w.pos.x, w.pos.z, w.pair]) }; });
   const X = (i) => S.ox - 4.5 + i, Z = (j) => S.oz + 3.5 + j;
   if (kind === 'bomb'){
     // east along row 2 to column 8, north to row 7, then one west onto the plate
@@ -230,6 +231,15 @@ async function solveShrine(kind){
     await shot('06-shrine-freeze-reveal'); await adv(2.0);
     for (let r = 0; r < 4; r++) await walkXY([S.ox + S.cols[S.path[r]], S.oz + S.rows[r]], { walk: true, near: 0.3 });
     await walkXY([S.ox, S.oz + 12.2]);
+  } else if (kind === 'flight'){
+    // two wheels whose vents don't overlap set all four blowing
+    const pick = [];
+    for (let a = 0; a < 4 && !pick.length; a++) for (let b = a + 1; b < 4; b++){
+      const cover = new Set([...S.wheels[a][2], ...S.wheels[b][2]]); if (cover.size === 4){ pick.push(S.wheels[a], S.wheels[b]); break; } }
+    for (const [x, z] of pick){ await walkXY([x, z - 0.5]); await face(x, z + 1); await press(B.A); await adv(0.5); }
+    await walkXY([S.ox, S.oz + 2.6]); await adv(1.5);
+    await shot('06-shrine-flight-wind');
+    await walkXY([S.ox, S.oz + 12.2], { walk: true, near: 0.3 });
   } else {
     for (const sym of S.order){ const [x, z] = S.levers.find((l) => l[2] === sym); await walkXY([x, z - 0.9]); await face(x, z + 1); await press(B.A); await adv(0.3); }
     await until(() => window.__uc.shrine.doorOpen > 0.95, null, 4);
@@ -306,6 +316,8 @@ for (const ch of L.chests){
   const pos = await ev((t) => window.__uc.world.chests.find((c) => Math.floor(c.pos.x / window.__uc.TILE) === t[0] && Math.floor(c.pos.z / window.__uc.TILE) === t[1]).pos, ch.tile);
   if (botDied) break;
   await face(pos.x, pos.z); await press(B.A); await adv(0.4);
+  const opened = await ev((t) => window.__uc.world.chests.find((c) => Math.floor(c.pos.x / window.__uc.TILE) === t[0] && Math.floor(c.pos.z / window.__uc.TILE) === t[1]).opened, ch.tile);
+  if (!opened) console.log(`  bot: the chest at ${ch.tile} is still shut (standing at ${await tileNow()}, ${JSON.stringify(await ev(() => { const p = window.__uc.player; return [p.x.toFixed(2), p.z.toFixed(2)]; }))}, chest at ${pos.x.toFixed(2)},${pos.z.toFixed(2)})`);
 }
 const weapons = await ev(() => Object.keys(window.__uc.inv.weapons));
 check(weapons.length === 4, `chests hold the other weapons (${weapons.join(', ')})`);
@@ -339,8 +351,35 @@ const brightness = await ev(() => { const src = document.querySelector('canvas')
   const d = g.getImageData(0, 0, 160, 90).data; let s = 0; for (let k = 0; k < d.length; k += 4) s += 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]; return s / (d.length / 4); });
 check(brightness > 10, `without the torch you can still see (mean brightness ${brightness.toFixed(1)})`);
 await ev(() => window.__uc.torch(true));
+// ---------- flight ----------
+await ev(() => { window.__uc.tryAgain(); window.__uc.give('flight'); });
+await adv(0.5);
+await press(B.LT); await adv(2.5);
+check(await ev(() => window.__uc.pw.flying && window.__uc.player.y > 1.62 + 0.8), `LT with the flight power lifts you off the ground (eye at ${(await ev(() => window.__uc.player.y)).toFixed(2)} m)`);
+{
+  const d = await ev(() => window.__uc.level.startDir), hp = await ev(() => window.__uc.player.hp);
+  await ev((d) => { const p = window.__uc.player; const z = window.__uc.spawnZombie(p.x + d[0] * 1.0, p.z + d[1] * 1.0, false); z.aware = true; window.__testZombie = z; }, d);
+  await adv(3);
+  await shot('15-flying-over-a-zombie');
+  check(await ev(() => window.__uc.player.hp) === hp, 'zombies can\'t reach you while you fly');
+}
+if (L.waterGate){
+  const [wx, wz] = await ev((t) => window.__uc.center(t[0], t[1]), L.waterGate);
+  await ev(([x, z]) => { window.__uc.place(x, z); window.__uc.player.y += 1.1; }, [wx, wz]); await adv(2);
+  check(await ev(() => window.__uc.state) === 'play', 'flying over deep water is safe');
+  await ev(() => { window.__uc.pw.flyT = 0.2; }); await adv(2);
+  check(await ev(() => window.__uc.pw.flying && window.__uc.state === 'play'), 'when the minute is up over water you keep flying until solid ground');
+}
+await ev(() => { const [x, z] = window.__uc.center(...window.__uc.level.start); window.__uc.place(x, z); window.__uc.player.y += 1.1; window.__uc.pw.flyT = Math.min(window.__uc.pw.flyT, 0.2); }); await adv(2.5);
+check(await ev(() => !window.__uc.pw.flying && window.__uc.player.y < 1.62 + 0.15), 'you land when the minute is up');
+await press(B.LT); await adv(0.3);
+check(await ev(() => !window.__uc.pw.flying), 'you can\'t fly again straight away');
+await ev(() => { const p = window.__uc.player; for (let k = 0; k < 4; k++){ const z = window.__uc.spawnZombie(p.x + 0.5, p.z, false); window.__uc.hurtZombie(z, 99, p, 0); } });
+await press(B.LT); await adv(0.3);
+check(await ev(() => window.__uc.pw.flying), 'defeating 4 zombies lets you fly again');
 // ---------- deep water kills ----------
 if (L.waterGate){
+  await ev(() => window.__uc.tryAgain()); await adv(0.3);         // (back on your feet after the flight test)
   const [wx, wz] = await ev((t) => window.__uc.center(t[0], t[1]), L.waterGate);
   await ev(([x, z]) => window.__uc.place(x, z), [wx, wz]); await adv(3);
   check(await ev(() => window.__uc.state) === 'dead', 'walking into deep water kills you');

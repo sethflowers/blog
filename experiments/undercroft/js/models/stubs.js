@@ -52,7 +52,7 @@ export function createChest(){
   return { group, setOpen(f){ lid.rotation.x = -f * 1.8; } };
 }
 export function createPowerGate(kind){
-  const group = new THREE.Group(), c = { magnet: 0xff3030, bomb: 0xff8020, freeze: 0x80c0ff, shield: 0xffd040 }[kind];
+  const group = new THREE.Group(), c = { magnet: 0xff3030, bomb: 0xff8020, freeze: 0x80c0ff, shield: 0xffd040, flight: 0x70ffd0 }[kind];
   const s = mat(0x5a5650);
   for (const x of [-1.0, 1.0]){ const p = box(0.4, 3, 0.5, s); p.position.set(x, 1.5, 0); group.add(p); }
   const top = box(2.4, 0.4, 0.5, s); top.position.y = 2.9; group.add(top);

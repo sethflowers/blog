@@ -33,8 +33,10 @@ const POWERS = {
   bomb:   { name: 'Bomb wand', desc: 'Throw a bomb, then press again to blow it up. Breaks cracked walls.', color: '#ff9a3a' },
   freeze: { name: 'Freeze', desc: 'Freezes nearby water so you can walk on it. It thaws after a while.', color: '#9ad4ff' },
   shield: { name: 'Shield', desc: 'Nothing can hurt you for one minute.', color: '#ffd24a' },
+  flight: { name: 'Flight', desc: 'Fly for one minute, over water and out of the zombies\u2019 reach. It comes back after you defeat 4 zombies.', color: '#7dffd4' },
 };
-const POWER_ORDER = ['magnet', 'bomb', 'freeze', 'shield'];
+const POWER_ORDER = ['magnet', 'bomb', 'freeze', 'shield', 'flight'];
+const FLY_TIME = 60, FLY_KILLS = 4, FLY_LIFT = 1.1;
 
 /* ================================================================
    RENDERER AND FILM LOOK
@@ -234,7 +236,7 @@ let shrine = null, shrineGate = null, trans = null;   // the shrine you're in, t
 const player = { x: 0, z: 0, y: EYE, yaw: 0, pitch: 0, bob: 0, speed: 0, vx: 0, vz: 0, kx: 0, kz: 0, hurry: false,
   hp: MAX_HP, invuln: 0, hurt: 0, shake: 0, dying: 0, cause: '' };
 const inv = { weapons: { sword: true }, weapon: 'sword', powers: [], power: -1, food: { apple: 0, bread: 0, cheese: 0, drumstick: 0 }, bolts: 0 };
-const pw = { bomb: null, bombCool: 0, shieldT: 0, shieldCool: 0, magnet: false, magnetT: 0 };
+const pw = { bomb: null, bombCool: 0, shieldT: 0, shieldCool: 0, magnet: false, magnetT: 0, flying: false, flyT: 0, fly: 0, flyKills: FLY_KILLS, flyWarn: 0, gustT: 0 };
 const stats = { slain: 0, eaten: 0, freed: 0 };
 let snapshot = null;                              // what you carried into this level, for trying again
 const zombies = [], bolts = [], prisoners = [];
@@ -304,7 +306,7 @@ function buildLevel(){
   for (const p of firePatches) levelRoot.remove(p.f); firePatches.length = 0;
   for (const f of jetCards) f.visible = false;
   for (const d of decals){ scene.remove(d.m); } decals.length = 0;
-  pw.bomb = null; pw.bombCool = 0; pw.shieldT = 0; pw.shieldCool = 0;
+  pw.bomb = null; pw.bombCool = 0; pw.shieldT = 0; pw.shieldCool = 0; pw.flying = false; pw.flyT = 0; pw.fly = 0; pw.flyKills = FLY_KILLS;
   lv = generateLevel(seed, levelNo);
   world = buildWorld(lv, mats, props, env);
   shrine = null; shrineGate = null; trans = null; grade.uniforms.fade.value = 0;
@@ -388,10 +390,10 @@ function zombieUpdate(z, dt){
   if (z.state === 'attack'){
     const dur = z.mini ? 0.7 : 1.0;
     z.t += dt; s.attack = Math.min(1, z.t / dur);
-    if (!z.hitDone && z.t > dur / 2){ z.hitDone = true; if (d < (z.mini ? 1.2 : 1.7) && player.dying === 0) hurtPlayer(1, z.mini ? 'a little zombie' : 'a zombie', z.x, z.z); }
+    if (!z.hitDone && z.t > dur / 2){ z.hitDone = true; if (d < (z.mini ? 1.2 : 1.7) && player.dying === 0 && pw.fly < 0.5) hurtPlayer(1, z.mini ? 'a little zombie' : 'a zombie', z.x, z.z); }
     if (z.t > dur){ z.state = 'chase'; s.attack = 0; }
   } else if (z.aware && z.stun <= 0 && player.dying === 0){
-    if (d < (z.mini ? 0.95 : 1.25)){ z.state = 'attack'; z.t = 0; z.hitDone = false; (z.mini ? sfx.miniGroan : sfx.zombieAttack)([z.x, 1.0, z.z]); }
+    if (d < (z.mini ? 0.95 : 1.25) && pw.fly < 0.5){ z.state = 'attack'; z.t = 0; z.hitDone = false; (z.mini ? sfx.miniGroan : sfx.zombieAttack)([z.x, 1.0, z.z]); }
     else {
       want = z.mini ? 2.3 : 1.35;
       // straight at you when it can see you and you're close; otherwise follow the walking-distance field downhill
@@ -444,7 +446,7 @@ function hurtZombie(z, dmg, from, knock){
   const p = new THREE.Vector3(z.x, 1.3, z.z);
   burst('blood', p, 18, new THREE.Vector3(dx / d, 0, dz / d)); sfx.hitFlesh([z.x, 1.3, z.z]);
   if (Math.random() < 0.6) decal(z.x + dx / d * 0.5, z.z + dz / d * 0.5, 0.5 + Math.random() * 0.4, 0x2a0202, 40, 0.25);
-  if (z.hp <= 0){ z.state = 'dead'; z.t = 0; z.s.attack = 0; stats.slain++; (z.mini ? sfx.miniDie : sfx.zombieDie)([z.x, 1.4, z.z]); if (z.state === 'attack') z.s.attack = 0; }
+  if (z.hp <= 0){ z.state = 'dead'; z.t = 0; z.s.attack = 0; stats.slain++; (z.mini ? sfx.miniDie : sfx.zombieDie)([z.x, 1.4, z.z]); flightKill(); }
   else if (z.state === 'attack'){ z.state = 'chase'; z.s.attack = 0; }
   return true;
 }
@@ -561,7 +563,7 @@ function beastUpdate(dt){
         b.y = 0; s.airborne = 0; b.state = 'land'; b.t = 0; sfx.stomp([b.x, 0.5, b.z]); player.shake = Math.max(player.shake, 0.6);
         ring.visible = true; ring.position.set(b.x, 0.05, b.z); ringT = 0;
         burst('dust', new THREE.Vector3(b.x, 0.2, b.z), 40);
-        if (Math.hypot(player.x - b.x, player.z - b.z) < 3.8) hurtPlayer(2, 'the monster', b.x, b.z, 9);
+        if (Math.hypot(player.x - b.x, player.z - b.z) < 3.8 && pw.fly < 0.5) hurtPlayer(2, 'the monster', b.x, b.z, 9);
       }
       break;
     }
@@ -825,17 +827,22 @@ function updatePlayer(dt, pad){
   player.bob += dt * player.speed * (player.hurry ? 2.4 : 2.9);
   if (Math.floor(prev / Math.PI) !== Math.floor(player.bob / Math.PI) && player.speed > 0.4){
     const i = Math.floor(player.x / TILE), j = Math.floor(player.z / TILE);
-    sfx.step(player.hurry, tt(i, j) === T.WATER);
+    if (pw.fly < 0.3) sfx.step(player.hurry, tt(i, j) === T.WATER);
   }
-  const ground = floorAt(player.x, player.z) + EYE;
+  // flying: rise a little over a metre and stay there (over water and pits too), just under the ceiling
+  pw.fly += ((pw.flying ? 1 : 0) - pw.fly) * (1 - Math.exp(-dt * 2.5));
+  const fl = floorAt(player.x, player.z);
+  const ground = (pw.fly > 0.05 ? Math.max(fl, 0) : fl) + EYE + pw.fly * FLY_LIFT + (pw.flying ? Math.sin(simTime * 1.6) * 0.05 : 0);
   player.y += (ground - player.y) * (1 - Math.exp(-dt * 10));
   if (shrine){
-    if (shrine.inWater(player.x, player.z) && !trans){ sfx.splash(); moveTo(() => { shrine.reset(); placeAt(shrine.start); }); hint('BACK TO THE START', 1.6); }
+    if (pw.fly > 0.3) return;
+    if (player.y - EYE < -1.4 && !trans){ sfx.thud(null); moveTo(() => { shrine.reset(); placeAt(shrine.start); }); hint('BACK TO THE START', 1.6); }
+    else if (shrine.inWater(player.x, player.z) && !trans){ sfx.splash(); moveTo(() => { shrine.reset(); placeAt(shrine.start); }); hint('BACK TO THE START', 1.6); }
     return;
   }
   // deep water is death
   const i = Math.floor(player.x / TILE), j = Math.floor(player.z / TILE);
-  if (tt(i, j) === T.WATER && !frozenAt(i, j)){
+  if (tt(i, j) === T.WATER && !frozenAt(i, j) && pw.fly < 0.3){
     const [cx, cz] = center(i, j);
     if (Math.abs(player.x - cx) < TILE / 2 - 0.15 && Math.abs(player.z - cz) < TILE / 2 - 0.15 && player.dying === 0){ sfx.splash(); die('the deep water'); player.drowning = true; }
   }
@@ -967,6 +974,11 @@ function usePower(pressedNow, held){
     if (pw.shieldT > 0) return;
     if (pw.shieldCool > 0){ hint('SHIELD RECHARGING: ' + Math.ceil(pw.shieldCool) + 's', 1.5); sfx.deny(); return; }
     pw.shieldT = 60; sfx.shield(true); hint('NOTHING CAN HURT YOU FOR ONE MINUTE', 2.5);
+  } else if (p === 'flight'){
+    if (pw.flying){ hint('FLYING: ' + Math.ceil(pw.flyT) + 's LEFT', 1.5); return; }
+    if (pw.flyKills < FLY_KILLS){ hint('DEFEAT ' + (FLY_KILLS - pw.flyKills) + ' MORE ZOMBIE' + (FLY_KILLS - pw.flyKills > 1 ? 'S' : '') + ' TO FLY AGAIN', 2); sfx.deny(); return; }
+    pw.flying = true; pw.flyT = FLY_TIME; pw.flyWarn = 0; sfx.flight(true); hint('YOU CAN FLY FOR ONE MINUTE', 2.5);
+    for (let k = 0; k < 30; k++) burst('magic', new THREE.Vector3(player.x, 0.1, player.z), 1, new THREE.Color(POWERS.flight.color));
   } else if (p === 'magnet') sfx.magnet(true);
 }
 function explodeBomb(){
@@ -995,7 +1007,37 @@ function explodeBomb(){
   }
 }
 const debris = [];
+// is it safe to come down here? (not over deep water or a pit)
+function safeToLand(){
+  if (shrine) return shrine.floorAt(player.x, player.z) > -0.3 && !shrine.inWater(player.x, player.z);
+  const i = Math.floor(player.x / TILE), j = Math.floor(player.z / TILE);
+  for (const [a, b] of [[0, 0], [RADIUS, 0], [-RADIUS, 0], [0, RADIUS], [0, -RADIUS]]){
+    const ii = Math.floor((player.x + a) / TILE), jj = Math.floor((player.z + b) / TILE);
+    if (tt(ii, jj) === T.WATER && !frozenAt(ii, jj)) return false;
+  }
+  return tt(i, j) !== T.WATER || frozenAt(i, j);
+}
+function flightKill(){
+  if (!inv.powers.includes('flight') || pw.flying || pw.flyKills >= FLY_KILLS) return;
+  pw.flyKills++;
+  if (pw.flyKills >= FLY_KILLS){ hint('YOU CAN FLY AGAIN', 2.5); sfx.pickup(); }
+  else hint('FLIGHT: ' + pw.flyKills + ' OF ' + FLY_KILLS + ' ZOMBIES', 1.4);
+  updateHud();
+}
+function updateFlight(dt){
+  if (!pw.flying) return;
+  pw.flyT = Math.max(0, pw.flyT - dt);
+  if (pw.flyT <= 10 && pw.flyWarn === 0){ pw.flyWarn = 1; hint('10 SECONDS OF FLIGHT LEFT', 2); sfx.beep(null); }
+  pw.gustT -= dt; if (pw.gustT <= 0){ pw.gustT = 1.4 + Math.random(); sfx.gust(null, 0.08); }
+  if (Math.random() < dt * 6) burst('magic', new THREE.Vector3(player.x + (Math.random() - 0.5) * 1.2, player.y - EYE - 0.4, player.z + (Math.random() - 0.5) * 1.2), 1, new THREE.Color(POWERS.flight.color));
+  if (pw.flyT > 0) return;
+  // time's up: come down, but never into deep water
+  if (!safeToLand()){ pw.flyWarn -= dt; if (pw.flyWarn < 0.5){ pw.flyWarn = 2.5; hint('FLY TO SOLID GROUND TO LAND', 2); } return; }
+  pw.flying = false; pw.flyKills = 0; sfx.flight(false);
+  hint(inv.powers.includes('flight') ? 'YOU LAND. DEFEAT 4 ZOMBIES TO FLY AGAIN' : 'YOU LAND', 2.5);
+}
 function updatePowers(dt){
+  updateFlight(dt);
   pw.bombCool = Math.max(0, pw.bombCool - dt);
   if (pw.shieldT > 0){ pw.shieldT -= dt; if (pw.shieldT <= 0){ pw.shieldT = 0; pw.shieldCool = 30; sfx.shield(false); hint('THE SHIELD FADES', 2); } }
   else pw.shieldCool = Math.max(0, pw.shieldCool - dt);
@@ -1305,6 +1347,7 @@ const POWER_ICON = {
   bomb: '<svg viewBox="0 0 40 40"><circle cx="18" cy="23" r="12" fill="#222" stroke="#aaa" stroke-width="1.2"/><path d="M26 13 q4 -6 9 -4" stroke="#b97" stroke-width="2" fill="none"/><circle cx="35" cy="8" r="2.5" fill="#fa4"/></svg>',
   freeze: '<svg viewBox="0 0 40 40" stroke="#bfe4ff" stroke-width="2.2" fill="none"><path d="M20 4v32M6 12l28 16M6 28l28-16"/><path d="M16 7l4 4 4-4M16 33l4-4 4 4M5 17l5-1-1-5M35 23l-5 1 1 5M5 23l5 1-1 5M35 17l-5-1 1-5"/></svg>',
   shield: '<svg viewBox="0 0 40 40"><path d="M20 3 L34 8 V19 C34 28 27 34 20 37 C13 34 6 28 6 19 V8 Z" fill="#b8902a" stroke="#ffe08a" stroke-width="1.6"/><path d="M20 9 V31 M12 18 H28" stroke="#ffe9a8" stroke-width="2"/></svg>',
+  flight: '<svg viewBox="0 0 40 40" fill="#bfffe9" stroke="#2a8f72" stroke-width="1"><path d="M4 14 Q18 4 36 9 L35 12 Q18 9 6 17 Z"/><path d="M8 16 L14 33 L17 32 L13 14 Z"/><path d="M13 14 L21 31 L24 29 L18 12 Z"/><path d="M18 12 L28 27 L30 25 L23 11 Z"/><path d="M23 11 L34 21 L35 18 L28 10 Z"/></svg>',
 };
 function updateHud(){
   let h = '';
@@ -1327,6 +1370,7 @@ function updateHudLive(){
   else if (p === 'bomb') s = pw.bomb ? (pw.bomb.landed ? 'press to explode' : '') : pw.bombCool > 0 ? '…' : 'ready';
   else if (p === 'magnet') s = pw.magnet ? 'pulling' : 'hold';
   else if (p === 'freeze') s = 'ready';
+  else if (p === 'flight') s = pw.flying ? Math.ceil(pw.flyT) + 's' : pw.flyKills < FLY_KILLS ? pw.flyKills + '/' + FLY_KILLS + ' zombies' : 'ready';
   if (el.textContent !== s) el.textContent = s;
   // prompt
   const pe = $('prompt');
@@ -1580,7 +1624,7 @@ window.__uc = {
   ready: false, god: false,
   get state(){ return state; }, get player(){ return player; }, get level(){ return lv; }, get world(){ return world; }, get inv(){ return inv; },
   get zombies(){ return zombies; }, get beast(){ return beast; }, get stats(){ return stats; }, get prisoners(){ return prisoners; }, get pw(){ return pw; },
-  start, pause, resume, nextLevel, tryAgain, openInventory, closeInventory, eat, hurtPlayer, spawnZombie, setWeapon,
+  start, pause, resume, nextLevel, tryAgain, openInventory, closeInventory, eat, hurtPlayer, spawnZombie, hurtZombie, setWeapon,
   advance(seconds, draw = true){ const n = Math.round(seconds * 60); for (let k = 0; k < n; k++) step(1 / 60); if (draw) composer.render(); return { x: player.x, z: player.z, state }; },
   render(){ composer.render(); },
   place(x, z, yaw, pitch){ player.x = x; player.z = z; player.y = floorAt(x, z) + EYE; if (yaw !== undefined) player.yaw = yaw; if (pitch !== undefined) player.pitch = pitch;

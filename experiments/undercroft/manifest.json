@@ -1,6 +1,6 @@
 {
-  "name": "The Undercroft",
-  "short_name": "Undercroft",
+  "name": "Dungeon Strikedown",
+  "short_name": "Strikedown",
   "description": "A pitch-dark stone maze and a torch in your hand. Find the stairs up.",
   "start_url": "/experiments/undercroft/",
   "scope": "/experiments/undercroft/",
