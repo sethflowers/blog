@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#888}</style>
+<script type="importmap">{ "imports": { "three": "/experiments/wildcat/lib/three.module.min.js" } }</script></head>
+<body><script type="module">
+// Renders one animal (?a=cat) in a pose (?pose=walk|run|swipe|rear|crouch|leap|dead|bite) from a few angles, lit like the game.
+import * as THREE from 'three';
+import { SPECIES, newAnim, advance, pose } from '/experiments/wildcat/js/species.js';
+import { makeCreature, furLOD } from '/experiments/wildcat/js/creature.js';
+const q = new URLSearchParams(location.search);
+const def = SPECIES[q.get('a') || 'cat'];
+const ICON = q.has('icon');
+const W = ICON ? 512 : 1200, H = ICON ? 512 : 800;
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x9aa7b0);
+scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x40381c, 1.2));
+const sun = new THREE.DirectionalLight(0xffe0b0, 3); sun.position.set(-3, 4, 3); sun.castShadow = true; scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial({ color: 0x4a5a30 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const t0 = performance.now();
+const c = makeCreature(def, 2); scene.add(c);
+const A = newAnim(); A.phase = 0.1;
+const p = q.get('pose') || 'stand';
+if (p === 'walk') A.speed = def.gait.walk * 1.2; if (p === 'run') A.speed = def.gait.run;
+if (p === 'swipe') A.swipe = 0.45; if (p === 'rear') A.rear = 1; if (p === 'crouch') A.crouch = 1; if (p === 'leap') A.leap = 1; if (p === 'dead') A.dead = 1; if (p === 'bite') A.bite = 0.5;
+advance(def, A, 0.016); pose(c, def, A);
+const s = def.height;
+if (ICON){ scene.background = new THREE.Color(0x1a2412); ground.visible = false; }
+const views = ICON ? [[0.55, 0.12, 0.75]] : [[0, 0.5, 2.6], [2.6, 0.6, 0.4], [1.7, 0.9, 1.9], [0.5, 0.15, 0.6]];
+c.updateMatrixWorld(true); const headP = new THREE.Vector3(); c.userData.bones.head.getWorldPosition(headP);
+const cam = new THREE.PerspectiveCamera(35, W / H / 1, 0.01, 100);
+renderer.setScissorTest(true);
+views.forEach((v, i) => {
+  const vw = ICON ? W : W / 2, vh = ICON ? H : H / 2, x = ICON ? 0 : (i % 2) * W / 2, y = ICON ? 0 : (1 - Math.floor(i / 2)) * H / 2;
+  renderer.setViewport(x, y, vw, vh); renderer.setScissor(x, y, vw, vh);
+  cam.aspect = vw / vh; cam.updateProjectionMatrix();
+  const k = s * 1.3;
+  if (i === 3 || ICON){ cam.position.set(headP.x + v[0] * s, headP.y + v[1] * s, headP.z + v[2] * s); cam.lookAt(headP.x, headP.y, headP.z + s * 0.06); }
+  else { cam.position.set(v[0] * k, v[1] * k + s * 0.2, v[2] * k); cam.lookAt(0, s * 0.5, 0); }
+  furLOD(c, cam.position.length());
+  renderer.render(scene, cam);
+});
+document.title = 'done ' + Math.round(performance.now() - t0) + 'ms';
+</script></body></html>

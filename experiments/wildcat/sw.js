@@ -1,0 +1,94 @@
+/* Service worker for Wildcat.
+   Precaches everything the game needs so it runs with no connection once it
+   has been opened once. The page is fetched from the network first so an update shows up
+   straight away; scripts and icons are served from the cache and refreshed
+   in the background. */
+var CACHE = 'wildcat-v1';
+var BASE = '/experiments/wildcat/';
+var ASSETS = [
+  BASE,
+  BASE + 'manifest.json',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png',
+  BASE + 'apple-touch-icon.png',
+  BASE + 'lib/three.core.min.js',
+  BASE + 'lib/three.module.min.js',
+  BASE + 'lib/utils/BufferGeometryUtils.js',
+  BASE + 'js/audio.js',
+  BASE + 'js/creature.js',
+  BASE + 'js/game.js',
+  BASE + 'js/noise.js',
+  BASE + 'js/species.js',
+  BASE + 'js/textures.js',
+  BASE + 'js/world.js'
+];
+
+self.addEventListener('install', function (e) {
+  e.waitUntil(
+    caches.open(CACHE).then(function (c) {
+      // One asset failing must not throw away the whole install: without the
+      // page and its scripts there is no offline game at all, and the rest are
+      // only icons.
+      return Promise.all(ASSETS.map(function (url) {
+        return c.add(new Request(url, { cache: 'reload' })).catch(function () {});
+      }));
+    }).then(function () { return self.skipWaiting(); })
+  );
+});
+
+self.addEventListener('activate', function (e) {
+  e.waitUntil(
+    caches.keys().then(function (keys) {
+      return Promise.all(keys.filter(function (k) { return k.indexOf('wildcat-') === 0 && k !== CACHE; })
+                             .map(function (k) { return caches.delete(k); }));
+    }).then(function () { return self.clients.claim(); })
+  );
+});
+
+self.addEventListener('fetch', function (e) {
+  var req = e.request;
+  if (req.method !== 'GET') return;
+  var url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  var navigating = (req.mode === 'navigate');
+  if (!navigating && url.pathname.indexOf(BASE) !== 0) return;
+
+  // Any navigation into the game — with a query string, from the home screen,
+  // or from a link — is answered with the one cached page.
+  var key = (navigating || url.pathname === BASE || url.pathname === BASE + 'index.html')
+    ? BASE : url.pathname;
+
+  // The page: network first (past the HTTP cache) so a new version shows up straight away;
+  // the cached copy only offline, or when the network takes more than three seconds.
+  if (key === BASE) {
+    e.respondWith(
+      caches.open(CACHE).then(function (c) {
+        var network = fetch(BASE, { cache: 'no-store' }).then(function (res) {
+          if (res && res.ok) c.put(BASE, res.clone());
+          return res;
+        });
+        var slow = new Promise(function (resolve) { setTimeout(resolve, 3000); });
+        return Promise.race([network.catch(function () {}), slow]).then(function (res) {
+          if (res && res.ok) return res;
+          return c.match(BASE).then(function (cached) { return cached || network; });
+        });
+      })
+    );
+    return;
+  }
+
+  e.respondWith(
+    caches.open(CACHE).then(function (c) {
+      return c.match(key).then(function (cached) {
+        var network = fetch(new Request(req, { cache: 'no-cache' })).then(function (res) {
+          if (res && res.ok) c.put(key, res.clone());
+          return res;
+        }).catch(function () {
+          return cached || (navigating ? c.match(BASE) : undefined);
+        });
+        return cached || network;
+      });
+    })
+  );
+});
