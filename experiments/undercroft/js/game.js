@@ -1095,8 +1095,12 @@ function moveTo(fn){ trans = { t: 0, fn, done: false }; }
 function placeAt(p){ player.x = p.x; player.z = p.z; player.yaw = p.yaw; player.pitch = 0; player.vx = player.vz = player.kx = player.kz = 0; player.y = floorAt(p.x, p.z) + EYE; }
 function enterShrine(g){
   // remember which side you came from, so you come back out facing the way you were going
-  const s = Math.sign((player.x - g.pos.x) * g.axis[0] + (player.z - g.pos.z) * g.axis[1]) || 1;
-  const ret = { x: g.pos.x + g.axis[0] * s * 1.7, z: g.pos.z + g.axis[1] * s * 1.7, yaw: Math.atan2(-g.axis[0] * s, -g.axis[1] * s) };
+  // (the open side nearest to where you came from: a gate can be walked into from the side)
+  const gi = Math.floor(g.pos.x / TILE), gj = Math.floor(g.pos.z / TILE);
+  const open = DIRS.filter(([dx, dz]) => { const t = tt(gi + dx, gj + dz); return t === T.FLOOR || t === T.HALL; });
+  const [rx, rz] = (open.length ? open : [g.axis]).slice().sort((a, b) =>
+    ((player.x - g.pos.x) * b[0] + (player.z - g.pos.z) * b[1]) - ((player.x - g.pos.x) * a[0] + (player.z - g.pos.z) * a[1]))[0];
+  const ret = { x: g.pos.x + rx * 1.7, z: g.pos.z + rz * 1.7, yaw: Math.atan2(-rx, -rz) };
   g.cool = true; sfx.shrine();
   moveTo(() => { shrine = g.shrine; shrineGate = g; shrine.ret = ret; shrine.leaveT = 0; placeAt(shrine.start);
     banner(shrine.name, shrine.taken ? 'Its power is already yours.' : shrine.hint + ' Walk back through the gate to leave.'); });
