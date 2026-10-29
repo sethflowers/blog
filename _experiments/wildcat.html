@@ -2,7 +2,7 @@
 title: Wildcat
 description: You are a wildcat in a big, wild forest. Bears, wolves and wild boar roam the woods, and if you get too close they will fight you. Claw, pounce and dodge, catch rabbits to heal, and grow from a kitten into the king of the wild. Plays with a controller, keyboard and mouse, or touch.
 date: 2026-10-29
-version: "1.0"
+version: "1.1"
 layout: null
 ---
 {% raw %}
@@ -103,6 +103,14 @@ layout: null
   #swipeBtn{width:96px;height:96px;right:calc(env(safe-area-inset-right) + 28px);bottom:calc(env(safe-area-inset-bottom) + 36px);font-size:13px;}
   #pounceBtn{width:70px;height:70px;right:calc(env(safe-area-inset-right) + 140px);bottom:calc(env(safe-area-inset-bottom) + 28px);}
   #dodgeBtn{width:64px;height:64px;right:calc(env(safe-area-inset-right) + 54px);bottom:calc(env(safe-area-inset-bottom) + 150px);}
+  .chooser{display:flex;flex-wrap:wrap;gap:6px;margin-top:22px;max-width:620px;}
+  #pause .chooser,#dead .chooser{justify-content:center;margin-left:auto;margin-right:auto;}
+  .chooser-label{margin-top:24px;font-size:11px;letter-spacing:.35em;color:var(--cream-faint);}
+  .pick{background:rgba(0,0,0,.3);border:1px solid var(--cream-faint);color:var(--cream-dim);font:inherit;font-size:13px;letter-spacing:.06em;padding:7px 12px;cursor:pointer;}
+  .pick:hover{border-color:var(--amber);color:var(--cream);}
+  .pick.on{border-color:var(--amber);color:#fff;background:rgba(226,180,74,.18);}
+  .pick.locked{opacity:.38;cursor:default;font-style:italic;}
+  #becomeBtn{width:84px;height:46px;right:calc(env(safe-area-inset-right) + 150px);bottom:calc(env(safe-area-inset-bottom) + 120px);border-radius:10px;font-size:10px;border-color:var(--amber);}
   #pauseBtn{width:46px;height:46px;right:calc(env(safe-area-inset-right) + 18px);top:calc(env(safe-area-inset-top) + 14px);border-radius:8px;}
 </style>
 <script type="importmap">
@@ -132,17 +140,21 @@ layout: null
   <div class="tbtn" id="pounceBtn" data-act="pounce">POUNCE</div>
   <div class="tbtn" id="dodgeBtn" data-act="dodge">DODGE</div>
   <div class="tbtn" id="pauseBtn" data-act="pause">II</div>
+  <div class="tbtn hidden" id="becomeBtn" data-act="become">BECOME</div>
 </div>
 
 <div class="screen" id="title">
   <h1>WILDCAT<span>alone in the wild</span></h1>
   <p>You are a wildcat, small and fierce, in a forest that goes on and on. <b>Brown bears</b>, <b>grey wolves</b> and <b>wild boar</b> live here too.
-    Get too close and they will come for you, and they won't let you run: you have to fight. Catch <b>rabbits</b> to get your strength back.</p>
+    Get too close and they will come for you, and they won't let you run: you have to fight. Catch <b>rabbits</b> to get your strength back.
+    Pick a coat below, and beat a bear, a wolf or a boar to be able to <b>become one</b>.</p>
   <p class="keys">
-    <span class="desk"><b>Controller</b> left stick to move (click it to sprint), right stick to look, <b>X</b> or <b>RT</b> claw, <b>A</b> pounce, <b>B</b> dodge.<br>
-      <b>Keyboard</b> WASD to move, <b>Shift</b> to sprint, mouse to look, <b>click</b> to claw, <b>Space</b> to pounce, <b>right-click</b> or <b>Q</b> to dodge.</span>
+    <span class="desk"><b>Controller</b> left stick to move (click it to sprint), right stick to look, <b>X</b> or <b>RT</b> claw, <b>A</b> pounce, <b>B</b> dodge, <b>Y</b> become the animal you just beat, <b>LB / RB</b> on this screen to choose.<br>
+      <b>Keyboard</b> WASD to move, <b>Shift</b> to sprint, mouse to look, <b>click</b> to claw, <b>Space</b> to pounce, <b>right-click</b> or <b>Q</b> to dodge, <b>E</b> to become the animal you just beat.</span>
     <span class="touchonly">Left thumb moves (push to the edge to sprint), right thumb looks. Buttons on the right claw, pounce and dodge.</span>
   </p>
+  <div class="chooser-label">BE A</div>
+  <div class="chooser"></div>
   <button class="go" id="startBtn" disabled>INTO THE WILD</button>
   <div class="loading" id="loading">WAKING UP</div>
   <div class="stat" id="best"></div>
@@ -151,6 +163,8 @@ layout: null
 
 <div class="screen hidden" id="pause">
   <h1>PAUSED</h1>
+  <div class="chooser-label">BE A</div>
+  <div class="chooser"></div>
   <button class="go" id="resumeBtn">CARRY ON</button>
   <button class="go alt" id="muteBtn">SOUND ON</button>
 </div>
@@ -158,6 +172,8 @@ layout: null
 <div class="screen hidden" id="dead">
   <h1>YOU FELL<span>the wild is hard</span></h1>
   <div class="stat" id="deadStat"></div>
+  <div class="chooser-label">GET UP AS A</div>
+  <div class="chooser"></div>
   <button class="go" id="retryBtn">GET UP AGAIN</button>
 </div>
 

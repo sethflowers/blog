@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { makeTextures } from './textures.js';
 import { createWorld, DEN, LAKE, EDGE } from './world.js';
-import { SPECIES, newAnim, advance, pose } from './species.js';
+import { SPECIES, COATS, newAnim, advance, pose } from './species.js';
 import { makeCreature, buildSpecies, furLOD } from './creature.js';
 import { initAudio, sfx, setListener, setMuted, isMuted } from './audio.js';
 import { clamp, lerp } from './noise.js';
@@ -30,7 +30,23 @@ let world, T;
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 // ---------------------------------------------------------------- tuning
-const CAT_STATS = { hp: 100, walk: 1.5, trot: 3.8, sprint: 8.6, swipe: 11, pounce: 26 };
+// What you can be. Every cat coat plays the same; the animals you beat play like themselves.
+const PLAY = {
+  cat:    { hp: 100, walk: 1.5, trot: 3.8, sprint: 8.6, swipe: 11, pounce: 26, leap: 1, attack: 'swipe', verb: 'claw' },
+  bear:   { hp: 240, walk: 1.4, trot: 3.6, sprint: 8.0, swipe: 30, pounce: 40, leap: 0.75, attack: 'swipe', verb: 'paw' },
+  wolf:   { hp: 140, walk: 1.6, trot: 4.3, sprint: 9.6, swipe: 17, pounce: 28, leap: 1, attack: 'bite', verb: 'bite' },
+  boar:   { hp: 170, walk: 1.3, trot: 3.6, sprint: 8.8, swipe: 18, pounce: 32, leap: 0.8, attack: 'gore', verb: 'tusk' },
+  rabbit: { hp: 45, walk: 1.0, trot: 4.0, sprint: 10.5, swipe: 4, pounce: 7, leap: 1.15, attack: 'bite', verb: 'nip' },
+};
+const CHOICES = ['cat', 'ginger', 'black', 'snow', 'spotted', 'bear', 'wolf', 'boar', 'rabbit'];
+const kindOf = (key) => COATS[key] ? 'cat' : key;
+let unlocked = new Set(['cat', 'ginger', 'black', 'snow', 'spotted']);
+try { for (const k of JSON.parse(localStorage.getItem('wildcat-unlocked') || '[]')) unlocked.add(k); } catch (e) {}
+let chosen = 'cat';
+try { const c = localStorage.getItem('wildcat-animal'); if (c && unlocked.has(c)) chosen = c; } catch (e) {}
+const me = { key: 'cat', kind: 'cat', def: SPECIES.cat, P: PLAY.cat };
+let CAT_STATS = PLAY.cat;
+let offer = null;           // a just-beaten animal you can become, for a few seconds
 const FOES = {
   bear: { name: 'BROWN BEAR', hp: 380, walk: 1.2, chase: 8.4, reach: 1.9, notice: 24, engage: 10, xp: 60, size: 3 },
   wolf: { name: 'GREY WOLF', hp: 80, walk: 1.4, chase: 9.4, reach: 1.3, notice: 30, engage: 12, xp: 22, size: 1.6 },
@@ -195,14 +211,27 @@ function killAnimal(a){
     const heal = 35; cat.hp = Math.min(cat.maxHp, cat.hp + heal); sfx.eat();
     hint('YOU CAUGHT A RABBIT  +' + heal, 2.5);
     gainXp(a.st.xp);
+    unlock('rabbit');
     return;
   }
   stats.wins++; stats[a.kind + 's'] = (stats[a.kind + 's'] || 0) + 1;
+  unlock(a.kind);
   sfx.roar([a.x, a.z], 0.6);
   gainXp(a.st.xp);
   if (!animals.some((b) => b.engaged && !b.dead)){
     setTimeout(() => { if (state === 'play' && !cat.dead){ banner('YOU WON', winLine(a)); sfx.win(); } }, 700);
   }
+}
+// beat an animal and you can be one: now (for a few seconds), or any time from the menu
+function unlock(kind){
+  const fresh = !unlocked.has(kind);
+  unlocked.add(kind);
+  try { localStorage.setItem('wildcat-unlocked', JSON.stringify([...unlocked])); } catch (e) {}
+  if (kind === me.key) return;
+  offer = { kind, t: 9 };
+  setTimeout(() => { if (offer && offer.kind === kind && state === 'play') hint((isTouchDevice ? 'TAP BECOME' : 'Y / E') + ' TO BECOME THE ' + SPECIES[kind].label.toUpperCase(), 6); }, fresh ? 3600 : 1500);
+  if (fresh) setTimeout(() => { if (state === 'play') banner('NEW ANIMAL', 'You can be a ' + SPECIES[kind].label.toLowerCase() + ' now.'); }, 2600);
+  renderChooser();
 }
 function winLine(a){
   return a.kind === 'bear' ? 'The bear is beaten. Nothing in these woods is bigger.' : a.kind === 'wolf' ? 'The pack is gone.' : 'The boar is down.';
@@ -210,7 +239,7 @@ function winLine(a){
 function gainXp(n){
   cat.xp += n;
   while (cat.level < LEVEL_XP.length && cat.xp >= LEVEL_XP[cat.level]){
-    cat.level++; cat.maxHp += 15; cat.hp = cat.maxHp;
+    cat.level++; cat.maxHp = maxHpFor(); cat.hp = cat.maxHp;
     setTimeout(() => banner('LEVEL ' + cat.level, 'You are a ' + RANKS[cat.level - 1].toLowerCase() + ' now. Stronger claws, more health.'), 1800);
   }
   updateHud();
@@ -224,8 +253,9 @@ function hurtCat(dmg, fromX, fromZ, knock){
   const dx = cat.x - fromX, dz = cat.z - fromZ, d = Math.hypot(dx, dz) || 1;
   cat.kx += dx / d * knock; cat.kz += dz / d * knock;
   if (knock > 5){ cat.vy = 3; cat.ground = false; }
-  burst('blood', cat.x, cat.y + 0.25, cat.z, 8, dx / d, dz / d);
-  burst('fur', cat.x, cat.y + 0.25, cat.z, 6, dx / d, dz / d);
+  const hy = cat.y + me.def.height * 0.6;
+  burst('blood', cat.x, hy, cat.z, 8, dx / d, dz / d);
+  burst('fur', cat.x, hy, cat.z, 6, dx / d, dz / d);
   sfx.hurt(); sfx.hit([cat.x, cat.z], dmg > 20);
   $('hurt').classList.remove('on'); void $('hurt').offsetWidth; $('hurt').classList.add('on');
   if (cat.hp <= 0) killCat();
@@ -233,7 +263,8 @@ function hurtCat(dmg, fromX, fromZ, knock){
   return true;
 }
 function killCat(){
-  cat.dead = 0.001; cat.act = null; sfx.yowl();
+  cat.dead = 0.001; cat.act = null; offer = null;
+  if (me.kind === 'cat') sfx.yowl(); else if (me.kind === 'rabbit') sfx.squeak([cat.x, cat.z]); else sfx.roar([cat.x, cat.z], 0.7);
   for (const a of animals) if (a.engaged){ a.engaged = false; a.state = 'wander'; a.move = null; a.wx = a.x + (Math.random() - 0.5) * 40; a.wz = a.z + (Math.random() - 0.5) * 40; }
 }
 
@@ -311,7 +342,7 @@ function updateAnimal(a, dt){
     if (dd < m && dd > 1e-3){ a.x += dx / dd * (m - dd) * 0.5; a.z += dz / dd * (m - dd) * 0.5; }
   }
   if (!cat.dead){
-    const m = a.def.radius * 0.8 + 0.15;
+    const m = a.def.radius * 0.8 + me.def.radius * 0.6 + 0.05;
     if (d < m && d > 1e-3 && cat.ground){ const k = (m - d); cat.x -= (a.x - cat.x) / d * k * 0.7; cat.z -= (a.z - cat.z) / d * k * 0.7; a.x += (a.x - cat.x) / d * k * 0.3; a.z += (a.z - cat.z) / d * k * 0.3; }
   }
   A.speed = a.speed;
@@ -409,7 +440,7 @@ const keys = {}, look = { dx: 0, dy: 0 }, pressed = new Set(), touch = { move: n
 let padPrev = [];
 addEventListener('keydown', (e) => {
   if (e.repeat) return; keys[e.code] = true;
-  const map = { Space: 'pounce', KeyJ: 'swipe', KeyK: 'dodge', KeyQ: 'dodge', ControlLeft: 'dodge', KeyE: 'swipe', Escape: 'pause', KeyP: 'pause', KeyM: 'mute', Enter: 'confirm' };
+  const map = { Space: 'pounce', KeyJ: 'swipe', KeyK: 'dodge', KeyQ: 'dodge', ControlLeft: 'dodge', KeyE: 'become', KeyY: 'become', ArrowLeft: 'prevAnimal', ArrowRight: 'nextAnimal', Escape: 'pause', KeyP: 'pause', KeyM: 'mute', Enter: 'confirm' };
   if (map[e.code]){ pressed.add(map[e.code]); if (e.code === 'Space') e.preventDefault(); }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -474,7 +505,7 @@ function readPad(){
   const dz = (v, d) => { const a = Math.abs(v); return a < d ? 0 : Math.sign(v) * (a - d) / (1 - d); };
   const out = { lx: pad.axes[0] || 0, ly: pad.axes[1] || 0, rx: dz(pad.axes[2] || 0, 0.12), ry: dz(pad.axes[3] || 0, 0.12), sprint: btn(10) || btn(6) || btn(4) };
   const ll = Math.hypot(out.lx, out.ly), lk = ll > 0.15 ? (ll - 0.15) / 0.85 / ll : 0; out.lx *= lk; out.ly *= lk;
-  const map = { 0: 'pounce', 2: 'swipe', 7: 'swipe', 5: 'swipe', 1: 'dodge', 9: 'pause', 3: 'confirm' };
+  const map = { 0: 'pounce', 2: 'swipe', 7: 'swipe', 5: 'swipe', 1: 'dodge', 9: 'pause', 3: 'become', 14: 'prevAnimal', 15: 'nextAnimal' };
   for (const k in map) if (was(+k)) pressed.add(map[k]);
   if (was(0) || was(9)) pressed.add('confirm');
   padPrev = pad.buttons.map((b) => !!(b && (b.pressed || b.value > 0.5)));
@@ -513,20 +544,20 @@ function updateCat(dt, pad){
   const tryAct = (name) => {
     if (cat.eatT > 0) return false;
     if (name === 'swipe' && onGround && (!cat.act || (cat.act === 'swipe' && cat.actT > 0.26))){
-      cat.act = 'swipe'; cat.actT = 0; cat.hitDone = false; cat.swipeSide = -cat.swipeSide; sfx.swipe();
+      cat.act = 'swipe'; cat.actT = 0; cat.hitDone = false; cat.swipeSide = -cat.swipeSide; attackSound();
       if (focus) cat.yaw = angleTo(cat, focus.x, focus.z);
       return true;
     }
     if (name === 'pounce' && onGround && !cat.act && cat.stam >= 20){
       cat.act = 'pounce'; cat.actT = 0; cat.hitDone = false; cat.stam -= 20; cat.stamWait = 0.6;
-      let sp = 6.5;
-      const tgt = nearestFoe(7, true);
-      let vy = 4.0;
+      let sp = 6.5 * CAT_STATS.leap;
+      const tgt = nearestFoe(7 * CAT_STATS.leap, true);
+      let vy = 4.0 * CAT_STATS.leap;
       // at something: a flatter, faster leap that comes down on it
       if (tgt){
         // lead a moving target: aim where it will be when the cat comes down
         const lx = tgt.x + Math.sin(tgt.yaw) * tgt.speed * 0.4, lz = tgt.z + Math.cos(tgt.yaw) * tgt.speed * 0.4;
-        cat.yaw = Math.atan2(lx - cat.x, lz - cat.z); vy = 3.4; cat.pounceAt = tgt;
+        cat.yaw = Math.atan2(lx - cat.x, lz - cat.z); vy = 3.4 * CAT_STATS.leap; cat.pounceAt = tgt;
         sp = clamp((Math.hypot(lx - cat.x, lz - cat.z) - tgt.def.radius * 0.5) / 0.42, 3, 11);
       }
       else { cat.pounceAt = null; if (m > 0.2) cat.yaw = Math.atan2(dirx, dirz); }
@@ -549,22 +580,25 @@ function updateCat(dt, pad){
   if (cat.act){
     cat.actT += dt;
     if (cat.act === 'swipe'){
-      A.swipe = clamp(cat.actT / 0.42, 0, 1); A.swipeSide = cat.swipeSide;
+      const pr = clamp(cat.actT / 0.42, 0, 1);
+      if (CAT_STATS.attack === 'swipe'){ A.swipe = pr; A.swipeSide = cat.swipeSide; }
+      else if (CAT_STATS.attack === 'bite') A.bite = pr;
+      else A.gore = pr;
       // a little lunge at whatever you're clawing, so it lands
       if (focus && cat.actT < 0.16){
-        const d = catDist(focus) - focus.def.radius * 0.8 - 0.3;
+        const d = catDist(focus) - focus.def.radius * 0.8 - me.def.radius * 0.6 - 0.2;
         if (d > 0 && d < 1.4){ const st = Math.min(d, 5 * dt); cat.x += Math.sin(cat.yaw) * st; cat.z += Math.cos(cat.yaw) * st; }
       }
       if (!cat.hitDone && cat.actT > 0.16){
         cat.hitDone = true;
-        const dmg = CAT_STATS.swipe + (cat.level - 1) * 2.5 + Math.random() * 3;
+        const dmg = (CAT_STATS.swipe + Math.random() * 3) * (1 + (cat.level - 1) * 0.22);
         for (const a of animals){
           if (a.dead) continue;
-          const d = catDist(a), reach = 0.55 + a.def.radius;
+          const d = catDist(a), reach = 0.45 + a.def.radius + me.def.radius * 0.6;
           if (d < reach && facing(cat, a.x, a.z) < 1.1) hurtAnimal(a, dmg, false);
         }
       }
-      if (cat.actT > 0.42){ cat.act = null; A.swipe = 0; }
+      if (cat.actT > 0.42){ cat.act = null; A.swipe = 0; A.bite = 0; A.gore = 0; }
       m *= 0.3;
     } else if (cat.act === 'pounce'){
       A.leap = Math.min(1, A.leap + dt * 8);
@@ -580,9 +614,9 @@ function updateCat(dt, pad){
         for (const a of animals){
           if (a.dead) continue;
           const d = Math.hypot(a.x - cat.x, a.z - cat.z);
-          if (d < a.def.radius + (a.kind === 'rabbit' ? 0.45 : 0.3) && cat.y - a.y < a.def.height * 1.2 + 0.4){
+          if (d < a.def.radius + me.def.radius * 0.5 + (a.kind === 'rabbit' ? 0.4 : 0.25) && cat.y - a.y < a.def.height * 1.2 + 0.4){
             cat.hitDone = true;
-            hurtAnimal(a, a.kind === 'rabbit' ? 1 : CAT_STATS.pounce + (cat.level - 1) * 4, true);
+            hurtAnimal(a, a.kind === 'rabbit' ? 1 : CAT_STATS.pounce * (1 + (cat.level - 1) * 0.15), true);
             // bounce back off it
             cat.vx = -Math.sin(cat.yaw) * 3; cat.vz = -Math.cos(cat.yaw) * 3; cat.vy = Math.max(cat.vy, 2.5);
             break;
@@ -613,9 +647,9 @@ function updateCat(dt, pad){
   let vx = cat.vx + cat.kx, vz = cat.vz + cat.kz;
   cat.kx *= Math.exp(-dt * 6); cat.kz *= Math.exp(-dt * 6);
   const nx = cat.x + vx * dt, nz = cat.z + vz * dt;
-  if (world.heightAt(nx, nz) > LAKE.level - 0.3 || !world.isWater(nx, nz)){ cat.x = nx; cat.z = nz; }
-  else if (!cat.lakeHint){ cat.lakeHint = true; hint('CATS DON’T SWIM', 2); }
-  world.collide(cat, 0.12);
+  if (!world.isWater(nx, nz, 0.3)){ cat.x = nx; cat.z = nz; }
+  else if (!cat.lakeHint){ cat.lakeHint = true; hint('TOO DEEP TO SWIM', 2); }
+  world.collide(cat, Math.max(0.12, me.def.radius * 0.6));
   const gy = world.heightAt(cat.x, cat.z);
   if (!cat.ground){
     cat.vy -= 13 * dt; cat.y += cat.vy * dt;
@@ -625,10 +659,10 @@ function updateCat(dt, pad){
     }
   } else cat.y = gy;
   const ground = { x: cat.x, z: cat.z, yaw: cat.yaw, pitch: catObj.userData.pitch, ground: cat.ground, y: cat.y };
-  placeOnGround(ground, dt, SPECIES.cat); catObj.userData.pitch = ground.pitch;
+  placeOnGround(ground, dt, me.def); catObj.userData.pitch = ground.pitch;
   A.speed = cat.ground ? cat.speed : 0;
-  const prev = A.phase; advance(SPECIES.cat, A, dt);
-  if (cat.ground && cat.speed > 0.6 && Math.floor(prev * 2) !== Math.floor(A.phase * 2)) sfx.step(null, 0.6, cat.sprinting);
+  const prev = A.phase; advance(me.def, A, dt);
+  if (cat.ground && cat.speed > 0.6 && Math.floor(prev * 2) !== Math.floor(A.phase * 2)) sfx.step(null, me.kind === 'cat' ? 0.6 : FOES[me.kind].size, cat.sprinting);
   // health creeps back when nothing is fighting you
   if (!fightActive && cat.hp < cat.maxHp) cat.hp = Math.min(cat.maxHp, cat.hp + dt * 1.2);
 }
@@ -654,16 +688,17 @@ function updateCamera(dt, pad){
   view.pitch = clamp(view.pitch, -0.25, 1.2);
   // in a fight, swing round to keep the enemy in view; otherwise drift in behind the cat when it runs
   const foe = nearestFoe(25);
-  let dist = 2.4;
+  const big = Math.pow(Math.max(1, me.def.height / 0.38), 0.65);
+  let dist = 2.4 * big;
   if (foe){
     const between = Math.atan2(cat.x - foe.x, cat.z - foe.z);
     if (view.manualT < 0) view.yaw += wrapA(between - view.yaw) * (1 - Math.exp(-dt * 2.2));
-    dist = 2.3 + foe.def.height * 1.6;
+    dist = 2.3 * big + foe.def.height * 1.6;
   } else if (view.manualT < 0 && cat.speed > 2.5){
     view.yaw += wrapA(cat.yaw + Math.PI - view.yaw) * (1 - Math.exp(-dt * 0.8));
   }
   view.dist = lerp(view.dist, dist, 1 - Math.exp(-dt * 2));
-  camTarget.set(cat.x, cat.y + 0.32 + (foe ? foe.def.height * 0.25 : 0), cat.z);
+  camTarget.set(cat.x, cat.y + me.def.height * 0.85 + (foe ? foe.def.height * 0.25 : 0), cat.z);
   const cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
   let x = camTarget.x + Math.sin(view.yaw) * cp * view.dist, z = camTarget.z + Math.cos(view.yaw) * cp * view.dist, y = camTarget.y + sp * view.dist;
   // pull in closer rather than sit inside a boulder or tree
@@ -717,6 +752,55 @@ function startGame(){
   lockPointer();
   hint(isTouchDevice ? 'LEFT THUMB TO MOVE · RIGHT THUMB TO LOOK' : 'FIND YOUR WAY IN THE WILD', 4);
 }
+// ---------------------------------------------------------------- being something else
+function maxHpFor(){ return Math.round(PLAY[me.kind].hp * (1 + (cat.level - 1) * 0.15)); }
+function attackSound(){
+  if (me.kind === 'cat') sfx.swipe();
+  else if (me.kind === 'bear'){ sfx.swipe(); if (Math.random() < 0.4) sfx.growl([cat.x, cat.z], 70); }
+  else if (me.kind === 'wolf') sfx.snarl([cat.x, cat.z]);
+  else if (me.kind === 'boar') sfx.grunt([cat.x, cat.z]);
+  else sfx.squeak([cat.x, cat.z]);
+}
+function setPlayer(key){
+  if (!SPECIES[key]) key = 'cat';
+  const ratio = catObj ? cat.hp / cat.maxHp : 1;
+  if (catObj) scene.remove(catObj);
+  me.key = key; me.kind = kindOf(key); me.def = SPECIES[key]; me.P = PLAY[me.kind]; CAT_STATS = me.P;
+  catObj = makeCreature(me.def, QUALITY); catObj.userData.pitch = 0;
+  scene.add(catObj);
+  catA = newAnim();
+  cat.maxHp = maxHpFor(); cat.hp = Math.max(1, Math.round(cat.maxHp * ratio));
+  cat.act = null; cat.eatT = 0;
+  chosen = key;
+  try { localStorage.setItem('wildcat-animal', key); } catch (e) {}
+  renderChooser(); updateHud();
+}
+function become(key){
+  if (!unlocked.has(key) || key === me.key) return;
+  setPlayer(key);
+  burst('fur', cat.x, cat.y + me.def.height * 0.5, cat.z, 14);
+  if (state === 'play') banner('YOU ARE A ' + me.def.label.toUpperCase(), me.kind === 'cat' ? '' : 'Press ' + (isTouchDevice ? 'the claw button' : 'claw') + ' to ' + me.P.verb + '.');
+}
+// the picker on the title and pause screens
+function renderChooser(){
+  for (const el of document.querySelectorAll('.chooser')){
+    el.innerHTML = '';
+    for (const k of CHOICES){
+      const b = document.createElement('button');
+      const open = unlocked.has(k);
+      b.className = 'pick' + (k === chosen ? ' on' : '') + (open ? '' : ' locked');
+      b.textContent = open ? SPECIES[k].label : SPECIES[k].label + ' \u2014 beat one';
+      b.disabled = !open;
+      b.onclick = () => { if (open && k !== chosen) setPlayer(k); };
+      el.appendChild(b);
+    }
+  }
+}
+function cycleChoice(dir){
+  const open = CHOICES.filter((k) => unlocked.has(k));
+  const i = open.indexOf(chosen);
+  setPlayer(open[(i + dir + open.length) % open.length]);
+}
 function respawn(){
   for (const a of animals.slice()) despawn(a);
   Object.assign(cat, { x: DEN.x, z: DEN.z, hp: cat.maxHp, stam: 100, dead: 0, act: null, vx: 0, vz: 0, vy: 0, kx: 0, kz: 0, ground: true, eatT: 0, invuln: 2, speed: 0 });
@@ -754,6 +838,13 @@ function frame(now){
   if (window.__wc.fixedDt) dt = window.__wc.fixedDt;
   frames++;
   const pad = readPad();
+  if (state !== 'play'){
+    // LB / RB (or the d-pad, or the arrow keys) choose what to be
+    const lb = padPrev[4], rb = padPrev[5];
+    if (pressed.has('prevAnimal') || (lb && !frame.lb)) cycleChoice(-1);
+    if (pressed.has('nextAnimal') || (rb && !frame.rb)) cycleChoice(1);
+    frame.lb = lb; frame.rb = rb;
+  }
   if (state === 'title' || state === 'dead'){
     if (pressed.has('confirm') && !$('startBtn').disabled) (state === 'dead' ? $('retryBtn') : $('startBtn')).click();
   } else if (state === 'pause'){
@@ -761,6 +852,10 @@ function frame(now){
   } else if (state === 'play'){
     if (pressed.has('pause')) pause();
     if (pressed.has('mute')) $('muteBtn').click();
+    if (offer){ offer.t -= dt; if (offer.t <= 0) offer = null; }
+    $('becomeBtn').classList.toggle('hidden', !offer);
+    if (offer) $('becomeBtn').textContent = 'BE ' + SPECIES[offer.kind].label.toUpperCase().split(' ').pop();
+    if (pressed.has('become') && offer && !cat.dead){ const k = offer.kind; offer = null; become(k); $('hint').classList.remove('show'); }
   }
   const playing = state === 'play';
   if (world && catObj){
@@ -791,10 +886,10 @@ function frame(now){
     // pose and place everything
     catObj.position.set(cat.x, cat.y, cat.z);
     catObj.rotation.set(catObj.userData.pitch || 0, cat.yaw, 0, 'YXZ');
-    pose(catObj, SPECIES.cat, catA);
+    pose(catObj, me.def, catA);
     furLOD(catObj, camera.position.distanceTo(catObj.position));
     pushers.length = 0;
-    pushers.push({ x: cat.x, z: cat.z, r: 0.35 });
+    pushers.push({ x: cat.x, z: cat.z, r: Math.max(0.35, me.def.radius * 1.6) });
     for (const a of animals){
       const dc = camera.position.distanceTo(a.obj.position);
       a.obj.visible = dc < 170 && !(a.kind === 'rabbit' && a.dead);
@@ -826,6 +921,8 @@ window.__wc = { god: false, stick: null, sprint: false, fixedDt: 0, cat, animals
   clear(){ for (const a of animals.slice()) despawn(a); },
   hunters: (on) => { hunterT = on ? 0 : 1e9; },
   forestSpot(){ for (let r = 20; r < 300; r += 5) for (let a = 0; a < 6.28; a += 0.2){ const x = Math.sin(a) * r, z = Math.cos(a) * r; if (world.forestAt(x, z) > 0.62 && !world.isWater(x, z)) return [x, z]; } return [0, 0]; },
+  shore(){ for (let d = 5; d < 120; d += 0.5){ const x = LAKE.x + d * 0.7, z = LAKE.z + d * 0.7; if (world.heightAt(x, z) > LAKE.level + 0.3) return [x + 1.5, z + 1.5, Math.atan2(0.7, 0.7)]; } return [LAKE.x, LAKE.z, 0]; },
+  setPlayer: (k) => setPlayer(k), get me(){ return me.key; }, unlock: (k) => unlock(k), get offer(){ return offer; },
   teleport(x, z){ cat.x = x; cat.z = z; cat.y = world.heightAt(x, z); },
 };
 async function boot(){
@@ -835,8 +932,9 @@ async function boot(){
   L.textContent = 'GROWING THE TREES'; await tick();
   world = createWorld(renderer, scene, T, QUALITY);
   for (const k of ['cat', 'bear', 'wolf', 'boar', 'rabbit']){ L.textContent = 'WAKING THE ' + (k === 'cat' ? 'WILDCAT' : k.toUpperCase() + 'S'); await tick(); buildSpecies(SPECIES[k], QUALITY); }
-  catObj = makeCreature(SPECIES.cat, QUALITY); catObj.userData.pitch = 0;
-  scene.add(catObj);
+  if (chosen !== 'cat'){ await tick(); buildSpecies(SPECIES[chosen], QUALITY); }
+  renderChooser();
+  setPlayer(chosen);
   cat.y = world.heightAt(cat.x, cat.z);
   view.yaw = 2.4; view.pitch = 0.25;
   for (let i = 0; i < 4; i++) population();

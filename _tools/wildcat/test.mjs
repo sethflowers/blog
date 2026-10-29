@@ -80,10 +80,12 @@ check(/v\d/.test(await tab.textContent('.build-version')), 'version on the title
 if (process.env.LOOK){
   await tapButton(0);
   await ev(() => { const w = window.__wc; w.hunters(false); w.clear(); });
-  const views = [['look-meadow', 0, 0, 2.6, 0.3, []], ['look-bear', 0, 0, 2.2, 0.25, [['bear', 0.5, -4.5]]], ['look-wolves', 0, 0, 2.2, 0.25, [['wolf', 1.5, -4], ['wolf', -1.5, -5]]],
-    ['look-boar', 0, 0, 2.2, 0.25, [['boar', 0.5, -3.5]]], ['look-forest', 'forest', 0, 3.5, 0.2, []]];
+  const allViews = [['look-meadow', 0, 0, 2.6, 0.3, []], ['look-bear', 0, 0, 2.2, 0.25, [['bear', 0.5, -4.5]]], ['look-wolves', 0, 0, 2.2, 0.25, [['wolf', 1.5, -4], ['wolf', -1.5, -5]]],
+    ['look-boar', 0, 0, 2.2, 0.25, [['boar', 0.5, -3.5]]], ['look-forest', 'forest', 0, 3.5, 0.2, []], ['look-lake', 'lake', 0, 0, 0.18, []]];
+  // VIEWS=look-lake,look-bear to render only some of them
+  const views = process.env.VIEWS ? allViews.filter((v) => process.env.VIEWS.split(',').includes(v[0])) : allViews;
   for (const [name, x, z, yaw, pitch, spawns] of views){
-    await ev(([x, z, yaw, pitch, spawns]) => { const w = window.__wc; w.clear(); if (x === 'forest') w.teleport(...w.forestSpot()); else if (x || z) w.teleport(x, z); w.view.yaw = yaw; w.view.pitch = pitch; w.view.manualT = 99; w.cat.yaw = yaw + Math.PI;
+    await ev(([x, z, yaw, pitch, spawns]) => { const w = window.__wc; w.clear(); if (x === 'lake'){ const [sx, sz, sy] = w.shore(); w.teleport(sx, sz); yaw = sy; w.view.yaw = yaw; w.cat.yaw = yaw + Math.PI; } else if (x === 'forest') w.teleport(...w.forestSpot()); else if (x || z) w.teleport(x, z); w.view.yaw = yaw; w.view.pitch = pitch; w.view.manualT = 99; w.cat.yaw = yaw + Math.PI;
       for (const [k, dx, dz] of spawns){ const s = Math.sin(yaw + Math.PI), c = Math.cos(yaw + Math.PI); const i = w.spawn(k, dx * c + -dz * s, -dx * s + -dz * c); w.animals[i].state = 'wander'; w.animals[i].pause = 99; w.animals[i].st = { ...w.animals[i].st, notice: 0 }; } },
       [x, z, yaw, pitch, spawns]);
     await frames(4);
@@ -157,6 +159,19 @@ await fight('boar', 1, 'boar');
 await fight('wolf', 2, 'wolves');
 await fight('bear', 1, 'bear');
 
+console.log('becoming');
+const off = await ev(() => window.__wc.offer && window.__wc.offer.kind);
+check(off === 'bear', `beating the bear offers to become one (${off})`);
+await tapButton(3);
+await frames(5);
+check(await ev(() => window.__wc.me) === 'bear', 'Y turns you into the bear');
+await shot('as-bear');
+await fight('wolf', 2, 'wolves, as the bear');
+await ev(() => window.__wc.setPlayer('ginger'));
+await frames(3);
+check(await ev(() => window.__wc.me) === 'ginger', 'a different coat can be chosen');
+await shot('as-ginger');
+
 console.log('death');
 await ev(() => { const w = window.__wc; w.clear(); w.god = false; w.cat.hp = 10; w.spawn('bear', 3, 3); });
 for (let i = 0; i < 80 && await ev(() => window.__wc.state) === 'play'; i++) await frames(5);
@@ -171,6 +186,9 @@ console.log('views');
 await ev(() => { const w = window.__wc; w.clear(); w.spawn('bear', 4, 9); w.spawn('wolf', -5, 8); w.view.yaw = Math.PI * 0.9; });
 await frames(20);
 await shot('view-forest');
+await ev(() => { const w = window.__wc; w.clear(); const [x, z, yaw] = w.shore(); w.teleport(x, z); w.view.yaw = yaw; w.view.pitch = 0.18; w.view.manualT = 99; w.cat.yaw = yaw + Math.PI; });
+await frames(6);
+await shot('view-lake');
 check(errors.length === 0, 'no page errors');
 console.log(failures ? `${failures} FAILED` : 'all passed');
 await browser.close(); server.close();
