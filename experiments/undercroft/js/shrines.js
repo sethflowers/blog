@@ -59,6 +59,28 @@ function muralTexture(order){
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// rising air: faint streaks scrolling up a cylinder, brightest at its edges and fading out towards the top
+function windMat(color, seed){
+  return new THREE.ShaderMaterial({
+    uniforms: { on: { value: 0 }, time: { value: 0 }, col: { value: color.clone().lerp(new THREE.Color(0xffffff), 0.4) }, seed: { value: seed * 3.7 } },
+    vertexShader: `varying vec2 vUv; varying float vEdge;
+      void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vec3 n = normalize(normalMatrix * normal); vEdge = 1.0 - abs(dot(n, normalize(-mv.xyz)));
+        gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform float on, time, seed; uniform vec3 col; varying vec2 vUv; varying float vEdge;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5); }
+      float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+      void main(){
+        vec2 q = vec2(vUv.x * 9.0 + vUv.y * 2.0 + seed, vUv.y * 6.0 - time * 1.4);
+        float streak = pow(n2(q) * n2(q * vec2(2.0, 0.5) + 7.0), 1.5);
+        float a = on * (0.025 + 0.18 * streak) * (0.4 + vEdge) * smoothstep(1.0, 0.7, vUv.y) * smoothstep(0.0, 0.25, vUv.y);
+        gl_FragColor = vec4(col * a, 1.0);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  });
+}
+
 export function buildShrine(kind, index, ctx){
   const { mats, props, env, makeFlame, seed } = ctx;
   const rng = mulberry(seed * 977 + index * 131 + 7);
@@ -80,7 +102,10 @@ export function buildShrine(kind, index, ctx){
   const PIT0 = 3.5, PIT1 = 11.5, DEEP = 9;
   if (chasm){
     // two ledges with a deep chasm between them
-    for (const [z0, z1] of [[0, PIT0], [PIT1, L]]){ const f = add(stoneBox(W, DEEP, z1 - z0, floorMat, 3)); f.position.set(ox, -DEEP / 2, oz + (z0 + z1) / 2); }
+    for (const [z0, z1] of [[0, PIT0], [PIT1, L]]){
+      const f = add(stoneBox(W, 0.4, z1 - z0, floorMat, 3)); f.position.set(ox, -0.2, oz + (z0 + z1) / 2);
+      const cliff = add(stoneBox(W, DEEP - 0.4, z1 - z0 - 0.02, wallMat)); cliff.position.set(ox, -0.4 - (DEEP - 0.4) / 2, oz + (z0 + z1) / 2);
+    }
     const bottom = add(stoneBox(W, 0.4, PIT1 - PIT0, floorMat, 3)); bottom.position.set(ox, -DEEP, oz + (PIT0 + PIT1) / 2);
   } else if (stones){
     for (const [z0, z1] of [[0, PIT0], [PIT1, L]]){ const f = add(stoneBox(W, 0.4, z1 - z0, floorMat, 3)); f.position.set(ox, -0.2, oz + (z0 + z1) / 2); }
@@ -304,8 +329,7 @@ export function buildShrine(kind, index, ctx){
       const grate = add(new THREE.Mesh(new THREE.RingGeometry(0.5, 1.1, 32).rotateX(-Math.PI / 2), offMat)); grate.position.set(at.x, -DEEP + 0.22, at.z);
       const core = add(new THREE.Mesh(new THREE.CircleGeometry(0.5, 24).rotateX(-Math.PI / 2), offMat)); core.position.set(at.x, -DEEP + 0.21, at.z);
       // the rising air: a faint column and motes of dust swirling up
-      const col = add(new THREE.Mesh(new THREE.CylinderGeometry(VR * 0.85, VR, DEEP + 2.5, 24, 1, true),
-        new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(0.35), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })));
+      const col = add(new THREE.Mesh(new THREE.CylinderGeometry(VR * 0.85, VR, DEEP + 2.5, 24, 1, true), windMat(color, k)));
       col.position.set(at.x, -DEEP / 2 + 1.25, at.z);
       const N = 70, pos = new Float32Array(N * 3), seeds = [];
       for (let i = 0; i < N; i++) seeds.push({ a: rng() * 6.28, r: 0.2 + rng() * (VR - 0.3), y: rng(), v: 0.5 + rng() * 0.5 });
@@ -339,7 +363,7 @@ export function buildShrine(kind, index, ctx){
       for (const w of sh.wheels){ w.spin += (w.turn - w.spin) * Math.min(1, dt * 6); w.wheel.rotation.z = w.spin; }
       for (const v of sh.vents){
         v.f = (v.f || 0) + ((v.on ? 1 : 0) - (v.f || 0)) * Math.min(1, dt * 3);
-        v.col.material.opacity = v.f * (0.5 + 0.15 * Math.sin(t * 3 + v.k));
+        v.col.material.uniforms.on.value = v.f; v.col.material.uniforms.time.value = t; v.col.visible = v.f > 0.01;
         v.motes.material.opacity = v.f;
         v.grate.material = v.core.material = v.on ? runeMat : offMat;
         if (v.f > 0.01){

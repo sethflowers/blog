@@ -316,6 +316,8 @@ for (const ch of L.chests){
   const pos = await ev((t) => window.__uc.world.chests.find((c) => Math.floor(c.pos.x / window.__uc.TILE) === t[0] && Math.floor(c.pos.z / window.__uc.TILE) === t[1]).pos, ch.tile);
   if (botDied) break;
   await face(pos.x, pos.z); await press(B.A); await adv(0.4);
+  const opened = await ev((t) => window.__uc.world.chests.find((c) => Math.floor(c.pos.x / window.__uc.TILE) === t[0] && Math.floor(c.pos.z / window.__uc.TILE) === t[1]).opened, ch.tile);
+  if (!opened) console.log(`  bot: the chest at ${ch.tile} is still shut (standing at ${await tileNow()}, ${JSON.stringify(await ev(() => { const p = window.__uc.player; return [p.x.toFixed(2), p.z.toFixed(2)]; }))}, chest at ${pos.x.toFixed(2)},${pos.z.toFixed(2)})`);
 }
 const weapons = await ev(() => Object.keys(window.__uc.inv.weapons));
 check(weapons.length === 4, `chests hold the other weapons (${weapons.join(', ')})`);
@@ -377,6 +379,7 @@ await press(B.LT); await adv(0.3);
 check(await ev(() => window.__uc.pw.flying), 'defeating 4 zombies lets you fly again');
 // ---------- deep water kills ----------
 if (L.waterGate){
+  await ev(() => window.__uc.tryAgain()); await adv(0.3);         // (back on your feet after the flight test)
   const [wx, wz] = await ev((t) => window.__uc.center(t[0], t[1]), L.waterGate);
   await ev(([x, z]) => window.__uc.place(x, z), [wx, wz]); await adv(3);
   check(await ev(() => window.__uc.state) === 'dead', 'walking into deep water kills you');
