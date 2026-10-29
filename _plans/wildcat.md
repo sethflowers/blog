@@ -21,6 +21,8 @@ made in code at start-up.
 - Grass is real blades: up to 240k instanced blades on a patch that follows the cat and wraps round, sat
   exactly on the terrain (the height map is read in the shader with the same triangle split as the
   mesh). They bend in gusts that roll across the field, and part around the cat and anything near it.
+- Water: the big lake and four ponds, one just outside the den. The water is opaque (not see-through)
+  so it draws the same on every graphics chip; the ripples are mapped in world space.
 - Low afternoon sun with soft shadows that follow the cat, a sky with clouds, blue haze in the distance,
   and image-based light from the sky.
 - The den: a ring of big stones where the cat starts and comes back to.
@@ -46,6 +48,18 @@ made in code at start-up.
 | Grey wolf (pack of 2–3) | 80 each | circles, crouches, then leaps in and bites (9). One at a time; the others spread round you |
 | Wild boar | 170 | backs off, paws the ground, then charges in a straight line (17, knocks you flying); tusk toss up close (12) |
 | Rabbit | 1 | runs, zig-zagging. Catch it to eat it (+35 health) |
+
+## Being someone else (1.1)
+
+- Five cat coats from the start, same body and moves: **Wildcat**, **Ginger tabby**, **Black cat**
+  (green eyes), **Snow cat** (blue eyes) and **Spotted cat** (rosettes instead of stripes).
+- Beat a bear, a wolf or a boar (or catch a rabbit) and you can **be that animal**. For a few seconds
+  after the win, Y / E / the BECOME button turns you into it on the spot; after that it's in the "Be a"
+  picker on the title, pause and "you fell" screens (LB / RB or the arrow keys, or click). Unlocked
+  animals and your last choice are remembered.
+- Each plays like itself: the bear is slow with a heavy paw (240 health), the wolf is fast and bites, the
+  boar gores with its tusks, the rabbit is the fastest thing in the woods and nips (45 health). The camera
+  pulls back for big animals. Everything else still fights you, bears included.
 
 ## Fighting
 

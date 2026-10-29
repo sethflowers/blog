@@ -96,7 +96,7 @@ export function makeTextures(quality){
         g.beginPath(); g.moveTo(x + ox, y + oy); g.lineTo(x + ox + Math.cos(a) * l, y + oy + Math.sin(a) * l); g.stroke();
       }
     }
-    T.dirt = tex(c); T.dirtN = normalFrom(hgt, S, S, 4);
+    T.dirt = tex(c); T.dirtN = normalFrom(hgt, S, S, 1.5);
   }
   // ---- rock: grey granite with lichen and cracks
   {

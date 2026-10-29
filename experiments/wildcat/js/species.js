@@ -47,6 +47,46 @@ function limbs(J, F, H, T, paw, x = {}){
   return P;
 }
 
+// The cat's markings, for any coat: base colour, the dark of the stripes, the pale of the belly and chin.
+// pattern: 'tabby' (stripes and a ringed tail), 'spots' (rosettes), or 'plain' (a whisper of stripes).
+function catColor(coat){
+  const { base, dark, cream } = coat, pattern = coat.pattern || 'tabby', tip = coat.tip || dark;
+  const markK = pattern === 'plain' ? 0.25 : 0.85;
+  return function(x, y, z, tag){
+    let c = base;
+    const wob = n3(x, y, z, 40, 1) * 1.6;
+    const spot = pattern === 'spots' && n3(x * 1.7, y * 1.7, z * 1.7, 55, 21) > 0.66;
+    if (tag === 'tail'){
+      if (z < -0.585) return tip;                                    // the blunt tip
+      if (pattern === 'spots') return spot ? mix3(base, dark, 0.8) : base;
+      return Math.sin(z * 52 + 1.4) > 0.35 ? mix3(base, dark, markK) : mix3(base, cream, 0.1);
+    }
+    if (tag === 'body' || tag === 'neck'){
+      const top = smooth(0.29, 0.34, y), belly = smooth(0.24, 0.19, y);
+      // vertical wavy stripes down the flanks (or spots), a dark line along the spine
+      const stripe = pattern === 'spots' ? spot : Math.sin(z * 75 + wob * 2.2 + y * 6) > 0.45 && Math.abs(x) > 0.025 && belly < 0.5;
+      c = stripe ? mix3(base, dark, markK) : base;
+      if (Math.abs(x) < 0.02 && top > 0.5 && z < 0.12) c = mix3(base, dark, markK);
+      c = mix3(c, cream, belly * 0.85);
+      if (tag === 'neck' && y < 0.3) c = mix3(c, cream, 0.6);
+    } else if (tag === 'leg' || tag === 'thigh'){
+      const bar = pattern === 'spots' ? spot : Math.sin(y * 95 + wob) > 0.6 && y > 0.06;
+      c = bar ? mix3(base, dark, markK * 0.95) : mix3(base, cream, 0.2);
+      if (tag === 'leg' && Math.abs(x) < 0.05) c = mix3(c, cream, 0.5);
+    } else if (tag === 'paw'){
+      c = y < 0.012 ? mix3(dark, [0.1, 0.08, 0.07], 0.5) : mix3(base, cream, 0.35);
+    } else if (tag === 'head' || tag === 'cheek'){
+      // four dark lines over the forehead, a dark line from the eye corner down the cheek
+      const fore = y > 0.383 && Math.abs(Math.sin(x * 210)) > 0.75 && z < 0.29;
+      const cheekLine = tag === 'cheek' && Math.abs(y - 0.35 + (z - 0.28) * 0.6) < 0.004 && Math.abs(x) > 0.03;
+      c = fore || cheekLine ? mix3(base, dark, markK * 0.95) : base;
+      if (y < 0.345) c = mix3(c, cream, 0.6);
+    } else if (tag === 'muzzle' || tag === 'chin') c = mix3(cream, coat.chin || [0.85, 0.8, 0.7], 0.5);
+    else if (tag === 'ear') c = mix3(base, dark, 0.4);
+    return mix3(c, [c[0] * 0.8, c[1] * 0.8, c[2] * 0.8], n3(x, y, z, 90, 3) * 0.6);
+  };
+}
+
 // ============================================================ the wildcat
 const CAT_J = {
   hip: [0, 0.27, -0.17], chest: [0, 0.28, 0.10], neck: [0, 0.31, 0.19], head: [0, 0.36, 0.25], jaw: [0, 0.342, 0.272],
@@ -72,38 +112,7 @@ export const CAT = {
     ...limbs(CAT_J, [0.034, 0.024, 0.02, 0.015, 0.015, 0.014], [0.05, 0.028, 0.022, 0.016, 0.014, 0.014], [0.031, 0.03, 0.029, 0.028, 0.026],
       [0.018, 0.012, 0.023], { tailFur: 1.7, pawFur: 0.5, pawK: 0.015 }),
   ],
-  color(x, y, z, tag){
-    const base = [0.46, 0.39, 0.29], dark = [0.1, 0.085, 0.07], cream = [0.68, 0.6, 0.47];
-    let c = base;
-    const wob = n3(x, y, z, 40, 1) * 1.6;
-    if (tag === 'tail'){
-      if (z < -0.585) return dark;                                   // the blunt black tip
-      return Math.sin(z * 52 + 1.4) > 0.35 ? dark : mix3(base, cream, 0.1);
-    }
-    if (tag === 'body' || tag === 'neck'){
-      const top = smooth(0.29, 0.34, y), belly = smooth(0.24, 0.19, y);
-      // vertical wavy stripes down the flanks, a dark line along the spine
-      const stripe = Math.sin(z * 75 + wob * 2.2 + y * 6) > 0.45 && Math.abs(x) > 0.025 && belly < 0.5;
-      c = stripe ? mix3(base, dark, 0.85) : base;
-      if (Math.abs(x) < 0.02 && top > 0.5 && z < 0.12) c = dark;
-      c = mix3(c, cream, belly * 0.85);
-      if (tag === 'neck' && y < 0.3) c = mix3(c, cream, 0.6);
-    } else if (tag === 'leg' || tag === 'thigh'){
-      const bar = Math.sin(y * 95 + wob) > 0.6 && y > 0.06;
-      c = bar ? mix3(base, dark, 0.8) : mix3(base, cream, 0.2);
-      if (tag === 'leg' && Math.abs(x) < 0.05) c = mix3(c, cream, 0.5);
-    } else if (tag === 'paw'){
-      c = y < 0.012 ? dark : mix3(base, cream, 0.35);
-    } else if (tag === 'head' || tag === 'cheek'){
-      // four dark lines over the forehead, a dark line from the eye corner down the cheek
-      const fore = y > 0.383 && Math.abs(Math.sin(x * 210)) > 0.75 && z < 0.29;
-      const cheekLine = tag === 'cheek' && Math.abs(y - 0.35 + (z - 0.28) * 0.6) < 0.004 && Math.abs(x) > 0.03;
-      c = fore || cheekLine ? mix3(base, dark, 0.8) : base;
-      if (y < 0.345) c = mix3(c, cream, 0.6);
-    } else if (tag === 'muzzle' || tag === 'chin') c = mix3(cream, [0.85, 0.8, 0.7], 0.5);
-    else if (tag === 'ear') c = mix3(base, dark, 0.4);
-    return mix3(c, [c[0] * 0.8, c[1] * 0.8, c[2] * 0.8], n3(x, y, z, 90, 3) * 0.6);
-  },
+  color: catColor({ base: [0.46, 0.39, 0.29], dark: [0.1, 0.085, 0.07], cream: [0.68, 0.6, 0.47] }),
   eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.025 * s, 0.377, 0.303], r: 0.0115, dir: [0.28 * s, 0.02, 1] })),
   extras: [
     { type: 'ell', bone: 'head', at: [0, 0.355, 0.331], size: [0.0065, 0.0042, 0.004], mat: 'nose' },
@@ -150,7 +159,7 @@ export const BEAR = {
     if (tag === 'body' && y < 0.6) c = mix3(c, dark, 0.4);
     return mix3(c, tip, n3(x, y, z, 6, 5) * 0.35);
   },
-  eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.085 * s, 0.985, 1.05], r: 0.018, dir: [0.3 * s, 0.08, 1] })),
+  eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.085 * s, 0.985, 1.05], r: 0.023, dir: [0.3 * s, 0.08, 1] })),
   extras: [
     { type: 'ell', bone: 'head', at: [0, 0.89, 1.2], size: [0.048, 0.033, 0.03], mat: 'dark' },
     { type: 'ell', bone: 'head', at: [0, 0.84, 1.03], size: [0.075, 0.03, 0.11], mat: 'mouth' },
@@ -223,7 +232,7 @@ const BOAR_J = {
 export const BOAR = {
   name: 'boar', res: 76, blend: 0.1, radius: 0.45, height: 0.95,
   fur: { len: 0.04, density: 130, shells: 14, comb: [0, -0.15, -0.9] },
-  eyeColor: ['#5a3412', '#1a0a02'], slitEyes: false,
+  eyeColor: ['#9a6024', '#3a1a06'], slitEyes: false,
   bones: skeleton(BOAR_J),
   prims: [
     ell('root', [0, 0.58, -0.42], [0.2, 0.24, 0.3], { tag: 'body' }),
@@ -247,7 +256,7 @@ export const BOAR = {
     if (tag === 'snout') c = [0.36, 0.27, 0.25];
     return c;
   },
-  eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.1 * s, 0.67, 0.64], r: 0.012, dir: [0.8 * s, 0.1, 0.6] })),
+  eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.1 * s, 0.67, 0.64], r: 0.017, dir: [0.8 * s, 0.1, 0.6] })),
   extras: [
     ...[1, -1].map((s) => ({ type: 'ell', bone: 'head', at: [0.022 * s, 0.48, 0.913], size: [0.011, 0.016, 0.006], mat: 'dark' })),
     ...[1, -1].map((s) => ({ type: 'cone', bone: 'jaw', at: [0.058 * s, 0.47, 0.75], r: 0.013, len: 0.09, dir: [0.35 * s, 1, 0.35], cast: true })),
@@ -296,6 +305,18 @@ export const RABBIT = {
 };
 
 export const SPECIES = { cat: CAT, bear: BEAR, wolf: WOLF, boar: BOAR, rabbit: RABBIT };
+
+// Other cats to be: same body, a different coat and eyes.
+const coat = (name, label, c, eyeColor) => ({ ...CAT, name, label, color: catColor(c), eyeColor });
+export const COATS = {
+  cat: Object.assign(CAT, { label: 'Wildcat' }),
+  ginger: coat('cat-ginger', 'Ginger tabby', { base: [0.76, 0.45, 0.2], dark: [0.52, 0.25, 0.09], cream: [0.93, 0.82, 0.64], tip: [0.55, 0.27, 0.1] }, ['#eaa83a', '#9a5410']),
+  black: coat('cat-black', 'Black cat', { base: [0.05, 0.046, 0.042], dark: [0.02, 0.019, 0.018], cream: [0.075, 0.07, 0.065], chin: [0.08, 0.075, 0.07], pattern: 'plain' }, ['#cde24e', '#5a8a18']),
+  snow: coat('cat-snow', 'Snow cat', { base: [0.84, 0.83, 0.8], dark: [0.36, 0.36, 0.38], cream: [0.96, 0.95, 0.93] }, ['#92cdf2', '#2a66a6']),
+  spotted: coat('cat-spotted', 'Spotted cat', { base: [0.72, 0.58, 0.38], dark: [0.16, 0.11, 0.07], cream: [0.9, 0.84, 0.72], pattern: 'spots' }, ['#d9c050', '#7a6a12']),
+};
+for (const [k, d] of Object.entries(COATS)) SPECIES[k] = d;
+BEAR.label = 'Brown bear'; WOLF.label = 'Grey wolf'; BOAR.label = 'Wild boar'; RABBIT.label = 'Rabbit';
 
 // ============================================================ posing
 // A holds the animation state: phase, speed, and 0..1 amounts for each special move.

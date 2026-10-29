@@ -100,7 +100,7 @@ function buildGeometry(def, res){
     }
     P[v * 3] = x; P[v * 3 + 1] = y; P[v * 3 + 2] = z;
   }
-  return { P: new Float32Array(P), N: Nn, I, h };
+  return { P: new Float32Array(P), N: Nn, I, h, sdf };
 }
 
 // ---------------------------------------------------------------- skinning and colour
@@ -206,6 +206,28 @@ function eyeTexture(color, slit){
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+// Eyes are placed by hand, but the blended head can swallow them. Slide each one along the surface
+// normal until it sits a little more than half out of the skin, looking the way the skin faces.
+function seatEyes(def, sdf){
+  for (const e of def.eyes || []){
+    if (!e.base) e.base = e.at.slice();
+    let [x, y, z] = e.base;
+    const k = e.r * 0.25;
+    let gx = 0, gy = 0, gz = 1;
+    for (let it = 0; it < 12; it++){
+      const d = sdf(x, y, z);
+      gx = sdf(x + k, y, z) - sdf(x - k, y, z); gy = sdf(x, y + k, z) - sdf(x, y - k, z); gz = sdf(x, y, z + k) - sdf(x, y, z - k);
+      const l = Math.hypot(gx, gy, gz) || 1; gx /= l; gy /= l; gz /= l;
+      const want = -e.r * 0.35;          // centre just under the skin, so most of the ball shows
+      x -= gx * (d - want); y -= gy * (d - want); z -= gz * (d - want);
+    }
+    e.at = [x, y, z];
+    if (!e.baseDir) e.baseDir = e.dir.slice();
+    const dl = Math.hypot(...e.baseDir);
+    e.dir = [gx * 0.5 + e.baseDir[0] / dl * 0.5, gy * 0.5 + e.baseDir[1] / dl * 0.5, gz * 0.5 + e.baseDir[2] / dl * 0.5];
+  }
+}
+
 // ---------------------------------------------------------------- the whole animal
 const cache = new Map();
 export function buildSpecies(def, quality){
@@ -213,6 +235,7 @@ export function buildSpecies(def, quality){
   const t0 = performance.now();
   const boneIndex = {}; def.bones.forEach((b, i) => boneIndex[b.name] = i);
   const g = buildGeometry(def, quality > 1 ? def.res : Math.round(def.res * 0.75));
+  seatEyes(def, g.sdf);
   const geo = decorate(def, g, boneIndex);
   const shells = quality > 1 ? def.fur.shells : Math.max(6, Math.round(def.fur.shells * 0.6));
   def.gust = { value: new THREE.Vector3() };
