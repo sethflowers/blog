@@ -1,6 +1,7 @@
-# The Undercroft
+# Dungeon Strikedown
 
-A first-person dungeon game, as photorealistic as we can make it in a browser. It was designed on paper
+(Called The Undercroft until 3.1; the files keep that name, so the address and home-screen installs
+still work.) A first-person dungeon game, as photorealistic as we can make it in a browser. It was designed on paper
 by a young game designer (three pages: the monster, the power gates, and the rules), and started as a
 walk-through demo (1.x). It plays on an Xbox (Edge, with the controller), an iPad (touch, or a paired
 Xbox, PlayStation or Switch controller), and a computer (keyboard and mouse).
@@ -17,6 +18,7 @@ Xbox, PlayStation or Switch controller), and a computer (keyboard and mouse).
   2. a **remote bomb wand**: you hit a button that makes it explode
   3. **freeze water** and walk on it
   4. **can't be hurt for one minute** (read from "you canet it fore one minit")
+  5. (added in 3.1) **fly for one minute**; it comes back after you kill 4 zombies
 - **The monster**: a horse-like body on four legs, a long neck and a bird's head, two tall wings, a dark
   tail. Powers: its **head shoots lasers and barfs zombies** (later changed by request: no lasers, it barfs fire too), **spikes on its wings** can kill people,
   it's **really tall**, and its **feet are like springs** that boost it faster.
@@ -38,7 +40,7 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
   as a warning 6 s before. A flooded dead-end room has a roast chicken leg on a stone in the middle:
   pull it with the magnet, or freeze and walk.
 - **Cracked wall**: a small branch is walled up behind a crumbling wall. Bomb it to get the war hammer.
-- **Power shrines** (3.0, like the shrines in Zelda): each of the four gates is a doorway. Walk through it and
+- **Power shrines** (3.0, like the shrines in Zelda): each of the five gates is a doorway. Walk through it and
   you're in a shrine, a stone chamber lit by runes in the power's colour, with a trial to solve. Solving it raises
   a portcullis to an altar where the power floats. Take it and you're carried back out beside the gate. Walk back
   through the gate inside to leave early. Water in a shrine only sends you back to its start. The trials:
@@ -49,6 +51,9 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
     others sink when you stand on them.
   - Shield: four levers marked sun, moon, star and eye; the mural over the door shows the order. A wrong
     pull resets them all.
+  - Flight (3.1): a deep chasm with four wind vents in a line across it. Four wind wheels on the near ledge
+    each switch two vents (on if off, off if on); find the two wheels that set all four blowing, then walk
+    across on the wind. Falling sends you back to the start; the wheels stay as you left them.
   The shrines are built far west of the maze (`js/shrines.js`). While you're inside, the zombies and the
   monster wait.
 - **Powers**: LT / right-click / Q uses one, LB / R swaps between them.
@@ -57,6 +62,10 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
     monster, breaks the cracked wall, and hurts you if you're too close.
   - Freeze: freezes all water within 11 m for 45 s.
   - Shield: nothing can hurt you for 60 s, then it recharges for 30 s.
+  - Flight (3.1): you rise about a metre and fly for 60 s, over water and out of the zombies' reach (the
+    monster's fire still reaches you; its landing shockwave doesn't). When the minute is up you land, but
+    never into deep water: you keep flying until you're over solid ground. Then defeat 4 zombies (big or
+    little) to charge it again.
 - **Weapons** (RT / click; RB, 1–4 or the mouse wheel to switch):
   - sword: quick, wide
   - spear: long reach, narrow

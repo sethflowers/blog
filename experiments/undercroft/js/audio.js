@@ -154,6 +154,11 @@ export const sfx = {
   magnet(on){ if (!ok()) return; const t = audio.ctx.currentTime; tone(t, 0.3, 'sawtooth', on ? 60 : 90, on ? 90 : 60, 0.15, null, 0.3, 0.05); },
   shield(on){ if (!audio.humGain) return; audio.humGain.gain.setTargetAtTime(on ? 0.03 : 0, audio.ctx.currentTime, 0.3);
     if (on && ok()){ const t = audio.ctx.currentTime; for (const f of [523, 659, 784, 1047]) tone(t + f / 4000, 1.2, 'sine', f, f, 0.12, null, 0.8, 0.05); } },
+  // flight: a rush of air on take-off, soft gusts while you're up, a thump when you land
+  flight(on){ if (!ok()) return; const t = audio.ctx.currentTime;
+    if (on){ noise(t, 1.4, 'bandpass', 300, 0.8, 0.5, null, 0.4, 1800); for (const f of [587, 784, 1175]) tone(t + 0.2 + f / 5000, 1.1, 'sine', f, f * 1.5, 0.08, null, 0.8, 0.1); }
+    else { noise(t, 0.5, 'bandpass', 900, 0.8, 0.3, null, 0.3, 200); tone(t + 0.35, 0.2, 'sine', 90, 50, 0.3, null, 0.2); } },
+  gust(at, gain){ if (!ok()) return; const t = audio.ctx.currentTime; noise(t, 1.6, 'bandpass', 250 + Math.random() * 200, 0.7, gain || 0.18, at, 0.5, 700 + Math.random() * 500); },
   power(){ if (!ok()) return; const t = audio.ctx.currentTime;
     [392, 494, 587, 784, 988].forEach((f, k) => tone(t + k * 0.12, 1.4, 'sine', f, f, 0.18, null, 0.9, 0.02)); },
   pickup(){ if (!ok()) return; const t = audio.ctx.currentTime; tone(t, 0.15, 'sine', 660, 990, 0.2, null, 0.4); tone(t + 0.09, 0.2, 'sine', 990, 1320, 0.15, null, 0.4); },

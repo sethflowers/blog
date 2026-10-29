@@ -64,5 +64,5 @@ Standalone pages (games, toys, demos) live in `_experiments/` and are listed at 
 
 ## Tests
 
-`_tools/` holds scripts that aren't published. `_tools/undercroft/test.mjs` plays The Undercroft in headless
+`_tools/` holds scripts that aren't published. `_tools/undercroft/test.mjs` plays Dungeon Strikedown (in `undercroft/`) in headless
 Chromium with a fake controller and saves screenshots (`NODE_PATH=$(npm root -g) node _tools/undercroft/test.mjs out/`).
