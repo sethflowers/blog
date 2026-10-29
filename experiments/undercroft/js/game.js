@@ -10,6 +10,7 @@ import { TILE, CEIL, HALL_CEIL, STAIR_RISE, T, DIRS, floorOf, ceilOf, generateLe
 import { makeMaterials, buildWorld, makeFlame, torchModel, ragMat, flameUniforms, center } from './world.js';
 import { audio, initAudio, resumeAudio, setMuted, sfx, ambience, setListener } from './audio.js';
 import * as stubs from './models/stubs.js';
+import { buildShrine } from './shrines.js';
 
 const BASE = '/experiments/undercroft/';
 const params = new URLSearchParams(location.search);
@@ -104,7 +105,7 @@ const pool = [0, 1, 2].map((k) => {
 });
 const exitLight = new THREE.SpotLight(0x8aa6ff, 60, 22, 0.75, 0.9, 1.6); scene.add(exitLight, exitLight.target);
 const exitGlow = new THREE.PointLight(0x7f98ff, 6, 9, 2); scene.add(exitGlow);
-const fxLight = new THREE.PointLight(0xff8a30, 0, 20, 2); scene.add(fxLight);   // explosions, lasers, magic
+const fxLight = new THREE.PointLight(0xff8a30, 0, 20, 2); scene.add(fxLight);   // explosions, fire breath, magic
 const fx = { light: 0, color: new THREE.Color() };
 function flash(pos, color, power){ fxLight.position.copy(pos); fx.color.set(color); fxLight.color.copy(fx.color); fx.light = Math.max(fx.light, power); }
 
@@ -190,7 +191,6 @@ function burst(kind, p, n, dir){
     else if (kind === 'frost') emit(glow, p.x + (R() - 0.5) * 2.4, p.y + R() * 0.3, p.z + (R() - 0.5) * 2.4, 0, 0.3 + R() * 0.6, 0, 0.8 + R(), 0.03, 0.5, 0.8, 1.2, 0, 1);
     else if (kind === 'magic') emit(glow, p.x + (R() - 0.5) * 0.6, p.y + R() * 1.5, p.z + (R() - 0.5) * 0.6, (R() - 0.5), 0.5 + R(), (R() - 0.5), 0.8 + R() * 0.6, 0.03, dir.r * 2, dir.g * 2, dir.b * 2, -0.5, 1);
     else if (kind === 'ember') emit(glow, p.x + (R() - 0.5) * 0.05, p.y + 0.05, p.z + (R() - 0.5) * 0.05, (R() - 0.5) * 0.3, 0.4 + R() * 0.6, (R() - 0.5) * 0.3, 0.6 + R() * 0.8, 0.012, 2.4, 1.0, 0.25, -0.2, 0);
-    else if (kind === 'laser') emit(glow, p.x, p.y, p.z, Math.cos(a) * 3 * s, R() * 3, Math.sin(a) * 3 * s, 0.2 + R() * 0.3, 0.02, 4, 0.3, 0.2, 9.8, 1);
   }
 }
 // dust drifting through the torchlight
@@ -230,6 +230,7 @@ function decal(x, z, size, color, life, rough){
 let state = 'loading';
 let levelNo = 1, seed = params.has('seed') ? (parseInt(params.get('seed'), 10) || 1) : (TEST ? 1 : (Math.random() * 1e9) | 0);
 let lv = null, world = null, simTime = 0, playTime = 0;
+let shrine = null, shrineGate = null, trans = null;   // the shrine you're in, the gate it belongs to, a fade in progress
 const player = { x: 0, z: 0, y: EYE, yaw: 0, pitch: 0, bob: 0, speed: 0, vx: 0, vz: 0, kx: 0, kz: 0, hurry: false,
   hp: MAX_HP, invuln: 0, hurt: 0, shake: 0, dying: 0, cause: '' };
 const inv = { weapons: { sword: true }, weapon: 'sword', powers: [], power: -1, food: { apple: 0, bread: 0, cheese: 0, drumstick: 0 }, bolts: 0 };
@@ -246,12 +247,14 @@ tileAt = (x, z) => tt(Math.floor(x / TILE), Math.floor(z / TILE));
 frozenAt = (i, j) => { const w = world.water.get(j * lv.W + i); return !!(w && w.frozenUntil > simTime); };
 // what stops you walking: rock, cells, the cracked wall until it's blown, the stairs until the gate is up
 solidAt = (x, z) => {
+  if (shrine) return !shrine.contains(x, z);
   const i = Math.floor(x / TILE), j = Math.floor(z / TILE), t = tt(i, j);
   return t === T.ROCK || t === T.CELL || t === T.CRACKED || (t === T.STAIRS && !world.portcullis.open);
 };
 // where zombies can go
 walkableZ = (t, i, j) => t === T.FLOOR || t === T.HALL || (t === T.WATER && frozenAt(i, j));
 function floorAt(x, z){
+  if (shrine) return shrine.floorAt(x, z);
   const i = Math.floor(x / TILE), j = Math.floor(z / TILE), t = tt(i, j);
   if (t === T.LANDING) return STAIR_RISE;
   if (t === T.WATER) return frozenAt(i, j) ? -0.1 : -0.6;
@@ -261,6 +264,7 @@ function floorAt(x, z){
   return (Math.min(7, Math.max(0, Math.floor(p * 8))) + 1) * STAIR_RISE / 8;
 }
 function lineOfSight(ax, az, bx, bz){
+  if (shrine) return true;
   const d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 0.25);
   for (let k = 1; k < n; k++){ const s = k / n, x = ax + (bx - ax) * s, z = az + (bz - az) * s;
     const t = tileAt(x, z); if (t === T.ROCK || t === T.CRACKED || t === T.CELL) return false;
@@ -269,6 +273,7 @@ function lineOfSight(ax, az, bx, bz){
 }
 // push a circle out of rock, pillars and furniture
 function collideCircle(o, r){
+  if (shrine){ shrine.collide(o, r); return; }
   const i0 = Math.floor((o.x - r) / TILE), i1 = Math.floor((o.x + r) / TILE), j0 = Math.floor((o.z - r) / TILE), j1 = Math.floor((o.z + r) / TILE);
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++){
     if (!solidAt((i + 0.5) * TILE, (j + 0.5) * TILE)) continue;
@@ -296,11 +301,13 @@ function buildLevel(){
   if (pw.bomb) scene.remove(pw.bomb.m.group);
   for (const d of debris) scene.remove(d.o);
   zombies.length = 0; bolts.length = 0; prisoners.length = 0; debris.length = 0; beast = null;
-  for (const bm of beams) bm.visible = false;
+  for (const p of firePatches) levelRoot.remove(p.f); firePatches.length = 0;
   for (const d of decals){ scene.remove(d.m); } decals.length = 0;
   pw.bomb = null; pw.bombCool = 0; pw.shieldT = 0; pw.shieldCool = 0;
   lv = generateLevel(seed, levelNo);
   world = buildWorld(lv, mats, props, env);
+  shrine = null; shrineGate = null; trans = null; grade.uniforms.fade.value = 0;
+  world.gates.forEach((g, k) => { g.shrine = buildShrine(g.kind, k, { mats, props, env, makeFlame, seed }); levelRoot.add(g.shrine.group); });
   levelRoot.add(world.group);
   exitLight.position.copy(world.exitLight.pos); exitLight.target.position.copy(world.exitLight.target); exitGlow.position.copy(world.exitLight.glow);
   // prisoners in their cells, some sitting, some at the bars
@@ -314,15 +321,19 @@ function buildLevel(){
     prisoners.push({ m: p, cell: c, pose: atBars ? 'bars' : 'sit', t: 0, state: 'caged', home: pos.clone() });
   });
   // zombies waiting in the dark
-  for (const z of lv.zombies){ const [x, zz] = center(z.tile[0], z.tile[1]); spawnZombie(x, zz, false); }
+  lv.zombies.forEach((z, k) => {
+    const [x, zz] = center(z.tile[0], z.tile[1]);
+    if (k % 3 === 2) for (let m = 0; m < 3; m++) spawnZombie(x + (m - 1) * 0.6, zz + (m % 2) * 0.5, false, true);   // a pack of little ones
+    else spawnZombie(x, zz, false);
+  });
   // the monster in its hall
   const b = beastMod.createBeast({ env });
   const [hx, hz] = center(lv.hall.centre[0], lv.hall.centre[1]);
   b.group.position.set(hx, 0, hz); levelRoot.add(b.group);
   b.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   beast = { m: b, x: hx, z: hz, yaw: 0, hp: 40, max: 40, state: 'idle', t: 0, aware: false, vy: 0, y: 0, from: null, to: null,
-    cd: { laser: 3, barf: 6, leap: 5, touch: 0 }, s: { speed: 0, crouch: 0, airborne: 0, flap: 0, aimYaw: 0, aimPitch: 0, mouth: 0, eyeGlow: 0, hurt: 0, dead: 0 },
-    wander: null, beamT: 0, beam: null, dead: false, roarT: 0 };
+    cd: { fire: 3, barf: 6, leap: 5, touch: 0 }, s: { speed: 0, crouch: 0, airborne: 0, flap: 0, aimYaw: 0, aimPitch: 0, mouth: 0, eyeGlow: 0, hurt: 0, dead: 0 },
+    wander: null, dead: false, roarT: 0 };
   // the player
   const [sx, sz] = center(lv.start[0], lv.start[1]);
   Object.assign(player, { x: sx, z: sz, y: EYE, pitch: 0, vx: 0, vz: 0, kx: 0, kz: 0, hp: player.hp, invuln: 0, hurt: 0, dying: 0 });
@@ -335,10 +346,13 @@ function buildLevel(){
    ZOMBIES
    ================================================================ */
 let zSeed = 1;
-function spawnZombie(x, z, emerging){
+// mini zombies: knee-high, quick, one hit kills them, but they come in packs
+const MINI = 0.55;
+function spawnZombie(x, z, emerging, mini){
   const m = peopleKit.makeZombie(seed * 31 + (zSeed++) * 17);
   m.group.position.set(x, 0, z); levelRoot.add(m.group);
-  const zb = { m, x, z, yaw: Math.random() * 6, hp: 3, state: emerging ? 'emerge' : 'idle', t: 0, vx: 0, vz: 0, speed: 0,
+  if (mini) m.group.scale.setScalar(MINI * (0.9 + Math.random() * 0.2));
+  const zb = { m, x, z, mini: !!mini, yaw: Math.random() * 6, hp: mini ? 1 : 3, state: emerging ? 'emerge' : 'idle', t: 0, vx: 0, vz: 0, speed: 0,
     s: { speed: 0, attack: 0, hurt: 0, dead: 0, emerge: emerging ? 0 : 1 }, aware: !!emerging, groanT: 2 + Math.random() * 6, hitDone: false, stun: 0 };
   zombies.push(zb); return zb;
 }
@@ -366,18 +380,19 @@ function zombieUpdate(z, dt){
   const dx = player.x - z.x, dz = player.z - z.z, d = Math.hypot(dx, dz);
   // notice you: close, or in sight, or hurrying nearby
   if (!z.aware && player.dying === 0){
-    if (d < 4.5 || (d < 14 && lineOfSight(z.x, z.z, player.x, player.z)) || (player.hurry && d < 9)){ z.aware = true; sfx.zombieGroan([z.x, 1.6, z.z]); }
+    if (d < 4.5 || (d < 14 && lineOfSight(z.x, z.z, player.x, player.z)) || (player.hurry && d < 9)){ z.aware = true; (z.mini ? sfx.miniGroan : sfx.zombieGroan)([z.x, 1.6, z.z]); }
   }
   if (z.aware && d > 32) z.aware = false;
   let want = 0, tx = z.x, tz = z.z;
   if (z.state === 'attack'){
-    z.t += dt; s.attack = Math.min(1, z.t / 1.0);
-    if (!z.hitDone && z.t > 0.5){ z.hitDone = true; if (d < 1.7 && player.dying === 0) hurtPlayer(1, 'a zombie', z.x, z.z); }
-    if (z.t > 1.0){ z.state = 'chase'; s.attack = 0; }
+    const dur = z.mini ? 0.7 : 1.0;
+    z.t += dt; s.attack = Math.min(1, z.t / dur);
+    if (!z.hitDone && z.t > dur / 2){ z.hitDone = true; if (d < (z.mini ? 1.2 : 1.7) && player.dying === 0) hurtPlayer(1, z.mini ? 'a little zombie' : 'a zombie', z.x, z.z); }
+    if (z.t > dur){ z.state = 'chase'; s.attack = 0; }
   } else if (z.aware && z.stun <= 0 && player.dying === 0){
-    if (d < 1.25){ z.state = 'attack'; z.t = 0; z.hitDone = false; sfx.zombieAttack([z.x, 1.6, z.z]); }
+    if (d < (z.mini ? 0.95 : 1.25)){ z.state = 'attack'; z.t = 0; z.hitDone = false; (z.mini ? sfx.miniGroan : sfx.zombieAttack)([z.x, 1.0, z.z]); }
     else {
-      want = 1.35;
+      want = z.mini ? 2.3 : 1.35;
       // straight at you when it can see you and you're close; otherwise follow the walking-distance field downhill
       if (d < 5 && lineOfSight(z.x, z.z, player.x, player.z)){ tx = player.x; tz = player.z; }
       else if (distField){
@@ -407,14 +422,16 @@ function zombieUpdate(z, dt){
   z.vx *= Math.exp(-dt * 6); z.vz *= Math.exp(-dt * 6);
   // keep apart from each other and from you
   for (const o of zombies){ if (o === z || o.state === 'dead') continue; const ax = z.x - o.x, az = z.z - o.z, ad = Math.hypot(ax, az);
-    if (ad < 0.7 && ad > 1e-4){ z.x += ax / ad * (0.7 - ad) * 0.5; z.z += az / ad * (0.7 - ad) * 0.5; } }
-  if (d < 0.75 && d > 1e-4){ z.x -= dx / d * (0.75 - d); z.z -= dz / d * (0.75 - d); }
-  const c = { x: z.x, z: z.z }; collideCircle(c, 0.3); z.x = c.x; z.z = c.z;
+    const sep = z.mini && o.mini ? 0.42 : 0.7;
+    if (ad < sep && ad > 1e-4){ z.x += ax / ad * (sep - ad) * 0.5; z.z += az / ad * (sep - ad) * 0.5; } }
+  const keep = z.mini ? 0.6 : 0.75;
+  if (d < keep && d > 1e-4){ z.x -= dx / d * (keep - d); z.z -= dz / d * (keep - d); }
+  const c = { x: z.x, z: z.z }; collideCircle(c, z.mini ? 0.2 : 0.3); z.x = c.x; z.z = c.z;
   // never into deep water
   const i = Math.floor(z.x / TILE), j = Math.floor(z.z / TILE);
   if (tt(i, j) === T.WATER && !frozenAt(i, j)){ z.x -= Math.sin(z.yaw) * z.speed * dt * 1.5; z.z -= Math.cos(z.yaw) * z.speed * dt * 1.5; }
-  if (z.aware && (z.groanT -= dt) < 0){ z.groanT = 3 + Math.random() * 6; sfx.zombieGroan([z.x, 1.6, z.z]); }
-  s.speed = z.speed;
+  if (z.aware && (z.groanT -= dt) < 0){ z.groanT = 3 + Math.random() * 6; (z.mini ? sfx.miniGroan : sfx.zombieGroan)([z.x, 1.6, z.z]); }
+  s.speed = z.mini ? Math.min(2.5, z.speed / MINI) : z.speed;
   z.m.group.position.set(z.x, floorAt(z.x, z.z) > 0 ? floorAt(z.x, z.z) : 0, z.z); z.m.group.rotation.y = z.yaw;
   z.m.update(dt, s);
 }
@@ -426,21 +443,19 @@ function hurtZombie(z, dmg, from, knock){
   const p = new THREE.Vector3(z.x, 1.3, z.z);
   burst('blood', p, 18, new THREE.Vector3(dx / d, 0, dz / d)); sfx.hitFlesh([z.x, 1.3, z.z]);
   if (Math.random() < 0.6) decal(z.x + dx / d * 0.5, z.z + dz / d * 0.5, 0.5 + Math.random() * 0.4, 0x2a0202, 40, 0.25);
-  if (z.hp <= 0){ z.state = 'dead'; z.t = 0; z.s.attack = 0; stats.slain++; sfx.zombieDie([z.x, 1.4, z.z]); if (z.state === 'attack') z.s.attack = 0; }
+  if (z.hp <= 0){ z.state = 'dead'; z.t = 0; z.s.attack = 0; stats.slain++; (z.mini ? sfx.miniDie : sfx.zombieDie)([z.x, 1.4, z.z]); if (z.state === 'attack') z.s.attack = 0; }
   else if (z.state === 'attack'){ z.state = 'chase'; z.s.attack = 0; }
   return true;
 }
 
 /* ================================================================
    THE MONSTER
-   It never leaves its hall (far too tall for the corridors). Lasers from its head, zombies from its mouth,
+   It never leaves its hall (far too tall for the corridors). Fire and zombies from its mouth,
    leaps on its spring feet, spikes on its wings.
    ================================================================ */
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
-const beamMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.25, 0.1), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-const beamGeo = new THREE.CylinderGeometry(0.035, 0.035, 1, 8, 1, true).translate(0, 0.5, 0).rotateX(Math.PI / 2);
-const beams = [new THREE.Mesh(beamGeo, beamMat), new THREE.Mesh(beamGeo, beamMat)];
-for (const b of beams){ b.visible = false; b.frustumCulled = false; scene.add(b); }
+const jetDir = new THREE.Vector3(), jetFrom = new THREE.Vector3();
+const firePatches = [];      // burning puddles of fire left on the floor
 const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.42, 0.35), transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 48).rotateX(-Math.PI / 2), ringMat); ring.visible = false; scene.add(ring);
 let ringT = 0;
@@ -476,19 +491,28 @@ function beastUpdate(dt){
       // pick an attack
       if (off < 0.4 && d < 4.5 && b.cd.touch <= 0){ /* the spikes handle close range below */ }
       if (b.cd.leap <= 0 && d > 5 && d < 15 && inHall(player.x, player.z, 1)){ b.state = 'crouch'; b.t = 0; break; }
-      if (b.cd.laser <= 0 && d > 3.5 && off < 0.5){ b.state = 'charge'; b.t = 0; sfx.laserCharge([b.x, 5, b.z]); break; }
+      if (b.cd.fire <= 0 && d < 12 && off < 0.5){ b.state = 'inhale'; b.t = 0; sfx.inhale([b.x, 5, b.z]); break; }
       if (b.cd.barf <= 0 && zombies.filter((z) => z.state !== 'dead').length < 8 && off < 0.6){ b.state = 'barf'; b.t = 0; sfx.barf([b.x, 4, b.z]); break; }
       break;
     }
-    case 'charge': {
+    case 'inhale': {
+      // a deep breath, embers glowing in its throat: the warning to get out of the way
       faceTo(player.x, player.z, 2.0);
-      s.eyeGlow = Math.min(1, b.t / 1.0);
-      if (b.t > 1.0){ fireLaser(); b.state = 'fire'; b.t = 0; }
+      s.mouth = Math.min(0.5, b.t / 0.7 * 0.5); s.eyeGlow = Math.min(0.6, b.t);
+      if (Math.random() < 0.6) burst('ember', b.m.mouth.getWorldPosition(tmp2), 1);
+      if (b.t > 0.8){
+        b.state = 'breathe'; b.t = 0; sfx.fireBreath([b.x, 4, b.z]);
+        b.m.mouth.getWorldPosition(jetFrom);
+        jetDir.set(player.x, player.y - 0.7, player.z).sub(jetFrom).normalize();
+      }
       break;
     }
-    case 'fire': {
-      if (b.t > 0.35){ for (const bm of beams) bm.visible = false; s.eyeGlow = 0; b.state = 'stalk'; b.cd.laser = 4 + Math.random() * 2.5; }
-      else s.eyeGlow = 1;
+    case 'breathe': {
+      // a jet of fire that swings after you, slowly enough to dodge
+      faceTo(player.x, player.z, 0.7);
+      s.mouth = 1; s.eyeGlow = 0.6;
+      breathFire(dt);
+      if (b.t > 1.9){ b.state = 'stalk'; b.cd.fire = 4.5 + Math.random() * 2.5; s.eyeGlow = 0; }
       break;
     }
     case 'barf': {
@@ -501,13 +525,15 @@ function beastUpdate(dt){
       }
       if (b.t > 1.0 && !b.barfed){
         b.barfed = true;
-        const n = Math.min(2, 8 - zombies.filter((z) => z.state !== 'dead').length);
+        // two zombies, or a litter of three little ones
+        const minis = Math.random() < 0.5, room = 8 - zombies.filter((z) => z.state !== 'dead').length;
+        const n = Math.min(minis ? 3 : 2, Math.max(0, room));
         for (let k = 0; k < n; k++){
-          const a = b.yaw + (k - 0.5) * 0.7, r = 4 + Math.random();
+          const a = b.yaw + (k - (n - 1) / 2) * 0.6, r = 4 + Math.random();
           let x = b.x + Math.sin(a) * r, z = b.z + Math.cos(a) * r;
           const c = { x, z }; collideCircle(c, 0.4); x = c.x; z = c.z;
-          const nz = spawnZombie(x, z, true); nz.yaw = b.yaw + Math.PI;
-          decal(x, z, 1.6, 0x2a3a06, 25, 0.08);
+          const nz = spawnZombie(x, z, true, minis); nz.yaw = b.yaw + Math.PI;
+          decal(x, z, minis ? 1.0 : 1.6, 0x2a3a06, 25, 0.08);
         }
       }
       if (b.t > 2.0){ s.mouth = 0; b.barfed = false; b.state = 'stalk'; b.cd.barf = 12 + Math.random() * 5; }
@@ -541,8 +567,8 @@ function beastUpdate(dt){
       break;
     }
   }
-  if (b.state !== 'charge' && b.state !== 'fire') s.eyeGlow = Math.max(0, s.eyeGlow - dt * 3);
-  if (b.state !== 'barf') s.mouth = Math.max(0, s.mouth - dt * 2);
+  if (b.state !== 'inhale' && b.state !== 'breathe') s.eyeGlow = Math.max(0, s.eyeGlow - dt * 3);
+  if (b.state !== 'barf' && b.state !== 'inhale' && b.state !== 'breathe') s.mouth = Math.max(0, s.mouth - dt * 2);
   if (b.state !== 'leap' && b.state !== 'land') s.flap = Math.max(b.aware ? 0.15 : 0, s.flap - dt);
   // walk, staying inside the hall and clear of the pillars
   if (speed > 0 && b.state !== 'leap'){ b.x += Math.sin(b.yaw) * speed * dt; b.z += Math.cos(b.yaw) * speed * dt; }
@@ -573,38 +599,58 @@ function beastUpdate(dt){
   }
   b.m.group.position.set(b.x, b.y, b.z); b.m.group.rotation.y = b.yaw;
   b.m.update(dt, s);
-  if (b.state === 'fire') updateBeams();
 }
-let beamEnd = new THREE.Vector3();
-function fireLaser(){
+function breathFire(dt){
   const b = beast;
-  const eye = b.m.eyes[0].getWorldPosition(new THREE.Vector3());
-  const target = new THREE.Vector3(player.x, player.y - 0.35, player.z);
-  // march the beam until it hits rock or a pillar
-  const dir = target.clone().sub(eye), len = dir.length(); dir.normalize();
-  let hitLen = 40;
-  for (let t = 0.5; t < 40; t += 0.15){
-    const x = eye.x + dir.x * t, y = eye.y + dir.y * t, z = eye.z + dir.z * t;
-    if (y < 0 || y > HALL_CEIL || solidAt(x, z) || world.pillars.some((p) => Math.hypot(x - p.x, z - p.z) < p.r * 0.75)){ hitLen = t; break; }
+  b.m.mouth.getWorldPosition(jetFrom);
+  // the jet swings toward you, but slower than you can run
+  tmp.set(player.x, player.y - 0.7, player.z).sub(jetFrom).normalize();
+  jetDir.lerp(tmp, Math.min(1, dt * 1.1)).normalize();
+  for (let k = 0; k < 16; k++){
+    const sp = 9 + R() * 4, spread = 0.9 + R() * 0.6;
+    const h = R();
+    emit(glow, jetFrom.x, jetFrom.y, jetFrom.z, jetDir.x * sp + (R() - 0.5) * spread, jetDir.y * sp + (R() - 0.5) * spread, jetDir.z * sp + (R() - 0.5) * spread,
+      0.35 + R() * 0.35, 0.05 + R() * 0.07, 1.6 + h, 0.5 + h * 0.6, 0.08 + h * 0.15, -2, 1.6);
   }
-  beamEnd.copy(eye).addScaledVector(dir, hitLen);
-  sfx.laserFire([eye.x, eye.y, eye.z]);
-  flash(beamEnd, 0xff3018, 30);
-  burst('laser', beamEnd, 30);
-  decal(beamEnd.x, beamEnd.z, 0.9, 0x050302, 30, 0.9);
-  if (hitLen >= len - 0.5 && player.dying === 0) hurtPlayer(2, 'the monster’s lasers', eye.x, eye.z, 3);
-  updateBeams();
+  if (R() < 0.5) burst('smoke', tmp2.copy(jetFrom).addScaledVector(jetDir, 4 + R() * 4), 1);
+  // where the jet meets the floor
+  const t = jetDir.y < -0.05 ? Math.min(12, -jetFrom.y / jetDir.y) : 12;
+  const hit = tmp2.copy(jetFrom).addScaledVector(jetDir, t);
+  flash(hit.clone().setY(1.2), 0xff7a28, 26);
+  b.patchT = (b.patchT || 0) - dt;
+  if (b.patchT <= 0 && hit.y < 0.5 && !solidAt(hit.x, hit.z)){
+    b.patchT = 0.3;
+    const f = makeFlame(0.7 + R() * 0.3); f.position.set(hit.x + (R() - 0.5) * 0.6, 0, hit.z + (R() - 0.5) * 0.6); levelRoot.add(f);
+    firePatches.push({ f, x: f.position.x, z: f.position.z, t: 4 + R() * 1.5 });
+    decal(hit.x, hit.z, 1.2, 0x060302, 40, 0.95);
+    if (firePatches.length > 14){ const o = firePatches.shift(); levelRoot.remove(o.f); }
+  }
+  // standing in the jet burns
+  b.burnT = (b.burnT || 0) - dt;
+  if (b.burnT <= 0 && player.dying === 0){
+    const px = player.x - jetFrom.x, py = (player.y - 0.6) - jetFrom.y, pz = player.z - jetFrom.z;
+    const along = px * jetDir.x + py * jetDir.y + pz * jetDir.z;
+    if (along > 0 && along < t + 0.5){
+      const cx = px - jetDir.x * along, cy = py - jetDir.y * along, cz = pz - jetDir.z * along;
+      if (Math.hypot(cx, cy, cz) < 0.5 + along * 0.1 && lineOfSight(b.x, b.z, player.x, player.z)){ b.burnT = 0.45; hurtPlayer(2, 'the monster\u2019s fire', jetFrom.x, jetFrom.z, 2); }
+    }
+  }
 }
-function updateBeams(){
-  beast.m.eyes.forEach((e, k) => { const p = e.getWorldPosition(tmp); const bm = beams[k]; if (!bm) return;
-    bm.visible = true; bm.position.copy(p); bm.lookAt(beamEnd); bm.scale.set(1, 1, p.distanceTo(beamEnd)); });
+function updateFirePatches(dt){
+  for (let k = firePatches.length - 1; k >= 0; k--){
+    const p = firePatches[k]; p.t -= dt;
+    p.f.scale.setScalar(Math.max(0.05, Math.min(1, p.t / 1.5)));
+    if (R() < 0.15) burst('ember', p.f.position, 1);
+    if (p.t <= 0){ levelRoot.remove(p.f); firePatches.splice(k, 1); continue; }
+    if (Math.hypot(player.x - p.x, player.z - p.z) < 0.6 && player.y - EYE < 0.5) hurtPlayer(1, 'the burning floor', p.x, p.z, 1.5);
+  }
 }
 function hurtBeast(dmg, at){
   const b = beast; if (!b || b.dead) return;
   b.hp -= dmg; b.s.hurt = 1; b.aware = true;
   burst('blood', at, 24); sfx.hitFlesh([at.x, at.y, at.z]);
   if (b.hp <= 0){
-    b.dead = true; b.t = 0; for (const bm of beams) bm.visible = false;
+    b.dead = true; b.t = 0;
     sfx.roar([b.x, 4, b.z]); hint('YOU BEAT THE MONSTER', 4);
     // it drops a feast
     for (const f of ['drumstick', 'bread', 'apple']){
@@ -772,6 +818,10 @@ function updatePlayer(dt, pad){
   }
   const ground = floorAt(player.x, player.z) + EYE;
   player.y += (ground - player.y) * (1 - Math.exp(-dt * 10));
+  if (shrine){
+    if (shrine.inWater(player.x, player.z) && !trans){ sfx.splash(); moveTo(() => { shrine.reset(); placeAt(shrine.start); }); hint('BACK TO THE START', 1.6); }
+    return;
+  }
   // deep water is death
   const i = Math.floor(player.x / TILE), j = Math.floor(player.z / TILE);
   if (tt(i, j) === T.WATER && !frozenAt(i, j)){
@@ -1008,6 +1058,7 @@ function interactables(){
     if (d > 0.6 && (dx * fwd.x + dz * fwd.z) / d < 0.35) return;
     if (d < bestD){ bestD = d; best = item; }
   };
+  if (shrine){ for (const it of shrine.interactables()) consider(it.pos, 1.9, { kind: 'shrine', it, label: it.label, hold: it.hold }); return best; }
   for (const c of world.chests) if (!c.opened) consider(c.pos, 1.9, { kind: 'chest', c, label: 'Open the chest', hold: 0 });
   for (const p of prisoners) if (p.state === 'caged') consider(p.cell.door, 1.9, { kind: 'cell', p, label: 'Break the lock', hold: 1.0 });
   return best;
@@ -1022,6 +1073,7 @@ function updateInteract(dt, held){
   else holdT = 0;
 }
 function doInteract(it){
+  if (it.kind === 'shrine'){ it.it.act(shrineApi); return; }
   if (it.kind === 'chest'){
     const c = it.c; c.opened = true; sfx.chest();
     const got = [];
@@ -1038,6 +1090,47 @@ function doInteract(it){
     const p = it.p; p.state = 'opening'; p.t = 0; sfx.door([p.cell.door.x, 1.5, p.cell.door.z]);
   }
 }
+/* ----- shrines: walk through a gate to go inside; solve the trial; take the power from the altar ----- */
+function moveTo(fn){ trans = { t: 0, fn, done: false }; }
+function placeAt(p){ player.x = p.x; player.z = p.z; player.yaw = p.yaw; player.pitch = 0; player.vx = player.vz = player.kx = player.kz = 0; player.y = floorAt(p.x, p.z) + EYE; }
+function enterShrine(g){
+  // remember which side you came from, so you come back out facing the way you were going
+  const s = Math.sign((player.x - g.pos.x) * g.axis[0] + (player.z - g.pos.z) * g.axis[1]) || 1;
+  const ret = { x: g.pos.x + g.axis[0] * s * 1.7, z: g.pos.z + g.axis[1] * s * 1.7, yaw: Math.atan2(-g.axis[0] * s, -g.axis[1] * s) };
+  g.cool = true; sfx.shrine();
+  moveTo(() => { shrine = g.shrine; shrineGate = g; shrine.ret = ret; shrine.leaveT = 0; placeAt(shrine.start);
+    banner(shrine.name, shrine.taken ? 'Its power is already yours.' : shrine.hint + ' Walk back through the gate to leave.'); });
+}
+function leaveShrine(){
+  const sh = shrine;
+  moveTo(() => { shrine = null; placeAt(sh.ret); shrineGate.cool = true; distField = null; });
+}
+const shrineApi = {
+  sfx, hint: (t, s) => hint(t, s), radius: RADIUS, eye: EYE,
+  solved(){ sfx.gate(null); hint('THE DOOR OPENS', 2.5); },
+  takePower(){
+    const g = shrineGate, kind = g.kind;
+    g.taken = true; g.obj.setActive(false); g.light.base = 1.5;
+    inv.powers.push(kind); inv.power = inv.powers.length - 1;
+    sfx.power(); flash(shrine.orb.position.clone(), POWERS[kind].color, 20);
+    for (let k = 0; k < 60; k++) burst('magic', shrine.orb.position.clone().setY(0.2), 1, new THREE.Color(POWERS[kind].color));
+    banner('NEW POWER: ' + POWERS[kind].name.toUpperCase(), POWERS[kind].desc + ' Use it with LT, right-click or Q. Swap powers with LB or R.');
+    shrine.leaveT = 4; updateHud();
+  },
+};
+function updateShrine(dt){
+  shrine.update(dt, simTime, player, shrineApi);
+  if (trans) return;
+  if (shrine.leaveT > 0){ shrine.leaveT -= dt; if (shrine.leaveT <= 0) leaveShrine(); }
+  else if (shrine.atExit(player.x, player.z)) leaveShrine();
+}
+function updateTrans(dt){
+  if (!trans) return;
+  trans.t += dt;
+  if (trans.t >= 0.45 && !trans.done){ trans.done = true; trans.fn(); }
+  grade.uniforms.fade.value = trans.t < 0.45 ? trans.t / 0.45 : Math.max(0, 1 - (trans.t - 0.45) / 0.45);
+  if (trans.t > 0.9){ trans = null; grade.uniforms.fade.value = 0; }
+}
 function updatePickups(dt){
   for (const it of world.items){
     if (it.taken) continue;
@@ -1052,14 +1145,9 @@ function updatePickups(dt){
     g.obj.update(simTime);
     if (g.taken) continue;
     if (Math.random() < 0.3) burst('magic', g.pos, 1, new THREE.Color(POWERS[g.kind].color));
-    if (Math.hypot(g.pos.x - player.x, g.pos.z - player.z) < 0.9){
-      g.taken = true; g.obj.setActive(false); g.light.base = 1.5;
-      inv.powers.push(g.kind); inv.power = inv.powers.length - 1;
-      sfx.power(); flash(g.pos.clone().setY(1.5), POWERS[g.kind].color, 20);
-      for (let k = 0; k < 60; k++) burst('magic', g.pos, 1, new THREE.Color(POWERS[g.kind].color));
-      banner('NEW POWER: ' + POWERS[g.kind].name.toUpperCase(), POWERS[g.kind].desc + ' Use it with LT, right-click or Q. Swap powers with LB or R.');
-      updateHud();
-    }
+    const d = Math.hypot(g.pos.x - player.x, g.pos.z - player.z);
+    if (d > 1.8) g.cool = false;
+    if (d < 0.9 && !g.cool && !trans) enterShrine(g);
   }
   // cells opening, prisoners cheering, then hurrying off to wait for you at the stairs
   for (const p of prisoners){
@@ -1119,20 +1207,21 @@ function updateWorld(dt){
   flameUniforms.time.value = t;
   handLight.intensity = 7.5 * flicker(t, 0) * (player.drowning ? Math.max(0, 1 - player.dying * 2) : 1);
   ragMat.color.setScalar(0.5 + 0.6 * flicker(t, 3.1));
-  for (const s of world.sconces){
+  const sources = shrine ? shrine.lights : world.sconces;
+  for (const s of sources){
     const d = Math.hypot(s.pos.x - player.x, s.pos.z - player.z);
     const vis = d < (s.big ? 26 : 20) && lineOfSight(player.x, player.z, s.pos.x + (player.x - s.pos.x) * 0.03, s.pos.z + (player.z - s.pos.z) * 0.03);
     s.score = vis ? (s.big ? 3 : 1) / (1 + d) : 0;
     s.w += ((vis ? 1 : 0) - s.w) * (1 - Math.exp(-dt * 4));
   }
-  const ranked = world.sconces.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, pool.length);
+  const ranked = sources.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, pool.length);
   pool.forEach((l, k) => { const s = ranked[k]; if (!s){ l.intensity = 0; return; }
     l.position.copy(s.pos); l.color.copy(s.color); l.intensity = s.base * flicker(t, s.phase) * s.w; });
   fx.light *= Math.exp(-dt * 6); fxLight.intensity = fx.light;
   // embers from the flames near you
   emberT -= dt;
   if (emberT < 0){ emberT = 0.06;
-    const near = world.flames.filter((f) => Math.abs(f.position.x - player.x) + Math.abs(f.position.z - player.z) < 10);
+    const near = (shrine ? shrine.flames : world.flames).filter((f) => Math.abs(f.position.x - player.x) + Math.abs(f.position.z - player.z) < 10);
     const f = Math.random() < 0.5 || !near.length ? heldFlame : near[(Math.random() * near.length) | 0];
     burst('ember', f.position, 1); }
   dustMat.uniforms.origin.value.copy(camera.position); dustMat.uniforms.light.value.copy(handLight.position);
@@ -1392,7 +1481,7 @@ function step(dt){
       player.dying += dt * 0.7;
       if (player.dying > 1.6 && state === 'play'){ state = 'dead'; $('deadStat').textContent = 'Killed by ' + player.cause + '.'; show('dead'); if (document.pointerLockElement) document.exitPointerLock(); }
     } else {
-      updatePlayer(dt, pad);
+      if (!trans) updatePlayer(dt, pad);
       // weapon switching
       const owned = WEAPON_ORDER.filter((w) => inv.weapons[w]);
       if (pressed.has('nextWeapon') || pressed.has('prevWeapon')){ const i = owned.indexOf(inv.weapon); setWeapon(owned[(i + (pressed.has('nextWeapon') ? 1 : owned.length - 1)) % owned.length]); }
@@ -1408,11 +1497,15 @@ function step(dt){
     swing.cool = Math.max(0, swing.cool - dt); swing.raise = Math.min(1, swing.raise + dt * 4);
     if (swing.t < 9){ swing.t += dt; if (!swing.hit && swing.t >= WEAPONS[swing.kind].hitAt){ swing.hit = true; meleeHit(); } }
     player.invuln = Math.max(0, player.invuln - dt); player.hurt = Math.max(0, player.hurt - dt * 1.4); player.shake = Math.max(0, player.shake - dt * 2);
+    updateTrans(dt);
+    if (shrine){ updateShrine(dt); updateBolts(dt); updatePowers(dt); }
+    else {
     updateDistField(dt);
     for (const z of zombies) zombieUpdate(z, dt);
     for (let k = zombies.length - 1; k >= 0; k--) if (zombies[k].gone) zombies.splice(k, 1);
-    beastUpdate(dt);
+    beastUpdate(dt); updateFirePatches(dt);
     updateBolts(dt); updatePowers(dt); updatePickups(dt); updateExit(dt);
+    }
   }
   pressed.clear();
   placeCamera(simTime);
@@ -1487,6 +1580,7 @@ window.__uc = {
     out.push([x, z]); return out; },
   iceLeft(i, j){ const w = world.water.get(j * lv.W + i); return w ? Math.max(0, w.frozenUntil - simTime) : null; },
   get icons(){ return icons; },
+  get shrine(){ return shrine; }, get trans(){ return trans; }, enterShrine: (k) => enterShrine(world.gates[k]), leaveShrine,
   tileOf(x, z){ return [Math.floor(x / TILE), Math.floor(z / TILE)]; },
   center, TILE, T, floorAt, solidAt: (x, z) => solidAt(x, z),
   timeRender(){ const t = performance.now(); composer.render(); renderer.getContext().finish(); return performance.now() - t; },
