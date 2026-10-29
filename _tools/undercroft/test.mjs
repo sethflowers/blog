@@ -152,7 +152,8 @@ async function walkTo(target, opts){
   let wp = 1, t = 0, stuck = 0, last = null;
   while (wp < pts.length && t < 120){
     const st = await ev(() => { const p = window.__uc.player; const z = window.__uc.zombies.find((z) => z.state !== 'dead' && z.state !== 'emerge' && Math.hypot(z.x - p.x, z.z - p.z) < 2.2);
-      return { x: p.x, z: p.z, yaw: p.yaw, zx: z ? z.x : null, zz: z ? z.z : null, state: window.__uc.state }; });
+      return { x: p.x, z: p.z, yaw: p.yaw, zx: z ? z.x : null, zz: z ? z.z : null, state: window.__uc.state, inside: !!(window.__uc.shrine || window.__uc.trans) }; });
+    if (st.inside){ await pad([0, 0, 0, 0]); return true; }
     if (st.state !== 'play'){ console.log('  bot: the game is in state ' + st.state + ' (' + await ev(() => window.__uc.player.cause) + ')'); botDied = true; return false; }
     let [tx, tz] = pts[wp];
     // about to step onto water that isn't frozen (or is about to thaw): freeze it first
@@ -186,7 +187,57 @@ async function selectPower(kind){
   for (let k = 0; k < 4; k++){ if (await ev((k) => window.__uc.inv.powers[window.__uc.inv.power] === k, kind)) return true; await press(B.LB); }
   return false;
 }
-// 1. every power gate
+// steering inside a shrine: no tile grid, straight lines between points chosen to miss the furniture
+async function walkXY(target, opts){
+  opts = opts || {};
+  for (let t = 0; t < (opts.time || 25); t += 0.1){
+    const st = await ev(() => { const p = window.__uc.player; return { x: p.x, z: p.z, yaw: p.yaw }; });
+    const dx = target[0] - st.x, dz = target[1] - st.z;
+    if (Math.hypot(dx, dz) < (opts.near || 0.18)) break;
+    const want = Math.atan2(-dx, -dz);
+    let diff = want - st.yaw; while (diff > Math.PI) diff -= 2 * Math.PI; while (diff < -Math.PI) diff += 2 * Math.PI;
+    const b = none(); if (!opts.walk && Math.hypot(dx, dz) > 1) b[10] = 1;
+    await pad([0, Math.abs(diff) < 0.4 ? -Math.min(1, Math.hypot(dx, dz) * 1.5 + 0.2) : 0, Math.max(-1, Math.min(1, -diff * 2.5)), 0], b);
+    await adv(0.1);
+  }
+  await pad([0, 0, 0, 0]);
+}
+const until = async (fn, arg, secs) => { for (let t = 0; t < secs; t += 0.2){ if (await ev(fn, arg)) return true; await adv(0.2); } return false; };
+async function solveShrine(kind){
+  const S = await ev(() => { const s = window.__uc.shrine; return { ox: s.ox, oz: s.oz, path: s.path, cols: s.cols, rows: s.rows, order: s.order,
+    levers: s.levers && s.levers.map((l) => [l.pos.x, l.pos.z, l.sym]), fires: s.fires && s.fires.map((f) => [f.pos.x, f.pos.z]) }; });
+  const X = (i) => S.ox - 4.5 + i, Z = (j) => S.oz + 3.5 + j;
+  if (kind === 'bomb'){
+    // east along row 2 to column 8, north to row 7, then one west onto the plate
+    const push = async (from, dir, done) => {
+      await walkXY(from); await face(from[0] + dir[0] * 3, from[1] + dir[1] * 3);
+      await pad([0, -0.8, 0, 0]); await until(done, null, 12); await pad([0, 0, 0, 0]); await adv(0.6);
+    };
+    await walkXY([X(1), S.oz + 2.6]);
+    await push([X(1), Z(2)], [1, 0], () => window.__uc.shrine.block.i >= 8);
+    await walkXY([X(7), Z(1)]);
+    await push([X(8), Z(1)], [0, 1], () => window.__uc.shrine.block.j >= 7);
+    await walkXY([X(9), Z(6)]);
+    await push([X(9), Z(7)], [-1, 0], () => window.__uc.shrine.block.i <= 7);
+    await until(() => window.__uc.shrine.doorOpen > 0.95, null, 4);
+    await walkXY([S.ox + 0.5, S.oz + 11.8]);
+  } else if (kind === 'magnet'){
+    for (const [x, z] of S.fires){ await walkXY([x, z - 1.2]); await face(x, z); await press(B.A); }
+    await until(() => window.__uc.shrine.doorOpen > 0.95, null, 4);
+    await walkXY([S.ox, S.oz + 11.8]);
+  } else if (kind === 'freeze'){
+    await walkXY([S.ox, S.oz + 2.9]); await adv(2.7);                 // stand on the rune and watch
+    await shot('06-shrine-freeze-reveal'); await adv(2.0);
+    for (let r = 0; r < 4; r++) await walkXY([S.ox + S.cols[S.path[r]], S.oz + S.rows[r]], { walk: true, near: 0.3 });
+    await walkXY([S.ox, S.oz + 12.2]);
+  } else {
+    for (const sym of S.order){ const [x, z] = S.levers.find((l) => l[2] === sym); await walkXY([x, z - 0.9]); await face(x, z + 1); await press(B.A); await adv(0.3); }
+    await until(() => window.__uc.shrine.doorOpen > 0.95, null, 4);
+    await walkXY([S.ox, S.oz + 11.8]);
+  }
+}
+const shrineShots = {};
+// 1. every power gate, and the shrine behind it
 let shotGate = false;
 for (const g of L.gates){
   if (!shotGate){
@@ -195,8 +246,20 @@ for (const g of L.gates){
     if (route && route.length > 2){ await walkTo(route[route.length - 2]); const c = await ev((t) => window.__uc.center(t[0], t[1]), g.tile); await face(c[0], c[1]); await adv(0.2); await shot('06-power-gate'); shotGate = true; }
   }
   await walkTo(g.tile);
+  await adv(1.2);
+  const kind = await ev(() => window.__uc.shrine && window.__uc.shrine.kind);
+  if (!check(kind === g.kind, `walking through the ${g.kind} gate takes you into its shrine`)) continue;
+  if (!shrineShots[kind]){ await adv(0.3); await shot('06-shrine-' + kind); shrineShots[kind] = true; }
+  await solveShrine(kind);
+  check(await ev(() => window.__uc.shrine && window.__uc.shrine.solved), `the ${kind} shrine's trial can be solved with the controller`);
+  await shot('06-shrine-' + kind + '-solved');
+  // through the opened door to the altar, take the power, and be carried back out
+  await walkXY(await ev(() => [window.__uc.shrine.ox, window.__uc.shrine.oz + 15.6]));
+  await face(...await ev(() => [window.__uc.shrine.ox, window.__uc.shrine.oz + 17]));
+  await press(B.A); await adv(5.5);
+  check(!(await ev(() => window.__uc.shrine)) && await ev((k) => window.__uc.inv.powers.includes(k), kind), `taking the ${kind} power from the altar brings you back out with it`);
 }
-check(await ev(() => window.__uc.inv.powers.length) === L.gates.length, `walking through the gates gives their powers (${await ev(() => window.__uc.inv.powers.join(', '))})`);
+check(await ev(() => window.__uc.inv.powers.length) === L.gates.length, `the shrines give all their powers (${await ev(() => window.__uc.inv.powers.join(', '))})`);
 // 2. the prisoners. The one past the water needs the ice.
 async function freeCell(c){
   const ok = await walkTo(c.from, { water: true });
@@ -252,6 +315,16 @@ const hallTile = L.hall.centre;
 await walkTo([L.hall.x0, L.hall.x0], { water: true, crack: true });
 await face(beastShots.x, beastShots.z); await ev(() => { window.__uc.player.pitch = 0.35; }); await adv(1.5);
 await shot('12-monster');
+// make it breathe fire right now, and look
+await ev(() => { const b = window.__uc.beast; if (!b.dead){ b.aware = true; b.state = 'inhale'; b.t = 0; } });
+await adv(1.4);
+await shot('12-monster-fire');
+await adv(1.5);
+// a litter of little zombies
+await ev(() => { const p = window.__uc.player; for (let k = 0; k < 3; k++){ const a = p.yaw + (k - 1) * 0.35; const z = window.__uc.spawnZombie(p.x - Math.sin(a) * 2.6, p.z - Math.cos(a) * 2.6, false, true); z.aware = true; } });
+await adv(0.8);
+await shot('12-mini-zombies');
+await adv(4);
 // 6. out
 const won = await walkTo(L.exit.landing, { water: true, crack: true });
 await adv(0.5);

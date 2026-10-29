@@ -18,7 +18,7 @@ Xbox, PlayStation or Switch controller), and a computer (keyboard and mouse).
   3. **freeze water** and walk on it
   4. **can't be hurt for one minute** (read from "you canet it fore one minit")
 - **The monster**: a horse-like body on four legs, a long neck and a bird's head, two tall wings, a dark
-  tail. Powers: its **head shoots lasers and barfs zombies**, **spikes on its wings** can kill people,
+  tail. Powers: its **head shoots lasers and barfs zombies** (later changed by request: no lasers, it barfs fire too), **spikes on its wings** can kill people,
   it's **really tall**, and its **feet are like springs** that boost it faster.
 
 Added by request: you start with a **sword**, find **other weapons** and keep everything in a
@@ -38,8 +38,20 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
   as a warning 6 s before. A flooded dead-end room has a roast chicken leg on a stone in the middle:
   pull it with the magnet, or freeze and walk.
 - **Cracked wall**: a small branch is walled up behind a crumbling wall. Bomb it to get the war hammer.
-- **Power gates** (four, in quiet rooms): walk through for the power. LT / right-click / Q uses it,
-  LB / R swaps between powers.
+- **Power shrines** (3.0, like the shrines in Zelda): each of the four gates is a doorway. Walk through it and
+  you're in a shrine, a stone chamber lit by runes in the power's colour, with a trial to solve. Solving it raises
+  a portcullis to an altar where the power floats. Take it and you're carried back out beside the gate. Walk back
+  through the gate inside to leave early. Water in a shrine only sends you back to its start. The trials:
+  - Bomb: push a stone block onto a pressure plate. Two pillars stop the obvious routes, so it has to go round.
+    A rune stone by the entrance puts the block back.
+  - Magnet: light four braziers with your torch; each burns 20 s, so all four must be burning at once.
+  - Freeze: stepping stones over water. Step on the rune and the safe stones glow one row at a time; the
+    others sink when you stand on them.
+  - Shield: four levers marked sun, moon, star and eye; the mural over the door shows the order. A wrong
+    pull resets them all.
+  The shrines are built far west of the maze (`js/shrines.js`). While you're inside, the zombies and the
+  monster wait.
+- **Powers**: LT / right-click / Q uses one, LB / R swaps between them.
   - Magnet: hold to pull food and items to you, and drag zombies onto your blade.
   - Bomb wand: the first press throws a bomb, the second blows it up. It kills zombies, hurts the
     monster, breaks the cracked wall, and hurts you if you're too close.
@@ -50,21 +62,24 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
   - spear: long reach, narrow
   - war hammer: slow, crushing, knocks back
   - crossbow: bolts, which you find in chests
-- **Hearts**: 5 hearts, counted in halves. A zombie hit takes half a heart. The monster's lasers, leap
+- **Hearts**: 5 hearts, counted in halves. A zombie hit takes half a heart. The monster's fire, leap
   and wing spikes take a whole heart. Water kills. After a hit you can't be hurt again for a moment.
 - **Food** (X / F eats whatever fits best, or pick one in the bag):
   - apple: 1 heart
   - bread: 1½ hearts
   - cheese: 2 hearts
   - roast chicken leg: 3 hearts
+- **Mini zombies** (3.0): knee-high, quick (faster than you walk, slower than you hurry), one hit kills
+  them, and they come in packs of three. Every third group of zombies in the maze is a pack of them.
 - **Zombies**:
   - A few wait in the maze. They notice you if you're close, in sight, or hurrying nearby.
   - They follow a walking-distance map to you (so they come round corners) and never step into deep water.
   - Three sword hits kill one.
 - **The monster** (40 hit points, a health bar while it's after you):
   - stalks you around the hall
-  - charges its eyes for a second, then fires twin lasers at where you were (pillars block them)
-  - barfs up two zombies that climb out of the puddle
+  - takes a deep breath (embers glow in its throat), then breathes a jet of fire that swings after you,
+    slower than you can run. It leaves burning patches on the floor for a few seconds. (The lasers went in 3.0.)
+  - barfs up two zombies, or a litter of three mini zombies, that climb out of the puddle
   - crouches on its spring feet and leaps at you, with a shockwave where it lands
   - its wing spikes hurt to touch
   - when beaten, it drops a feast
@@ -89,7 +104,7 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
   examples (MIT).
 - Light: a cold fill everywhere, the torch in your left hand (shadowed), and a pool of three lights.
   Those three are handed each frame to the nearest wall torches, braziers and power gates you can see,
-  and the nearest one casts shadows. There's also one light for explosions and lasers, and the moonlight
+  and the nearest one casts shadows. There's also one light for explosions and fire breath, and the moonlight
   at the way out. The light count never changes, so shaders never recompile mid-game.
 
 ## Testing without a person

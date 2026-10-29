@@ -2,7 +2,7 @@
    Precaches everything the game needs so it runs with no connection once it
    has been opened once. Cached files are served immediately and refreshed in
    the background, so an update shows up the next time the game is opened. */
-var CACHE = 'undercroft-v2';
+var CACHE = 'undercroft-v3';
 var BASE = '/experiments/undercroft/';
 var ASSETS = [
   BASE,
@@ -14,6 +14,7 @@ var ASSETS = [
   BASE + 'js/env.js',
   BASE + 'js/game.js',
   BASE + 'js/level.js',
+  BASE + 'js/shrines.js',
   BASE + 'js/world.js',
   BASE + 'lib/three.core.min.js',
   BASE + 'lib/three.module.min.js',
