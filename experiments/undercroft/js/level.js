@@ -185,11 +185,11 @@ export function generateLevel(seed, levelNo){
   addCell(cellSpot((x, z, t) => t === T.HALL), false);
   for (let k = 1; k < levelNo && k < 3; k++) addCell(cellSpot((x, z, t) => t === T.FLOOR && regionAt(x, z) === 1 && dAt(x, z) > 6), true);
 
-  // 8. the four power gates, in quiet rooms of the main maze, spread apart. Freeze is never behind the water.
+  // 8. the five power gates, in quiet rooms of the main maze, spread apart. Freeze is never behind the water.
   const gateRooms = shuffle(rooms.filter((r) => r.region === 1 && !used.has(key(r.x, r.z)) && r.d > 3))
     .sort((a, b) => (a.exits === 1 ? 0 : 1) - (b.exits === 1 ? 0 : 1));
   const gates = [];
-  for (const kind of shuffle(['magnet', 'bomb', 'freeze', 'shield'])){
+  for (const kind of shuffle(['magnet', 'bomb', 'freeze', 'shield', 'flight'])){
     const r = gateRooms.find((o) => !near(o.x, o.z, 8)) || gateRooms.find((o) => !used.has(key(o.x, o.z)));
     if (!r) break;
     // face it along the way in, so you walk through it
