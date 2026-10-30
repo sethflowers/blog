@@ -97,6 +97,8 @@ if (process.env.LOOK){
 console.log('controls');
 await tapButton(0);
 check(await ev(() => window.__wc.state) === 'play', 'A starts the game');
+const herd = await ev(() => { const prey = window.__wc.animals.filter((a) => a.st.prey); return { n: prey.length, kinds: [...new Set(prey.map((a) => a.kind))].sort().join(' ') }; });
+check(herd.n >= 20 && herd.kinds === 'deer hare mouse rabbit squirrel', `lots of prey about (${herd.n}: ${herd.kinds})`);
 await ev(() => { window.__wc.hunters(false); window.__wc.noSpawn = true; window.__wc.clear(); });
 const p0 = await ev(() => ({ x: window.__wc.cat.x, z: window.__wc.cat.z }));
 await ev(() => { window.__pad.axes = [0, -1, 0, 0]; });
@@ -120,6 +122,14 @@ const r = await ev(() => ({ rabbits: window.__wc.stats.rabbits, hp: window.__wc.
 check(r.rabbits === 1, 'a pounce catches the rabbit');
 check(r.hp > 60, `eating it heals (hp ${r.hp.toFixed(0)})`);
 await frames(20);
+
+console.log('deer');
+await ev(() => { const w = window.__wc; w.clear(); w.cat.eatT = 0; const d = w.animals[w.spawn('deer', 0, 0)]; d.x = w.cat.x + Math.sin(w.cat.yaw) * 3.5; d.z = w.cat.z + Math.cos(w.cat.yaw) * 3.5; d.yaw = w.cat.yaw; });
+for (let i = 0; i < 6 && await ev(() => window.__wc.stats.caught) < 2; i++){
+  await ev(() => { const w = window.__wc, d = w.animals.find((a) => a.kind === 'deer'); if (d && w.cat.stam < 30) w.cat.stam = 100; });
+  await tapButton(0); await frames(25);
+}
+check(await ev(() => (window.__wc.stats.deers || 0)) === 1, 'pouncing brings down a roe deer');
 
 // a fight: spawn the animal nearby, let it come, claw and pounce until it falls
 async function fight(kind, n, label){
