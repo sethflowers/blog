@@ -303,8 +303,6 @@ function buildLevel(){
   if (pw.bomb) scene.remove(pw.bomb.m.group);
   for (const d of debris) scene.remove(d.o);
   zombies.length = 0; bolts.length = 0; prisoners.length = 0; debris.length = 0; beast = null;
-  for (const p of firePatches) levelRoot.remove(p.f); firePatches.length = 0;
-  for (const f of jetCards) f.visible = false;
   for (const d of decals){ scene.remove(d.m); } decals.length = 0;
   pw.bomb = null; pw.bombCool = 0; pw.shieldT = 0; pw.shieldCool = 0; pw.flying = false; pw.flyT = 0; pw.fly = 0; pw.flyKills = FLY_KILLS;
   lv = generateLevel(seed, levelNo);
@@ -326,8 +324,7 @@ function buildLevel(){
   // zombies waiting in the dark
   lv.zombies.forEach((z, k) => {
     const [x, zz] = center(z.tile[0], z.tile[1]);
-    if (k % 3 === 2) for (let m = 0; m < 3; m++) spawnZombie(x + (m - 1) * 0.6, zz + (m % 2) * 0.5, false, true);   // a pack of little ones
-    else spawnZombie(x, zz, false);
+    spawnZombie(x, zz, false);
   });
   // the monster in its hall
   const b = beastMod.createBeast({ env });
@@ -335,7 +332,7 @@ function buildLevel(){
   b.group.position.set(hx, 0, hz); levelRoot.add(b.group);
   b.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   beast = { m: b, x: hx, z: hz, yaw: 0, hp: 40, max: 40, state: 'idle', t: 0, aware: false, vy: 0, y: 0, from: null, to: null,
-    cd: { fire: 3, barf: 6, leap: 5, touch: 0 }, s: { speed: 0, crouch: 0, airborne: 0, flap: 0, aimYaw: 0, aimPitch: 0, mouth: 0, eyeGlow: 0, hurt: 0, dead: 0 },
+    cd: { barf: 6, leap: 5, touch: 0 }, s: { speed: 0, crouch: 0, airborne: 0, flap: 0, aimYaw: 0, aimPitch: 0, mouth: 0, eyeGlow: 0, hurt: 0, dead: 0 },
     wander: null, dead: false, roarT: 0 };
   // the player
   const [sx, sz] = center(lv.start[0], lv.start[1]);
@@ -349,13 +346,10 @@ function buildLevel(){
    ZOMBIES
    ================================================================ */
 let zSeed = 1;
-// mini zombies: knee-high, quick, one hit kills them, but they come in packs
-const MINI = 0.55;
-function spawnZombie(x, z, emerging, mini){
+function spawnZombie(x, z, emerging){
   const m = peopleKit.makeZombie(seed * 31 + (zSeed++) * 17);
   m.group.position.set(x, 0, z); levelRoot.add(m.group);
-  if (mini) m.group.scale.setScalar(MINI * (0.9 + Math.random() * 0.2));
-  const zb = { m, x, z, mini: !!mini, yaw: Math.random() * 6, hp: mini ? 1 : 3, state: emerging ? 'emerge' : 'idle', t: 0, vx: 0, vz: 0, speed: 0,
+  const zb = { m, x, z, yaw: Math.random() * 6, hp: 3, state: emerging ? 'emerge' : 'idle', t: 0, vx: 0, vz: 0, speed: 0,
     s: { speed: 0, attack: 0, hurt: 0, dead: 0, emerge: emerging ? 0 : 1 }, aware: !!emerging, groanT: 2 + Math.random() * 6, hitDone: false, stun: 0 };
   zombies.push(zb); return zb;
 }
@@ -383,19 +377,19 @@ function zombieUpdate(z, dt){
   const dx = player.x - z.x, dz = player.z - z.z, d = Math.hypot(dx, dz);
   // notice you: close, or in sight, or hurrying nearby
   if (!z.aware && player.dying === 0){
-    if (d < 4.5 || (d < 14 && lineOfSight(z.x, z.z, player.x, player.z)) || (player.hurry && d < 9)){ z.aware = true; (z.mini ? sfx.miniGroan : sfx.zombieGroan)([z.x, 1.6, z.z]); }
+    if (d < 4.5 || (d < 14 && lineOfSight(z.x, z.z, player.x, player.z)) || (player.hurry && d < 9)){ z.aware = true; sfx.zombieGroan([z.x, 1.6, z.z]); }
   }
   if (z.aware && d > 32) z.aware = false;
   let want = 0, tx = z.x, tz = z.z;
   if (z.state === 'attack'){
-    const dur = z.mini ? 0.7 : 1.0;
+    const dur = 1.0;
     z.t += dt; s.attack = Math.min(1, z.t / dur);
-    if (!z.hitDone && z.t > dur / 2){ z.hitDone = true; if (d < (z.mini ? 1.2 : 1.7) && player.dying === 0 && pw.fly < 0.5) hurtPlayer(1, z.mini ? 'a little zombie' : 'a zombie', z.x, z.z); }
+    if (!z.hitDone && z.t > dur / 2){ z.hitDone = true; if (d < 1.7 && player.dying === 0 && pw.fly < 0.5) hurtPlayer(1, 'a zombie', z.x, z.z); }
     if (z.t > dur){ z.state = 'chase'; s.attack = 0; }
   } else if (z.aware && z.stun <= 0 && player.dying === 0){
-    if (d < (z.mini ? 0.95 : 1.25) && pw.fly < 0.5){ z.state = 'attack'; z.t = 0; z.hitDone = false; (z.mini ? sfx.miniGroan : sfx.zombieAttack)([z.x, 1.0, z.z]); }
+    if (d < 1.25 && pw.fly < 0.5){ z.state = 'attack'; z.t = 0; z.hitDone = false; sfx.zombieAttack([z.x, 1.0, z.z]); }
     else {
-      want = z.mini ? 2.3 : 1.35;
+      want = 1.35;
       // straight at you when it can see you and you're close; otherwise follow the walking-distance field downhill
       if (d < 5 && lineOfSight(z.x, z.z, player.x, player.z)){ tx = player.x; tz = player.z; }
       else if (distField){
@@ -425,16 +419,16 @@ function zombieUpdate(z, dt){
   z.vx *= Math.exp(-dt * 6); z.vz *= Math.exp(-dt * 6);
   // keep apart from each other and from you
   for (const o of zombies){ if (o === z || o.state === 'dead') continue; const ax = z.x - o.x, az = z.z - o.z, ad = Math.hypot(ax, az);
-    const sep = z.mini && o.mini ? 0.42 : 0.7;
+    const sep = 0.7;
     if (ad < sep && ad > 1e-4){ z.x += ax / ad * (sep - ad) * 0.5; z.z += az / ad * (sep - ad) * 0.5; } }
-  const keep = z.mini ? 0.6 : 0.75;
+  const keep = 0.75;
   if (d < keep && d > 1e-4){ z.x -= dx / d * (keep - d); z.z -= dz / d * (keep - d); }
-  const c = { x: z.x, z: z.z }; collideCircle(c, z.mini ? 0.2 : 0.3); z.x = c.x; z.z = c.z;
+  const c = { x: z.x, z: z.z }; collideCircle(c, 0.3); z.x = c.x; z.z = c.z;
   // never into deep water
   const i = Math.floor(z.x / TILE), j = Math.floor(z.z / TILE);
   if (tt(i, j) === T.WATER && !frozenAt(i, j)){ z.x -= Math.sin(z.yaw) * z.speed * dt * 1.5; z.z -= Math.cos(z.yaw) * z.speed * dt * 1.5; }
-  if (z.aware && (z.groanT -= dt) < 0){ z.groanT = 3 + Math.random() * 6; (z.mini ? sfx.miniGroan : sfx.zombieGroan)([z.x, 1.6, z.z]); }
-  s.speed = z.mini ? Math.min(2.5, z.speed / MINI) : z.speed;
+  if (z.aware && (z.groanT -= dt) < 0){ z.groanT = 3 + Math.random() * 6; sfx.zombieGroan([z.x, 1.6, z.z]); }
+  s.speed = z.speed;
   z.m.group.position.set(z.x, floorAt(z.x, z.z) > 0 ? floorAt(z.x, z.z) : 0, z.z); z.m.group.rotation.y = z.yaw;
   z.m.update(dt, s);
 }
@@ -446,21 +440,17 @@ function hurtZombie(z, dmg, from, knock){
   const p = new THREE.Vector3(z.x, 1.3, z.z);
   burst('blood', p, 18, new THREE.Vector3(dx / d, 0, dz / d)); sfx.hitFlesh([z.x, 1.3, z.z]);
   if (Math.random() < 0.6) decal(z.x + dx / d * 0.5, z.z + dz / d * 0.5, 0.5 + Math.random() * 0.4, 0x2a0202, 40, 0.25);
-  if (z.hp <= 0){ z.state = 'dead'; z.t = 0; z.s.attack = 0; stats.slain++; (z.mini ? sfx.miniDie : sfx.zombieDie)([z.x, 1.4, z.z]); flightKill(); }
+  if (z.hp <= 0){ z.state = 'dead'; z.t = 0; z.s.attack = 0; stats.slain++; sfx.zombieDie([z.x, 1.4, z.z]); flightKill(); }
   else if (z.state === 'attack'){ z.state = 'chase'; z.s.attack = 0; }
   return true;
 }
 
 /* ================================================================
    THE MONSTER
-   It never leaves its hall (far too tall for the corridors). Fire and zombies from its mouth,
+   It never leaves its hall (far too tall for the corridors). Zombies from its mouth,
    leaps on its spring feet, spikes on its wings.
    ================================================================ */
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
-const jetDir = new THREE.Vector3(), jetFrom = new THREE.Vector3();
-const firePatches = [];      // burning puddles of fire left on the floor
-const jetCards = [];         // the jet itself: a chain of flames along its path, growing as it spreads
-for (let k = 0; k < 18; k++){ const f = makeFlame(1, k * 1.7); f.visible = false; scene.add(f); jetCards.push(f); }
 const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.42, 0.35), transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide });
 const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.0, 48).rotateX(-Math.PI / 2), ringMat); ring.visible = false; scene.add(ring);
 let ringT = 0;
@@ -496,29 +486,7 @@ function beastUpdate(dt){
       // pick an attack
       if (off < 0.4 && d < 4.5 && b.cd.touch <= 0){ /* the spikes handle close range below */ }
       if (b.cd.leap <= 0 && d > 5 && d < 15 && inHall(player.x, player.z, 1)){ b.state = 'crouch'; b.t = 0; break; }
-      if (b.cd.fire <= 0 && d < 12 && off < 0.5){ b.state = 'inhale'; b.t = 0; sfx.inhale([b.x, 5, b.z]); break; }
       if (b.cd.barf <= 0 && zombies.filter((z) => z.state !== 'dead').length < 8 && off < 0.6){ b.state = 'barf'; b.t = 0; sfx.barf([b.x, 4, b.z]); break; }
-      break;
-    }
-    case 'inhale': {
-      // a deep breath, embers glowing in its throat: the warning to get out of the way
-      faceTo(player.x, player.z, 2.0);
-      s.mouth = Math.min(0.5, b.t / 0.7 * 0.5); s.eyeGlow = Math.min(0.6, b.t);
-      if (Math.random() < 0.6) burst('ember', b.m.mouth.getWorldPosition(tmp2), 1);
-      if (b.t > 0.8){
-        b.state = 'breathe'; b.t = 0; sfx.fireBreath([b.x, 4, b.z]);
-        b.m.mouth.getWorldPosition(jetFrom);
-        const aim = b.testAim || { x: player.x, y: player.y - 0.7, z: player.z };
-        jetDir.set(aim.x, aim.y, aim.z).sub(jetFrom).normalize();
-      }
-      break;
-    }
-    case 'breathe': {
-      // a jet of fire that swings after you, slowly enough to dodge
-      faceTo(player.x, player.z, 0.7);
-      s.mouth = 1; s.eyeGlow = 0.6;
-      breathFire(dt);
-      if (b.t > 1.9){ b.state = 'stalk'; b.cd.fire = 4.5 + Math.random() * 2.5; s.eyeGlow = 0; }
       break;
     }
     case 'barf': {
@@ -531,15 +499,14 @@ function beastUpdate(dt){
       }
       if (b.t > 1.0 && !b.barfed){
         b.barfed = true;
-        // two zombies, or a litter of three little ones
-        const minis = Math.random() < 0.5, room = 8 - zombies.filter((z) => z.state !== 'dead').length;
-        const n = Math.min(minis ? 3 : 2, Math.max(0, room));
+        // two zombies
+        const n = Math.min(2, Math.max(0, 8 - zombies.filter((z) => z.state !== 'dead').length));
         for (let k = 0; k < n; k++){
           const a = b.yaw + (k - (n - 1) / 2) * 0.6, r = 4 + Math.random();
           let x = b.x + Math.sin(a) * r, z = b.z + Math.cos(a) * r;
           const c = { x, z }; collideCircle(c, 0.4); x = c.x; z = c.z;
-          const nz = spawnZombie(x, z, true, minis); nz.yaw = b.yaw + Math.PI;
-          decal(x, z, minis ? 1.0 : 1.6, 0x2a3a06, 25, 0.08);
+          const nz = spawnZombie(x, z, true); nz.yaw = b.yaw + Math.PI;
+          decal(x, z, 1.6, 0x2a3a06, 25, 0.08);
         }
       }
       if (b.t > 2.0){ s.mouth = 0; b.barfed = false; b.state = 'stalk'; b.cd.barf = 12 + Math.random() * 5; }
@@ -573,9 +540,8 @@ function beastUpdate(dt){
       break;
     }
   }
-  if (b.state !== 'inhale' && b.state !== 'breathe') s.eyeGlow = Math.max(0, s.eyeGlow - dt * 3);
-  if (b.state !== 'breathe') for (const f of jetCards) f.visible = false;
-  if (b.state !== 'barf' && b.state !== 'inhale' && b.state !== 'breathe') s.mouth = Math.max(0, s.mouth - dt * 2);
+  s.eyeGlow = Math.max(0, s.eyeGlow - dt * 3);
+  if (b.state !== 'barf') s.mouth = Math.max(0, s.mouth - dt * 2);
   if (b.state !== 'leap' && b.state !== 'land') s.flap = Math.max(b.aware ? 0.15 : 0, s.flap - dt);
   // walk, staying inside the hall and clear of the pillars
   if (speed > 0 && b.state !== 'leap'){ b.x += Math.sin(b.yaw) * speed * dt; b.z += Math.cos(b.yaw) * speed * dt; }
@@ -607,63 +573,12 @@ function beastUpdate(dt){
   b.m.group.position.set(b.x, b.y, b.z); b.m.group.rotation.y = b.yaw;
   b.m.update(dt, s);
 }
-function breathFire(dt){
-  const b = beast;
-  b.m.mouth.getWorldPosition(jetFrom);
-  // the jet swings toward you, but slower than you can run
-  const aim = b.testAim || { x: player.x, y: player.y - 0.7, z: player.z };      // (tests can point it elsewhere)
-  tmp.set(aim.x, aim.y, aim.z).sub(jetFrom).normalize();
-  jetDir.lerp(tmp, Math.min(1, dt * 1.1)).normalize();
-  for (let k = 0; k < 10; k++){
-    const sp = 9 + R() * 4, spread = 1.2 + R() * 0.8;
-    const h = R();
-    emit(glow, jetFrom.x, jetFrom.y, jetFrom.z, jetDir.x * sp + (R() - 0.5) * spread, jetDir.y * sp + (R() - 0.5) * spread, jetDir.z * sp + (R() - 0.5) * spread,
-      0.3 + R() * 0.4, 0.015 + R() * 0.025, 1.8 + h, 0.6 + h * 0.5, 0.1 + h * 0.15, -2, 1.6);
-  }
-  if (R() < 0.5) burst('smoke', tmp2.copy(jetFrom).addScaledVector(jetDir, 4 + R() * 4), 1);
-  // where the jet meets the floor
-  const t = jetDir.y < -0.05 ? Math.min(12, -jetFrom.y / jetDir.y) : 12;
-  jetCards.forEach((f, k) => {
-    const d = (k + 0.6) / jetCards.length * t, size = 0.7 + d * 0.3;
-    f.visible = true; f.material.uniforms.size.value = size * (0.85 + R() * 0.3);
-    f.position.copy(jetFrom).addScaledVector(jetDir, d).add(tmp.set((R() - 0.5) * 0.15, -size * 0.4, (R() - 0.5) * 0.15));
-  });
-  const hit = tmp2.copy(jetFrom).addScaledVector(jetDir, t);
-  flash(hit.clone().setY(1.2), 0xff7a28, 26);
-  b.patchT = (b.patchT || 0) - dt;
-  if (b.patchT <= 0 && hit.y < 0.5 && !solidAt(hit.x, hit.z)){
-    b.patchT = 0.3;
-    const f = makeFlame(0.7 + R() * 0.3); f.position.set(hit.x + (R() - 0.5) * 0.6, 0, hit.z + (R() - 0.5) * 0.6); levelRoot.add(f);
-    firePatches.push({ f, x: f.position.x, z: f.position.z, t: 4 + R() * 1.5 });
-    decal(hit.x, hit.z, 1.2, 0x060302, 40, 0.95);
-    if (firePatches.length > 14){ const o = firePatches.shift(); levelRoot.remove(o.f); }
-  }
-  // standing in the jet burns
-  b.burnT = (b.burnT || 0) - dt;
-  if (b.burnT <= 0 && player.dying === 0){
-    const px = player.x - jetFrom.x, py = (player.y - 0.6) - jetFrom.y, pz = player.z - jetFrom.z;
-    const along = px * jetDir.x + py * jetDir.y + pz * jetDir.z;
-    if (along > 0 && along < t + 0.5){
-      const cx = px - jetDir.x * along, cy = py - jetDir.y * along, cz = pz - jetDir.z * along;
-      if (Math.hypot(cx, cy, cz) < 0.5 + along * 0.1 && lineOfSight(b.x, b.z, player.x, player.z)){ b.burnT = 0.45; hurtPlayer(2, 'the monster\u2019s fire', jetFrom.x, jetFrom.z, 2); }
-    }
-  }
-}
-function updateFirePatches(dt){
-  for (let k = firePatches.length - 1; k >= 0; k--){
-    const p = firePatches[k]; p.t -= dt;
-    p.f.scale.setScalar(Math.max(0.05, Math.min(1, p.t / 1.5)));
-    if (R() < 0.15) burst('ember', p.f.position, 1);
-    if (p.t <= 0){ levelRoot.remove(p.f); firePatches.splice(k, 1); continue; }
-    if (Math.hypot(player.x - p.x, player.z - p.z) < 0.6 && player.y - EYE < 0.5) hurtPlayer(1, 'the burning floor', p.x, p.z, 1.5);
-  }
-}
 function hurtBeast(dmg, at){
   const b = beast; if (!b || b.dead) return;
   b.hp -= dmg; b.s.hurt = 1; b.aware = true;
   burst('blood', at, 24); sfx.hitFlesh([at.x, at.y, at.z]);
   if (b.hp <= 0){
-    b.dead = true; b.t = 0; for (const f of jetCards) f.visible = false;
+    b.dead = true; b.t = 0;
     sfx.roar([b.x, 4, b.z]); hint('YOU BEAT THE MONSTER', 4);
     // it drops a feast
     for (const f of ['drumstick', 'bread', 'apple']){
@@ -1562,7 +1477,7 @@ function step(dt){
     updateDistField(dt);
     for (const z of zombies) zombieUpdate(z, dt);
     for (let k = zombies.length - 1; k >= 0; k--) if (zombies[k].gone) zombies.splice(k, 1);
-    beastUpdate(dt); updateFirePatches(dt);
+    beastUpdate(dt);
     updateBolts(dt); updatePowers(dt); updatePickups(dt); updateExit(dt);
     }
   }

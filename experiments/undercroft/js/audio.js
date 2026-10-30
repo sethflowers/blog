@@ -129,16 +129,10 @@ export const sfx = {
   hurt(){ if (!ok()) return; const t = audio.ctx.currentTime;
     tone(t, 0.25, 'sawtooth', 190, 120, 0.25, null, 0.2, 0.02); noise(t, 0.15, 'lowpass', 500, 1, 0.6, null, 0.2); },
   zombieGroan(at){ groan(at, 0.35, 1.6); },
-  miniGroan(at){ groan(at, 0.25, 3.2, 1.2); },
-  miniDie(at){ groan(at, 0.4, 3.0, 0.7); },
   zombieAttack(at){ if (!ok()) return; const t = audio.ctx.currentTime; groan(at, 0.5, 2.2, 0.6); noise(t + 0.25, 0.15, 'bandpass', 900, 1, 0.5, at, 0.3); },
   zombieDie(at){ groan(at, 0.6, 1.2, 1.4); },
   roar(at){ if (!ok()) return; const t = audio.ctx.currentTime; groan(at, 1.2, 0.55, 2.2);
     noise(t, 2.0, 'bandpass', 300, 1.5, 0.9, at, 0.8, 120); },
-  inhale(at){ if (!ok()) return; const t = audio.ctx.currentTime; noise(t, 0.85, 'bandpass', 300, 1.5, 0.5, at, 0.5, 1400); groan(at, 0.3, 0.6, 0.9); },
-  fireBreath(at){ if (!ok()) return; const t = audio.ctx.currentTime;
-    noise(t, 2.0, 'lowpass', 700, 0.8, 1.3, at, 0.8, 1800); noise(t, 2.0, 'bandpass', 2500, 0.6, 0.35, at, 0.6);
-    for (let k = 0; k < 14; k++) noise(t + k * 0.13 + Math.random() * 0.05, 0.04, 'highpass', 2000 + Math.random() * 3000, 0.7, 0.3, at, 0.3); },
   barf(at){ if (!ok()) return; const t = audio.ctx.currentTime; groan(at, 0.8, 0.9, 1.2);
     noise(t + 0.3, 1.2, 'lowpass', 900, 2, 1.0, at, 0.6, 300); for (let k = 0; k < 8; k++) noise(t + 0.5 + k * 0.12, 0.08, 'lowpass', 400, 4, 0.6, at, 0.4); },
   boing(at){ if (!ok()) return; const t = audio.ctx.currentTime; tone(t, 0.5, 'sine', 90, 360, 0.6, at, 0.4, 0.01); tone(t, 0.5, 'triangle', 180, 720, 0.2, at, 0.4); },
