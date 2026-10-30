@@ -282,6 +282,7 @@ export const RABBIT = {
     ell('root', [0, 0.11, -0.07], [0.065, 0.075, 0.08], { tag: 'body' }),
     ell('chest', [0, 0.105, 0.035], [0.05, 0.06, 0.06], { tag: 'body' }),
     ell('head', [0, 0.185, 0.14], [0.035, 0.038, 0.045], { tag: 'head' }),
+    cone('neck', [0, 0.125, 0.06], [0, 0.175, 0.125], 0.036, 0.028, { tag: 'body' }),
     ell('head', [0, 0.175, 0.175], [0.022, 0.02, 0.02], { tag: 'muzzle' }),
     ...[1, -1].map((s) => cone('head', [0.015 * s, 0.22, 0.125], [0.026 * s, 0.31, 0.085], 0.013, 0.009, { tag: 'ear', fur: 0.4, k: 0.01 })),
     ...[1, -1].map((s) => ell('hUp' + (s > 0 ? 'L' : 'R'), [0.045 * s, 0.09, -0.05], [0.025, 0.045, 0.05], { tag: 'body' })),
@@ -317,6 +318,154 @@ export const COATS = {
 };
 for (const [k, d] of Object.entries(COATS)) SPECIES[k] = d;
 BEAR.label = 'Brown bear'; WOLF.label = 'Grey wolf'; BOAR.label = 'Wild boar'; RABBIT.label = 'Rabbit';
+
+// ============================================================ more prey
+// A copy of an animal at another size: every position, radius and stride scaled together.
+function scaled(def, k, over){
+  const v = (a) => a.map((x) => x * k);
+  const d = {
+    ...def, ...over,
+    radius: def.radius * k, height: def.height * k, blend: def.blend * k,
+    fur: { ...def.fur, len: def.fur.len * k, density: def.fur.density / k, ...(over.fur || {}) },
+    bones: def.bones.map((b) => ({ ...b, at: v(b.at) })),
+    prims: def.prims.map((p) => p.type === 'cone' ? { ...p, a: v(p.a), b: v(p.b), ra: p.ra * k, rb: p.rb * k, k: p.k && p.k * k }
+      : { ...p, c: v(p.c), r: v(p.r), k: p.k && p.k * k }),
+    eyes: def.eyes.map((e) => ({ ...e, at: v(e.at), r: e.r * k, base: undefined, baseDir: undefined })),
+    extras: (def.extras || []).map((x) => ({ ...x, at: v(x.at), size: x.size && v(x.size), len: x.len && x.len * k, r: x.r && x.r * k })),
+    gait: { ...def.gait, walk: def.gait.walk * k, run: def.gait.run * k, stride: def.gait.stride * k, runStride: def.gait.runStride * k,
+      bob: def.gait.bob * k, crouchDrop: def.gait.crouchDrop * k, deadDrop: def.gait.deadDrop * k, ...(over.gait || {}) },
+  };
+  // markings are written for the original size
+  const col = over.color || def.color;
+  d.color = (x, y, z, tag, p) => col(x / k, y / k, z / k, tag, p);
+  return d;
+}
+
+// a brown hare: a bigger, leggier rabbit with black-tipped ears and amber eyes
+export const HARE = scaled(RABBIT, 1.45, {
+  name: 'hare', label: 'Brown hare', res: 64, eyeColor: ['#e0a040', '#6a3a08'],
+  color(x, y, z, tag){
+    const base = [0.55, 0.42, 0.28], white = [0.86, 0.83, 0.77], dark = [0.08, 0.07, 0.06];
+    let c = mix3(base, [0.3, 0.24, 0.17], n3(x, y, z, 110, 13) * 0.6);
+    if (tag === 'body' && y < 0.075) c = white;
+    if (tag === 'tail') c = z < -0.16 ? dark : white;
+    if (tag === 'ear' && y > 0.28) c = dark;
+    if (tag === 'muzzle' && y < 0.17) c = white;
+    return c;
+  },
+});
+
+// a wood mouse: a round body, big ears and eyes, a long bare tail
+const MOUSE_J = {
+  hip: [0, 0.035, -0.025], chest: [0, 0.035, 0.02], neck: [0, 0.04, 0.035], head: [0, 0.045, 0.045], jaw: [0, 0.04, 0.06],
+  shoulder: [0.012, 0.032, 0.025], elbow: [0.014, 0.018, 0.022], wrist: [0.013, 0.006, 0.03], fToe: [0.013, 0.002, 0.037],
+  hipJ: [0.015, 0.032, -0.03], knee: [0.018, 0.02, -0.014], hock: [0.016, 0.006, -0.036], hToe: [0.016, 0.002, -0.02],
+  tail: [[0, 0.028, -0.058], [0, 0.02, -0.09], [0, 0.012, -0.12], [0, 0.008, -0.15], [0, 0.007, -0.17]],
+};
+export const MOUSE = {
+  name: 'mouse', label: 'Wood mouse', res: 72, blend: 0.006, radius: 0.03, height: 0.06,
+  fur: { len: 0.0035, density: 2200, shells: 8, comb: [0, -0.2, -0.8] },
+  eyeColor: ['#2a160a', '#050302'], slitEyes: false,
+  bones: skeleton(MOUSE_J),
+  prims: [
+    ell('root', [0, 0.031, -0.022], [0.023, 0.025, 0.037], { tag: 'body' }),
+    ell('chest', [0, 0.031, 0.016], [0.018, 0.02, 0.024], { tag: 'body' }),
+    ell('head', [0, 0.042, 0.05], [0.014, 0.014, 0.02], { tag: 'head' }),
+    cone('head', [0, 0.04, 0.06], [0, 0.036, 0.078], 0.009, 0.004, { tag: 'muzzle', fur: 0.5 }),
+    ...[1, -1].map((s) => ell('head', [0.012 * s, 0.056, 0.044], [0.008, 0.009, 0.003], { tag: 'ear', fur: 0.2, k: 0.003 })),
+    ...limbs(MOUSE_J, [0.006, 0.004, 0.0035, 0.003, 0.003, 0.003], [0.009, 0.005, 0.004, 0.003, 0.003, 0.003], [0.003, 0.0026, 0.0022, 0.0018, 0.0015],
+      [0.0035, 0.0022, 0.005], { tailFur: 0.1, pawFur: 0.2 }),
+  ],
+  color(x, y, z, tag){
+    const base = [0.46, 0.34, 0.22], belly = [0.82, 0.78, 0.7], pink = [0.72, 0.56, 0.52];
+    if (tag === 'tail' || tag === 'paw') return pink;
+    if (tag === 'ear') return mix3(pink, base, 0.4);
+    let c = mix3(base, [0.3, 0.22, 0.14], n3(x, y, z, 400, 17) * 0.5);
+    if (y < 0.022) c = belly;
+    return c;
+  },
+  eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.011 * s, 0.047, 0.059], r: 0.0036, dir: [0.8 * s, 0.2, 0.6] })),
+  extras: [{ type: 'ell', bone: 'head', at: [0, 0.036, 0.079], size: [0.002, 0.0016, 0.0014], mat: 'nose' }],
+  gait: { walk: 0.25, run: 3.5, stride: 0.05, runStride: 0.16, swing: 0.6, fBend: 0.9, hBend: 0.9, bob: 0.003, tailLift: 0.1, jawOpen: 0.3,
+    rearAngle: 0.7, crouchDrop: 0.008, deadDrop: 0.02 },
+};
+
+// a red squirrel: rust-red with a white front, ear tufts and a huge tail curled up over its back
+const SQ_J = {
+  hip: [0, 0.1, -0.06], chest: [0, 0.1, 0.04], neck: [0, 0.12, 0.08], head: [0, 0.14, 0.1], jaw: [0, 0.125, 0.12],
+  shoulder: [0.025, 0.09, 0.06], elbow: [0.028, 0.05, 0.05], wrist: [0.026, 0.012, 0.07], fToe: [0.026, 0.005, 0.086],
+  hipJ: [0.03, 0.095, -0.07], knee: [0.038, 0.06, -0.02], hock: [0.034, 0.015, -0.08], hToe: [0.034, 0.005, -0.03],
+  tail: [[0, 0.105, -0.12], [0, 0.16, -0.17], [0, 0.24, -0.16], [0, 0.29, -0.11], [0, 0.31, -0.06]],
+};
+export const SQUIRREL = {
+  name: 'squirrel', label: 'Red squirrel', res: 70, blend: 0.015, radius: 0.07, height: 0.22,
+  fur: { len: 0.009, density: 750, shells: 12, comb: [0, -0.2, -0.8] },
+  eyeColor: ['#2a160a', '#050302'], slitEyes: false,
+  bones: skeleton(SQ_J),
+  prims: [
+    ell('root', [0, 0.095, -0.055], [0.044, 0.05, 0.064], { tag: 'body' }),
+    ell('chest', [0, 0.095, 0.03], [0.037, 0.045, 0.045], { tag: 'body' }),
+    ell('head', [0, 0.14, 0.113], [0.029, 0.029, 0.034], { tag: 'head' }),
+    ell('head', [0, 0.133, 0.143], [0.016, 0.015, 0.016], { tag: 'muzzle' }),
+    ...[1, -1].map((s) => cone('head', [0.018 * s, 0.163, 0.105], [0.022 * s, 0.195, 0.1], 0.009, 0.003, { tag: 'ear', fur: 1.8, k: 0.005 })),
+    ...limbs(SQ_J, [0.012, 0.009, 0.008, 0.007, 0.007, 0.006], [0.022, 0.012, 0.009, 0.008, 0.008, 0.008], [0.02, 0.02, 0.02, 0.018, 0.012],
+      [0.008, 0.006, 0.014], { tailFur: 3.2, hindPawLong: 1.6 }),
+  ],
+  color(x, y, z, tag){
+    const base = [0.62, 0.3, 0.13], white = [0.9, 0.86, 0.78];
+    if (tag === 'tail') return mix3([0.52, 0.24, 0.09], [0.7, 0.4, 0.2], n3(x, y, z, 200, 19) * 0.6);
+    let c = mix3(base, [0.45, 0.2, 0.08], n3(x, y, z, 260, 18) * 0.5);
+    if ((tag === 'body' && y < 0.085 && z > -0.03) || (tag === 'muzzle' && y < 0.13)) c = white;
+    return c;
+  },
+  eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.022 * s, 0.148, 0.13], r: 0.0065, dir: [0.8 * s, 0.15, 0.6] })),
+  extras: [{ type: 'ell', bone: 'head', at: [0, 0.136, 0.159], size: [0.004, 0.003, 0.0025], mat: 'dark' }],
+  gait: { walk: 0.5, run: 6, stride: 0.12, runStride: 0.45, swing: 0.6, fBend: 0.8, hBend: 1.0, bob: 0.01, tailLift: 0, jawOpen: 0.3,
+    rearAngle: 0.8, crouchDrop: 0.02, deadDrop: 0.05, hop: true },
+};
+
+// a roe deer: slim and long-legged, red-brown, a white rump, big ears, a dark nose with a white band
+const DEER_J = {
+  hip: [0, 0.78, -0.38], chest: [0, 0.8, 0.2], neck: [0, 0.88, 0.34], head: [0, 1.1, 0.5], jaw: [0, 1.05, 0.56],
+  shoulder: [0.1, 0.76, 0.26], elbow: [0.11, 0.5, 0.2], wrist: [0.1, 0.2, 0.24], fToe: [0.1, 0.03, 0.28],
+  hipJ: [0.1, 0.76, -0.42], knee: [0.12, 0.52, -0.3], hock: [0.11, 0.28, -0.52], hToe: [0.11, 0.03, -0.47],
+  tail: [[0, 0.8, -0.56], [0, 0.74, -0.6]],
+};
+export const DEER = {
+  name: 'deer', label: 'Roe deer', res: 76, blend: 0.05, radius: 0.33, height: 1.2,
+  fur: { len: 0.012, density: 420, shells: 12, comb: [0, -0.3, -0.7] },
+  eyeColor: ['#3a2410', '#0a0502'], slitEyes: false,
+  bones: skeleton(DEER_J),
+  prims: [
+    ell('root', [0, 0.76, -0.34], [0.13, 0.15, 0.22], { tag: 'body' }),
+    cone('root', [0, 0.74, -0.14], [0, 0.76, 0.08], 0.14, 0.16, { tag: 'body' }),
+    ell('chest', [0, 0.76, 0.18], [0.14, 0.18, 0.2], { tag: 'body' }),
+    cone('neck', [0, 0.84, 0.28], [0, 1.06, 0.47], 0.08, 0.055, { tag: 'neck' }),
+    ell('head', [0, 1.11, 0.53], [0.058, 0.064, 0.08], { tag: 'head' }),
+    cone('head', [0, 1.09, 0.58], [0, 1.045, 0.7], 0.045, 0.027, { tag: 'muzzle', k: 0.03 }),
+    cone('jaw', [0, 1.04, 0.58], [0, 1.025, 0.68], 0.025, 0.015, { tag: 'chin', k: 0.02 }),
+    ...[1, -1].map((s) => cone('head', [0.04 * s, 1.16, 0.5], [0.095 * s, 1.24, 0.47], 0.032, 0.012, { tag: 'ear', fur: 0.5, k: 0.02 })),
+    ...limbs(DEER_J, [0.055, 0.035, 0.026, 0.02, 0.018, 0.016], [0.08, 0.04, 0.03, 0.02, 0.018, 0.016], [0.03, 0.02],
+      [0.016, 0.024, 0.022], { pawFur: 0, pawK: 0.01 }),
+  ],
+  color(x, y, z, tag){
+    const base = [0.56, 0.33, 0.18], pale = [0.78, 0.66, 0.52], white = [0.9, 0.88, 0.84];
+    if (tag === 'paw') return [0.08, 0.06, 0.05];
+    let c = mix3(base, [0.42, 0.24, 0.12], n3(x, y, z, 30, 23) * 0.4);
+    if (tag === 'tail' || (tag === 'body' && z < -0.5 && y > 0.62)) return white;      // the rump patch
+    if (tag === 'body' && y < 0.66) c = mix3(c, pale, 0.6);
+    if (tag === 'leg' || tag === 'thigh') c = mix3(c, [0.4, 0.28, 0.18], 0.4);
+    if (tag === 'muzzle') c = z > 0.66 ? [0.08, 0.06, 0.05] : z > 0.62 ? white : c;
+    if (tag === 'chin') c = white;
+    if (tag === 'ear') c = mix3(c, [0.2, 0.15, 0.1], 0.3);
+    return c;
+  },
+  eyes: [1, -1].map((s) => ({ bone: 'head', at: [0.05 * s, 1.14, 0.6], r: 0.017, dir: [0.7 * s, 0.1, 0.7] })),
+  extras: [{ type: 'ell', bone: 'head', at: [0, 1.05, 0.705], size: [0.022, 0.016, 0.012], mat: 'dark' }],
+  gait: { walk: 1.1, run: 11, stride: 1.0, runStride: 3.0, swing: 0.55, fBend: 1.2, hBend: 1.0, bob: 0.03, tailLift: 0.2, jawOpen: 0.3,
+    rearAngle: 0.6, crouchDrop: 0.08, deadDrop: 0.45 },
+};
+Object.assign(SPECIES, { hare: HARE, mouse: MOUSE, squirrel: SQUIRREL, deer: DEER });
 
 // ============================================================ posing
 // A holds the animation state: phase, speed, and 0..1 amounts for each special move.

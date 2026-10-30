@@ -49,6 +49,21 @@ made in code at start-up.
 | Wild boar | 170 | backs off, paws the ground, then charges in a straight line (17, knocks you flying); tusk toss up close (12) |
 | Rabbit | 1 | runs, zig-zagging. Catch it to eat it (+35 health) |
 
+### Prey (1.2)
+
+About thirty animals to hunt around you at any time, spawned close and let go once far behind. Each
+freezes for a moment when it sees you, then bolts, zig-zagging. Every one can be played once caught.
+
+| Prey | How many | Runs at | Heals | Notes |
+| --- | --- | --- | --- | --- |
+| Wood mouse | 8 | 3.4 m/s | 12 | tiny; only notices you at 3 m |
+| Red squirrel | 6 | 6 m/s | 20 | hops; huge tail |
+| Rabbit | 9 | 6.8 m/s | 35 | |
+| Brown hare | 4 | 8 m/s | 45 | a bigger, leggier rabbit |
+| Roe deer | 2 herds of 3 | 8 m/s | 70 | 24 health: one good pounce, or a sprint and a few claws; a herd runs together |
+
+The pounce steers in the air toward whatever it was aimed at, so a well-timed one catches anything.
+
 ## Being someone else (1.1)
 
 - Five cat coats from the start, same body and moves: **Wildcat**, **Ginger tabby**, **Black cat**

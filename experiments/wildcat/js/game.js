@@ -37,8 +37,12 @@ const PLAY = {
   wolf:   { hp: 140, walk: 1.6, trot: 4.3, sprint: 9.6, swipe: 17, pounce: 28, leap: 1, attack: 'bite', verb: 'bite' },
   boar:   { hp: 170, walk: 1.3, trot: 3.6, sprint: 8.8, swipe: 18, pounce: 32, leap: 0.8, attack: 'gore', verb: 'tusk' },
   rabbit: { hp: 45, walk: 1.0, trot: 4.0, sprint: 10.5, swipe: 4, pounce: 7, leap: 1.15, attack: 'bite', verb: 'nip' },
+  hare:   { hp: 55, walk: 1.2, trot: 4.5, sprint: 11.5, swipe: 5, pounce: 9, leap: 1.3, attack: 'bite', verb: 'nip' },
+  mouse:  { hp: 20, walk: 0.4, trot: 1.5, sprint: 4.5, swipe: 2, pounce: 3, leap: 0.5, attack: 'bite', verb: 'nibble' },
+  squirrel: { hp: 30, walk: 0.7, trot: 2.5, sprint: 7.0, swipe: 3, pounce: 5, leap: 1.0, attack: 'bite', verb: 'nip' },
+  deer:   { hp: 150, walk: 1.4, trot: 4.5, sprint: 11.0, swipe: 16, pounce: 22, leap: 1.1, attack: 'swipe', verb: 'kick' },
 };
-const CHOICES = ['cat', 'ginger', 'black', 'snow', 'spotted', 'bear', 'wolf', 'boar', 'rabbit'];
+const CHOICES = ['cat', 'ginger', 'black', 'snow', 'spotted', 'bear', 'wolf', 'boar', 'deer', 'hare', 'rabbit', 'squirrel', 'mouse'];
 const kindOf = (key) => COATS[key] ? 'cat' : key;
 let unlocked = new Set(['cat', 'ginger', 'black', 'snow', 'spotted']);
 try { for (const k of JSON.parse(localStorage.getItem('wildcat-unlocked') || '[]')) unlocked.add(k); } catch (e) {}
@@ -51,7 +55,12 @@ const FOES = {
   bear: { name: 'BROWN BEAR', hp: 380, walk: 1.2, chase: 8.4, reach: 1.9, notice: 24, engage: 10, xp: 60, size: 3 },
   wolf: { name: 'GREY WOLF', hp: 80, walk: 1.4, chase: 9.4, reach: 1.3, notice: 30, engage: 12, xp: 22, size: 1.6 },
   boar: { name: 'WILD BOAR', hp: 170, walk: 1.0, chase: 8.8, reach: 1.25, notice: 20, engage: 10, xp: 35, size: 2 },
-  rabbit: { name: 'RABBIT', hp: 1, walk: 0.5, chase: 6.8, reach: 0, notice: 6, engage: 0, xp: 4, size: 0.4 },
+  // prey: they run (each with a moment's freeze first), and heal you when caught
+  rabbit:   { name: 'RABBIT', hp: 1, walk: 0.5, chase: 6.8, reach: 0, notice: 6, engage: 0, xp: 4, size: 0.4, prey: true, heal: 35, freeze: 0.7, wander: 1.2 },
+  hare:     { name: 'BROWN HARE', hp: 1, walk: 0.6, chase: 8.0, reach: 0, notice: 9, engage: 0, xp: 8, size: 0.6, prey: true, heal: 45, freeze: 0.5, wander: 1.4 },
+  mouse:    { name: 'WOOD MOUSE', hp: 1, walk: 0.2, chase: 3.4, reach: 0, notice: 3, engage: 0, xp: 2, size: 0.15, prey: true, heal: 12, freeze: 0.3, wander: 0.4 },
+  squirrel: { name: 'RED SQUIRREL', hp: 1, walk: 0.4, chase: 6.0, reach: 0, notice: 6, engage: 0, xp: 4, size: 0.3, prey: true, heal: 20, freeze: 0.6, wander: 0.9 },
+  deer:     { name: 'ROE DEER', hp: 24, walk: 1.1, chase: 8.0, reach: 0, notice: 15, engage: 0, xp: 18, size: 1.6, prey: true, heal: 70, freeze: 0.5, wander: 1.1 },
 };
 const RANKS = ['KITTEN', 'YOUNG CAT', 'HUNTER', 'STALKER', 'FIGHTER', 'WARRIOR', 'BEAR BEATER', 'LEGEND OF THE WOODS', 'KING OF THE WILD'];
 const LEVEL_XP = [0, 40, 100, 190, 310, 460, 650, 880, 1150];
@@ -61,7 +70,7 @@ let state = 'title';           // title | play | pause | dead
 const cat = { x: DEN.x, z: DEN.z, y: 0, vx: 0, vz: 0, vy: 0, yaw: Math.PI, hp: 100, maxHp: 100, stam: 100, stamWait: 0, level: 1, xp: 0,
   act: null, actT: 0, combo: 0, queued: null, invuln: 0, ground: true, hurtT: 0, dead: 0, eatT: 0, sprinting: false, swipeSide: 1, hitDone: false,
   speed: 0, kx: 0, kz: 0, stepPh: 0 };
-const stats = { wins: 0, bears: 0, wolves: 0, boars: 0, rabbits: 0 };
+const stats = { wins: 0, caught: 0, bears: 0, wolves: 0, boars: 0, rabbits: 0 };
 let best = { wins: 0, level: 1 };
 try { best = Object.assign(best, JSON.parse(localStorage.getItem('wildcat-best') || '{}')); } catch (e) {}
 let catObj = null, catA = newAnim();
@@ -146,11 +155,21 @@ function freeSpot(minD, maxD){
 }
 function population(){
   const count = (k) => animals.filter((a) => a.kind === k && !a.dead).length;
-  const want = { bear: 2, wolf: 1, boar: 2, rabbit: 7 };
+  const want = { bear: 2, wolf: 1, boar: 2, rabbit: 9, hare: 4, mouse: 8, squirrel: 6 };
   // a wolf "slot" is a pack of two or three
   const packs = new Set(animals.filter((a) => a.kind === 'wolf' && !a.dead).map((a) => a.pack)).size;
-  for (const k of ['bear', 'boar', 'rabbit']){
-    if (count(k) < want[k]){ const p = freeSpot(k === 'rabbit' ? 20 : 70, k === 'rabbit' ? 70 : 160); if (p) spawn(k, p.x, p.z); }
+  for (const k of ['bear', 'boar']){
+    if (count(k) < want[k]){ const p = freeSpot(70, 160); if (p) spawn(k, p.x, p.z); }
+  }
+  // lots of small things to hunt, close by; a few at a time so the start isn't a stall
+  for (const k of ['rabbit', 'hare', 'mouse', 'squirrel']){
+    for (let i = 0; i < 2 && count(k) < want[k]; i++){ const p = freeSpot(k === 'mouse' ? 10 : 18, k === 'mouse' ? 45 : 75); if (p) spawn(k, p.x, p.z); }
+  }
+  // roe deer come in small herds
+  const herds = new Set(animals.filter((a) => a.kind === 'deer' && !a.dead).map((a) => a.herd)).size;
+  if (herds < 2){
+    const p = freeSpot(40, 120);
+    if (p){ const id = Math.random(); for (let i = 0; i < 3; i++) spawn('deer', p.x + (Math.random() - 0.5) * 8, p.z + (Math.random() - 0.5) * 8, { herd: id }); }
   }
   if (packs < want.wolf){
     const p = freeSpot(90, 170);
@@ -159,7 +178,7 @@ function population(){
   // far away and not fighting: let them go
   for (const a of animals.slice()){
     const d = Math.hypot(a.x - cat.x, a.z - cat.z);
-    if ((d > 240 && !a.engaged) || (a.dead && a.deadT > 45)) despawn(a);
+    if ((d > (a.st.prey ? 130 : 240) && !a.engaged) || (a.dead && a.deadT > 45)) despawn(a);
   }
 }
 
@@ -193,7 +212,7 @@ function hurtAnimal(a, dmg, big){
   burst('blood', hx, hy, hz, big ? 14 : 7, (a.x - cat.x) * 0.3, (a.z - cat.z) * 0.3);
   burst('fur', hx, hy, hz, big ? 8 : 4);
   sfx.hit([a.x, a.z], big);
-  if (a.kind === 'rabbit'){ killAnimal(a); return; }
+  if (a.st.prey){ if (a.hp <= 0) killAnimal(a); else { a.A.hurt = 1; a.freeze = 0; } return; }
   if (!a.engaged) engage(a);
   // small animals (and anyone, when pounced) get knocked off their move
   if (big || (a.kind === 'wolf' && Math.random() < 0.3)){ a.move = null; a.stagger = big ? 0.9 : 0.35; a.A.rear = 0; a.A.swipe = 0; }
@@ -204,14 +223,15 @@ function hurtAnimal(a, dmg, big){
 }
 function killAnimal(a){
   a.dead = true; a.deadT = 0; a.engaged = false; a.state = 'dead'; a.move = null;
-  if (a.kind === 'rabbit'){
-    stats.rabbits++; sfx.squeak([a.x, a.z]);
+  if (a.st.prey){
+    stats.caught++; stats[a.kind + 's'] = (stats[a.kind + 's'] || 0) + 1;
+    if (a.kind === 'deer') sfx.squeal([a.x, a.z]); else sfx.squeak([a.x, a.z]);
     // eat it: heal up
     cat.eatT = 1.4; cat.act = null;
-    const heal = 35; cat.hp = Math.min(cat.maxHp, cat.hp + heal); sfx.eat();
-    hint('YOU CAUGHT A RABBIT  +' + heal, 2.5);
+    const heal = a.st.heal; cat.hp = Math.min(cat.maxHp, cat.hp + heal); sfx.eat();
+    hint('YOU CAUGHT A ' + a.st.name + '  +' + heal, 2.5);
     gainXp(a.st.xp);
-    unlock('rabbit');
+    unlock(a.kind);
     return;
   }
   stats.wins++; stats[a.kind + 's'] = (stats[a.kind + 's'] || 0) + 1;
@@ -264,7 +284,7 @@ function hurtCat(dmg, fromX, fromZ, knock){
 }
 function killCat(){
   cat.dead = 0.001; cat.act = null; offer = null;
-  if (me.kind === 'cat') sfx.yowl(); else if (me.kind === 'rabbit') sfx.squeak([cat.x, cat.z]); else sfx.roar([cat.x, cat.z], 0.7);
+  if (me.kind === 'cat') sfx.yowl(); else if (FOES[me.kind].prey) sfx.squeak([cat.x, cat.z]); else sfx.roar([cat.x, cat.z], 0.7);
   for (const a of animals) if (a.engaged){ a.engaged = false; a.state = 'wander'; a.move = null; a.wx = a.x + (Math.random() - 0.5) * 40; a.wz = a.z + (Math.random() - 0.5) * 40; }
 }
 
@@ -284,18 +304,19 @@ function updateAnimal(a, dt){
   a.voiceT -= dt;
   if (a.voiceT < 0){ a.voiceT = 8 + Math.random() * 14; if (d < 90) voice(a, a.engaged); }
 
-  if (a.kind === 'rabbit'){
-    // nibble the grass; bolt from the cat, zig-zagging
-    if (d < st.notice && !cat.dead){
-      if (a.state !== 'flee'){ a.state = 'flee'; a.zig = 0.5; a.zigA = 0; a.freeze = 0.7; }
+  if (st.prey){
+    // nibble the grass; bolt from the cat, zig-zagging (and a herd runs together)
+    const herdRuns = a.herd && animals.some((b) => b !== a && b.herd === a.herd && b.state === 'flee' && Math.hypot(a.x - b.x, a.z - b.z) < 20);
+    if ((d < st.notice || (herdRuns && d < 45)) && !cat.dead){
+      if (a.state !== 'flee'){ a.state = 'flee'; a.zig = 0.5; a.zigA = 0; a.freeze = st.freeze; }
       a.freeze -= dt;
       a.zig -= dt; if (a.zig < 0){ a.zig = 0.4 + Math.random() * 0.5; a.zigA = (Math.random() - 0.5) * 1.6; }
-      wantYaw = catAngle + Math.PI + a.zigA; speed = a.freeze > 0 ? 0 : st.chase; turnRate = a.freeze > 0 ? 0 : 9;
+      wantYaw = catAngle + Math.PI + a.zigA * (a.kind === 'deer' ? 0.4 : 1); speed = a.freeze > 0 ? 0 : st.chase; turnRate = a.freeze > 0 ? 0 : (a.kind === 'deer' ? 4 : 9);
     } else {
       a.state = 'wander';
       if (Math.hypot(a.wx - a.x, a.wz - a.z) < 0.5 || a.t > 6){ a.t = 0; a.wx = a.x + (Math.random() - 0.5) * 6; a.wz = a.z + (Math.random() - 0.5) * 6; a.pause = Math.random() * 3; }
       a.pause -= dt;
-      if (a.pause < 0){ wantYaw = angleTo(a, a.wx, a.wz); speed = 1.2; } else A.headPitch = 0.5;
+      if (a.pause < 0){ wantYaw = angleTo(a, a.wx, a.wz); speed = st.wander; } else A.headPitch = 0.5;
     }
   } else if (!a.engaged){
     A.rear = Math.max(0, A.rear - dt * 2); A.swipe = 0; A.crouch = Math.max(0, A.crouch - dt * 2);
@@ -606,17 +627,21 @@ function updateCat(dt, pad){
       const t = cat.pounceAt;
       if (t && !t.dead && !cat.hitDone){
         const want = angleTo(cat, t.x, t.z);
-        turnTo(cat, want, 6, dt);
-        const sp = Math.max(Math.hypot(cat.vx, cat.vz), t.speed + 2.5);
+        turnTo(cat, want, 8, dt);
+        // time left in the air, and the speed that lands right on it (up to a limit)
+        const above = Math.max(0, cat.y - world.heightAt(cat.x, cat.z));
+        const tLeft = (cat.vy + Math.sqrt(cat.vy * cat.vy + 26 * above)) / 13;
+        const need = Math.hypot(t.x - cat.x, t.z - cat.z) / Math.max(tLeft, 0.08);
+        const sp = clamp(Math.max(need, t.speed + 2.5), 0, 14);
         cat.vx = Math.sin(cat.yaw) * sp; cat.vz = Math.cos(cat.yaw) * sp;
       }
       if (!cat.hitDone){
         for (const a of animals){
           if (a.dead) continue;
           const d = Math.hypot(a.x - cat.x, a.z - cat.z);
-          if (d < a.def.radius + me.def.radius * 0.5 + (a.kind === 'rabbit' ? 0.4 : 0.25) && cat.y - a.y < a.def.height * 1.2 + 0.4){
+          if (d < a.def.radius + me.def.radius * 0.5 + (a.st.prey && a.kind !== 'deer' ? 0.4 : 0.25) && cat.y - a.y < a.def.height * 1.2 + 0.4){
             cat.hitDone = true;
-            hurtAnimal(a, a.kind === 'rabbit' ? 1 : CAT_STATS.pounce * (1 + (cat.level - 1) * 0.15), true);
+            hurtAnimal(a, CAT_STATS.pounce * (1 + (cat.level - 1) * 0.15), true);
             // bounce back off it
             cat.vx = -Math.sin(cat.yaw) * 3; cat.vz = -Math.cos(cat.yaw) * 3; cat.vy = Math.max(cat.vy, 2.5);
             break;
@@ -669,7 +694,7 @@ function updateCat(dt, pad){
 function nearestFoe(range, includePrey){
   let best = null, bd = range;
   for (const a of animals){
-    if (a.dead || (!a.engaged && !(includePrey && a.kind === 'rabbit'))) continue;
+    if (a.dead || (!a.engaged && !(includePrey && a.st.prey))) continue;
     const d = catDist(a);
     if (d < bd){ bd = d; best = a; }
   }
@@ -688,7 +713,7 @@ function updateCamera(dt, pad){
   view.pitch = clamp(view.pitch, -0.25, 1.2);
   // in a fight, swing round to keep the enemy in view; otherwise drift in behind the cat when it runs
   const foe = nearestFoe(25);
-  const big = Math.pow(Math.max(1, me.def.height / 0.38), 0.65);
+  const big = Math.max(0.4, Math.pow(me.def.height / 0.38, 0.65));
   let dist = 2.4 * big;
   if (foe){
     const between = Math.atan2(cat.x - foe.x, cat.z - foe.z);
@@ -731,7 +756,7 @@ function updateHud(){
   $('lvl').textContent = 'LEVEL ' + cat.level;
   const next = LEVEL_XP[cat.level];
   $('xpFill').style.width = next ? ((cat.xp - LEVEL_XP[cat.level - 1]) / (next - LEVEL_XP[cat.level - 1]) * 100) + '%' : '100%';
-  $('wins').textContent = stats.wins;
+  $('wins').textContent = stats.wins; $('caught').textContent = stats.caught;
 }
 function updateFoeBar(){
   const foes = animals.filter((a) => a.engaged && !a.dead).sort((a, b) => catDist(a) - catDist(b));
@@ -759,6 +784,7 @@ function attackSound(){
   else if (me.kind === 'bear'){ sfx.swipe(); if (Math.random() < 0.4) sfx.growl([cat.x, cat.z], 70); }
   else if (me.kind === 'wolf') sfx.snarl([cat.x, cat.z]);
   else if (me.kind === 'boar') sfx.grunt([cat.x, cat.z]);
+  else if (me.kind === 'deer') sfx.swipe();
   else sfx.squeak([cat.x, cat.z]);
 }
 function setPlayer(key){
@@ -810,7 +836,7 @@ function respawn(){
 function showDead(){
   state = 'dead'; document.body.classList.remove('playing');
   if (document.pointerLockElement) document.exitPointerLock();
-  $('deadStat').textContent = `You beat ${stats.wins} ${stats.wins === 1 ? 'animal' : 'animals'} and caught ${stats.rabbits} ${stats.rabbits === 1 ? 'rabbit' : 'rabbits'}. Level ${cat.level}: ${RANKS[cat.level - 1].toLowerCase()}.`;
+  $('deadStat').textContent = `You beat ${stats.wins} ${stats.wins === 1 ? 'animal' : 'animals'} and caught ${stats.caught} to eat. Level ${cat.level}: ${RANKS[cat.level - 1].toLowerCase()}.`;
   saveBest();
   $('dead').classList.remove('hidden');
 }
@@ -868,7 +894,7 @@ function frame(now){
       hunterT -= dt;
       if (hunterT < 0 && !fightActive){
         hunterT = 35 + Math.random() * 30;
-        const c = animals.filter((a) => !a.dead && a.kind !== 'rabbit' && !a.engaged && a.state === 'wander');
+        const c = animals.filter((a) => !a.dead && !a.st.prey && !a.engaged && a.state === 'wander');
         if (c.length){ const a = c[Math.floor(Math.random() * c.length)]; a.state = 'hunt'; for (const b of animals) if (a.pack && b.pack === a.pack) b.state = 'hunt'; voice(a, false); }
       }
       const wasFight = fightActive;
@@ -892,7 +918,7 @@ function frame(now){
     pushers.push({ x: cat.x, z: cat.z, r: Math.max(0.35, me.def.radius * 1.6) });
     for (const a of animals){
       const dc = camera.position.distanceTo(a.obj.position);
-      a.obj.visible = dc < 170 && !(a.kind === 'rabbit' && a.dead);
+      a.obj.visible = dc < 170 * clamp(a.def.height * 2.5, 0.25, 1) && !(a.st.prey && a.dead);
       if (!a.obj.visible) continue;
       a.obj.position.set(a.x, a.y, a.z);
       a.obj.rotation.set(a.pitch || 0, a.yaw, 0, 'YXZ');
@@ -931,7 +957,7 @@ async function boot(){
   T = makeTextures(QUALITY);
   L.textContent = 'GROWING THE TREES'; await tick();
   world = createWorld(renderer, scene, T, QUALITY);
-  for (const k of ['cat', 'bear', 'wolf', 'boar', 'rabbit']){ L.textContent = 'WAKING THE ' + (k === 'cat' ? 'WILDCAT' : k.toUpperCase() + 'S'); await tick(); buildSpecies(SPECIES[k], QUALITY); }
+  for (const k of ['cat', 'bear', 'wolf', 'boar', 'rabbit', 'hare', 'mouse', 'squirrel', 'deer']){ L.textContent = 'WAKING THE ' + ({ cat: 'WILDCAT', mouse: 'MICE', deer: 'DEER', wolf: 'WOLVES' }[k] || k.toUpperCase() + 'S'); await tick(); buildSpecies(SPECIES[k], QUALITY); }
   if (chosen !== 'cat'){ await tick(); buildSpecies(SPECIES[chosen], QUALITY); }
   renderChooser();
   setPlayer(chosen);
