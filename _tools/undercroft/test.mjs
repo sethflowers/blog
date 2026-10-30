@@ -330,7 +330,7 @@ await shot('12-monster');
 // make it barf zombies right now, and look
 {
   const before = await ev(() => window.__uc.zombies.filter((z) => z.state !== 'dead').length);
-  await ev(() => { const b = window.__uc.beast; if (!b.dead){ b.aware = true; b.state = 'barf'; b.t = 0; } });
+  await ev(() => { const b = window.__uc.beast; if (!b.dead){ b.aware = true; b.state = 'barf'; b.t = 0; b.barfed = false; } });
   await adv(1.6);
   await shot('12-monster-barf');
   check(await ev(() => window.__uc.beast.dead) || await ev(() => window.__uc.zombies.filter((z) => z.state !== 'dead').length) > before, 'the monster barfs up zombies');
