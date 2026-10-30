@@ -1,0 +1,767 @@
+---
+title: Matter Quest
+description: A science study game about matter — vocab, atoms, the periodic table, states of matter, properties, formulas, and physical vs. chemical changes — with a cheat sheet and a boss round.
+date: 2026-10-30
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Matter Quest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fde8f0; --paper:#fffafc; --ink:#2a1650; --muted:#6d5a8f; --line:#2a1650;
+  --soft:#f3dbe8; --grape:#5b2bb5; --good:#12a46c; --bad:#e2434b; --hl:#ff9a1f;
+  --proton:#ff6f61; --neutron:#f4eefc; --electron:#14a3b4; --particle:#5b2bb5; --glass:#e9f6fb;
+  --shadow:#2a1650;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#1b1230; --paper:#271a44; --ink:#f6eefe; --muted:#bcaadb; --line:#f6eefe;
+    --soft:#33245a; --grape:#b393ff; --good:#3fd394; --bad:#ff7a80; --hl:#ffb347;
+    --proton:#ff7f72; --neutron:#4a3a6e; --electron:#37c6d6; --particle:#b393ff; --glass:#2c2550;
+    --shadow:#000;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#1b1230; --paper:#271a44; --ink:#f6eefe; --muted:#bcaadb; --line:#f6eefe;
+  --soft:#33245a; --grape:#b393ff; --good:#3fd394; --bad:#ff7a80; --hl:#ffb347;
+  --proton:#ff7f72; --neutron:#4a3a6e; --electron:#37c6d6; --particle:#b393ff; --glass:#2c2550;
+  --shadow:#000;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:17px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--hl);outline-offset:3px}
+h1,h2,h3,.disp{font-family:"Baloo 2","Nunito",system-ui,sans-serif;line-height:1.15;margin:0}
+.wrap{max-width:640px;margin:0 auto;padding:12px 16px 40px}
+.top{display:flex;justify-content:space-between;align-items:center;padding:6px 0 10px}
+.brand{background:none;border:0;padding:4px 0;font-family:"Baloo 2",system-ui,sans-serif;font-weight:800;font-size:20px}
+.iconbtn{background:var(--paper);border:2.5px solid var(--line);border-radius:999px;width:42px;height:42px;font-size:18px;box-shadow:2px 2px 0 var(--shadow)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:4px 0 18px}
+.hero h1{font-size:clamp(40px,11vw,62px);font-weight:800;letter-spacing:-.5px;color:var(--grape)}
+.hero p{margin:6px 0 10px;color:var(--muted);font-weight:700;max-width:30ch}
+.date{display:inline-block;background:var(--hl);color:#2a1650;font-weight:800;border-radius:10px;padding:4px 10px;transform:rotate(-2deg);border:2.5px solid #2a1650}
+.hero svg{width:clamp(110px,30vw,150px);height:auto}
+.orbit{transform-origin:75px 75px;animation:spin 6s linear infinite}
+.orbit.b{animation-duration:9s;animation-direction:reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.orbit{animation:none}}
+
+.stars-total{display:flex;align-items:center;justify-content:space-between;background:var(--paper);border:2.5px solid var(--line);border-radius:16px;padding:10px 14px;margin-bottom:16px;box-shadow:3px 3px 0 var(--shadow);font-weight:800}
+.stars-total .big{font-family:"Baloo 2",sans-serif;font-size:22px}
+.meter{flex:1;height:12px;border-radius:99px;background:var(--soft);margin:0 12px;overflow:hidden;border:2px solid var(--line)}
+.meter i{display:block;height:100%;background:var(--hl)}
+
+.cheat{width:100%;text-align:left;display:flex;gap:12px;align-items:center;background:var(--paper);border:2.5px dashed var(--line);border-radius:16px;padding:12px 14px;margin-bottom:16px;font-weight:800}
+.cheat span.e{font-size:30px}
+.cheat small{display:block;color:var(--muted);font-weight:700}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.gcard{position:relative;text-align:left;border:2.5px solid #2a1650;border-radius:18px;padding:12px 12px 10px;background:var(--g);color:#fff;box-shadow:4px 4px 0 var(--shadow);display:flex;flex-direction:column;gap:2px;min-height:136px;transition:transform .12s,box-shadow .12s}
+.gcard:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--shadow)}
+.gcard .ge{font-size:30px;line-height:1}
+.gcard .gt{font-family:"Baloo 2",sans-serif;font-weight:800;font-size:20px;line-height:1.1;margin-top:6px}
+.gcard .gd{font-size:14px;font-weight:700;opacity:.92;line-height:1.3}
+.gcard .gs{margin-top:auto;padding-top:6px;letter-spacing:2px;font-size:17px;color:#ffe066;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+.gcard.boss{grid-column:1/-1;min-height:0;flex-direction:row;align-items:center;gap:12px}
+.gcard.boss .ge{font-size:40px}
+.gcard.boss .gs{margin:0 0 0 auto;padding:0}
+
+/* game */
+.gbar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.back{background:var(--paper);border:2.5px solid var(--line);border-radius:12px;padding:6px 12px;font-weight:800;box-shadow:2px 2px 0 var(--shadow)}
+.gname{font-family:"Baloo 2",sans-serif;font-weight:800;font-size:19px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.streak{font-weight:800;background:var(--paper);border:2.5px solid var(--line);border-radius:12px;padding:4px 10px}
+.streak.hot{background:var(--hl);color:#2a1650;animation:bump .4s}
+@keyframes bump{50%{transform:scale(1.2)}}
+.prog{height:14px;border:2.5px solid var(--line);border-radius:99px;background:var(--paper);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--grape);transition:width .3s}
+.qmeta{display:flex;justify-content:space-between;color:var(--muted);font-weight:800;font-size:14px;margin:6px 2px 10px}
+.qcard{background:var(--paper);border:2.5px solid var(--line);border-radius:22px;padding:16px;box-shadow:5px 5px 0 var(--shadow)}
+.qcard.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+.vis{display:flex;flex-direction:column;align-items:center;margin-bottom:10px}
+.qtext{font-family:"Nunito",sans-serif;font-size:21px;font-weight:800;line-height:1.3;margin:2px 0 14px}
+.qtext em{font-style:normal;color:var(--grape)}
+.opts{display:grid;gap:10px}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{background:var(--soft);border:2.5px solid var(--line);border-radius:14px;padding:12px 14px;text-align:left;font-weight:800;font-size:17px;line-height:1.3;box-shadow:3px 3px 0 var(--shadow);transition:transform .1s}
+.opts.two .opt{text-align:center;font-size:19px;padding:16px 10px}
+.opt:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--shadow)}
+.opt.right{background:var(--good);color:#fff}
+.opt.wrong{background:var(--bad);color:#fff}
+.opt:disabled{cursor:default}
+.opt.fade{opacity:.5}
+
+.fb:empty{display:none}
+.fb{margin-top:14px}
+.fbin{border-radius:16px;padding:12px 14px;border:2.5px solid var(--line)}
+.fbin.good{background:color-mix(in srgb,var(--good) 18%,var(--paper))}
+.fbin.bad{background:color-mix(in srgb,var(--bad) 15%,var(--paper))}
+.fbt{font-family:"Baloo 2",sans-serif;font-weight:800;font-size:23px}
+.fba{font-weight:800;margin:2px 0}
+.fbx{margin:4px 0 10px}
+.next,.primary{width:100%;background:var(--grape);color:#fff;border:2.5px solid #2a1650;border-radius:14px;padding:12px;font-family:"Baloo 2",sans-serif;font-weight:800;font-size:20px;box-shadow:3px 3px 0 var(--shadow)}
+.secondary{width:100%;background:var(--paper);border:2.5px solid var(--line);border-radius:14px;padding:12px;font-family:"Baloo 2",sans-serif;font-weight:800;font-size:19px;box-shadow:3px 3px 0 var(--shadow)}
+
+/* numpad */
+.numwrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.numdisp{min-width:140px;text-align:center;font-family:"Baloo 2",sans-serif;font-weight:800;font-size:40px;border:2.5px solid var(--line);border-radius:14px;background:var(--soft);padding:0 16px;line-height:1.5}
+.numdisp.empty{color:var(--muted)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:300px}
+.pad button{border:2.5px solid var(--line);border-radius:12px;background:var(--paper);font-family:"Baloo 2",sans-serif;font-weight:800;font-size:24px;padding:6px 0;box-shadow:2px 2px 0 var(--shadow)}
+.pad button.ok{background:var(--good);color:#fff}
+.pad button:disabled{opacity:.5}
+.hint{background:none;border:0;color:var(--grape);font-weight:800;text-decoration:underline;padding:0}
+.hinttext{font-size:15px;color:var(--muted);font-weight:700;text-align:center}
+
+/* visuals */
+.atom{width:min(240px,70vw);height:auto}
+.shell{fill:none;stroke:var(--ink);stroke-width:2.5;opacity:.7}
+.hlshell{stroke:var(--hl);stroke-width:6;opacity:1;animation:glow .8s ease-in-out infinite alternate}
+.nucring{fill:none;stroke:var(--muted);stroke-width:2;stroke-dasharray:5 5}
+.hlnuc{fill:var(--hl);fill-opacity:.3;stroke:var(--hl);stroke-width:5;stroke-dasharray:none;animation:glow .8s ease-in-out infinite alternate}
+.marker{fill:none;stroke:var(--hl);stroke-width:5;animation:glow .8s ease-in-out infinite alternate}
+@keyframes glow{from{opacity:1}to{opacity:.35}}
+.pr{fill:var(--proton);stroke:var(--ink);stroke-width:1.5}
+.ne{fill:var(--neutron);stroke:var(--ink);stroke-width:1.5}
+.el{fill:var(--electron);stroke:var(--ink);stroke-width:1.5}
+.sign{fill:#fff;font:800 14px "Nunito",sans-serif;text-anchor:middle;dominant-baseline:central}
+canvas.beaker{width:220px;height:184px;display:block}
+.tile{width:150px;border:3px solid var(--line);border-radius:6px;background:var(--glass);text-align:center;padding:8px 6px;font-weight:800}
+.tile .tz{text-align:left;font-size:20px;padding-left:4px}
+.tile .ts{font-family:"Baloo 2",sans-serif;font-size:52px;line-height:1}
+.tile .tn{font-size:16px}
+.tile .tm{font-size:18px}
+.formula{font-family:"Baloo 2",sans-serif;font-weight:800;font-size:60px;line-height:1.1;color:var(--grape)}
+.formula sub{font-size:.5em}
+.fname{color:var(--muted);font-weight:800}
+.bigcard{font-family:"Baloo 2",sans-serif;font-weight:800;font-size:26px;text-align:center;background:var(--soft);border:2.5px dashed var(--line);border-radius:16px;padding:16px 14px;width:100%}
+
+/* end */
+.end{text-align:center;background:var(--paper);border:2.5px solid var(--line);border-radius:22px;padding:22px 16px;box-shadow:5px 5px 0 var(--shadow)}
+.bigstars{font-size:54px;letter-spacing:6px;color:var(--hl);line-height:1.1}
+.end h1{font-size:34px;margin:8px 0 4px;color:var(--grape)}
+.end p{margin:4px 0;font-weight:700}
+.endbtns{display:grid;gap:10px;margin-top:16px}
+.review{text-align:left;margin-top:20px}
+.review h3{font-size:24px;margin-bottom:8px}
+.rv{border-top:2px dashed var(--soft);padding:10px 0}
+.rq{font-weight:800}
+.ra{color:var(--good);font-weight:800}
+.rx{color:var(--muted);font-size:15px}
+
+/* cheat sheet */
+.sheet h2{font-size:30px;color:var(--grape);margin:4px 0 12px}
+.sec{background:var(--paper);border:2.5px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px;box-shadow:3px 3px 0 var(--shadow)}
+.sec h3{font-size:22px;margin-bottom:6px}
+.sec p,.sec li{margin:4px 0}
+.sec ul{padding-left:20px;margin:4px 0}
+.sec b{color:var(--grape)}
+.beakers{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}
+.beakers canvas.beaker{width:100%;height:auto;aspect-ratio:240/200}
+.beakers .bl{font-family:"Baloo 2",sans-serif;font-weight:800;font-size:19px}
+.beakers .bd{font-size:13px;font-weight:700;color:var(--muted);line-height:1.3}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{border:2px solid var(--line);padding:6px;text-align:left;vertical-align:top}
+th{background:var(--soft)}
+.row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chip{border:2px solid var(--line);border-radius:99px;padding:2px 10px;font-weight:700;font-size:14px;background:var(--soft)}
+
+.confetti{position:fixed;top:-12px;width:10px;height:14px;border-radius:2px;z-index:50;pointer-events:none;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+@media (prefers-reduced-motion: reduce){.confetti{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <button class="brand" id="homeBtn" aria-label="Go to the game menu">⚛️ Matter Quest</button>
+    <button class="iconbtn" id="snd" aria-label="Turn sound on or off">🔊</button>
+  </div>
+  <main id="app"></main>
+</div>
+<script>
+/* ---------- helpers ---------- */
+const app = document.getElementById('app');
+const shuffle = a => { a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+const pick = (a,n) => shuffle(a).slice(0,n);
+const rnd = a => a[Math.floor(Math.random()*a.length)];
+function mc(q,a,wrong,ex,vis){ return {type:'mc',q,a,opts:shuffle([a,...wrong]),ex,vis}; }
+function mc2(q,a,opts,ex,vis){ return {type:'mc',q,a,opts,ex,vis}; }
+function num(q,a,ex,vis,hint){ return {type:'num',q,a,ex,vis,hint}; }
+const fmt = f => f.replace(/(\d+)/g,'<sub>$1</sub>');
+const andList = a => a.length<2?a[0]:a.length===2?`${a[0]} and ${a[1]}`:`${a.slice(0,-1).join(', ')}, and ${a[a.length-1]}`;
+
+/* ---------- content ---------- */
+const VOCAB = [
+ ["matter","anything that has mass and takes up space (volume)","Everything around you is matter: your desk, water, even air!"],
+ ["mass","how much matter is in an object","Mass = how much stuff."],
+ ["volume","how much space an object takes up","Volume = how much space."],
+ ["density","how heavy or light something is for its size","Floats = less dense than water. Sinks = more dense."],
+ ["thermal conductivity","how well matter lets heat flow through it","Metal pots heat up fast because metal has good thermal conductivity."],
+ ["electrical conductivity","how well matter lets electricity pass through it","Copper wires carry electricity really well."],
+ ["conductor","an object that lets energy (heat or electricity) flow through it","Metals like copper, iron, and aluminum are conductors."],
+ ["insulator","an object that does NOT let energy flow through it easily","Rubber, plastic, wood, and foam are insulators."],
+ ["solubility","how well something dissolves in another material","Sugar dissolves in water, so it’s soluble. Sand doesn’t."],
+ ["atom","the smallest, most basic part of an element","Atoms are made of protons, neutrons, and electrons."],
+ ["element","a substance that cannot be broken down into any other substances","Every element has its own square on the periodic table."],
+ ["molecule","two or more atoms combined","O₂ is a molecule: two oxygen atoms stuck together."],
+ ["compound","two or more different elements combined","H₂O is a compound: hydrogen + oxygen are different elements."],
+ ["proton","a particle in an atom that has a positive (+) charge","Proton = Positive. P and P!"],
+ ["neutron","a particle in an atom that has no charge","Neutron = Neutral. N and N!"],
+ ["electron","a particle in an atom that has a negative (−) charge","Electrons zoom around the nucleus in shells."]
+];
+
+const ELEMENTS = [
+ {z:1,s:'H',name:'Hydrogen',m:'1.008'},{z:2,s:'He',name:'Helium',m:'4.003'},{z:3,s:'Li',name:'Lithium',m:'6.94'},
+ {z:4,s:'Be',name:'Beryllium',m:'9.012'},{z:5,s:'B',name:'Boron',m:'10.81'},{z:6,s:'C',name:'Carbon',m:'12.011'},
+ {z:7,s:'N',name:'Nitrogen',m:'14.007'},{z:8,s:'O',name:'Oxygen',m:'15.999'},{z:9,s:'F',name:'Fluorine',m:'18.998'},
+ {z:10,s:'Ne',name:'Neon',m:'20.180'},{z:11,s:'Na',name:'Sodium',m:'22.990'},{z:12,s:'Mg',name:'Magnesium',m:'24.305'},
+ {z:13,s:'Al',name:'Aluminum',m:'26.982'},{z:14,s:'Si',name:'Silicon',m:'28.086'},{z:15,s:'P',name:'Phosphorus',m:'30.974'},
+ {z:16,s:'S',name:'Sulfur',m:'32.06'},{z:17,s:'Cl',name:'Chlorine',m:'35.45'},{z:18,s:'Ar',name:'Argon',m:'39.948'},
+ {z:19,s:'K',name:'Potassium',m:'39.098'},{z:20,s:'Ca',name:'Calcium',m:'40.078'},{z:25,s:'Mn',name:'Manganese',m:'54.938'},
+ {z:26,s:'Fe',name:'Iron',m:'55.845'},{z:29,s:'Cu',name:'Copper',m:'63.546'},{z:30,s:'Zn',name:'Zinc',m:'65.38'},
+ {z:35,s:'Br',name:'Bromine',m:'79.904'},{z:47,s:'Ag',name:'Silver',m:'107.868'},{z:53,s:'I',name:'Iodine',m:'126.904'},
+ {z:79,s:'Au',name:'Gold',m:'196.967'}
+];
+
+const FORMULAS = [
+ {f:'H2O',name:'water',a:{H:2,O:1}},{f:'CO2',name:'carbon dioxide',a:{C:1,O:2}},{f:'CH4',name:'methane',a:{C:1,H:4}},
+ {f:'NH3',name:'ammonia',a:{N:1,H:3}},{f:'NaCl',name:'table salt',a:{Na:1,Cl:1}},{f:'C6H12O6',name:'sugar (glucose)',a:{C:6,H:12,O:6}},
+ {f:'H2O2',name:'hydrogen peroxide',a:{H:2,O:2}},{f:'CaCO3',name:'chalk',a:{Ca:1,C:1,O:3}},{f:'Fe2O3',name:'rust',a:{Fe:2,O:3}},
+ {f:'O2',name:'oxygen gas',a:{O:2}},{f:'O3',name:'ozone',a:{O:3}},{f:'S8',name:'sulfur',a:{S:8}},{f:'N2',name:'nitrogen gas',a:{N:2}}
+];
+const ELNAME={H:'hydrogen',O:'oxygen',C:'carbon',N:'nitrogen',Na:'sodium',Cl:'chlorine',Ca:'calcium',Fe:'iron',S:'sulfur'};
+
+/* ---------- question generators ---------- */
+function genVocab(){
+  return pick(VOCAB,10).map(([w,d,tip])=>{
+    const others = VOCAB.filter(v=>v[0]!==w);
+    const ex = `<b>${w}</b>: ${d}.<br>💡 ${tip}`;
+    if(Math.random()<0.6) return mc(`Which word means <em>“${d}”</em>?`, w, pick(others,3).map(v=>v[0]), ex);
+    return mc(`What does <em>${w}</em> mean?`, d, pick(others,3).map(v=>v[1]), ex);
+  });
+}
+
+function genAtom(){
+  const diag = [
+    mc('What is this center part of the atom called?','Nucleus',['Electron shell','Molecule','Proton'],'The <b>nucleus</b> is the center of the atom. It holds the protons and neutrons.',{atom:'nucleus'}),
+    mc('The glowing particle has a + sign. What is it?','Proton',['Neutron','Electron','Nucleus'],'<b>Proton</b> = <b>P</b>ositive (+). It lives in the nucleus.',{atom:'proton'}),
+    mc('The glowing particle is in the nucleus and has NO sign. What is it?','Neutron',['Proton','Electron','Element'],'<b>Neutron</b> = <b>N</b>eutral (no charge). It lives in the nucleus with the protons.',{atom:'neutron'}),
+    mc('The glowing particle zooms around on a ring. What is it?','Electron',['Proton','Neutron','Nucleus'],'<b>Electrons</b> have a negative (−) charge and move around the nucleus in shells.',{atom:'electron'}),
+    mc('What are the glowing rings called?','Electron shells',['The nucleus','Neutrons','Atomic mass'],'Electrons travel around the nucleus in <b>electron shells</b>.',{atom:'shell'}),
+    num('Count the blue electrons. How many does this atom have?',6,'2 electrons on the inner shell + 4 on the outer shell = <b>6</b>.',{atom:'all'}),
+    num('Count the protons (the ones with +). How many are there?',6,'There are <b>6</b> protons. That makes this atom carbon (atomic number 6)!',{atom:'all'}),
+    mc('This atom has 6 protons. Which element is it?','Carbon',['Oxygen','Lithium','Neon'],'Atomic number = number of protons. Atomic number <b>6</b> is <b>carbon</b>.',{atom:'all'})
+  ];
+  const text = [
+    mc('Which particle has a <em>positive</em> charge?','Proton',['Neutron','Electron'],'<b>P</b>roton = <b>P</b>ositive (+).'),
+    mc('Which particle has <em>no</em> charge?','Neutron',['Proton','Electron'],'<b>N</b>eutron = <b>N</b>eutral. No charge!'),
+    mc('Which particle has a <em>negative</em> charge?','Electron',['Proton','Neutron'],'Electrons are negative (−).'),
+    mc('Which two particles are in the nucleus?','Protons and neutrons',['Protons and electrons','Electrons and neutrons','Only electrons'],'Protons and neutrons hang out together in the nucleus. Electrons zoom around outside.'),
+    mc('Where are electrons found?','In shells around the nucleus',['Inside the nucleus','Glued to the neutrons','Atoms don’t have electrons'],'Electrons move around the nucleus in <b>electron shells</b>.'),
+    mc('How many electrons can the <em>first</em> shell hold?','2',['8','18','1'],'Shell 1 holds <b>2</b>, shell 2 holds 8, shell 3 holds 18.'),
+    mc('How many electrons can the <em>second</em> shell hold?','8',['2','18','10'],'Shell 1 holds 2, shell 2 holds <b>8</b>, shell 3 holds 18.'),
+    mc('How many electrons can the <em>third</em> shell hold?','18',['2','8','20'],'Shell 1 holds 2, shell 2 holds 8, shell 3 holds <b>18</b>.'),
+    mc('The atomic number tells you the number of…','Protons (and electrons)',['Neutrons','Shells','Molecules'],'Atomic number = number of protons = number of electrons.'),
+    mc('Atomic mass is about the number of…','Protons + neutrons',['Protons + electrons','Electrons only','Shells + electrons'],'Atomic mass ≈ protons + neutrons. Electrons are so tiny they barely count!'),
+    mc('An atom has 9 protons. How many electrons does it have?','9',['18','0','4'],'In an atom, electrons = protons. So <b>9</b>.'),
+    mc('When every electron is balanced by one proton, the atom’s charge is…','Neutral (balanced)',['Positive','Negative'],'The + and − cancel out, so the atom is neutral.'),
+    mc('What is an atom?','The smallest, most basic part of an element',['Two or more elements combined','A kind of compound','A particle with no charge'],'An <b>atom</b> is the smallest, most basic part of an element.')
+  ];
+  return shuffle([...pick(diag,5),...pick(text,5)]);
+}
+
+function genMath(){
+  const kinds=['number','protons','electrons','neutrons','neutrons','neutrons','mass'];
+  return pick(ELEMENTS,10).map(e=>{
+    const k=rnd(kinds), m=Math.round(parseFloat(e.m)), n=m-e.z, vis={tile:e};
+    const stepN=`Round the atomic mass: ${e.m} → <b>${m}</b>. Then subtract the atomic number: ${m} − ${e.z} = <b>${n}</b> neutrons.`;
+    switch(k){
+      case 'number': return num(`What is the <em>atomic number</em> of ${e.name}?`,e.z,`The atomic number is the whole number at the top of the square: <b>${e.z}</b>.`,vis);
+      case 'protons': return num(`How many <em>protons</em> does ${e.name} have?`,e.z,`Protons = atomic number = <b>${e.z}</b>.`,vis,'Hint: protons = the atomic number.');
+      case 'electrons': return num(`How many <em>electrons</em> does ${e.name} have?`,e.z,`Electrons = protons = atomic number = <b>${e.z}</b>.`,vis,'Hint: electrons = protons = atomic number.');
+      case 'neutrons': return num(`How many <em>neutrons</em> does ${e.name} have?`,n,stepN,vis,'Hint: round the atomic mass, then subtract the atomic number.');
+      default: return mc(`Which number is the <em>atomic mass</em> of ${e.name}?`,e.m,[String(e.z),String(e.z+m)],`The atomic mass is the number with the decimal at the bottom: <b>${e.m}</b>.`,vis);
+    }
+  });
+}
+
+function genStates(){
+  const anim = [
+    mc('Watch the particles! Which state of matter is this?','Solid',['Liquid','Gas'],'In a <b>solid</b>, particles are packed tight and just vibrate in place.',{state:'solid'}),
+    mc('Watch the particles! Which state of matter is this?','Liquid',['Solid','Gas'],'In a <b>liquid</b>, particles are close together but slide past each other.',{state:'liquid'}),
+    mc('Watch the particles! Which state of matter is this?','Gas',['Solid','Liquid'],'In a <b>gas</b>, particles are far apart and zoom around fast in every direction.',{state:'gas'})
+  ].map(q=>({...q,opts:['Solid','Liquid','Gas']}));
+  const text = [
+    mc('Which state has a definite shape <em>and</em> a definite volume?','Solid',['Liquid','Gas'],'A <b>solid</b> keeps its own shape and its own volume.'),
+    mc('Which state has a definite volume but takes the shape of its container?','Liquid',['Solid','Gas'],'A <b>liquid</b> keeps its volume but changes shape to fit the container.'),
+    mc('Which state has <em>no</em> definite shape and <em>no</em> definite volume?','Gas',['Solid','Liquid'],'A <b>gas</b> spreads out to fill its whole container.'),
+    mc('How do the atoms in a <em>solid</em> move?','Packed tight, vibrating in place',['Sliding past each other','Zooming around far apart'],'Solid atoms are locked in place. They can only wiggle (vibrate).'),
+    mc('How do the atoms in a <em>liquid</em> move?','Close together, sliding past each other',['Packed tight, vibrating in place','Zooming around far apart'],'Liquid atoms stay close but can slide and flow.'),
+    mc('How do the atoms in a <em>gas</em> move?','Far apart, zooming around fast',['Packed tight, vibrating in place','Close together, sliding past each other'],'Gas atoms are spread out and move fast and freely.'),
+    mc('In which state do the particles move the <em>fastest</em>?','Gas',['Solid','Liquid'],'Gas particles move the fastest. Solid particles move the slowest.'),
+    mc('In which state do the particles move the <em>slowest</em>?','Solid',['Liquid','Gas'],'Solid particles only vibrate in place.'),
+    mc('You pour 1 cup of juice from a tall bottle into a wide bowl. What happens?','The shape changes, but it’s still 1 cup',['The volume shrinks','Nothing about it changes','It turns into a gas'],'Liquids keep their <b>volume</b> but take the <b>shape</b> of the container.'),
+    mc('You move a rock from a bucket into a box. Its shape and volume…','Stay the same',['Both change','Only the shape changes'],'Solids have a definite shape and a definite volume.'),
+    mc('Air from a balloon is let into a big empty jar. The air…','Spreads out to fill the whole jar',['Stays in a little ball','Sinks to the bottom like water'],'Gases spread out to fill their container.'),
+    mc('Ice cube, orange juice, steam. Which one is a gas?','Steam',['Ice cube','Orange juice'],'Steam is water as a gas.')
+  ];
+  return shuffle([...anim,...pick(text,7)]);
+}
+
+function genProps(){
+  const flt = [
+    mc('A cork floats in water. The cork is…','Less dense than water',['More dense than water','The same as water'],'Floats → <b>less dense</b> than water. Sinks → <b>more dense</b>.',{card:'🍾 Cork floats'}),
+    mc('A rock sinks to the bottom of a pond. The rock is…','More dense than water',['Less dense than water'],'Sinks → <b>more dense</b> than water.',{card:'🪨 Rock sinks'}),
+    mc('A block of wood floats. Wood is…','Less dense than water',['More dense than water'],'Floats → <b>less dense</b> than water.',{card:'🪵 Wood floats'}),
+    mc('A metal coin sinks. The coin is…','More dense than water',['Less dense than water'],'Sinks → <b>more dense</b> than water.',{card:'🪙 Coin sinks'}),
+    mc('An ice cube floats in your drink. Ice is…','Less dense than water',['More dense than water'],'Floats → <b>less dense</b> than water. That’s why ice floats on lakes!',{card:'🧊 Ice floats'}),
+    mc('If an object is <em>more</em> dense than water, it will…','Sink',['Float','Melt'],'More dense than water → sinks.'),
+    mc('If an object is <em>less</em> dense than water, it will…','Float',['Sink','Dissolve'],'Less dense than water → floats.')
+  ];
+  const items = [['🔌 Copper wire','Conductor','Copper is a metal. Metals are great conductors.'],['🎈 Rubber','Insulator','Rubber blocks electricity and heat.'],
+    ['🌯 Aluminum foil','Conductor','Aluminum is a metal, so it conducts.'],['🥄 Plastic spoon','Insulator','Plastic is an insulator.'],
+    ['🔩 Iron nail','Conductor','Iron is a metal, so it conducts.'],['🥢 Wooden spoon','Insulator','Wood is an insulator, which is why it doesn’t get hot in soup.'],
+    ['🍲 Steel pot','Conductor','Steel is a metal, so heat flows through it to the food.'],['🥤 Foam cup','Insulator','Foam keeps heat in, so it’s an insulator.'],
+    ['🧤 Wool mitten','Insulator','Wool keeps your body heat in, so it’s an insulator.'],['🫙 Glass jar','Insulator','Glass does not let electricity flow, so it’s an insulator.']];
+  const cond = items.map(([t,a,ex])=>mc2('Conductor or insulator?',a,['Conductor','Insulator'],ex,{card:t}));
+  const uses = [
+    mc('Why are cooking pots made of metal?','Metal is a good thermal conductor, so heat moves into the food',['Metal is an insulator','Metal is less dense than water','Metal dissolves in water'],'Metal has good <b>thermal conductivity</b>: heat flows through it easily.'),
+    mc('Why do pot handles often have plastic or wood on them?','They’re insulators, so your hand doesn’t get burned',['They’re conductors that heat up fast','They make the pot float','They make the pot cook faster'],'Plastic and wood are <b>insulators</b>. They stop the heat from reaching your hand.'),
+    mc('Why are electrical wires made of copper?','Copper is a good electrical conductor',['Copper is an insulator','Copper is a gas','Copper floats'],'Copper lets electricity flow through it easily.'),
+    mc('Why are wires covered in rubber or plastic?','Rubber and plastic are insulators that protect you from shocks',['They help electricity escape','They make the wire hotter','They are conductors'],'The insulator coating keeps the electricity inside the wire and away from you.'),
+    mc('What does an oven mitt do?','It’s a thermal insulator that blocks heat',['It conducts heat to your hand','It conducts electricity','It makes the pan lighter'],'Oven mitts are <b>thermal insulators</b>.'),
+    mc('Sugar dissolves in water, but sand does not. This is about…','Solubility',['Density','Thermal conductivity','Volume'],'<b>Solubility</b> = how well something dissolves in another material.'),
+    mc('Which list describes physical properties of wood?','Hard, solid, an insulator, floats in water',['A liquid, a conductor, sinks','A gas with no shape','Soft, a conductor, dissolves in water'],'Wood is hard, a solid, a good electrical and thermal insulator, and less dense than water.')
+  ];
+  return shuffle([...pick(flt,3),...pick(cond,3),...pick(uses,4)]);
+}
+
+function genFormula(){
+  const qs=[];
+  pick(FORMULAS,7).forEach(F=>{
+    const els=Object.keys(F.a), f=fmt(F.f), vis={formula:F.f,name:F.name};
+    const kinds=['count','count','total','type']; if(els.length>1) kinds.push('kinds');
+    const k=rnd(kinds);
+    if(k==='count'){
+      const e=rnd(els), n=F.a[e];
+      qs.push(num(`How many <em>${ELNAME[e]}</em> (${e}) atoms are in ${f}?`,n,
+        n===1?`There’s no little number after ${e}, so there is just <b>1</b> ${ELNAME[e]} atom.`:`The little ${n} after ${e} means <b>${n}</b> ${ELNAME[e]} atoms.`,vis,'Hint: look at the little number right after the symbol. No number means 1.'));
+    } else if(k==='total'){
+      const tot=els.reduce((s,e)=>s+F.a[e],0);
+      qs.push(num(`How many atoms <em>in all</em> are in ${f}?`,tot,`${els.map(e=>`${F.a[e]} ${e}`).join(' + ')} = <b>${tot}</b> atoms in all.`,vis,'Hint: count each element, then add them up.'));
+    } else if(k==='kinds'){
+      qs.push(num(`How many <em>different elements</em> are in ${f}?`,els.length,`${f} has ${andList(els.map(e=>ELNAME[e]))}. That’s <b>${els.length}</b> different elements.`,vis,'Hint: count the capital letters.'));
+    } else {
+      const comp=els.length>1;
+      qs.push(mc2(`Is ${f} a compound, or just a molecule?`,comp?'Compound':'Just a molecule',['Compound','Just a molecule'],
+        comp?`${f} has <b>different</b> elements (${andList(els.map(e=>ELNAME[e]))}), so it’s a compound. And every compound is a molecule too!`
+            :`${f} is made of only ${ELNAME[els[0]]} atoms. Same element = a molecule, but <b>not</b> a compound.`,vis));
+    }
+  });
+  const concept=[
+    mc2('True or false: All compounds are molecules.','True',['True','False'],'True! All compounds are molecules, but not all molecules are compounds.'),
+    mc2('True or false: All molecules are compounds.','False',['True','False'],'False! O₂ is a molecule, but it’s only oxygen, so it’s <b>not</b> a compound.'),
+    mc('What makes something a <em>compound</em>?','Two or more different elements combined',['Two atoms of the same element','Only one atom','Anything that is a gas'],'A compound must have <b>different</b> elements.'),
+    mc('Which one is a molecule but <em>not</em> a compound?','O₂',['H₂O','CO₂','NaCl'],'O₂ is only oxygen, so it’s not a compound.'),
+    mc('Which one <em>is</em> a compound?','CO₂',['O₂','O₃','S₈'],'CO₂ has carbon and oxygen. Different elements = compound!'),
+    mc('In a formula, the small number after a symbol is called a…','Subscript',['Atomic number','Charge','Neutron'],'That little number is a <b>subscript</b>. It tells how many atoms.'),
+    mc('If there’s no number after a symbol, how many atoms of that element are there?','1',['0','2'],'No number means just <b>1</b> atom.')
+  ];
+  return shuffle([...qs,...pick(concept,3)]);
+}
+
+function genChange(){
+  const P=[['🧊 Ice melting into water','It’s still water. Only the state changed.'],['✂️ Cutting paper into pieces','Still paper, just smaller pieces.'],
+    ['🥫 Crushing a soda can','Still metal. Only the shape changed.'],['♨️ Water boiling into steam','Steam is still water, just a gas.'],
+    ['🍬 Sugar dissolving in water','The sugar is still sugar, just mixed in. Let the water dry up and the sugar is back!'],['🍫 Melting chocolate','Still chocolate, just liquid now.'],
+    ['🧃 Freezing juice into popsicles','Still juice, just frozen solid.'],['✏️ Sharpening a pencil','Still wood, just a new shape.'],
+    ['🪟 Breaking a glass','Still glass, just in pieces.'],['✈️ Folding a paper airplane','Same paper, new shape.']];
+  const C=[['🔥 Burning wood','Burning makes new substances: ash and smoke.'],['🎂 Baking a cake','The batter becomes something new. You can’t un-bake it!'],
+    ['🔩 A nail rusting','Rust is a new substance made when iron reacts with oxygen and water.'],['🍳 Frying an egg','The egg becomes a new substance and can’t go back to raw.'],
+    ['🎆 Fireworks exploding','Light, heat, and smoke are signs of a chemical change.'],['🍌 A banana rotting','Rotting makes new substances. See the color and smell change?'],
+    ['🫧 Baking soda + vinegar fizzing','Bubbles of a new gas form. That’s a chemical change!'],['🍞 Toasting bread','It turns brown and smells different, so new substances formed.'],
+    ['🥛 Milk going sour','Sour milk has a new smell and taste because new substances formed.'],['🕯️ Lighting a match','Fire, light, and smoke mean new substances are made.']];
+  const sorts=pick([...P.map(x=>[...x,'Physical']),...C.map(x=>[...x,'Chemical'])],8)
+    .map(([t,ex,a])=>mc2('Physical change or chemical change?',a,['Physical','Chemical'],ex,{card:t}));
+  const concept=[
+    mc('In a <em>physical</em> change…','The substance stays the same; only its size, shape, or state changes',['A brand-new substance is made','The atoms disappear'],'Physical change = same stuff, new look. Melting, cutting, crushing, freezing.'),
+    mc('In a <em>chemical</em> change…','A new substance is made',['Only the shape changes','Only the state changes'],'Chemical change = new stuff! Burning, rusting, baking, rotting.'),
+    mc('Which is a clue that a <em>chemical</em> change happened?','Bubbles, a new smell, or a color change',['It got cut in half','It melted','It changed shape'],'Signs of a chemical change: bubbles (gas), new color, new smell, light, or heat.'),
+    mc('Why is melting ice a <em>physical</em> change?','It’s still water, just a different state',['It makes a new substance','It gives off smoke'],'Changing state (solid → liquid) is a physical change.'),
+    mc('Why is burning paper a <em>chemical</em> change?','It turns into new substances like ash and smoke',['It just changes shape','It can easily turn back into paper'],'New substances = chemical change.')
+  ];
+  return shuffle([...sorts,...pick(concept,2)]);
+}
+
+function genBoss(){
+  return shuffle([...genVocab().slice(0,3),...genAtom().slice(0,2),...genMath().slice(0,2),...genStates().slice(0,2),
+    ...genProps().slice(0,2),...genFormula().slice(0,2),...genChange().slice(0,2)]);
+}
+
+const GAMES=[
+ {id:'vocab',emoji:'📖',name:'Word Wizard',desc:'Match all 16 vocab words',g:'#6a35cf',gen:genVocab},
+ {id:'atom',emoji:'⚛️',name:'Atom Explorer',desc:'Protons, neutrons, electrons',g:'#e8524a',gen:genAtom},
+ {id:'math',emoji:'🔢',name:'Atomic Math',desc:'Read the periodic table',g:'#0f8a99',gen:genMath},
+ {id:'states',emoji:'🧊',name:'States of Matter',desc:'Solid, liquid, or gas?',g:'#2f6fd6',gen:genStates},
+ {id:'props',emoji:'⚖️',name:'Float, Sink & Conduct',desc:'Density and conductors',g:'#c26a00',gen:genProps},
+ {id:'formula',emoji:'🧪',name:'Formula Factory',desc:'Count atoms, molecules vs compounds',g:'#0e8f5e',gen:genFormula},
+ {id:'change',emoji:'🔥',name:'Change It Up',desc:'Physical or chemical change?',g:'#c22f78',gen:genChange},
+ {id:'boss',emoji:'🏆',name:'Test Day Boss',desc:'15 mixed questions from everything',g:'#2a1650',gen:genBoss}
+];
+
+/* ---------- storage & sound ---------- */
+function loadBest(){ try{ return JSON.parse(localStorage.getItem('mq-best')||'{}')||{}; }catch(e){ return {}; } }
+function saveBest(){ try{ localStorage.setItem('mq-best',JSON.stringify(best)); }catch(e){} }
+let best=loadBest();
+let soundOn=true; try{ soundOn=localStorage.getItem('mq-sound')!=='off'; }catch(e){}
+const sndBtn=document.getElementById('snd');
+function paintSnd(){ sndBtn.textContent=soundOn?'🔊':'🔇'; }
+paintSnd();
+sndBtn.onclick=()=>{ soundOn=!soundOn; paintSnd(); try{ localStorage.setItem('mq-sound',soundOn?'on':'off'); }catch(e){} };
+let AC=null;
+function beep(ok){
+  if(!soundOn) return;
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    const notes=ok?[523,659,784]:[247,196];
+    notes.forEach((f,i)=>{
+      const o=AC.createOscillator(), g=AC.createGain(), t=AC.currentTime+i*0.09;
+      o.type=ok?'triangle':'sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.2,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.2);
+      o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+0.22);
+    });
+  }catch(e){}
+}
+
+/* ---------- visuals ---------- */
+const NUC=[[-9,-16,'n'],[9,-16,'p'],[-18,0,'p'],[0,0,'n'],[18,0,'n'],[-9,16,'p'],[9,16,'n'],[0,-31,'p'],[27,-15,'n'],[-27,15,'n'],[27,15,'p'],[-27,-15,'p']];
+function atomSVG(hi){
+  const cx=130,cy=130;
+  let s=`<svg class="atom" viewBox="0 0 260 260" role="img" aria-label="Diagram of an atom">`;
+  const sc=hi==='shell'?'shell hlshell':'shell';
+  s+=`<circle class="${sc}" cx="${cx}" cy="${cy}" r="72"/><circle class="${sc}" cx="${cx}" cy="${cy}" r="112"/>`;
+  s+=`<circle class="nucring ${hi==='nucleus'?'hlnuc':''}" cx="${cx}" cy="${cy}" r="47"/>`;
+  NUC.forEach(([x,y,k])=>{
+    s+=k==='p'?`<circle class="pr" cx="${cx+x}" cy="${cy+y}" r="11"/><text class="sign" x="${cx+x}" y="${cy+y}">+</text>`
+              :`<circle class="ne" cx="${cx+x}" cy="${cy+y}" r="11"/>`;
+  });
+  const E=[[130,58],[130,202],[227,74],[33,74],[33,186],[227,186]];
+  E.forEach(([x,y])=>{ s+=`<circle class="el" cx="${x}" cy="${y}" r="10"/><text class="sign" x="${x}" y="${y}">−</text>`; });
+  const mk={proton:[cx-27,cy-15],neutron:[cx+27,cy-15],electron:[227,74]}[hi];
+  if(mk) s+=`<circle class="marker" cx="${mk[0]}" cy="${mk[1]}" r="18"/>`;
+  return s+'</svg>';
+}
+function tileHTML(e){ return `<div class="tile" aria-label="Periodic table square for ${e.name}"><div class="tz">${e.z}</div><div class="ts">${e.s}</div><div class="tn">${e.name}</div><div class="tm">${e.m}</div></div>`; }
+function renderVis(v){
+  if(!v) return '';
+  if(v.atom) return atomSVG(v.atom);
+  if(v.state) return `<canvas class="beaker" data-state="${v.state}" aria-label="Animated particles in a beaker"></canvas>`;
+  if(v.tile) return tileHTML(v.tile);
+  if(v.formula) return `<div class="formula">${fmt(v.formula)}</div><div class="fname">${v.name}</div>`;
+  if(v.card) return `<div class="bigcard">${v.card}</div>`;
+  return '';
+}
+
+let rafId=null;
+function stopAnim(){ if(rafId) cancelAnimationFrame(rafId); rafId=null; }
+function startAnim(){
+  const cs=[...document.querySelectorAll('canvas.beaker')]; if(!cs.length) return;
+  const sims=cs.map(makeSim);
+  const loop=t=>{ sims.forEach(f=>f(t)); rafId=requestAnimationFrame(loop); };
+  rafId=requestAnimationFrame(loop);
+}
+function makeSim(c){
+  const W=240,H=200,dpr=Math.min(2,window.devicePixelRatio||1);
+  c.width=W*dpr; c.height=H*dpr; const ctx=c.getContext('2d'); ctx.scale(dpr,dpr);
+  const st=c.dataset.state, css=getComputedStyle(document.documentElement);
+  const col=css.getPropertyValue('--particle').trim(), ink=css.getPropertyValue('--ink').trim(), glass=css.getPropertyValue('--glass').trim();
+  const L=58,R=182,T=24,B=186,r=8;
+  const ps=[];
+  if(st==='solid'){ const cols=6,rows=4,gap=17.5,x0=(L+R)/2-(cols-1)*gap/2;
+    for(let j=0;j<rows;j++)for(let i=0;i<cols;i++) ps.push({bx:x0+i*gap,by:B-r-2-j*gap,ph:Math.random()*6.28}); }
+  else if(st==='liquid'){ for(let i=0;i<24;i++) ps.push({x:L+r+Math.random()*(R-L-2*r),y:B-r-Math.random()*70,vx:(Math.random()-.5)*1.2,vy:(Math.random()-.5)*1.2}); }
+  else { for(let i=0;i<10;i++){ const a=Math.random()*6.28,sp=2.2+Math.random()*1.4; ps.push({x:L+r+Math.random()*(R-L-2*r),y:T+r+Math.random()*(B-T-2*r),vx:Math.cos(a)*sp,vy:Math.sin(a)*sp}); } }
+  return t=>{
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=glass; ctx.strokeStyle=ink; ctx.lineWidth=3; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(L-8,T-10); ctx.lineTo(L,T); ctx.lineTo(L,B-6); ctx.quadraticCurveTo(L,B+5,L+11,B+5);
+    ctx.lineTo(R-11,B+5); ctx.quadraticCurveTo(R,B+5,R,B-6); ctx.lineTo(R,T); ctx.lineTo(R+8,T-10); ctx.fill(); ctx.stroke();
+    ctx.lineWidth=2; for(let k=0;k<4;k++){ const y=T+30+k*32; ctx.beginPath(); ctx.moveTo(R,y); ctx.lineTo(R-(k%2?10:18),y); ctx.stroke(); }
+    ctx.fillStyle=col;
+    ps.forEach(p=>{
+      let x,y;
+      if(st==='solid'){ x=p.bx+Math.sin(t/55+p.ph)*1.7; y=p.by+Math.cos(t/47+p.ph)*1.7; }
+      else{
+        if(st==='liquid'){ p.vx+=(Math.random()-.5)*.15; p.vy+=(Math.random()-.5)*.15+0.02; const sp=Math.hypot(p.vx,p.vy); if(sp>1.1){p.vx*=1.1/sp;p.vy*=1.1/sp;} }
+        p.x+=p.vx; p.y+=p.vy; const top=st==='liquid'?B-r-78:T+r;
+        if(p.x<L+r){p.x=L+r;p.vx=Math.abs(p.vx);} if(p.x>R-r){p.x=R-r;p.vx=-Math.abs(p.vx);}
+        if(p.y<top){p.y=top;p.vy=Math.abs(p.vy);} if(p.y>B-r){p.y=B-r;p.vy=-Math.abs(p.vy);}
+        x=p.x; y=p.y;
+      }
+      ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    });
+  };
+}
+
+/* ---------- screens ---------- */
+let S=null;
+const starStr=n=>'★'.repeat(n)+'☆'.repeat(3-n);
+
+function home(){
+  stopAnim(); S=null;
+  const total=GAMES.reduce((a,g)=>a+(best[g.id]||0),0), max=GAMES.length*3;
+  app.innerHTML=`
+  <section class="hero">
+    <div>
+      <h1>Matter Quest</h1>
+      <p>Play each game, earn stars, and walk into the test ready.</p>
+      <span class="date">Test day: October 30 · Go, Neutrons!</span>
+      <div class="build-version" style="font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;margin-top:6px">v{% endraw %}{{ page.version }}{% raw %}</div>
+    </div>
+    <svg viewBox="0 0 150 150" aria-hidden="true">
+      <circle cx="75" cy="75" r="62" fill="none" stroke="currentColor" stroke-width="3" opacity=".6"/>
+      <ellipse cx="75" cy="75" rx="62" ry="24" fill="none" stroke="currentColor" stroke-width="3" opacity=".6" transform="rotate(60 75 75)"/>
+      <g class="orbit"><circle cx="137" cy="75" r="9" fill="var(--electron)" stroke="currentColor" stroke-width="2"/></g>
+      <g class="orbit b"><circle cx="75" cy="13" r="9" fill="var(--electron)" stroke="currentColor" stroke-width="2"/></g>
+      <circle cx="68" cy="70" r="12" fill="var(--proton)" stroke="currentColor" stroke-width="2"/>
+      <circle cx="84" cy="72" r="12" fill="var(--neutron)" stroke="currentColor" stroke-width="2"/>
+      <circle cx="75" cy="85" r="12" fill="var(--proton)" stroke="currentColor" stroke-width="2"/>
+    </svg>
+  </section>
+  <div class="stars-total"><span>Stars</span><span class="meter"><i style="width:${total/max*100}%"></i></span><span class="big">⭐ ${total}/${max}</span></div>
+  <button class="cheat" id="cheat"><span class="e">📚</span><span>Read the cheat sheet first<small>Everything on the study guide, in one place</small></span></button>
+  <div class="grid">${GAMES.map(g=>`<button class="gcard ${g.id==='boss'?'boss':''}" style="--g:${g.g}" data-g="${g.id}">
+      <span class="ge">${g.emoji}</span><span><span class="gt" style="display:block">${g.name}</span><span class="gd">${g.desc}</span></span>
+      <span class="gs" aria-label="${best[g.id]||0} of 3 stars">${starStr(best[g.id]||0)}</span></button>`).join('')}</div>`;
+  app.querySelectorAll('.gcard').forEach(b=>b.onclick=()=>startGame(b.dataset.g));
+  document.getElementById('cheat').onclick=cheat;
+  window.scrollTo(0,0);
+}
+
+function startGame(id){
+  const g=GAMES.find(x=>x.id===id);
+  S={g,qs:g.gen(),i:0,score:0,streak:0,bestStreak:0,missed:[],input:'',answered:false};
+  showQ();
+}
+
+function showQ(){
+  stopAnim();
+  const q=S.qs[S.i]; S.answered=false; S.input='';
+  const two=q.type==='mc'&&q.opts.length===2;
+  app.innerHTML=`
+  <div class="gbar"><button class="back" id="back">Games</button><div class="gname">${S.g.emoji} ${S.g.name}</div><div class="streak ${S.streak>=3?'hot':''}" id="stk">🔥 ${S.streak}</div></div>
+  <div class="prog"><i style="width:${S.i/S.qs.length*100}%"></i></div>
+  <div class="qmeta"><span>Question ${S.i+1} of ${S.qs.length}</span><span>✅ ${S.score} right</span></div>
+  <div class="qcard" id="qcard">
+    ${q.vis?`<div class="vis">${renderVis(q.vis)}</div>`:''}
+    <h2 class="qtext">${q.q}</h2>
+    ${q.type==='mc'?`<div class="opts ${two?'two':''}">${q.opts.map((o,i)=>`<button class="opt" data-i="${i}">${o}</button>`).join('')}</div>`:numpadHTML(q)}
+    <div class="fb" id="fb" aria-live="polite"></div>
+  </div>`;
+  document.getElementById('back').onclick=home;
+  if(q.type==='mc') app.querySelectorAll('.opt').forEach(b=>b.onclick=()=>choose(+b.dataset.i));
+  else bindPad(q);
+  startAnim();
+  window.scrollTo(0,0);
+}
+
+function numpadHTML(q){
+  return `<div class="numwrap">
+    <div class="numdisp empty" id="nd">?</div>
+    <div class="pad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-k="${n}">${n}</button>`).join('')}
+      <button data-k="del" aria-label="Delete">⌫</button><button data-k="0">0</button><button data-k="ok" class="ok" aria-label="Check answer">✓</button></div>
+    ${q.hint?`<button class="hint" id="hintb">Need a hint?</button><div class="hinttext" id="hintt" hidden>${q.hint}</div>`:''}
+  </div>`;
+}
+function bindPad(q){
+  app.querySelectorAll('.pad button').forEach(b=>b.onclick=()=>padKey(b.dataset.k));
+  const hb=document.getElementById('hintb'); if(hb) hb.onclick=()=>{ document.getElementById('hintt').hidden=false; hb.remove(); };
+}
+function padKey(k){
+  if(!S||S.answered) return;
+  if(k==='ok'){ if(S.input==='') return; const q=S.qs[S.i]; finish(Number(S.input)===q.a, String(q.a)); app.querySelectorAll('.pad button').forEach(b=>b.disabled=true); return; }
+  if(k==='del') S.input=S.input.slice(0,-1); else if(S.input.length<3) S.input+=k;
+  const nd=document.getElementById('nd'); nd.textContent=S.input||'?'; nd.classList.toggle('empty',!S.input);
+}
+
+function choose(i){
+  if(S.answered) return;
+  const q=S.qs[S.i], ok=q.opts[i]===q.a;
+  app.querySelectorAll('.opt').forEach((b,j)=>{
+    b.disabled=true;
+    if(q.opts[j]===q.a) b.classList.add('right');
+    else if(j===i) b.classList.add('wrong');
+    else b.classList.add('fade');
+  });
+  finish(ok,q.a);
+}
+
+const PRAISE=['Awesome!','You got it!','Science star!','Nailed it!','Atomic!','Brilliant!','Way to go!'];
+function finish(ok,correct){
+  S.answered=true;
+  const q=S.qs[S.i];
+  if(ok){ S.score++; S.streak++; S.bestStreak=Math.max(S.bestStreak,S.streak); }
+  else { S.streak=0; S.missed.push(q); const c=document.getElementById('qcard'); c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); }
+  beep(ok);
+  const stk=document.getElementById('stk'); stk.textContent='🔥 '+S.streak; stk.classList.toggle('hot',S.streak>=3);
+  const last=S.i===S.qs.length-1;
+  const title=ok?(S.streak>=3?`🔥 ${S.streak} in a row!`:rnd(PRAISE)+' 🎉'):'Not quite!';
+  const fb=document.getElementById('fb');
+  fb.innerHTML=`<div class="fbin ${ok?'good':'bad'}"><div class="fbt">${title}</div>
+    ${ok?'':`<div class="fba">Answer: ${correct}</div>`}<div class="fbx">${q.ex||''}</div>
+    <button class="next" id="next">${last?'See my score':'Next question'}</button></div>`;
+  const nx=document.getElementById('next'); nx.onclick=()=>{ if(last) end(); else { S.i++; showQ(); } };
+  fb.scrollIntoView({behavior:'smooth',block:'nearest'}); nx.focus({preventScroll:true});
+}
+
+function end(){
+  stopAnim();
+  const n=S.qs.length,p=S.score/n, stars=p>=0.9?3:p>=0.7?2:p>=0.5?1:0;
+  if(stars>(best[S.g.id]||0)){ best[S.g.id]=stars; saveBest(); }
+  const msg=['Keep practicing!','Good start!','Great job!','Superstar scientist!'][stars];
+  const gid=S.g.id;
+  app.innerHTML=`<div class="end">
+    <div class="bigstars" aria-label="${stars} of 3 stars">${starStr(stars)}</div>
+    <h1>${msg}</h1>
+    <p>You got <b>${S.score}</b> out of <b>${n}</b> right.</p>
+    <p>Longest streak: 🔥 ${S.bestStreak}</p>
+    <div class="endbtns"><button class="primary" id="again">Play again (new questions)</button><button class="secondary" id="home2">Pick another game</button></div>
+    ${S.missed.length?`<div class="review"><h3>📝 Let’s review these</h3>${S.missed.map(q=>`<div class="rv"><div class="rq">${q.vis&&q.vis.formula?fmt(q.vis.formula)+': ':''}${q.vis&&q.vis.card?q.vis.card+': ':''}${q.q}</div><div class="ra">✅ ${q.a}</div><div class="rx">${q.ex||''}</div></div>`).join('')}</div>`
+      :'<p style="margin-top:14px">A perfect round, no mistakes! 🎉</p>'}
+  </div>`;
+  document.getElementById('again').onclick=()=>startGame(gid);
+  document.getElementById('home2').onclick=home;
+  if(stars>=2) confetti();
+  window.scrollTo(0,0);
+}
+
+function confetti(){
+  const cols=['#ff6f61','#14a3b4','#ffb020','#6a35cf','#12a46c','#ff7ab6'];
+  for(let i=0;i<80;i++){
+    const d=document.createElement('div'); d.className='confetti';
+    d.style.left=Math.random()*100+'vw'; d.style.background=cols[i%cols.length];
+    d.style.animationDuration=(1.8+Math.random()*1.6)+'s'; d.style.animationDelay=(Math.random()*0.5)+'s';
+    document.body.appendChild(d); setTimeout(()=>d.remove(),4200);
+  }
+}
+
+function cheat(){
+  stopAnim();
+  app.innerHTML=`<div class="sheet">
+  <div class="gbar"><button class="back" id="back">Games</button></div>
+  <h2>📚 Cheat sheet</h2>
+
+  <div class="sec"><h3>Matter words</h3>
+    <p><b>Matter</b>: anything that has mass and takes up space (volume).</p>
+    <p><b>Mass</b>: how much matter is in an object. <b>Volume</b>: how much space it takes up.</p>
+    <p><b>Density</b>: how heavy or light something is for its size.</p>
+    <p><b>Solubility</b>: how well something dissolves in another material (sugar dissolves in water, sand doesn’t).</p>
+  </div>
+
+  <div class="sec"><h3>Float or sink? 🛟</h3>
+    <p>Floats → <b>less dense</b> than water (wood, cork, ice).</p>
+    <p>Sinks → <b>more dense</b> than water (rocks, coins, metal).</p>
+  </div>
+
+  <div class="sec"><h3>Conductors and insulators ⚡🔥</h3>
+    <p><b>Thermal conductivity</b>: how well heat flows through. <b>Electrical conductivity</b>: how well electricity flows through.</p>
+    <p><b>Conductors</b> let energy flow: <span class="chips"><span class="chip">copper</span><span class="chip">iron</span><span class="chip">aluminum</span><span class="chip">steel</span><span class="chip">most metals</span></span></p>
+    <p><b>Insulators</b> block energy: <span class="chips"><span class="chip">rubber</span><span class="chip">plastic</span><span class="chip">wood</span><span class="chip">foam</span><span class="chip">wool</span><span class="chip">glass</span></span></p>
+    <ul><li>Metal pots heat food fast (thermal conductor).</li><li>Plastic or wood handles and oven mitts protect your hands (thermal insulators).</li><li>Wires are copper inside (electrical conductor) with rubber or plastic outside so you don’t get shocked (insulator).</li></ul>
+    <p>Describe wood: hard, a solid, a good electrical and thermal insulator, less dense than water.</p>
+  </div>
+
+  <div class="sec"><h3>3 states of matter</h3>
+    <div class="beakers">
+      <div><canvas class="beaker" data-state="solid"></canvas><div class="bl">Solid</div><div class="bd">Definite shape and volume. Packed tight, vibrate in place.</div></div>
+      <div><canvas class="beaker" data-state="liquid"></canvas><div class="bl">Liquid</div><div class="bd">Definite volume, takes the container’s shape. Close, slide past each other.</div></div>
+      <div><canvas class="beaker" data-state="gas"></canvas><div class="bl">Gas</div><div class="bd">No definite shape or volume, fills the container. Far apart, move fast.</div></div>
+    </div>
+  </div>
+
+  <div class="sec"><h3>Parts of an atom ⚛️</h3>
+    <div class="row"><div style="flex:0 0 auto;margin:auto">${atomSVG('all').replace('class="atom"','class="atom" style="width:180px"')}</div>
+    <div style="flex:1;min-width:200px">
+      <p><b>Atom</b>: the smallest, most basic part of an element.</p>
+      <p><b>Nucleus</b>: the center. Holds protons and neutrons.</p>
+      <p><b>Proton</b> = <b>P</b>ositive (+)<br><b>Neutron</b> = <b>N</b>eutral (no charge)<br><b>Electron</b> = negative (−), zooms in shells</p>
+      <p><b>Electron shells</b> hold 2, then 8, then 18 electrons.</p>
+    </div></div>
+  </div>
+
+  <div class="sec"><h3>Reading the periodic table 🔢</h3>
+    <div class="row"><div style="margin:auto">${tileHTML(ELEMENTS[7])}</div>
+    <div style="flex:1;min-width:200px">
+      <p>Top whole number = <b>atomic number</b>. Big letter = <b>symbol</b>. Then the <b>name</b>. Number with a decimal = <b>atomic mass</b>.</p>
+      <p><b>Protons</b> = atomic number<br><b>Electrons</b> = atomic number<br><b>Neutrons</b> = rounded atomic mass − atomic number</p>
+      <p>Oxygen: 15.999 → 16. Then 16 − 8 = <b>8 neutrons</b>.</p>
+    </div></div>
+  </div>
+
+  <div class="sec"><h3>Molecules vs compounds 🧪</h3>
+    <p><b>Element</b>: can’t be broken down into other substances.</p>
+    <p><b>Molecule</b>: two or more atoms combined (can be the same kind).</p>
+    <p><b>Compound</b>: two or more <b>different</b> elements combined.</p>
+    <p>All compounds are molecules, but not all molecules are compounds.</p>
+    <div class="tw"><table><tr><th>Molecule only</th><th>Compound (and molecule)</th></tr>
+      <tr><td>O₂, O₃, S₈, N₂</td><td>H₂O, CO₂, CH₄, NaCl, NH₃</td></tr></table></div>
+  </div>
+
+  <div class="sec"><h3>Counting atoms in a formula</h3>
+    <p>The little number after a symbol (a <b>subscript</b>) tells how many atoms. No number means 1.</p>
+    <p>H₂O → H = 2 atoms, O = 1 atom (3 in all)<br>CO₂ → C = 1, O = 2 (3 in all)<br>CH₄ → C = 1, H = 4 (5 in all)</p>
+  </div>
+
+  <div class="sec"><h3>Physical vs chemical change 🔥</h3>
+    <p><b>Physical change</b>: same substance, only size, shape, or state changes.</p>
+    <div class="chips"><span class="chip">melting ice</span><span class="chip">cutting paper</span><span class="chip">crushing a can</span><span class="chip">boiling water</span><span class="chip">dissolving sugar</span></div>
+    <p><b>Chemical change</b>: a new substance is made. Clues: bubbles, new color, new smell, light, or heat.</p>
+    <div class="chips"><span class="chip">burning wood</span><span class="chip">baking a cake</span><span class="chip">rusting nail</span><span class="chip">frying an egg</span><span class="chip">baking soda + vinegar</span></div>
+  </div>
+
+  <button class="primary" id="go">Start playing</button>
+  </div>`;
+  document.getElementById('back').onclick=home;
+  document.getElementById('go').onclick=home;
+  startAnim();
+  window.scrollTo(0,0);
+}
+
+/* keyboard support for the number pad */
+document.addEventListener('keydown',e=>{
+  if(!S) return;
+  const q=S.qs&&S.qs[S.i]; if(!q) return;
+  if(S.answered){ if(e.key==='Enter'){ const nx=document.getElementById('next'); if(nx&&document.activeElement!==nx){ e.preventDefault(); nx.click(); } } return; }
+  if(q.type!=='num') return;
+  if(/^[0-9]$/.test(e.key)) padKey(e.key);
+  else if(e.key==='Backspace') padKey('del');
+  else if(e.key==='Enter') padKey('ok');
+});
+
+document.getElementById('homeBtn').onclick=home;
+home();
+</script>
+</body>
+</html>
+{% endraw %}
