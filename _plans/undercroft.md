@@ -20,7 +20,7 @@ Xbox, PlayStation or Switch controller), and a computer (keyboard and mouse).
   4. **can't be hurt for one minute** (read from "you canet it fore one minit")
   5. (added in 3.1) **fly for one minute**; it comes back after you kill 4 zombies
 - **The monster**: a horse-like body on four legs, a long neck and a bird's head, two tall wings, a dark
-  tail. Powers: its **head shoots lasers and barfs zombies** (later changed by request: no lasers, it barfs fire too), **spikes on its wings** can kill people,
+  tail. Powers: its **head shoots lasers and barfs zombies** (changed by request: the lasers went in 3.0 for fire breath, and the fire went in 3.2 because it went through the ceiling just like the lasers; now it only barfs zombies), **spikes on its wings** can kill people,
   it's **really tall**, and its **feet are like springs** that boost it faster.
 
 Added by request: you start with a **sword**, find **other weapons** and keep everything in a
@@ -62,33 +62,30 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
     monster, breaks the cracked wall, and hurts you if you're too close.
   - Freeze: freezes all water within 11 m for 45 s.
   - Shield: nothing can hurt you for 60 s, then it recharges for 30 s.
-  - Flight (3.1): you rise about a metre and fly for 60 s, over water and out of the zombies' reach (the
-    monster's fire still reaches you; its landing shockwave doesn't). When the minute is up you land, but
-    never into deep water: you keep flying until you're over solid ground. Then defeat 4 zombies (big or
-    little) to charge it again.
+  - Flight (3.1): you rise about a metre and fly for 60 s, over water and out of the zombies' reach (its
+    wing spikes still hurt; its landing shockwave doesn't). When the minute is up you land, but
+    never into deep water: you keep flying until you're over solid ground. Then defeat 4 zombies to charge it
+    again.
 - **Weapons** (RT / click; RB, 1–4 or the mouse wheel to switch):
   - sword: quick, wide
   - spear: long reach, narrow
   - war hammer: slow, crushing, knocks back
   - crossbow: bolts, which you find in chests
-- **Hearts**: 5 hearts, counted in halves. A zombie hit takes half a heart. The monster's fire, leap
-  and wing spikes take a whole heart. Water kills. After a hit you can't be hurt again for a moment.
+- **Hearts**: 5 hearts, counted in halves. A zombie hit takes half a heart. The monster's leap and
+  wing spikes take a whole heart. Water kills. After a hit you can't be hurt again for a moment.
 - **Food** (X / F eats whatever fits best, or pick one in the bag):
   - apple: 1 heart
   - bread: 1½ hearts
   - cheese: 2 hearts
   - roast chicken leg: 3 hearts
-- **Mini zombies** (3.0): knee-high, quick (faster than you walk, slower than you hurry), one hit kills
-  them, and they come in packs of three. Every third group of zombies in the maze is a pack of them.
+- (Mini zombies came in 3.0 and went again in 3.2, by request.)
 - **Zombies**:
   - A few wait in the maze. They notice you if you're close, in sight, or hurrying nearby.
   - They follow a walking-distance map to you (so they come round corners) and never step into deep water.
   - Three sword hits kill one.
 - **The monster** (40 hit points, a health bar while it's after you):
   - stalks you around the hall
-  - takes a deep breath (embers glow in its throat), then breathes a jet of fire that swings after you,
-    slower than you can run. It leaves burning patches on the floor for a few seconds. (The lasers went in 3.0.)
-  - barfs up two zombies, or a litter of three mini zombies, that climb out of the puddle
+  - barfs up two zombies that climb out of the puddle
   - crouches on its spring feet and leaps at you, with a shockwave where it lands
   - its wing spikes hurt to touch
   - when beaten, it drops a feast
@@ -113,7 +110,7 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
   examples (MIT).
 - Light: a cold fill everywhere, the torch in your left hand (shadowed), and a pool of three lights.
   Those three are handed each frame to the nearest wall torches, braziers and power gates you can see,
-  and the nearest one casts shadows. There's also one light for explosions and fire breath, and the moonlight
+  and the nearest one casts shadows. There's also one light for explosions, and the moonlight
   at the way out. The light count never changes, so shaders never recompile mid-game.
 
 ## Testing without a person

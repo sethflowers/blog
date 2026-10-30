@@ -327,16 +327,16 @@ const hallTile = L.hall.centre;
 await walkTo([L.hall.x0, L.hall.x0], { water: true, crack: true });
 await face(beastShots.x, beastShots.z); await ev(() => { window.__uc.player.pitch = 0.35; }); await adv(1.5);
 await shot('12-monster');
-// make it breathe fire right now, and look
-await ev(() => { const b = window.__uc.beast; if (!b.dead){ b.aware = true; b.state = 'inhale'; b.t = 0; } });
-await adv(1.4);
-await shot('12-monster-fire');
-await adv(1.5);
-// a litter of little zombies
-await ev(() => { const p = window.__uc.player; for (let k = 0; k < 3; k++){ const a = p.yaw + (k - 1) * 0.35; const z = window.__uc.spawnZombie(p.x - Math.sin(a) * 2.6, p.z - Math.cos(a) * 2.6, false, true); z.aware = true; } });
-await adv(0.8);
-await shot('12-mini-zombies');
-await adv(4);
+// make it barf zombies right now, and look
+{
+  const before = await ev(() => window.__uc.zombies.filter((z) => z.state !== 'dead').length);
+  await ev(() => { const b = window.__uc.beast; if (!b.dead){ b.aware = true; b.state = 'barf'; b.t = 0; } });
+  await adv(1.6);
+  await shot('12-monster-barf');
+  check(await ev(() => window.__uc.beast.dead) || await ev(() => window.__uc.zombies.filter((z) => z.state !== 'dead').length) > before, 'the monster barfs up zombies');
+  check(await ev(() => window.__uc.zombies.every((z) => z.m.group.scale.y > 0.9)), 'no little zombies');
+  await adv(4);
+}
 // 6. out
 const won = await walkTo(L.exit.landing, { water: true, crack: true });
 await adv(0.5);
@@ -387,6 +387,32 @@ if (L.waterGate){
 }
 console.log('  render', JSON.stringify(await ev(() => window.__uc.info())));
 check(errors.length === 0, 'no errors in the console' + (errors.length ? ':\n    ' + errors.slice(0, 8).join('\n    ') : ''));
+
+// ---------- no network: open it once, then with the server gone and the browser offline, open it again ----------
+{
+  const offCtx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const first = await offCtx.newPage();
+  await first.goto(BASE);                                         // not a test run, so the service worker registers
+  const want = (fs.readFileSync(path.join(ROOT, 'experiments/undercroft/sw.js'), 'utf8').match(/^\s+BASE/gm) || []).length;
+  const cached = await first.waitForFunction(async (want) => {
+    const keys = await caches.keys(); const k = keys.find((n) => n.startsWith('undercroft-'));
+    return k && (await (await caches.open(k)).keys()).length >= want && navigator.serviceWorker.controller ? true : false;
+  }, want, { timeout: 240000, polling: 1000 }).then(() => true, () => false);
+  check(cached, `the first visit stores all ${want} files for offline play`);
+  await first.close();
+  server.closeAllConnections(); server.close();
+  await offCtx.setOffline(true);
+  const again = await offCtx.newPage();
+  const offErrors = [];
+  again.on('pageerror', (e) => offErrors.push(String(e)));
+  again.on('requestfailed', (r) => offErrors.push('failed ' + r.url()));
+  const opened = await again.goto(BASE).then(() => true, (e) => { offErrors.push(String(e)); return false; });
+  const ready = opened && await again.waitForFunction(() => !document.getElementById('startBtn').disabled, null, { timeout: 240000 }).then(() => true, () => false);
+  if (ready){ await again.click('#startBtn'); await again.waitForTimeout(3000); }
+  await again.screenshot({ path: path.join(OUT, '16-offline.png') }); console.log('  shot 16-offline');
+  check(ready && await again.evaluate(() => window.__uc.state) === 'play', 'with no network at all it opens again and plays' + (offErrors.length ? ':\n    ' + offErrors.slice(0, 8).join('\n    ') : ''));
+  await offCtx.close();
+}
 await browser.close();
 server.close();
 console.log(failures ? `${failures} FAILED` : 'all passed');
