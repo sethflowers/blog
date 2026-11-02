@@ -1656,7 +1656,8 @@ window.__uc = {
   give(what){ if (WEAPONS[what]){ inv.weapons[what] = true; if (what === 'crossbow') inv.bolts += 10; } else if (POWERS[what]){ if (!inv.powers.includes(what)) inv.powers.push(what); inv.power = inv.powers.indexOf(what); } else if (FOOD[what]) inv.food[what]++; updateHud(); },
   // shortest walk between tiles; water and the cracked wall count as passable only if asked
   path(from, to, opts){ opts = opts || {};
-    const pass = (t, x, z) => t === T.FLOOR || t === T.HALL || t === T.STAIRS || t === T.LANDING || (opts.water && t === T.WATER) || (opts.crack && t === T.CRACKED) || (t === T.PIT && (opts.pit || bridgedAt(x, z)));
+    const dn = world.down, avoid = (x, z) => dn.open && x === dn.tile[0] && z === dn.tile[1] && !(to[0] === x && to[1] === z);
+    const pass = (t, x, z) => !avoid(x, z) && (t === T.FLOOR || t === T.HALL || t === T.STAIRS || t === T.LANDING || (opts.water && t === T.WATER) || (opts.crack && t === T.CRACKED) || (t === T.PIT && (opts.pit || bridgedAt(x, z))));
     const d = bfs(lv, to, pass), W = lv.W, out = [];
     let [x, z] = from; if (d[z * W + x] < 0) return null;
     while (d[z * W + x] > 0){ out.push([x, z]); const n = DIRS.map(([a, b]) => [x + a, z + b]).find(([a, b]) => d[b * W + a] === d[z * W + x] - 1); [x, z] = n; }
