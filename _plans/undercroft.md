@@ -31,15 +31,27 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
 - **A level** is a maze of 9 by 9 rooms (bigger on later levels). In the middle is the **great hall**:
   3 by 3 rooms under one 8 m vault with four pillars and fire braziers. This is the monster's hall.
   It's too tall for the corridors, so it never leaves.
-- **Prisoners**: three cells, each with iron bars. One is in the far reaches of the maze, one is past the
+- **Prisoners**: three cells (five with the chasm rooms below), each with iron bars. One is in the far reaches of the maze, one is past the
   water, and one opens off the monster's hall. Hold A at the bars to break the lock. The prisoner cheers,
   leaves, and waits for you on the stairs. When everyone is free, the portcullis at the foot of the stairs
-  rises. Walk up and out to finish the level. Each later level has one more prisoner, up to five.
+  rises. Walk up and out to escape (the end of the run). Each deeper level has one more prisoner, up to two more.
 - **Water**: one branch of the maze is cut off by deep water (death if you step in). Freeze it (the gate
   for it is always reachable without crossing water) and cross before it thaws after 45 s. It cracks
   as a warning 6 s before. A flooded dead-end room has a roast chicken leg on a stone in the middle:
   pull it with the magnet, or freeze and walk.
 - **Cracked wall**: a small branch is walled up behind a crumbling wall. Bomb it to get the war hammer.
+- **Chasm rooms** (4.0): one or two small branches are cut off by a deep chasm (death if you walk in).
+  Only flight gets you across. Each has a prisoner; freeing them raises a stone block out of the chasm
+  as a bridge, so you can walk back (and flight has time to recharge).
+- **Radar** (4.0): a round map top left, turned so the way you face is up. It shows the maze within 18 m,
+  water (blue), chasms (black, outlined), zombies (red), the monster (big red, pulsing), prisoners still
+  locked up (gold), power gates (rings in their colour), unopened chests (brown), and the ways out once
+  they're open (green up, orange down).
+- **Deeper levels** (4.0): beat the monster and it drops a pile of meat (seven roast legs), and a moment
+  later the floor in the middle of the hall falls away to stairs down. Walking down takes you to the next
+  level of the dungeon, keeping everything you carry: a bigger maze from level 3, one more zombie per
+  level, two monsters from level 2 and three from level 4. Going up the stairs (after freeing that
+  level's prisoners) is escaping: the end of the run.
 - **Power shrines** (3.0, like the shrines in Zelda): each of the five gates is a doorway. Walk through it and
   you're in a shrine, a stone chamber lit by runes in the power's colour, with a trial to solve. Solving it raises
   a portcullis to an altar where the power floats. Take it and you're carried back out beside the gate. Walk back

@@ -1,8 +1,8 @@
 ---
 title: Dungeon Strikedown
-description: A first-person dungeon game designed by a young game designer. Free the prisoners from their cells, solve the trials in the power shrines (one of them teaches you to fly), fight off the zombies and the zombie-barfing monster with the spring feet, and lead everyone up the stairs. Plays with a controller (Xbox, PlayStation, Switch), keyboard and mouse, or touch.
+description: A first-person dungeon game designed by a young game designer. Free the prisoners from their cells, solve the trials in the power shrines (one of them teaches you to fly), fight off the zombies and the zombie-barfing monster with the spring feet, then go down to deeper levels or lead everyone up the stairs. Plays with a controller (Xbox, PlayStation, Switch), keyboard and mouse, or touch.
 date: 2026-10-27
-version: "3.2"
+version: "4.0"
 layout: null
 ---
 {% raw %}
@@ -56,6 +56,8 @@ layout: null
   /* ---------- HUD ---------- */
   #hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none;}
   body.playing #hud{display:block;}
+  #radar{position:absolute;left:calc(env(safe-area-inset-left) + 16px);top:calc(env(safe-area-inset-top) + 54px);width:130px;height:130px;border-radius:50%;opacity:0;transition:opacity .4s;pointer-events:none;}
+  #radar.show{opacity:1;}
   #hearts{position:absolute;left:calc(env(safe-area-inset-left) + 18px);top:calc(env(safe-area-inset-top) + 16px);display:flex;gap:6px;}
   .heart{width:30px;height:28px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8));}
   #objective{position:absolute;right:calc(env(safe-area-inset-right) + 70px);top:calc(env(safe-area-inset-top) + 18px);text-align:right;
@@ -144,6 +146,7 @@ layout: null
 
 <div id="hud">
   <div id="hearts"></div>
+  <canvas id="radar" width="260" height="260"></canvas>
   <div id="objective">PRISONERS FREED<b id="freed">0 / 3</b></div>
   <div id="slots">
     <div class="hslot" id="foodSlot"><div class="ic">&#127838;</div><div class="nm" id="foodCount">0</div><div class="k">X &middot; F</div></div>
@@ -151,7 +154,7 @@ layout: null
     <div class="hslot" id="wSlot"><div class="ic" id="wIcon"></div><div class="nm" id="wName">Sword</div><div class="st"></div><div class="k">RT &middot; CLICK</div></div>
   </div>
   <div id="prompt"><span id="promptText"></span><div id="promptTrack"><div id="promptBar"></div></div></div>
-  <div id="bossBar"><div class="lbl">THE MONSTER</div><div id="bossTrack"><div id="bossFill"></div></div></div>
+  <div id="bossBar"><div class="lbl" id="bossName">THE MONSTER</div><div id="bossTrack"><div id="bossFill"></div></div></div>
 </div>
 <div id="crosshair"></div>
 <div id="hint"></div>
@@ -171,7 +174,7 @@ layout: null
 <div class="screen" id="title">
   <h1>DUNGEON STRIKEDOWN<span>free them &middot; find the way up</span></h1>
   <p>People are locked in cells deep under the ground. Zombies wander the dark, and something very tall lives in the great hall.
-    Each <b>power gate</b> leads into a shrine: solve its trial to earn the power. Deep water is death. You have <b>five hearts</b>; eat to get them back.</p>
+    Each <b>power gate</b> leads into a shrine: solve its trial to earn the power. Some prisoners are across chasms only flight can cross. Beat the monster and stairs open down to the next level. Deep water and chasms are death. You have <b>five hearts</b>; eat to get them back.</p>
   <p class="keys">
     <span class="desk"><b>Controller</b> left stick walks (click to hurry), right stick looks, <b>RT</b> attack, <b>LT</b> power, <b>LB</b> swap power, <b>RB</b> swap weapon,
       <b>A</b> open / break a lock (hold), <b>X</b> eat, <b>Y</b> bag, <b>Start</b> pause.<br>
@@ -204,9 +207,9 @@ layout: null
 </div>
 
 <div class="screen hidden" id="won">
-  <h1 id="wonTitle">LEVEL 1<span>you led them out</span></h1>
+  <h1 id="wonTitle">YOU ESCAPED<span>and led them all out</span></h1>
   <div class="stat" id="wonStat"></div>
-  <button class="go" id="againBtn">GO DEEPER</button>
+  <button class="go" id="againBtn">PLAY AGAIN</button>
 </div>
 
 <div class="screen hidden" id="dead">
