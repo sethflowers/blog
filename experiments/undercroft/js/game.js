@@ -1491,7 +1491,10 @@ function startLevel(){
   snapshot = JSON.parse(JSON.stringify({ inv, hp: player.hp }));
   buildLevel(); compileAll();
   state = 'play'; show(null); lockPointer();
-  hint(levelNo === 1 ? 'FREE THE PRISONERS. FIND THE WAY UP.' : 'DUNGEON LEVEL ' + levelNo + ': ' + lv.monsters + ' MONSTERS IN THE HALL', 4);
+  // what was on screen from the level above goes
+  for (const id of ['banner', 'say']){ $(id).classList.remove('show'); } hintEl.classList.remove('show'); clearTimeout(banner.t); clearTimeout(say.t); clearTimeout(hint.t);
+  if (levelNo === 1) hint('FREE THE PRISONERS. FIND THE WAY UP.', 4);
+  else banner('DUNGEON LEVEL ' + levelNo, lv.monsters + ' monsters wait in the great hall, and more zombies in the dark. Beat the monsters to find the stairs down, or free everyone and escape up the stairs.');
 }
 function start(){
   initAudio(); setMuted(TEST || audio.muted); resumeAudio();
