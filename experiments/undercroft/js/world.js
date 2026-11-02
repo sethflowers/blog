@@ -1,6 +1,6 @@
 // The Undercroft: turns a level (see level.js) into geometry and places everything in it.
 import * as THREE from 'three';
-import { TILE, CEIL, HALL_CEIL, STAIR_RISE, T, DIRS, floorOf, ceilOf, mulberry } from './level.js';
+import { TILE, CEIL, HALL_CEIL, STAIR_RISE, T, DIRS, PIT_DEPTH, floorOf, ceilOf, mulberry } from './level.js';
 
 const BASE = '/experiments/undercroft/';
 
@@ -160,7 +160,7 @@ export function buildWorld(lv, mats, props, env){
   const tt = (i, j) => (i < 0 || j < 0 || i >= W || j >= W) ? T.ROCK : lv.g[j * W + i];
   const cellAt = new Map(); for (const c of lv.cells) cellAt.set(c.tile[1] * W + c.tile[0], c);
   const world = { group: new THREE.Group(), sconces: [], flames: [], water: new Map(), cells: [], gates: [], chests: [], items: [],
-    pillars: [], chains: [], cracked: null, portcullis: null, decor: [] };
+    pillars: [], chains: [], cracked: null, portcullis: null, decor: [], pits: new Map(), down: null };
   const add = (o) => { world.group.add(o); return o; };
 
   // is the face between tile (i,j) and its neighbour in direction (dx,dz) solid from (i,j)'s side?
@@ -188,7 +188,8 @@ export function buildWorld(lv, mats, props, env){
   for (let j = 0; j < W; j++) for (let i = 0; i < W; i++){
     const t = tt(i, j); if (t === T.ROCK) continue;
     const x0 = i * TILE, z0 = j * TILE, fh = floorOf(t), ch = ceilOf(t);
-    if (t !== T.STAIRS && t !== T.WATER){
+    const downHere = i === lv.down[0] && j === lv.down[1];         // that floor is a separate slab, over the hidden stairs down
+    if (t !== T.STAIRS && t !== T.WATER && !downHere){
       floors.quad([x0, fh, z0 + TILE], [TILE, 0, 0], [0, 0, -TILE], S, S, (x, y, z) => [x / 3, -z / 3],
         (x, y, z) => { const d = rockDist(x, z, i, j); return 1 - 0.62 * Math.exp(-d / 0.32) - 0.18 * Math.exp(-d / 1.1); });
     }
@@ -240,6 +241,37 @@ export function buildWorld(lv, mats, props, env){
     const p = add(new THREE.Mesh(pillarGeo, mats.pillar)); p.position.set(x, HALL_CEIL / 2, z); p.castShadow = p.receiveShadow = true;
     for (const y of [0.25, HALL_CEIL - 0.25]){ const b = add(new THREE.Mesh(plinthGeo, mats.pillar)); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; }
     world.pillars.push({ x, z, r: 0.85 });
+  }
+
+  // chasms: a stone block waits at the bottom of each, and rises to make a bridge when its prisoner is freed
+  for (let j = 0; j < W; j++) for (let i = 0; i < W; i++){
+    if (tt(i, j) !== T.PIT) continue;
+    const [x, z] = center(i, j);
+    const slab = add(new THREE.Mesh(new THREE.BoxGeometry(TILE - 0.04, 0.6, TILE - 0.04), mats.pillar));
+    slab.position.set(x, -PIT_DEPTH + 0.3, z); slab.castShadow = slab.receiveShadow = true;
+    world.pits.set(j * W + i, { slab, i, j, bridged: false, rise: 0 });
+  }
+  // the stairs down, hidden under a slab in the middle of the hall until the monsters are beaten
+  {
+    const [di, dj] = lv.down, [x, z] = center(di, dj), D = 3.4, steps = 9;
+    const hatchGeo = new THREE.PlaneGeometry(TILE, TILE).rotateX(-Math.PI / 2);
+    { const uv = hatchGeo.attributes.uv; for (let k = 0; k < uv.count; k++) uv.setXY(k, (x - TILE / 2 + uv.getX(k) * TILE) / 3, (-(z + TILE / 2) + uv.getY(k) * TILE) / 3); }
+    const hatch = add(new THREE.Mesh(hatchGeo, mats.floor)); hatch.position.set(x, 0.002, z); hatch.receiveShadow = true;
+    const well = new THREE.Group(); well.position.set(x, 0, z); well.visible = false; add(well);
+    // the shaft's four walls, and steps going down towards +x
+    for (const [w, d, ox, oz] of [[TILE, 0.3, 0, -TILE / 2 - 0.15], [TILE, 0.3, 0, TILE / 2 + 0.15], [0.3, TILE, -TILE / 2 - 0.15, 0], [0.3, TILE, TILE / 2 + 0.15, 0]]){
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, D, d), mats.pillar); b.position.set(ox, -D / 2, oz); b.receiveShadow = true; well.add(b);
+    }
+    for (let k = 0; k < steps; k++){
+      const top = -(k + 1) * D / (steps + 1), run = TILE / steps;
+      const st = new THREE.Mesh(new THREE.BoxGeometry(run, D + top, TILE - 0.02), mats.pillar);
+      st.position.set(-TILE / 2 + run * (k + 0.5), top - (D + top) / 2, 0); st.castShadow = st.receiveShadow = true; well.add(st);
+    }
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(TILE, TILE).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x3a0c04 }));
+    glow.position.y = -D + 0.01; well.add(glow);
+    const light = { pos: new THREE.Vector3(x + 0.4, -1.2, z), color: new THREE.Color(0xff5a20), base: 0, phase: 7, w: 0, big: true };
+    world.sconces.push(light);
+    world.down = { tile: [di, dj], pos: new THREE.Vector3(x, 0, z), hatch, well, light, open: false };
   }
 
   // water: a surface in each flooded tile
@@ -346,7 +378,7 @@ export function buildWorld(lv, mats, props, env){
   // bones here and there
   for (let k = 0; k < 6; k++){
     const [i, j] = floorTiles[(rng() * floorTiles.length) | 0];
-    if (Math.abs(i - lv.start[0]) + Math.abs(j - lv.start[1]) < 3) continue;
+    if (Math.abs(i - lv.start[0]) + Math.abs(j - lv.start[1]) < 3 || (i === lv.down[0] && j === lv.down[1])) continue;
     const s = props.createSkullPile({ env }), [cx, cz] = center(i, j);
     const side = DIRS.find(([dx, dz]) => tt(i + dx, j + dz) === T.ROCK) || [0, 0];
     s.position.set(cx + side[0] * 0.95, 0, cz + side[1] * 0.95); s.rotation.y = rng() * 6; add(s);
@@ -371,7 +403,7 @@ export function buildWorld(lv, mats, props, env){
     const [x, z] = center(gt.tile[0], gt.tile[1]);
     g.group.position.set(x, 0, z); g.group.rotation.y = Math.atan2(gt.axis[0], gt.axis[1]);
     add(g.group);
-    const color = { magnet: 0xff4030, bomb: 0xff8a2a, freeze: 0x8cc8ff, shield: 0xffd24a }[gt.kind];
+    const color = { magnet: 0xff4030, bomb: 0xff8a2a, freeze: 0x8cc8ff, shield: 0xffd24a, flight: 0x7dffd4 }[gt.kind];
     const light = { pos: new THREE.Vector3(x, 1.6, z), color: new THREE.Color(color), base: 6, phase: rng() * 100, w: 0, gate: true };
     world.sconces.push(light);
     world.gates.push({ kind: gt.kind, obj: g, pos: new THREE.Vector3(x, 0, z), axis: gt.axis, taken: false, light });

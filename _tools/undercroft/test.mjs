@@ -65,7 +65,7 @@ tab.on('console', (m) => { if (m.type() === 'error' || (m.type() === 'warning' &
 const seed = process.env.SEED || '1';
 await tab.goto(BASE + '?test&seed=' + seed);
 await tab.waitForFunction(() => window.__uc && window.__uc.ready, null, { timeout: 240000 });
-const shot = async (name) => { await tab.evaluate(() => window.__uc.render()); await tab.screenshot({ path: path.join(OUT, name + '.png') }); console.log('  shot ' + name); };
+const shot = async (name) => { await tab.evaluate(() => window.__uc.render()); await tab.screenshot({ path: path.join(OUT, name + '.png'), timeout: 180000 }); console.log('  shot ' + name); };
 const ev = (fn, arg) => tab.evaluate(fn, arg);
 await shot('01-title');
 const version = await tab.textContent('.build-version');
@@ -137,7 +137,9 @@ check(await ev(() => window.__uc.player.hp) > hpBefore, 'X eats and heals');
 // ---------- a whole level, by a bot ----------
 await ev(() => { window.__uc.god = true; window.__uc.tryAgain(); });
 await adv(0.2);
-const L = await ev(() => { const l = window.__uc.level; return { start: l.start, gates: l.gates, cells: l.cells, chests: l.chests, waterGate: l.waterGate, crackGate: l.crackGate, exit: l.exit, hall: l.hall }; });
+const L = await ev(() => { const l = window.__uc.level; return { start: l.start, gates: l.gates, cells: l.cells, chests: l.chests, waterGate: l.waterGate, crackGate: l.crackGate, exit: l.exit, hall: l.hall, pitGates: l.pitGates, down: l.down }; });
+check(L.pitGates.length >= 1 && L.cells.some((c) => L.pitGates.length && true), `there are rooms across chasms (${L.pitGates.length})`);
+check(await ev(() => document.getElementById('radar').classList.contains('show')), 'the radar is on screen');
 console.log(`  level: ${L.gates.length} gates, ${L.cells.length} cells, ${L.chests.length} chests, water ${!!L.waterGate}, cracked wall ${!!L.crackGate}`);
 let botTime = 0, botDied = false;
 const tileNow = () => ev(() => window.__uc.tileOf(window.__uc.player.x, window.__uc.player.z));
@@ -156,6 +158,13 @@ async function walkTo(target, opts){
     if (st.inside){ await pad([0, 0, 0, 0]); return true; }
     if (st.state !== 'play'){ console.log('  bot: the game is in state ' + st.state + ' (' + await ev(() => window.__uc.player.cause) + ')'); botDied = true; return false; }
     let [tx, tz] = pts[wp];
+    // about to cross a chasm: fly (recharging flight by hand if it's spent; the recharge is checked on its own below)
+    if (wp < route.length && !(await ev(() => window.__uc.pw.flying)) && await ev((t) => { const u = window.__uc, l = u.level, k = t[1] * l.W + t[0];
+      return l.g[k] === u.T.PIT && !u.world.pits.get(k).bridged; }, route[wp])){
+      await pad([0, 0, 0, 0]);
+      if (await ev(() => window.__uc.pw.flyKills < 4)){ console.log('  bot: flight is spent, recharging it by hand'); await ev(() => { window.__uc.pw.flyKills = 4; }); }
+      if (await selectPower('flight')){ await press(B.LT); await adv(1.5); }
+    }
     // about to step onto water that isn't frozen (or is about to thaw): freeze it first
     if (wp < route.length && await ev((t) => { const left = window.__uc.iceLeft(t[0], t[1]); return left !== null && left < 10; }, route[wp])){
       await pad([0, 0, 0, 0]);
@@ -272,7 +281,7 @@ for (const g of L.gates){
 check(await ev(() => window.__uc.inv.powers.length) === L.gates.length, `the shrines give all their powers (${await ev(() => window.__uc.inv.powers.join(', '))})`);
 // 2. the prisoners. The one past the water needs the ice.
 async function freeCell(c){
-  const ok = await walkTo(c.from, { water: true });
+  const ok = await walkTo(c.from, { water: true, pit: true });
   if (botDied) return false;
   const door = await ev((c) => window.__uc.world.cells.find((w) => w.tile[0] === c.tile[0] && w.tile[1] === c.tile[1]).door, c);
   await face(door.x, door.z);
@@ -295,6 +304,13 @@ for (const c of L.cells){
   await freeCell(c);
   if (c === L.cells[0]) await shot('09-cell-opened');
   check(await freedBefore() === before + 1, `holding A at the bars frees the prisoner at ${c.tile}`);
+  const region = await ev((c) => window.__uc.level.regionTile[c.from[1] * window.__uc.level.W + c.from[0]], c);
+  if (region >= 4){
+    if (!shrineShots.flyroom){ shrineShots.flyroom = true; await shot('09-flight-room'); }
+    const pit = L.pitGates[region - 4];
+    await adv(3.5);
+    check(await ev((t) => window.__uc.world.pits.get(t[1] * window.__uc.level.W + t[0]).bridged, pit), `freeing the prisoner across the chasm at ${pit} raises a bridge`);
+  }
 }
 check(await ev(() => window.__uc.world.portcullis.open), 'freeing everyone opens the gate to the stairs');
 // 3. the cracked wall: throw a bomb, step back, blow it
@@ -337,10 +353,27 @@ await shot('12-monster');
   check(await ev(() => window.__uc.zombies.every((z) => z.m.group.scale.y > 0.9)), 'no little zombies');
   await adv(4);
 }
-// 6. out
+// 6. beat the monster (by hand): it drops meat, and the stairs down open
+{
+  await ev(() => { const u = window.__uc; for (const b of u.beasts) if (!b.dead) u.hurtBeast(b, 999); });
+  await adv(0.5);
+  const meat = await ev(() => window.__uc.world.items.filter((i) => i.meat && !i.taken).map((i) => [i.pos.x, i.pos.z]));
+  check(meat.length >= 5, `the monster drops a pile of meat (${meat.length})`);
+  const had = await ev(() => window.__uc.inv.food.drumstick);
+  const tm = await ev(([x, z]) => window.__uc.tileOf(x, z), meat[0]);
+  await walkTo(tm, { exact: meat[0] }); await adv(0.5);
+  check(await ev(() => window.__uc.inv.food.drumstick) > had, 'you can pick the meat up');
+  await adv(5.5);
+  check(await ev(() => window.__uc.world.down.open), 'beating the monster opens stairs down in the hall');
+  const dp = await ev(() => window.__uc.world.down.pos);
+  await ev((d) => { const p = window.__uc.player; p.yaw = Math.atan2(-(d.x - p.x), -(d.z - p.z)); p.pitch = -0.35; }, dp); await adv(0.3);
+  await shot('12-stairs-down');
+}
+// 7. out
 const won = await walkTo(L.exit.landing, { water: true, crack: true });
 await adv(0.5);
 check(await ev(() => window.__uc.state) === 'won', `the bot finished the level (${botTime.toFixed(0)} s of play, state ${await ev(() => window.__uc.state)})`);
+check(await ev(() => document.getElementById('wonTitle').textContent.includes('ESCAPED')), 'going up the stairs is the escape');
 await shot('13-won');
 
 // ---------- the torch out: still visible ----------
@@ -384,6 +417,28 @@ if (L.waterGate){
   await ev(([x, z]) => window.__uc.place(x, z), [wx, wz]); await adv(3);
   check(await ev(() => window.__uc.state) === 'dead', 'walking into deep water kills you');
   await shot('14-drowned');
+}
+// ---------- chasms kill too ----------
+{
+  await ev(() => window.__uc.tryAgain()); await adv(0.3);
+  const [px, pz] = await ev((t) => window.__uc.center(t[0], t[1]), L.pitGates[0]);
+  await ev(([x, z]) => window.__uc.place(x, z), [px, pz]); await adv(3);
+  check(await ev(() => window.__uc.state) === 'dead', 'walking into a chasm kills you');
+}
+// ---------- down the stairs to level 2: more monsters and zombies ----------
+{
+  await ev(() => { window.__uc.god = true; window.__uc.tryAgain(); }); await adv(0.3);
+  const z1 = await ev(() => window.__uc.level.zombies.length);
+  await ev(() => { const u = window.__uc; for (const b of u.beasts) u.hurtBeast(b, 999); }); await adv(6);
+  await walkTo(L.down, { water: true, crack: true });
+  await adv(2);
+  const l2 = await ev(() => ({ n: window.__uc.levelNo, beasts: window.__uc.beasts.length, zombies: window.__uc.level.zombies.length, state: window.__uc.state }));
+  check(l2.n === 2 && l2.state === 'play', `walking down the stairs takes you to level 2 (level ${l2.n}, ${l2.state})`);
+  check(l2.beasts > 1 && l2.zombies > z1, `level 2 has more monsters (${l2.beasts}) and zombies (${l2.zombies} waiting, level 1 had ${z1})`);
+  const b = await ev(() => { const l = window.__uc.level, [x, z] = window.__uc.center(l.hall.x0, l.hall.x0); window.__uc.place(x, z); const b = window.__uc.beasts[0]; return [b.x, b.z]; });
+  await face(b[0], b[1]); await ev(() => { window.__uc.player.pitch = 0.3; }); await adv(2);
+  await shot('17-level-2');
+  await ev(() => { window.__uc.god = false; });
 }
 console.log('  render', JSON.stringify(await ev(() => window.__uc.info())));
 check(errors.length === 0, 'no errors in the console' + (errors.length ? ':\n    ' + errors.slice(0, 8).join('\n    ') : ''));

@@ -6,7 +6,7 @@ import { UnrealBloomPass } from '/experiments/undercroft/lib/postprocessing/Unre
 import { OutputPass } from '/experiments/undercroft/lib/postprocessing/OutputPass.js';
 import { ShaderPass } from '/experiments/undercroft/lib/postprocessing/ShaderPass.js';
 import { makeEnvMap } from './env.js';
-import { TILE, CEIL, HALL_CEIL, STAIR_RISE, T, DIRS, floorOf, ceilOf, generateLevel, bfs, mulberry } from './level.js';
+import { TILE, CEIL, HALL_CEIL, STAIR_RISE, T, DIRS, PIT_DEPTH, floorOf, ceilOf, generateLevel, bfs, mulberry } from './level.js';
 import { makeMaterials, buildWorld, makeFlame, torchModel, ragMat, flameUniforms, center } from './world.js';
 import { audio, initAudio, resumeAudio, setMuted, sfx, ambience, setListener } from './audio.js';
 import * as stubs from './models/stubs.js';
@@ -237,16 +237,20 @@ const player = { x: 0, z: 0, y: EYE, yaw: 0, pitch: 0, bob: 0, speed: 0, vx: 0, 
   hp: MAX_HP, invuln: 0, hurt: 0, shake: 0, dying: 0, cause: '' };
 const inv = { weapons: { sword: true }, weapon: 'sword', powers: [], power: -1, food: { apple: 0, bread: 0, cheese: 0, drumstick: 0 }, bolts: 0 };
 const pw = { bomb: null, bombCool: 0, shieldT: 0, shieldCool: 0, magnet: false, magnetT: 0, flying: false, flyT: 0, fly: 0, flyKills: FLY_KILLS, flyWarn: 0, gustT: 0 };
-const stats = { slain: 0, eaten: 0, freed: 0 };
+const stats = { slain: 0, eaten: 0, freed: 0, freedAll: 0 };
 let snapshot = null;                              // what you carried into this level, for trying again
 const zombies = [], bolts = [], prisoners = [];
-let beast = null;
+let beast = null;                                 // the monster being updated or hit right now
+const beasts = [];                                // every monster in the hall (more on deeper levels)
 let tileType, tileAt, solidAt, walkableZ, frozenAt;
 
 function tt(i, j){ return (i < 0 || j < 0 || i >= lv.W || j >= lv.W) ? T.ROCK : lv.g[j * lv.W + i]; }
 tileType = tt;
 tileAt = (x, z) => tt(Math.floor(x / TILE), Math.floor(z / TILE));
 frozenAt = (i, j) => { const w = world.water.get(j * lv.W + i); return !!(w && w.frozenUntil > simTime); };
+const bridgedAt = (i, j) => { const p = world.pits.get(j * lv.W + i); return !!(p && p.bridged); };
+// a drop you'd fall into: deep water that isn't frozen, or a chasm with no bridge
+const deadlyAt = (i, j) => { const t = tt(i, j); return (t === T.WATER && !frozenAt(i, j)) || (t === T.PIT && !bridgedAt(i, j)); };
 // what stops you walking: rock, cells, the cracked wall until it's blown, the stairs until the gate is up
 solidAt = (x, z) => {
   if (shrine) return !shrine.contains(x, z);
@@ -254,12 +258,14 @@ solidAt = (x, z) => {
   return t === T.ROCK || t === T.CELL || t === T.CRACKED || (t === T.STAIRS && !world.portcullis.open);
 };
 // where zombies can go
-walkableZ = (t, i, j) => t === T.FLOOR || t === T.HALL || (t === T.WATER && frozenAt(i, j));
+walkableZ = (t, i, j) => t === T.FLOOR || t === T.HALL || (t === T.WATER && frozenAt(i, j)) || (t === T.PIT && bridgedAt(i, j));
 function floorAt(x, z){
   if (shrine) return shrine.floorAt(x, z);
   const i = Math.floor(x / TILE), j = Math.floor(z / TILE), t = tt(i, j);
   if (t === T.LANDING) return STAIR_RISE;
   if (t === T.WATER) return frozenAt(i, j) ? -0.1 : -0.6;
+  if (t === T.PIT) return bridgedAt(i, j) ? 0 : -PIT_DEPTH;
+  if (world.down && world.down.open && i === world.down.tile[0] && j === world.down.tile[1]) return -3 * Math.max(0, Math.min(1, x / TILE - i));
   if (t !== T.STAIRS) return 0;
   const [sx, sz] = lv.exit.stairs, [dx, dz] = lv.exit.dir;
   const along = dx ? (x / TILE - sx) : (z / TILE - sz), p = (dx + dz) > 0 ? along : 1 - along;
@@ -302,7 +308,7 @@ function buildLevel(){
   for (const b of bolts) scene.remove(b.o);
   if (pw.bomb) scene.remove(pw.bomb.m.group);
   for (const d of debris) scene.remove(d.o);
-  zombies.length = 0; bolts.length = 0; prisoners.length = 0; debris.length = 0; beast = null;
+  zombies.length = 0; bolts.length = 0; prisoners.length = 0; debris.length = 0; beast = null; beasts.length = 0;
   for (const d of decals){ scene.remove(d.m); } decals.length = 0;
   pw.bomb = null; pw.bombCool = 0; pw.shieldT = 0; pw.shieldCool = 0; pw.flying = false; pw.flyT = 0; pw.fly = 0; pw.flyKills = FLY_KILLS;
   lv = generateLevel(seed, levelNo);
@@ -326,14 +332,21 @@ function buildLevel(){
     const [x, zz] = center(z.tile[0], z.tile[1]);
     spawnZombie(x, zz, false);
   });
-  // the monster in its hall
-  const b = beastMod.createBeast({ env });
-  const [hx, hz] = center(lv.hall.centre[0], lv.hall.centre[1]);
-  b.group.position.set(hx, 0, hz); levelRoot.add(b.group);
-  b.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-  beast = { m: b, x: hx, z: hz, yaw: 0, hp: 40, max: 40, state: 'idle', t: 0, aware: false, vy: 0, y: 0, from: null, to: null,
-    cd: { barf: 6, leap: 5, touch: 0 }, s: { speed: 0, crouch: 0, airborne: 0, flap: 0, aimYaw: 0, aimPitch: 0, mouth: 0, eyeGlow: 0, hurt: 0, dead: 0 },
-    wander: null, dead: false, roarT: 0 };
+  // the monsters in their hall
+  for (let k = 0; k < lv.monsters; k++){
+    const b = beastMod.createBeast({ env });
+    const [cx, cz] = center(lv.hall.centre[0], lv.hall.centre[1]), a = k * Math.PI * 2 / lv.monsters + 0.4, r = lv.monsters > 1 ? 3.2 : 0;
+    const hx = cx + Math.cos(a) * r, hz = cz + Math.sin(a) * r;
+    b.group.position.set(hx, 0, hz); levelRoot.add(b.group);
+    b.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    beasts.push({ m: b, x: hx, z: hz, yaw: k * 2, hp: 40, max: 40, state: 'idle', t: 0, aware: false, vy: 0, y: 0, from: null, to: null,
+      cd: { barf: 6 + k * 4, leap: 5 + k * 3, touch: 0 }, s: { speed: 0, crouch: 0, airborne: 0, flap: 0, aimYaw: 0, aimPitch: 0, mouth: 0, eyeGlow: 0, hurt: 0, dead: 0 },
+      wander: null, dead: false, roarT: 0 });
+  }
+  beast = beasts[0];
+  downT = -1;
+  // powers you already have: their gates stand empty
+  for (const g of world.gates) if (inv.powers.includes(g.kind)){ g.taken = true; g.obj.setActive(false); g.light.base = 1.5; g.shrine.taken = true; }
   // the player
   const [sx, sz] = center(lv.start[0], lv.start[1]);
   Object.assign(player, { x: sx, z: sz, y: EYE, pitch: 0, vx: 0, vz: 0, kx: 0, kz: 0, hp: player.hp, invuln: 0, hurt: 0, dying: 0 });
@@ -426,7 +439,7 @@ function zombieUpdate(z, dt){
   const c = { x: z.x, z: z.z }; collideCircle(c, 0.3); z.x = c.x; z.z = c.z;
   // never into deep water
   const i = Math.floor(z.x / TILE), j = Math.floor(z.z / TILE);
-  if (tt(i, j) === T.WATER && !frozenAt(i, j)){ z.x -= Math.sin(z.yaw) * z.speed * dt * 1.5; z.z -= Math.cos(z.yaw) * z.speed * dt * 1.5; }
+  if (deadlyAt(i, j)){ z.x -= Math.sin(z.yaw) * z.speed * dt * 1.5; z.z -= Math.cos(z.yaw) * z.speed * dt * 1.5; }
   if (z.aware && (z.groanT -= dt) < 0){ z.groanT = 3 + Math.random() * 6; sfx.zombieGroan([z.x, 1.6, z.z]); }
   s.speed = z.speed;
   z.m.group.position.set(z.x, floorAt(z.x, z.z) > 0 ? floorAt(z.x, z.z) : 0, z.z); z.m.group.rotation.y = z.yaw;
@@ -461,7 +474,10 @@ function beastUpdate(dt){
   const b = beast, s = b.s; if (!b) return;
   s.hurt = Math.max(0, s.hurt - dt * 3);
   for (const k in b.cd) b.cd[k] = Math.max(0, b.cd[k] - dt);
-  if (b.dead){ b.t += dt; s.dead = Math.min(1, b.t / 2.5); s.speed = 0; s.flap *= 0.95; s.eyeGlow = 0; s.mouth *= 0.95; b.m.update(dt, s); return; }
+  if (b.dead){ b.t += dt; s.dead = Math.min(1, b.t / 2.5); s.speed = 0; s.flap *= 0.95; s.eyeGlow = 0; s.mouth *= 0.95;
+    // after a while the body sinks into the floor (so it never lies over the stairs down)
+    if (b.t > 3){ b.y = -(b.t - 3) * 1.4; b.m.group.position.y = b.y; if (b.t > 7 && b.m.group.parent) levelRoot.remove(b.m.group); }
+    b.m.update(dt, s); return; }
   const dx = player.x - b.x, dz = player.z - b.z, d = Math.hypot(dx, dz);
   const head = b.m.eyes[0].getWorldPosition(tmp);
   const sees = player.dying === 0 && (inHall(player.x, player.z, 2.5) || (d < 24 && lineOfSight(b.x, b.z, player.x, player.z))) && lineOfSight(b.x, b.z, player.x, player.z);
@@ -579,13 +595,41 @@ function hurtBeast(dmg, at){
   burst('blood', at, 24); sfx.hitFlesh([at.x, at.y, at.z]);
   if (b.hp <= 0){
     b.dead = true; b.t = 0;
-    sfx.roar([b.x, 4, b.z]); hint('YOU BEAT THE MONSTER', 4);
-    // it drops a feast
-    for (const f of ['drumstick', 'bread', 'apple']){
-      const o = props.createFood(f); o.position.set(b.x + (Math.random() - 0.5) * 3, 0, b.z + (Math.random() - 0.5) * 3); levelRoot.add(o);
-      world.items.push({ kind: 'food', food: f, obj: o, pos: o.position.clone(), taken: false });
+    sfx.roar([b.x, 4, b.z]);
+    const left = beasts.filter((o) => !o.dead).length;
+    hint(left ? 'YOU BEAT A MONSTER. ' + left + ' LEFT' : beasts.length > 1 ? 'YOU BEAT THE MONSTERS' : 'YOU BEAT THE MONSTER', 4);
+    // it drops a pile of meat
+    const [a, c] = hallBounds(0.8);
+    for (let k = 0; k < 7; k++){
+      const ang = k * 0.9 + Math.random() * 0.5, r = 1.2 + Math.random() * 1.6;
+      const o = props.createFood('drumstick');
+      o.position.set(Math.max(a, Math.min(c, b.x + Math.cos(ang) * r)), 0, Math.max(a, Math.min(c, b.z + Math.sin(ang) * r))); o.rotation.y = Math.random() * 6;
+      levelRoot.add(o); world.items.push({ kind: 'food', food: 'drumstick', obj: o, pos: o.position.clone(), taken: false, meat: true });
     }
+    setTimeout(() => say('It dropped a pile of meat!', 2.5), TEST ? 0 : 1500);
+    if (!left) downT = 5;                       // a moment later the floor in the middle of the hall opens
   } else if (Math.random() < 0.25) sfx.roar([b.x, 4, b.z]);
+}
+// the stairs down: once every monster is beaten, the slab in the middle of the hall falls away
+let downT = -1;
+function updateDown(dt){
+  for (const pit of world.pits.values()){
+    if (pit.rise > 0 && pit.rise < 1){ pit.rise = Math.min(1, pit.rise + dt * 0.4); pit.slab.position.y = -PIT_DEPTH + 0.3 + (PIT_DEPTH - 0.6) * (1 - Math.pow(1 - pit.rise, 2));
+      if (pit.rise >= 1){ pit.slab.position.y = -0.3; pit.bridged = true; distField = null; sfx.stomp([pit.slab.position.x, 0, pit.slab.position.z]); } }
+  }
+  const dn = world.down; if (!dn) return;
+  if (downT > 0){ downT -= dt; if (downT <= 0){
+    dn.open = true; dn.hatch.visible = false; dn.well.visible = true; dn.light.base = 16;
+    sfx.stomp([dn.pos.x, 0, dn.pos.z]); sfx.gate([dn.pos.x, 0, dn.pos.z]); player.shake = Math.max(player.shake, 0.4);
+    burst('dust', dn.pos.clone().setY(0.3), 50);
+    banner('STAIRS DOWN', 'Stairs have opened in the middle of the hall. They lead deeper into the dungeon, where more monsters wait.');
+  } }
+  if (!dn.open || trans) return;
+  if (Math.floor(player.x / TILE) === dn.tile[0] && Math.floor(player.z / TILE) === dn.tile[1] && floorAt(player.x, player.z) < -1.0){ sfx.shrine(); moveTo(goDeeper); }
+}
+function goDeeper(){
+  levelNo++; seed = (seed * 1103515245 + 12345) >>> 0 || 7; player.hp = Math.max(player.hp, 6);
+  stats.freedAll += stats.freed; startLevel();
 }
 
 /* ================================================================
@@ -755,11 +799,13 @@ function updatePlayer(dt, pad){
     else if (shrine.inWater(player.x, player.z) && !trans){ sfx.splash(); moveTo(() => { shrine.reset(); placeAt(shrine.start); }); hint('BACK TO THE START', 1.6); }
     return;
   }
-  // deep water is death
+  // deep water and chasms are death
   const i = Math.floor(player.x / TILE), j = Math.floor(player.z / TILE);
-  if (tt(i, j) === T.WATER && !frozenAt(i, j) && pw.fly < 0.3){
+  if (deadlyAt(i, j) && pw.fly < 0.3){
     const [cx, cz] = center(i, j);
-    if (Math.abs(player.x - cx) < TILE / 2 - 0.15 && Math.abs(player.z - cz) < TILE / 2 - 0.15 && player.dying === 0){ sfx.splash(); die('the deep water'); player.drowning = true; }
+    if (Math.abs(player.x - cx) < TILE / 2 - 0.15 && Math.abs(player.z - cz) < TILE / 2 - 0.15 && player.dying === 0){
+      if (tt(i, j) === T.WATER){ sfx.splash(); die('the deep water'); } else { sfx.hurt(); die('falling into the chasm'); }
+      player.drowning = true; }
   }
 }
 
@@ -822,7 +868,7 @@ function meleeHit(){
     if (!lineOfSight(player.x, player.z, z.x, z.z)) continue;
     if (hurtZombie(z, W.dmg, player, W.knock)) any = true;
   }
-  if (beast && !beast.dead){
+  for (const bb of beasts){ if (bb.dead) continue; beast = bb;
     for (const p of beast.m.parts){
       const w = p.object.getWorldPosition(tmp);
       const v = w.clone().sub(camera.position), d = v.length() - p.radius;
@@ -849,8 +895,9 @@ function updateBolts(dt){
       if (solidAt(b.pos.x, b.pos.z) || b.pos.y < 0.02 || b.pos.y > ceilOf(tileAt(b.pos.x, b.pos.z))){ b.stuck = true; b.life = 8; sfx.thud([b.pos.x, b.pos.y, b.pos.z]); burst('spark', b.pos, 6); break; }
       for (const z of zombies){ if (z.state === 'dead') continue;
         if (Math.hypot(b.pos.x - z.x, b.pos.z - z.z) < 0.4 && b.pos.y < 1.9){ hurtZombie(z, WEAPONS.crossbow.dmg, { x: b.pos.x - b.vel.x, z: b.pos.z - b.vel.z }, 3); b.stuck = true; b.life = 0; scene.remove(b.o); b.gone = true; break; } }
-      if (!b.stuck && beast && !beast.dead) for (const p of beast.m.parts){ const w = p.object.getWorldPosition(tmp);
-        if (w.distanceTo(b.pos) < p.radius){ hurtBeast(WEAPONS.crossbow.dmg, b.pos.clone()); b.stuck = true; b.life = 0; scene.remove(b.o); b.gone = true; break; } }
+      for (const bb of beasts){ if (b.stuck || bb.dead) continue; beast = bb;
+        for (const p of bb.m.parts){ const w = p.object.getWorldPosition(tmp);
+          if (w.distanceTo(b.pos) < p.radius){ hurtBeast(WEAPONS.crossbow.dmg, b.pos.clone()); b.stuck = true; b.life = 0; scene.remove(b.o); b.gone = true; break; } } }
     }
     b.o.position.copy(b.pos); b.o.lookAt(b.pos.clone().sub(b.vel));
   }
@@ -903,7 +950,8 @@ function explodeBomb(){
   decal(p.x, p.z, 2.4, 0x050403, 60, 0.95);
   player.shake = Math.max(player.shake, Math.max(0.15, 1 - p.distanceTo(camera.position) / 12));
   for (const z of zombies){ if (z.state !== 'dead' && Math.hypot(z.x - p.x, z.z - p.z) < 3.8) hurtZombie(z, 10, p, 8); }
-  if (beast && !beast.dead) for (const part of beast.m.parts){ if (part.object.getWorldPosition(tmp).distanceTo(p) < 4 + part.radius){ hurtBeast(8, tmp.clone()); break; } }
+  for (const bb of beasts){ if (bb.dead) continue; beast = bb;
+    for (const part of bb.m.parts){ if (part.object.getWorldPosition(tmp).distanceTo(p) < 4 + part.radius){ hurtBeast(8, tmp.clone()); break; } } }
   if (Math.hypot(player.x - p.x, player.z - p.z) < 2.6) hurtPlayer(2, 'your own bomb', p.x, p.z, 7);
   // the cracked wall comes down
   const cw = world.cracked;
@@ -928,9 +976,9 @@ function safeToLand(){
   const i = Math.floor(player.x / TILE), j = Math.floor(player.z / TILE);
   for (const [a, b] of [[0, 0], [RADIUS, 0], [-RADIUS, 0], [0, RADIUS], [0, -RADIUS]]){
     const ii = Math.floor((player.x + a) / TILE), jj = Math.floor((player.z + b) / TILE);
-    if (tt(ii, jj) === T.WATER && !frozenAt(ii, jj)) return false;
+    if (deadlyAt(ii, jj)) return false;
   }
-  return tt(i, j) !== T.WATER || frozenAt(i, j);
+  return !deadlyAt(i, j);
 }
 function flightKill(){
   if (!inv.powers.includes('flight') || pw.flying || pw.flyKills >= FLY_KILLS) return;
@@ -1083,7 +1131,7 @@ const shrineApi = {
   takePower(){
     const g = shrineGate, kind = g.kind;
     g.taken = true; g.obj.setActive(false); g.light.base = 1.5;
-    inv.powers.push(kind); inv.power = inv.powers.length - 1;
+    if (!inv.powers.includes(kind)) inv.powers.push(kind); inv.power = inv.powers.indexOf(kind);
     sfx.power(); flash(shrine.orb.position.clone(), POWERS[kind].color, 20);
     for (let k = 0; k < 60; k++) burst('magic', shrine.orb.position.clone().setY(0.2), 1, new THREE.Color(POWERS[kind].color));
     banner('NEW POWER: ' + POWERS[kind].name.toUpperCase(), POWERS[kind].desc + ' Use it with LT, right-click or Q. Swap powers with LB or R.');
@@ -1099,7 +1147,7 @@ function updateShrine(dt){
 function updateTrans(dt){
   if (!trans) return;
   trans.t += dt;
-  if (trans.t >= 0.45 && !trans.done){ trans.done = true; trans.fn(); }
+  if (trans.t >= 0.45 && !trans.done){ const tr = trans; tr.done = true; tr.fn(); trans = tr; }     // (a new level clears trans; keep fading in)
   grade.uniforms.fade.value = trans.t < 0.45 ? trans.t / 0.45 : Math.max(0, 1 - (trans.t - 0.45) / 0.45);
   if (trans.t > 0.9){ trans = null; grade.uniforms.fade.value = 0; }
 }
@@ -1129,7 +1177,11 @@ function updatePickups(dt){
       if (p.t > 0.9){ p.state = 'cheer'; p.t = 0; stats.freed++; sfx.cheer([p.m.group.position.x, 1.6, p.m.group.position.z]);
         const all = stats.freed >= prisoners.length;
         say(all ? '“That’s everyone! The gate at the stairs is opening!”' : '“Thank you! I’ll wait for you by the stairs!”', 3.5);
-        updateHud(); if (all) openExit(); }
+        updateHud(); if (all) openExit();
+        // a prisoner across a chasm: a stone block rises out of it so you can both walk back
+        const region = lv.regionTile[p.cell.from[1] * lv.W + p.cell.from[0]];
+        if (region >= 4 && lv.pitGates[region - 4]){ const [pi, pj] = lv.pitGates[region - 4], pit = world.pits.get(pj * lv.W + pi);
+          if (pit && !pit.rise){ pit.rise = 0.001; sfx.gate([pit.slab.position.x, -2, pit.slab.position.z]); setTimeout(() => hint('A STONE BRIDGE RISES OUT OF THE CHASM', 3), TEST ? 0 : 2600); } } }
       p.m.update(dt, { pose: p.pose });
     } else if (p.state === 'cheer'){
       p.m.update(dt, { pose: 'cheer' });
@@ -1297,9 +1349,59 @@ function updateHudLive(){
   $('useBtn').classList.toggle('lit', !!prompt);
   // the monster's health while you're fighting it
   const bb = $('bossBar');
-  const showBoss = beast && beast.aware && !beast.dead && state === 'play';
+  const fighting = beasts.filter((b) => b.aware && !b.dead), showBoss = fighting.length && state === 'play' && !shrine;
   bb.classList.toggle('show', !!showBoss);
-  if (showBoss) $('bossFill').style.width = (Math.max(0, beast.hp) / beast.max * 100) + '%';
+  if (showBoss){
+    const alive = beasts.filter((b) => !b.dead);
+    $('bossFill').style.width = (alive.reduce((s, b) => s + Math.max(0, b.hp), 0) / beasts.reduce((s, b) => s + b.max, 0) * 100) + '%';
+    const name = beasts.length > 1 ? 'THE MONSTERS (' + alive.length + ' LEFT)' : 'THE MONSTER';
+    if ($('bossName').textContent !== name) $('bossName').textContent = name;
+  }
+}
+// the radar: the maze around you (forward is up), and what's in it
+const radar = $('radar'), rctx = radar.getContext('2d');
+const RADAR_M = 18;                              // metres from the middle to the edge
+function drawRadar(){
+  const show = state === 'play' && !shrine && !trans;
+  radar.classList.toggle('show', show);
+  if (!show) return;
+  const S = radar.width, h = S / 2, k = h / RADAR_M, c = rctx;
+  const cs = Math.cos(player.yaw), sn = Math.sin(player.yaw);
+  // world (x, z) to radar pixels, turned so the way you face is up
+  const P = (x, z) => { const dx = x - player.x, dz = z - player.z; return [h + (dx * cs - dz * sn) * k, h + (dx * sn + dz * cs) * k]; };
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, S, S);
+  c.save(); c.beginPath(); c.arc(h, h, h - 1, 0, 7); c.clip();
+  c.fillStyle = 'rgba(8,10,9,.78)'; c.fillRect(0, 0, S, S);
+  // tiles, drawn in the radar's turned frame
+  c.save(); c.translate(h, h); c.rotate(-player.yaw); c.scale(k, k); c.translate(-player.x, -player.z);
+  const r = Math.ceil(RADAR_M * 1.45 / TILE), pi = Math.floor(player.x / TILE), pj = Math.floor(player.z / TILE);
+  for (let j = pj - r; j <= pj + r; j++) for (let i = pi - r; i <= pi + r; i++){
+    const t = tt(i, j); if (t === T.ROCK || t === T.CELL) continue;
+    c.fillStyle = t === T.WATER ? (frozenAt(i, j) ? 'rgba(150,200,240,.55)' : 'rgba(40,90,170,.75)')
+      : t === T.PIT ? (bridgedAt(i, j) ? 'rgba(150,150,140,.45)' : 'rgba(0,0,0,.9)') : t === T.CRACKED ? 'rgba(120,100,80,.5)'
+      : t === T.PILLAR ? 'rgba(90,90,85,.45)' : 'rgba(150,150,140,.32)';
+    c.fillRect(i * TILE - 0.02, j * TILE - 0.02, TILE + 0.04, TILE + 0.04);
+    if (t === T.PIT && !bridgedAt(i, j)){ c.strokeStyle = 'rgba(125,255,212,.6)'; c.lineWidth = 0.25; c.strokeRect(i * TILE + 0.3, j * TILE + 0.3, TILE - 0.6, TILE - 0.6); }
+  }
+  c.restore();
+  const dot = (x, z, rad, col, ring) => { const [u, v] = P(x, z); c.beginPath(); c.arc(u, v, rad, 0, 7);
+    if (ring){ c.strokeStyle = col; c.lineWidth = 3; c.stroke(); } else { c.fillStyle = col; c.fill(); } };
+  for (const g of world.gates) if (!g.taken) dot(g.pos.x, g.pos.z, 6, POWERS[g.kind].color, true);
+  for (const ch of world.chests) if (!ch.opened) dot(ch.pos.x, ch.pos.z, 5, '#b88a4a');
+  for (const p of prisoners) if (p.state === 'caged') dot(p.cell.pos.x, p.cell.pos.z, 7, '#ffd75a');
+  const pc = world.portcullis; if (pc.open){ const [ex, ez] = center(lv.exit.landing[0], lv.exit.landing[1]); dot(ex, ez, 7, '#9fe08a'); }
+  if (world.down.open) dot(world.down.pos.x, world.down.pos.z, 8, '#ff7a3a');
+  for (const z of zombies) if (z.state !== 'dead') dot(z.x, z.z, 5, '#e0352a');
+  const pulse = 9 + Math.sin(simTime * 6) * 2;
+  for (const b of beasts) if (!b.dead) dot(b.x, b.z, pulse, '#ff2a1a');
+  // the sweep
+  const a = (simTime * 2.2) % (Math.PI * 2), g = c.createRadialGradient(h, h, 0, h, h, h);
+  g.addColorStop(0, 'rgba(120,255,160,.0)'); g.addColorStop(1, 'rgba(120,255,160,.22)');
+  c.fillStyle = g; c.beginPath(); c.moveTo(h, h); c.arc(h, h, h, a - 0.5, a); c.closePath(); c.fill();
+  c.restore();
+  // you, pointing up, and the rim
+  c.fillStyle = '#e8f6ea'; c.beginPath(); c.moveTo(h, h - 11); c.lineTo(h - 7, h + 7); c.lineTo(h, h + 3); c.lineTo(h + 7, h + 7); c.closePath(); c.fill();
+  c.strokeStyle = 'rgba(216,207,189,.45)'; c.lineWidth = 2; c.beginPath(); c.arc(h, h, h - 2, 0, 7); c.stroke();
 }
 function padConnected(){ const ps = navigator.getGamepads ? navigator.getGamepads() : []; for (const p of ps) if (p) return true; return false; }
 
@@ -1389,13 +1491,13 @@ function startLevel(){
   snapshot = JSON.parse(JSON.stringify({ inv, hp: player.hp }));
   buildLevel(); compileAll();
   state = 'play'; show(null); lockPointer();
-  hint(levelNo === 1 ? 'FREE THE PRISONERS. FIND THE WAY UP.' : 'LEVEL ' + levelNo, 4);
+  hint(levelNo === 1 ? 'FREE THE PRISONERS. FIND THE WAY UP.' : 'DUNGEON LEVEL ' + levelNo + ': ' + lv.monsters + ' MONSTERS IN THE HALL', 4);
 }
 function start(){
   initAudio(); setMuted(TEST || audio.muted); resumeAudio();
   levelNo = 1; player.hp = MAX_HP;
   Object.assign(inv, { weapons: { sword: true }, weapon: 'sword', powers: [], power: -1, food: { apple: 0, bread: 0, cheese: 0, drumstick: 0 }, bolts: 0 });
-  stats.slain = stats.eaten = 0;
+  stats.slain = stats.eaten = stats.freedAll = 0;
   setWeapon('sword'); startLevel();
 }
 function pause(){ if (state !== 'play') return; state = 'pause'; show('pause'); if (document.pointerLockElement) document.exitPointerLock(); }
@@ -1406,11 +1508,11 @@ function levelDone(){
   if (state !== 'play') return;
   state = 'won'; sfx.win(); if (document.pointerLockElement) document.exitPointerLock();
   const m = Math.floor(playTime / 60), s = Math.floor(playTime % 60);
-  $('wonTitle').innerHTML = `LEVEL ${levelNo}<span>you led them out</span>`;
-  $('wonStat').innerHTML = `${m}:${String(s).padStart(2, '0')} in the dark &middot; ${stats.freed} freed &middot; ${stats.slain} zombies slain${beast && beast.dead ? ' &middot; the monster beaten' : ''}`;
+  const freed = stats.freedAll + stats.freed;
+  $('wonTitle').innerHTML = `YOU ESCAPED<span>${levelNo > 1 ? 'up from level ' + levelNo + ' of the dungeon' : 'and led them all out'}</span>`;
+  $('wonStat').innerHTML = `${freed} prisoner${freed === 1 ? '' : 's'} freed &middot; ${stats.slain} zombies slain${beasts.length && beasts.every((b) => b.dead) ? ' &middot; ' + (beasts.length > 1 ? 'the monsters' : 'the monster') + ' beaten' : ''} &middot; ${m}:${String(s).padStart(2, '0')} on this level`;
   show('won');
 }
-function nextLevel(){ levelNo++; seed = (seed * 1103515245 + 12345) >>> 0 || 7; player.hp = Math.max(player.hp, 6); startLevel(); }
 function tryAgain(){
   Object.assign(inv, JSON.parse(JSON.stringify(snapshot.inv))); player.hp = MAX_HP; player.dying = 0; player.drowning = false;
   setWeapon(inv.weapon); startLevel();
@@ -1418,13 +1520,13 @@ function tryAgain(){
 function confirmMenu(){
   if (state === 'title' && !$('startBtn').disabled) start();
   else if (state === 'pause') resume();
-  else if (state === 'won') nextLevel();
+  else if (state === 'won') start();
   else if (state === 'dead') tryAgain();
 }
 $('startBtn').addEventListener('click', start);
 $('resumeBtn').addEventListener('click', resume);
 $('restartBtn').addEventListener('click', () => tryAgain());
-$('againBtn').addEventListener('click', nextLevel);
+$('againBtn').addEventListener('click', start);
 $('retryBtn').addEventListener('click', tryAgain);
 $('muteBtn').addEventListener('click', () => { setMuted(!audio.muted); $('muteBtn').textContent = audio.muted ? 'SOUND OFF' : 'SOUND ON'; });
 $('invClose').addEventListener('click', closeInventory);
@@ -1477,7 +1579,11 @@ function step(dt){
     updateDistField(dt);
     for (const z of zombies) zombieUpdate(z, dt);
     for (let k = zombies.length - 1; k >= 0; k--) if (zombies[k].gone) zombies.splice(k, 1);
-    beastUpdate(dt);
+    for (const b of beasts){ beast = b; beastUpdate(dt); }
+    // monsters keep out of each other's way
+    for (const a of beasts) for (const b of beasts){ if (a === b || a.dead || b.dead) continue;
+      const dx = a.x - b.x, dz = a.z - b.z, d = Math.hypot(dx, dz); if (d < 3.6 && d > 1e-3){ a.x += dx / d * (3.6 - d) * 0.5; a.z += dz / d * (3.6 - d) * 0.5; } }
+    updateDown(dt);
     updateBolts(dt); updatePowers(dt); updatePickups(dt); updateExit(dt);
     }
   }
@@ -1489,7 +1595,7 @@ function step(dt){
   grade.uniforms.shield.value += ((pw.shieldT > 0 ? 1 : 0) - grade.uniforms.shield.value) * Math.min(1, dt * 3);
   setListener(camera.position, tmp2.set(0, 0, -1).applyQuaternion(camera.quaternion));
   if (state === 'play') ambience(dt, player.x, player.z);
-  updateHudLive();
+  updateHudLive(); drawRadar();
 }
 let last = performance.now(), frameAvg = 16, frames = 0, resTimer = 0;
 function frame(now){
@@ -1538,8 +1644,8 @@ if ('serviceWorker' in navigator && !TEST) navigator.serviceWorker.register(BASE
 window.__uc = {
   ready: false, god: false,
   get state(){ return state; }, get player(){ return player; }, get level(){ return lv; }, get world(){ return world; }, get inv(){ return inv; },
-  get zombies(){ return zombies; }, get beast(){ return beast; }, get stats(){ return stats; }, get prisoners(){ return prisoners; }, get pw(){ return pw; },
-  start, pause, resume, nextLevel, tryAgain, openInventory, closeInventory, eat, hurtPlayer, spawnZombie, hurtZombie, setWeapon,
+  get zombies(){ return zombies; }, get beast(){ return beasts[0]; }, get beasts(){ return beasts; }, get levelNo(){ return levelNo; }, hurtBeast: (b, dmg) => { beast = b; hurtBeast(dmg, new THREE.Vector3(b.x, 2, b.z)); }, get stats(){ return stats; }, get prisoners(){ return prisoners; }, get pw(){ return pw; },
+  start, pause, resume, nextLevel: goDeeper, tryAgain, openInventory, closeInventory, eat, hurtPlayer, spawnZombie, hurtZombie, setWeapon,
   advance(seconds, draw = true){ const n = Math.round(seconds * 60); for (let k = 0; k < n; k++) step(1 / 60); if (draw) composer.render(); return { x: player.x, z: player.z, state }; },
   render(){ composer.render(); },
   place(x, z, yaw, pitch){ player.x = x; player.z = z; player.y = floorAt(x, z) + EYE; if (yaw !== undefined) player.yaw = yaw; if (pitch !== undefined) player.pitch = pitch;
@@ -1547,7 +1653,7 @@ window.__uc = {
   give(what){ if (WEAPONS[what]){ inv.weapons[what] = true; if (what === 'crossbow') inv.bolts += 10; } else if (POWERS[what]){ if (!inv.powers.includes(what)) inv.powers.push(what); inv.power = inv.powers.indexOf(what); } else if (FOOD[what]) inv.food[what]++; updateHud(); },
   // shortest walk between tiles; water and the cracked wall count as passable only if asked
   path(from, to, opts){ opts = opts || {};
-    const pass = (t) => t === T.FLOOR || t === T.HALL || t === T.STAIRS || t === T.LANDING || (opts.water && t === T.WATER) || (opts.crack && t === T.CRACKED);
+    const pass = (t, x, z) => t === T.FLOOR || t === T.HALL || t === T.STAIRS || t === T.LANDING || (opts.water && t === T.WATER) || (opts.crack && t === T.CRACKED) || (t === T.PIT && (opts.pit || bridgedAt(x, z)));
     const d = bfs(lv, to, pass), W = lv.W, out = [];
     let [x, z] = from; if (d[z * W + x] < 0) return null;
     while (d[z * W + x] > 0){ out.push([x, z]); const n = DIRS.map(([a, b]) => [x + a, z + b]).find(([a, b]) => d[b * W + a] === d[z * W + x] - 1); [x, z] = n; }

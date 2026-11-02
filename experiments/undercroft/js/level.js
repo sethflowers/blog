@@ -11,13 +11,14 @@ export const HALL_CEIL = 8.0;
 export const STAIR_RISE = 1.5;
 export const PAD = 2;
 
-export const T = { ROCK: 0, FLOOR: 1, STAIRS: 2, LANDING: 3, CELL: 4, WATER: 5, HALL: 6, PILLAR: 7, CRACKED: 8 };
+export const T = { ROCK: 0, FLOOR: 1, STAIRS: 2, LANDING: 3, CELL: 4, WATER: 5, HALL: 6, PILLAR: 7, CRACKED: 8, PIT: 9 };
+export const PIT_DEPTH = 7;
 export const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 export function mulberry(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
   t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
-export function floorOf(t){ return t === T.LANDING ? STAIR_RISE : t === T.WATER ? -1.0 : 0; }
+export function floorOf(t){ return t === T.LANDING ? STAIR_RISE : t === T.WATER ? -1.0 : t === T.PIT ? -PIT_DEPTH : 0; }
 export function ceilOf(t){ return (t === T.HALL || t === T.PILLAR) ? HALL_CEIL : (t === T.STAIRS || t === T.LANDING) ? STAIR_RISE + CEIL : CEIL; }
 
 // breadth-first walking distance over tiles that pass(type, x, z)
@@ -73,21 +74,29 @@ export function generateLevel(seed, levelNo){
   }
   const inSubtree = (k, root) => { for (let c = k; c >= 0; c = parent[c]) if (c === root) return true; return false; };
   const startRoom = 0;
-  // 2. a branch cut off by deep water (needs the freeze power), and a small one walled up behind a cracked wall (needs a bomb)
+  // 2. a branch cut off by deep water (needs the freeze power), a small one walled up behind a cracked wall
+  // (needs a bomb), and one or two little ones across a chasm (needs flight)
   const pickBranch = (lo, hi, avoid) => {
     const c = [];
     for (let k = 1; k < n * n; k++){
       if (hasHall[k] || size[k] < lo || size[k] > hi || depth[k] < 3) continue;
-      if (avoid >= 0 && (inSubtree(k, avoid) || inSubtree(avoid, k))) continue;
+      if (avoid.some((a) => a >= 0 && (inSubtree(k, a) || inSubtree(a, k)))) continue;
       c.push(k);
     }
     return c.length ? pick(c) : -1;
   };
-  let waterRoot = pickBranch(8, 18, -1);
-  if (waterRoot < 0) waterRoot = pickBranch(4, 30, -1);
-  let crackRoot = pickBranch(3, 7, waterRoot);
-  if (crackRoot < 0) crackRoot = pickBranch(2, 12, waterRoot);
-  const regionOf = (k) => (waterRoot >= 0 && inSubtree(k, waterRoot)) ? 'water' : (crackRoot >= 0 && inSubtree(k, crackRoot)) ? 'crack' : 'main';
+  let waterRoot = pickBranch(8, 18, []);
+  if (waterRoot < 0) waterRoot = pickBranch(4, 30, []);
+  let crackRoot = pickBranch(3, 7, [waterRoot]);
+  if (crackRoot < 0) crackRoot = pickBranch(2, 12, [waterRoot]);
+  const pitRoots = [];
+  for (let k = 0; k < 2; k++){
+    let r = pickBranch(1, 4, [waterRoot, crackRoot, ...pitRoots]);
+    if (r < 0) r = pickBranch(1, 8, [waterRoot, crackRoot, ...pitRoots]);
+    if (r >= 0) pitRoots.push(r);
+  }
+  const regionOf = (k) => (waterRoot >= 0 && inSubtree(k, waterRoot)) ? 'water' : (crackRoot >= 0 && inSubtree(k, crackRoot)) ? 'crack'
+    : pitRoots.findIndex((r) => inSubtree(k, r)) >= 0 ? 'pit' + pitRoots.findIndex((r) => inSubtree(k, r)) : 'main';
   const gateTile = (k) => { const p = parent[k]; return [(TI(k % n) + TI(p % n)) / 2, (TI((k / n) | 0) + TI((p / n) | 0)) / 2]; };
 
   // 3. knock through some dead ends for loops, but never across a region's edge
@@ -107,13 +116,15 @@ export function generateLevel(seed, levelNo){
   const crackGate = crackRoot >= 0 ? gateTile(crackRoot) : null;
   if (waterGate) set(waterGate[0], waterGate[1], T.WATER);
   if (crackGate) set(crackGate[0], crackGate[1], T.CRACKED);
+  const pitGates = pitRoots.map(gateTile);
+  for (const [x, z] of pitGates) set(x, z, T.PIT);
 
   // which tiles you can reach from the start without crossing water or the cracked wall, and which lie beyond each
   const lv = { W, g, n };
   const walk = (t) => t === T.FLOOR || t === T.HALL || t === T.STAIRS || t === T.LANDING;
   const S = [TI(0), TI(0)];
   const mainD = bfs(lv, S, walk);
-  const regionTile = new Uint8Array(W * W);                // 1 main, 2 beyond the water, 3 behind the cracked wall
+  const regionTile = new Uint8Array(W * W);                // 1 main, 2 beyond the water, 3 behind the cracked wall, 4+ across a chasm
   for (let k = 0; k < W * W; k++) if (mainD[k] >= 0) regionTile[k] = 1;
   const flood = (gate, label) => {
     if (!gate) return;
@@ -124,7 +135,7 @@ export function generateLevel(seed, levelNo){
       for (let k = 0; k < W * W; k++) if (d[k] >= 0 && !regionTile[k]) regionTile[k] = label;
     }
   };
-  flood(waterGate, 2); flood(crackGate, 3);
+  flood(waterGate, 2); flood(crackGate, 3); pitGates.forEach((p, k) => flood(p, 4 + k));
   const regionAt = (x, z) => regionTile[z * W + x];
   const allD = bfs(lv, S, (t) => t !== T.ROCK && t !== T.PILLAR);   // walking distance ignoring the obstacles
   const dAt = (x, z) => allD[z * W + x];
@@ -133,7 +144,7 @@ export function generateLevel(seed, levelNo){
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++){
     const x = TI(i), z = TI(j), t = at(x, z);
     if (t !== T.FLOOR) continue;
-    rooms.push({ x, z, exits: DIRS.filter(([dx, dz]) => walk(at(x + dx, z + dz)) || at(x + dx, z + dz) === T.WATER || at(x + dx, z + dz) === T.CRACKED).length,
+    rooms.push({ x, z, exits: DIRS.filter(([dx, dz]) => walk(at(x + dx, z + dz)) || at(x + dx, z + dz) === T.WATER || at(x + dx, z + dz) === T.CRACKED || at(x + dx, z + dz) === T.PIT).length,
       region: regionAt(x, z), d: dAt(x, z), boundary: i === 0 || j === 0 || i === n - 1 || j === n - 1, i, j });
   }
   const used = new Set();
@@ -183,6 +194,8 @@ export function generateLevel(seed, levelNo){
   addCell(cellSpot((x, z, t) => t === T.FLOOR && regionAt(x, z) === 1 && dAt(x, z) > 10 && x % 2 && z % 2), true);
   addCell(cellSpot((x, z, t) => t === T.FLOOR && regionAt(x, z) === 2), true);
   addCell(cellSpot((x, z, t) => t === T.HALL), false);
+  // and one across each chasm: only flight gets you there (freeing them raises a stone bridge to walk back on)
+  pitGates.forEach((p, k) => addCell(cellSpot((x, z, t) => t === T.FLOOR && regionAt(x, z) === 4 + k), true));
   for (let k = 1; k < levelNo && k < 3; k++) addCell(cellSpot((x, z, t) => t === T.FLOOR && regionAt(x, z) === 1 && dAt(x, z) > 6), true);
 
   // 8. the five power gates, in quiet rooms of the main maze, spread apart. Freeze is never behind the water.
@@ -235,13 +248,15 @@ export function generateLevel(seed, levelNo){
 
   // 12. zombies waiting in the dark, and the monster in its hall
   const zombies = [];
-  const zRooms = shuffle(rooms.filter((r) => r.d > 9 && !used.has(key(r.x, r.z))));
+  const zRooms = shuffle(rooms.filter((r) => r.d > 9 && r.region < 4 && !used.has(key(r.x, r.z))));
   const zCount = 3 + levelNo;
   for (let k = 0; k < zCount && k < zRooms.length; k++){ zombies.push({ tile: [zRooms[k].x, zRooms[k].z] }); used.add(key(zRooms[k].x, zRooms[k].z)); }
   const hallCentre = [TI(h0 + 1), TI(h0 + 1)];
 
   const start = [TI(0), TI(0)];
   const startDir = DIRS.find(([dx, dz]) => walk(at(start[0] + dx, start[1] + dz))) || [1, 0];
-  return { W, g, n, seed, levelNo, start, startDir, exit, cells, gates, chests, items, pool, zombies,
-    hall: { x0: TI(h0), x1: TI(h0 + 2), centre: hallCentre }, waterGate, crackGate, regionTile };
+  // deeper down there are more monsters in the hall; beating them all opens the stairs down in its middle
+  const monsters = levelNo >= 4 ? 3 : levelNo >= 2 ? 2 : 1;
+  return { W, g, n, seed, levelNo, start, startDir, exit, cells, gates, chests, items, pool, zombies, monsters,
+    hall: { x0: TI(h0), x1: TI(h0 + 2), centre: hallCentre }, down: hallCentre, waterGate, crackGate, pitGates, regionTile };
 }
