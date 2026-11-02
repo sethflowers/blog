@@ -34,7 +34,7 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
 - **Prisoners**: three cells (five with the chasm rooms below), each with iron bars. One is in the far reaches of the maze, one is past the
   water, and one opens off the monster's hall. Hold A at the bars to break the lock. The prisoner cheers,
   leaves, and waits for you on the stairs. When everyone is free, the portcullis at the foot of the stairs
-  rises. Walk up and out to finish the level. Each later level has one more prisoner, up to five.
+  rises. Walk up and out to escape (the end of the run). Each deeper level has one more prisoner, up to two more.
 - **Water**: one branch of the maze is cut off by deep water (death if you step in). Freeze it (the gate
   for it is always reachable without crossing water) and cross before it thaws after 45 s. It cracks
   as a warning 6 s before. A flooded dead-end room has a roast chicken leg on a stone in the middle:
