@@ -151,7 +151,7 @@ async function walkTo(target, opts){
   if (!route) return false;
   const pts = await ev((r) => r.map(([i, j]) => window.__uc.center(i, j)), route);
   if (opts.exact) pts.push(opts.exact);
-  let wp = 1, t = 0, stuck = 0, last = null;
+  let wp = 1, t = 0, stuck = 0, last = null, unstick = -1;
   while (wp < pts.length && t < 120){
     const st = await ev(() => { const p = window.__uc.player; const z = window.__uc.zombies.find((z) => z.state !== 'dead' && z.state !== 'emerge' && Math.hypot(z.x - p.x, z.z - p.z) < 2.2);
       return { x: p.x, z: p.z, yaw: p.yaw, zx: z ? z.x : null, zz: z ? z.z : null, state: window.__uc.state, inside: !!(window.__uc.shrine || window.__uc.trans) }; });
@@ -184,7 +184,7 @@ async function walkTo(target, opts){
     await adv(0.1); t += 0.1; botTime += 0.1;
     if (last && Math.hypot(last[0] - st.x, last[1] - st.z) < 0.01 && fwd) stuck++; else stuck = 0;
     last = [st.x, st.z];
-    if (stuck > 30){ await pad([1, 0, 0, 0]); await adv(0.6); stuck = 0; }
+    if (stuck > 30){ unstick = -unstick; await pad([unstick, 0.8, 0, 0]); await adv(0.7); stuck = 0; }
   }
   await pad([0, 0, 0, 0]);
   return wp >= pts.length;
@@ -363,6 +363,7 @@ await shot('12-monster');
   const tm = await ev(([x, z]) => window.__uc.tileOf(x, z), meat[0]);
   await walkTo(tm, { exact: meat[0] }); await adv(0.5);
   check(await ev(() => window.__uc.inv.food.drumstick) > had, 'you can pick the meat up');
+  await walkXY(await ev((t) => window.__uc.center(t[0], t[1]), tm));      // back to the middle of the tile, clear of the pillars
   await adv(5.5);
   check(await ev(() => window.__uc.world.down.open), 'beating the monster opens stairs down in the hall');
   const dp = await ev(() => window.__uc.world.down.pos);
