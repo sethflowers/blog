@@ -1,0 +1,15 @@
+{
+  "name": "VR Test",
+  "short_name": "VR Test",
+  "description": "A small blocky world for a VR headset: walk around, see your body, slice melons, shoot bottles, meet the villagers.",
+  "start_url": "/experiments/vr-test/",
+  "scope": "/experiments/vr-test/",
+  "display": "standalone",
+  "background_color": "#1b2a3a",
+  "theme_color": "#1b2a3a",
+  "icons": [
+    { "src": "/experiments/vr-test/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/vr-test/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/vr-test/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

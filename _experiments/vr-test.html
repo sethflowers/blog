@@ -1,0 +1,77 @@
+---
+title: VR Test
+description: A small blocky world for a VR headset. Walk around with the sticks or your own feet, see your arms, body and legs, slice melons with a sword, shoot bottles, pick up chickens and say hi to the villagers. Install it from the headset's browser.
+date: 2026-11-05
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1b2a3a">
+<meta name="apple-mobile-web-app-title" content="VR Test">
+<link rel="manifest" href="/experiments/vr-test/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/vr-test/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/vr-test/icon-192.png">
+<title>VR Test</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#1b2a3a;color:#f4f1e8;
+    font-family:"Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;
+    background:radial-gradient(ellipse at center,rgba(10,20,35,.35) 0%,rgba(10,20,35,.8) 100%);}
+  #title.hidden{display:none;}
+  .card{max-width:560px;width:100%;text-align:center;}
+  h1{font-size:clamp(56px,12vw,104px);letter-spacing:.06em;line-height:1;
+    text-shadow:0 6px 0 #2a4a6a,0 10px 24px rgba(0,0,0,.5);}
+  h1 span{color:#ffd24a;}
+  .sub{margin:14px 0 26px;font-size:18px;opacity:.9;}
+  button{display:block;width:100%;max-width:340px;margin:12px auto;padding:18px 20px;font:bold 24px/1 inherit;
+    font-family:inherit;color:#1b2a3a;background:#ffd24a;border:0;border-radius:14px;cursor:pointer;
+    box-shadow:0 6px 0 #b8902a;}
+  button:active{transform:translateY(3px);box-shadow:0 3px 0 #b8902a;}
+  button:disabled{background:#6a7a8a;box-shadow:0 6px 0 #4a5a6a;color:#2a3540;cursor:default;}
+  button.second{background:#cfe0f0;box-shadow:0 6px 0 #8aa0b8;font-size:18px;padding:14px;}
+  #status{margin-top:14px;font-size:15px;opacity:.85;min-height:20px;}
+  .controls{margin-top:22px;font-size:14px;opacity:.8;line-height:1.6;}
+  .controls b{color:#ffd24a;}
+  .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;pointer-events:none;}
+</style>
+<script type="importmap">
+{ "imports": { "three": "/experiments/vr-test/lib/three.module.min.js" } }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<div id="title">
+  <div class="card">
+    <h1>VR <span>TEST</span></h1>
+    <p class="sub">A little blocky world to walk around in.</p>
+    <button id="enter-vr">Enter VR</button>
+    <button id="try-desktop" class="second">Try it on this screen</button>
+    <p id="status">Checking for a headset&hellip;</p>
+    <div class="controls">
+      <b>Left stick</b> walk (click to run) &middot; <b>Right stick</b> turn<br>
+      <b>Grip</b> grab &middot; <b>Trigger</b> fire &middot; <b>A</b> jump &middot; <b>B</b> bring things back<br>
+      <b>X</b> set your height &middot; <b>Y</b> smooth / snap turn<br>
+      To install: use the install button in the browser&rsquo;s address bar.
+    </div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<script type="module" src="/experiments/vr-test/js/main.js"></script>
+<script>
+if ('serviceWorker' in navigator){
+  addEventListener('load', function(){
+    navigator.serviceWorker.register('/experiments/vr-test/sw.js', { updateViaCache: 'none' }).catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
+{% endraw %}
