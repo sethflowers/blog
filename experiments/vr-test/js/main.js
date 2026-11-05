@@ -7,7 +7,10 @@ import { Avatar, yawOf } from './avatar.js';
 import { Items, Particles } from './items.js';
 import { Creatures, Villagers } from './creatures.js';
 import { startAudio, setListener, sfx } from './audio.js';
-import { textCanvas, boxMesh, COL } from './util.js';
+import { textCanvas, boxMesh, COL, blockMaterial } from './util.js';
+import { Builder } from './build.js';
+import { Dragon } from './dragon.js';
+import { Vehicles } from './vehicles.js';
 
 const $ = (id) => document.getElementById(id);
 const VERSION = document.body.dataset.version || '';
@@ -19,6 +22,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 renderer.xr.setFoveation(0.6);
+renderer.localClippingEnabled = true;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -32,7 +36,12 @@ const world = buildWorld(scene);
 const particles = new Particles(scene);
 const creatures = new Creatures(scene, particles);
 const villagers = new Villagers(scene);
-const items = new Items(scene, { particles, creatures, npcs: villagers });
+const dragon = new Dragon(scene, particles);
+const items = new Items(scene, { particles, creatures, npcs: villagers, dragon });
+const builder = new Builder(scene, particles);
+items.builder = builder;
+builder.onSay = (t) => say(t);
+const vehicles = new Vehicles(scene, { particles, builder, creatures, villagers, dragon, items });
 
 // ---------- your body, and its reflection ----------
 const avatar = new Avatar({ head: true, firstPerson: true });
@@ -49,6 +58,35 @@ scene.add(mirrorGroup);
 const mirrorAvatar = new Avatar({ head: true });
 mirrorGroup.add(mirrorAvatar.root);
 const mirrorItems = new Map();
+// Behind the mirror is a hollow room the reflection is drawn in. Two sets of clipping planes keep the
+// illusion: real things (your hands, a sword) are cut off where they go through the glass, and their
+// reflections only ever draw on the far side of it.
+{
+  const S = PLACES.shed;
+  const roomPlanes = [
+    new THREE.Plane(new THREE.Vector3(1, 0, 0), -(M.x - 0.13)), new THREE.Plane(new THREE.Vector3(-1, 0, 0), S.x0 + 0.15),
+    new THREE.Plane(new THREE.Vector3(0, 0, -1), S.z0 + 0.15), new THREE.Plane(new THREE.Vector3(0, 0, 1), -(S.z1 - 0.15)),
+    new THREE.Plane(new THREE.Vector3(0, 1, 0), -(S.h - 0.15)), new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.05),
+  ];
+  // everything real loses whatever is inside the room box (all six planes at once)
+  scene.updateMatrixWorld(true);
+  const seen = new Set();
+  scene.traverse((o) => {
+    if (!o.material || o.parent === mirrorGroup || seen.has(o.material)) return;
+    for (const m of [].concat(o.material)){ seen.add(m); m.clippingPlanes = roomPlanes; m.clipIntersection = true; }
+  });
+  blockMaterial().clippingPlanes = roomPlanes; blockMaterial().clipIntersection = true;
+  window.__roomPlanes = roomPlanes;
+}
+const mirrorPlane = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), M.x)];
+const mirrorMats = new Map();
+function mirrorMaterial(m){
+  let c = mirrorMats.get(m);
+  if (!c){ c = m.clone(); c.clippingPlanes = mirrorPlane; c.clipIntersection = false; mirrorMats.set(m, c); }
+  return c;
+}
+function toMirror(obj){ obj.traverse((o) => { if (o.material) o.material = Array.isArray(o.material) ? o.material.map(mirrorMaterial) : mirrorMaterial(o.material); }); return obj; }
+toMirror(mirrorAvatar.root);
 
 // ---------- holsters on your hips: left for the sword, right for the pistol ----------
 const holsters = [0, 1].map((i) => ({ side: i ? 1 : -1, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), item: null, mesh: null }));
@@ -97,6 +135,8 @@ watchBody.rotation.x = Math.PI / 2; watchScreen.position.z = 0.0065;
 watch.add(watchBody, watchScreen);
 scene.add(watch);
 const watchLocal = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)).setPosition(-0.032, 0.105, 0.005);
+let callT = 0, lastCall = -10;
+const headLocal = new THREE.Vector3(0, 1.6, 0), headLocalQ = new THREE.Quaternion();
 let gameTime = 0, fps = 0, frames = 0, fpsT = 0, watchT = 0;
 function drawWatch(){
   const g = watchFace.ctx;
@@ -214,7 +254,19 @@ function locomotion(dt){
   const target = v1.copy(headPos).addScaledVector(player.moveVel, dt);
   target.y = 0;
   const feet = rig.position.y;
-  pushOut(target, 0.22, feet);
+  // tall things (walls, trees, the shed, block towers) stop you however you move, even walking for real
+  const lean = headPos.y - 0.45;
+  pushOut(target, 0.22, feet, STEP, { minTop: lean });
+  // low things (the table, fences, low walls) only stop the stick, so you can lean right over them
+  if (player.moveVel.lengthSq() > 1e-4){
+    const pen = (x, z) => { const c = v2.set(x, 0, z); pushOut(c, 0.18, feet, STEP, { maxTop: lean }); return Math.hypot(c.x - x, c.z - z); };
+    const now = pen(headPos.x, headPos.z);
+    if (pen(target.x, target.z) > now + 1e-4){
+      if (pen(target.x, headPos.z) <= now + 1e-4) target.z = headPos.z;
+      else if (pen(headPos.x, target.z) <= now + 1e-4) target.x = headPos.x;
+      else { target.x = headPos.x; target.z = headPos.z; }
+    }
+  }
   const dx = target.x - headPos.x, dz = target.z - headPos.z;
   rig.position.x += dx; rig.position.z += dz;
   headPos.x += dx; headPos.z += dz;
@@ -238,8 +290,14 @@ function locomotion(dt){
 // ---------- the frame ----------
 const clock = new THREE.Clock();
 let xrRefSpace = null;
+// One bad frame must never stop the loop (three.js only asks for the next frame after this returns).
+let frameErrors = 0;
 function frame(time, xrFrame){
-  const dt = Math.min(clock.getDelta(), 1 / 30);
+  try { step(time, xrFrame); }
+  catch (e){ if (frameErrors++ < 5) console.error(e); if (frameErrors < 3) setTimeout(() => { throw e; }); }
+}
+function step(time, xrFrame){
+  const dt = Math.max(1e-4, Math.min(clock.getDelta(), 1 / 30));
   gameTime += dt;
   frames++; fpsT += dt; if (fpsT >= 1){ fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
   avatar.root.visible = mode !== 'title';
@@ -252,8 +310,8 @@ function frame(time, xrFrame){
     const pose = xrFrame && ref ? xrFrame.getViewerPose(ref) : null;
     if (pose){
       const t = pose.transform;
-      headPos.set(t.position.x, t.position.y, t.position.z).applyMatrix4(rig.matrixWorld);
-      headQuat.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w).premultiply(q1.setFromRotationMatrix(m1.extractRotation(rig.matrixWorld)));
+      headLocal.set(t.position.x, t.position.y, t.position.z); headLocalQ.set(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
+      headFromLocal();
       // learn how tall you are from the first couple of seconds
       if (!calib.done){
         calib.t += dt;
@@ -265,27 +323,47 @@ function frame(time, xrFrame){
   } else desktopInput(dt);
   edges();
 
-  locomotion(dt);
+  const L = hands[0], Rh = hands[1];
+  // getting into a vehicle: squeeze while your hand is on it (and not on something to pick up)
+  if (!vehicles.current) for (const h of hands){
+    if (h.squeezeDown && h.tracked && !h.held && !h.heldCreature && !items.nearCandidate(h) && !creatures.near(h)){
+      const v = vehicles.touched(h);
+      if (v){ enterVehicle(v); h.squeezeDown = false; break; }
+    }
+  }
+  if (vehicles.current && L.stickDown) exitVehicle();
+  vehicles.update(dt, hands);
+  if (vehicles.current) seatRig(); else locomotion(dt);
   // the grips moved with the rig
   if (mode === 'vr') readVRInput(renderer.xr.getSession());
   handMotion(dt);
 
+  // raise both hands over your head to call the dragon
+  if (L.tracked && Rh.tracked && L.pos.y > headPos.y + 0.12 && Rh.pos.y > headPos.y + 0.12){
+    callT += dt;
+    if (callT > 0.6 && gameTime - lastCall > 4){ lastCall = gameTime; if (dragon.call(player)) say('here comes the dragon!'); L.haptic(0.3, 60); Rh.haptic(0.3, 60); }
+  } else callT = 0;
+
   // buttons
-  const L = hands[0], Rh = hands[1];
   if (L.bDown){ settings.smoothTurn = !settings.smoothTurn; saveSettings(); say(settings.smoothTurn ? 'smooth turn' : 'snap turn'); sfx.ui(); }
   if (L.aDown){ calibrateNow(); }
   if (Rh.bDown){ items.recallAll(); say('items returned'); sfx.ui(); }
 
   player.pos.set(headPos.x, rig.position.y, headPos.z);
   player.head.copy(headPos);
+  player.yaw = yawOf(v1.set(0, 0, -1).applyQuaternion(headQuat).setY(0).lengthSq() > 1e-4 ? v1 : v1.set(0, 0, -1));
 
   // body
   const grips = hands.map((h) => h.tracked ? { pos: h.pos, quat: h.quat } : null);
   avatar.update(dt, headPos, headQuat, grips, (x, z) => surfaceHeight(x, z, rig.position.y + STEP), player.air);
+  const seated = !!vehicles.current;
+  for (const m of [...avatar.thigh, ...avatar.shin, ...avatar.foot, avatar.shadow]) m.visible = !seated;
   for (let i = 0; i < 2; i++) avatar.hands[i].setPose(hands[i].curl.index, hands[i].curl.grip, hands[i].curl.thumb);
   updateHolsters();
 
   items.update(dt, hands, holsters);
+  builder.update(dt, hands, player, !vehicles.current);
+  dragon.update(dt, player, hands);
   creatures.update(dt, player);
   villagers.update(dt, player, headPos);
   particles.update(dt);
@@ -315,6 +393,45 @@ function frame(time, xrFrame){
 }
 const specCam = new THREE.PerspectiveCamera(60, 1, 0.05, 600);
 renderer.setAnimationLoop(frame);
+
+// head pose in the world from its pose in the tracking space
+function headFromLocal(){
+  rig.updateMatrixWorld(true);
+  headPos.copy(headLocal).applyMatrix4(rig.matrixWorld);
+  headQuat.copy(headLocalQ).premultiply(q1.setFromRotationMatrix(m1.extractRotation(rig.matrixWorld)));
+}
+// ---- vehicles ----
+function enterVehicle(v){
+  player.seatHead = mode === 'vr' ? headLocal.clone() : new THREE.Vector3(0, headPos.y - rig.position.y, 0);
+  const e = new THREE.Euler().setFromQuaternion(headLocalQ, 'YXZ');
+  player.seatYaw = mode === 'vr' ? -e.y : 0;
+  player.air = false; player.vy = 0; player.moveVel.set(0, 0, 0);
+  vehicles.enter(v, player);
+  say({ truck: 'truck: left stick drives', tank: 'tank: right stick aims, trigger fires', heli: 'chopper: right stick up = climb' }[v.kind]);
+  avatar.feet.forEach((f) => { f.init = false; });
+}
+function exitVehicle(){
+  const p = vehicles.exit();
+  if (!p) return;
+  rig.position.x += p.x - headPos.x; rig.position.z += p.z - headPos.z; rig.position.y = p.y;
+  if (mode === 'vr') headFromLocal(); else { headPos.set(rig.position.x, rig.position.y + 1.62, rig.position.z); }
+  avatar.feet.forEach((f) => { f.init = false; });
+  say('out'); sfx.ui();
+}
+// keep your head on the seat as the vehicle moves
+function seatRig(){
+  const v = vehicles.current, seat = v.seatWorld(v2);
+  if (mode === 'vr'){
+    rig.rotation.y = v.yaw + player.seatYaw;
+    const off = v1.copy(player.seatHead).applyAxisAngle(THREE.Object3D.DEFAULT_UP, rig.rotation.y);
+    rig.position.copy(seat).sub(off);
+    headFromLocal();
+  } else {
+    rig.position.set(seat.x, seat.y - (window.__vrtest && window.__vrtest.input && window.__vrtest.input.eye != null ? window.__vrtest.input.eye : 1.62), seat.z);
+    headPos.copy(seat);
+  }
+  player.moveVel.set(0, 0, 0); player.air = false;
+}
 
 function setEyeHeight(h){ eyeHeight = Math.max(1.0, Math.min(2.05, h)); avatar.setScale(eyeHeight); mirrorAvatar.setScale(eyeHeight); }
 function calibrateNow(){
@@ -346,7 +463,7 @@ function updateMirror(){
     const p = it.mesh.position;
     if (!(p.x > M.x && p.x < M.x + 4 && Math.abs(p.z - M.z) < 2.2)) continue;
     let c = mirrorItems.get(it);
-    if (!c){ c = it.mesh.clone(); mirrorItems.set(it, c); mirrorGroup.add(c); }
+    if (!c){ c = toMirror(it.mesh.clone()); mirrorItems.set(it, c); mirrorGroup.add(c); }
     c.position.copy(p); c.quaternion.copy(it.mesh.quaternion); c.scale.copy(it.mesh.scale); c.visible = true;
     if (it.kind === 'gun'){ c.children[1].position.copy(it.mesh.userData.slide.position); c.children[2].visible = it.mesh.userData.flash.visible; }
     seen.add(it);
@@ -364,6 +481,8 @@ function titleSpin(dt){
   creatures.update(dt, { pos: new THREE.Vector3(0, 0, 50), head: new THREE.Vector3(0, 1.6, 50), speed: 0 });
   villagers.update(dt, { pos: new THREE.Vector3(0, 0, 50), head: new THREE.Vector3(0, 1.6, 50), speed: 0 }, camera.position);
   items.update(dt, [], holsters);
+  dragon.update(dt, { pos: new THREE.Vector3(0, 0, 50), head: new THREE.Vector3(0, 1.6, 50), speed: 0 }, null);
+  vehicles.update(dt, hands);
   world.update(dt);
 }
 
@@ -408,6 +527,7 @@ function desktopInput(dt){
       const th = T.hands[i];
       h.pos.set(...th.pos); h.quat.set(...th.quat);
       h.rayQuat = h.rayQuat || new THREE.Quaternion(); h.rayQuat.copy(th.rayQuat ? new THREE.Quaternion(...th.rayQuat) : h.quat);
+      h.rayPos = (h.rayPos || new THREE.Vector3()).copy(h.pos);
       h.trigger = th.trigger || 0; h.squeeze = th.squeeze || 0; h.triggerTouch = !!th.triggerTouch || h.trigger > 0.05; h.thumbTouch = !!th.thumbTouch;
       h.stick.x = th.stick ? th.stick[0] : 0; h.stick.y = th.stick ? th.stick[1] : 0; h.a = !!th.a; h.b = !!th.b; h.stickPress = false;
       continue;
@@ -415,6 +535,7 @@ function desktopInput(dt){
     h.pos.set(...offs[i]).applyQuaternion(headQuat).add(headPos);
     h.quat.copy(headQuat).multiply(handBasis);
     h.rayQuat = h.rayQuat || new THREE.Quaternion(); h.rayQuat.copy(headQuat);
+    h.rayPos = (h.rayPos || new THREE.Vector3()).copy(h.pos);
     h.trigger = i === 1 && desk.trigger ? 1 : 0; h.triggerTouch = i === 1;
     h.squeeze = (i === 1 ? desk.rightGrip : desk.leftGrip) ? 1 : 0;
     h.thumbTouch = true;
@@ -437,6 +558,7 @@ async function enterVR(){
   }
 }
 function startPlay(m){
+  if (vehicles.current) vehicles.exit();
   mode = m;
   $('title').classList.add('hidden');
   rig.position.set(0, 0, 1.2); rig.rotation.set(0, 0, 0);
@@ -472,7 +594,7 @@ addEventListener('resize', () => {
 
 // for the headless test
 window.__vrtest = {
-  get mode(){ return mode; }, items, creatures, villagers, avatar, mirrorAvatar, hands, rig, player, settings, holsters, renderer,
+  get mode(){ return mode; }, items, creatures, villagers, builder, dragon, vehicles, avatar, mirrorAvatar, hands, rig, player, settings, holsters, renderer,
   enterVR, startDesktop, spectate: null, input: null,
   get eyeHeight(){ return eyeHeight; }, get time(){ return gameTime; }, get fps(){ return fps; },
   get head(){ return headPos.toArray(); }, get headQuat(){ return headQuat.toArray(); },

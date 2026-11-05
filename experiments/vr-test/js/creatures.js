@@ -87,6 +87,16 @@ export class Creatures {
       a.hitCool -= dt;
       const sp = a.sp;
       if (a.held){ this.animate(a, dt, 0, true); continue; }
+      if (a.pulled){
+        const h = a.pulled;
+        a.pullT += dt;
+        // move the body centre toward the hand
+        v1.copy(h.pos).sub(v2.set(0, sp.center, 0));
+        a.pos.lerp(v1, Math.min(1, dt * 6));
+        if (this.center(a).distanceTo(h.pos) < 0.2 || a.pullT > 1.5){ this.grab(a, h); h.heldCreature = a; h.pullingCreature = null; }
+        this.animate(a, dt, 0, true);
+        continue;
+      }
       if (a.air){
         a.vel.y -= (a.kind === 'chicken' && a.vel.y < 0 ? 4 : 9.8) * dt;
         a.pos.addScaledVector(a.vel, dt);
@@ -100,8 +110,7 @@ export class Creatures {
       }
       // what's the player doing?
       const dx = a.pos.x - player.pos.x, dz = a.pos.z - player.pos.z, dist = Math.hypot(dx, dz);
-      const scary = a.kind === 'chicken' ? 1.4 : 1.0;
-      if (dist < scary && (a.kind === 'chicken' || player.speed > 1.5) && a.state !== 'flee'){ a.state = 'flee'; a.timer = 1.5 + R(); }
+      if (dist < 1.6 && player.speed > 1.5 && a.state !== 'flee'){ a.state = 'flee'; a.timer = 1.5 + R(); }
       a.timer -= dt;
       let want = 0, wantYaw = a.yaw;
       if (a.state === 'idle' || a.state === 'graze'){
@@ -190,21 +199,40 @@ export class Creatures {
   }
 
   // ---- picking up chickens ----
-  grabAt(h){
-    let best = null, bd = 0.24;
+  near(h){
+    let best = null, bd = 0.32;
     for (const a of this.list){
-      if (!a.sp.grab || a.held) continue;
+      if (!a.sp.grab || a.held || a.pulled) continue;
       const d = this.center(a).distanceTo(h.pos);
       if (d < bd){ bd = d; best = a; }
     }
-    if (!best) return null;
-    best.held = h; best.air = false;
-    m1.compose(h.pos, h.quat, v1.set(1, 1, 1)).invert();
-    best.group.updateMatrix();
-    best.offset.multiplyMatrices(m1, best.group.matrix);
-    sfx.squawk(best.pos);
     return best;
   }
+  pointAt(h){
+    if (!h.rayQuat) return null;
+    const d = v2.set(0, 0, -1).applyQuaternion(h.rayQuat).clone();
+    let best = null, bs = 1e9;
+    for (const a of this.list){
+      if (!a.sp.grab || a.held || a.pulled) continue;
+      v1.subVectors(this.center(a), h.rayPos);
+      const along = v1.dot(d); if (along < 0.4 || along > 12) continue;
+      const perp = v1.addScaledVector(d, -along).length();
+      if (perp > 0.2 + along * 0.05) continue;
+      if (perp / along < bs){ bs = perp / along; best = a; }
+    }
+    return best ? { c: best, score: bs } : null;
+  }
+  grab(a, h){
+    a.held = h; a.air = false; a.pulled = null;
+    m1.compose(h.pos, h.quat, v1.set(1, 1, 1)).invert();
+    a.group.updateMatrix();
+    a.offset.multiplyMatrices(m1, a.group.matrix);
+    sfx.squawk(a.pos);
+  }
+  grabAt(h){ const a = this.near(h); if (a) this.grab(a, h); return a; }
+  // fly toward a hand that is pulling it, then land in it
+  pull(a, h){ a.pulled = h; a.pullT = 0; a.air = false; sfx.squawk(a.pos); }
+  stopPull(a){ if (a.pulled){ a.pulled = null; a.air = true; a.vel.set(0, 0, 0); } }
   holdUpdate(a, h){
     m1.compose(h.pos, h.quat, v1.set(1, 1, 1)).multiply(a.offset);
     m1.decompose(a.pos, a.quat, v1);
@@ -219,8 +247,8 @@ export class Creatures {
 
 // ---------- villagers ----------
 const LINES = {
-  Mara: ["Hi! I'm Mara.", 'Grab the sword off the table with your side grip.', 'Swing it fast to slice the melons on the posts!', 'The pistol fires with the trigger. Try the bottles at the range.', 'Let go of a weapon by your hip to holster it.', 'Press B to send everything back to the table.'],
-  Bo: ["Howdy, I'm Bo. These are my animals.", 'You can pick the chickens up. Gently!', 'Throw the ball to knock bottles off the rail.', 'Seen yourself in the mirror? It\'s on the shed.', 'Y switches smooth and snap turning.', 'Stand up tall and press X if your body looks the wrong size.'],
+  Mara: ["Hi! I'm Mara.", 'Grab the sword off the table with your side grip.', 'Swing it fast to slice the melons on the posts!', 'The pistol fires with the trigger. Try the bottles at the range.', 'Let go of a weapon by your hip to holster it.', 'Press B to send everything back to the table.', 'Rest a finger on the right trigger to build. Left trigger breaks.', 'Wave both hands over your head and the dragon comes!'],
+  Bo: ["Howdy, I'm Bo. These are my animals.", 'You can pick the chickens up. Gently! Or point at one and squeeze.', 'Throw the ball to knock bottles off the rail.', 'Seen yourself in the mirror? It\'s on the shed.', 'Y switches smooth and snap turning.', 'Stand up tall and press X if your body looks the wrong size.', 'The truck, tank and chopper are in the yard. Touch one and squeeze to get in.', 'Click the left stick to climb out of a vehicle.'],
 };
 const OUCH = ['Ouch!', 'Hey! Watch it!', "I'm not a melon!", 'Careful with that!'];
 

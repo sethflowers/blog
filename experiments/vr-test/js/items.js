@@ -81,6 +81,8 @@ export class Item {
     this.home = null; this.idle = 0; this.cool = 0; this.age = 0; this.dead = false;
     this.freeOffset = new THREE.Matrix4();
     this.spawnT = opts.spawnIn ? 0 : 1;
+    // its outline in its own frame, for "is my hand touching it"
+    this.localBox = new THREE.Box3().setFromObject(mesh);
     this.grounded = false;
   }
   setHome(){ this.home = { pos: this.mesh.position.clone(), quat: this.mesh.quaternion.clone() }; }
@@ -140,8 +142,12 @@ const FRUIT = [
 ];
 
 export class Items {
-  constructor(scene, { particles, creatures, npcs }){
-    this.scene = scene; this.particles = particles; this.creatures = creatures; this.npcs = npcs;
+  constructor(scene, { particles, creatures, npcs, dragon }){
+    this.scene = scene; this.particles = particles; this.creatures = creatures; this.npcs = npcs; this.dragon = dragon;
+    this.builder = null;
+    // outlines on whatever each hand would grab: white within reach, blue when pointing at it from afar
+    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
+    this.hover = [0, 1].map(() => { const l = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff })); l.visible = false; l.matrixAutoUpdate = false; scene.add(l); return l; });
     this.list = [];
     this.tracers = [];
     for (let i = 0; i < 4; i++){
@@ -221,7 +227,7 @@ export class Items {
     for (const it of [...this.list]){
       it.age += dt; it.cool -= dt;
       if (it.spawnT < 1){ it.spawnT = Math.min(1, it.spawnT + dt * 4); it.mesh.scale.setScalar(0.01 + 0.99 * (1 - (1 - it.spawnT) ** 3)); }
-      if (it.held) continue;
+      if (it.held || it.pulledBy) continue;
       if (it.holster){ this.followHolster(it, holsters); continue; }
       if (!it.sleeping) this.physics(dt, it);
       // pieces fade away after a while; lost things go home
@@ -260,8 +266,56 @@ export class Items {
   }
 
   // ---- hands ----
+  // how far a point is from an item's surface
+  reach(it, p){
+    if (it.sphere) return it.mesh.position.distanceTo(p) - it.radius;
+    it.mesh.updateMatrixWorld();
+    v1.copy(p); it.mesh.worldToLocal(v1);
+    const b = it.localBox;
+    const dx = Math.max(b.min.x - v1.x, 0, v1.x - b.max.x), dy = Math.max(b.min.y - v1.y, 0, v1.y - b.max.y), dz = Math.max(b.min.z - v1.z, 0, v1.z - b.max.z);
+    return Math.hypot(dx, dy, dz) * it.mesh.scale.x;
+  }
+  // the closest thing within reach of a hand
+  nearCandidate(h){
+    let best = null, bd = 0.1;
+    for (const it of this.list){
+      if (it.dead || it.spawnT < 0.5 || it.pulledBy) continue;
+      if (it.held === h) continue;
+      const d = this.reach(it, h.pos);
+      if (d < bd){ bd = d; best = it; }
+    }
+    return best;
+  }
+  // the thing a hand is pointing at, up to 12 m away
+  pointCandidate(h){
+    if (!h.rayQuat) return null;
+    const d = v2.set(0, 0, -1).applyQuaternion(h.rayQuat);
+    let best = null, bs = 1e9;
+    for (const it of this.list){
+      if (it.dead || it.held || it.spawnT < 0.5 || it.pulledBy || it.holster) continue;
+      v1.subVectors(it.mesh.position, h.rayPos);
+      const along = v1.dot(d); if (along < 0.4 || along > 12) continue;
+      const perp = v1.addScaledVector(d, -along).length();
+      if (perp > 0.15 + along * 0.05) continue;
+      const score = perp / along;
+      if (score < bs){ bs = score; best = it; }
+    }
+    return best ? { it: best, score: bs } : null;
+  }
+  showHover(i, it, far){
+    const l = this.hover[i];
+    if (!it){ l.visible = false; return; }
+    const b = it.localBox, size = v1.subVectors(b.max, b.min).addScalar(0.03), c = v2.addVectors(b.min, b.max).multiplyScalar(0.5);
+    it.mesh.updateMatrixWorld();
+    l.matrix.copy(it.mesh.matrixWorld).multiply(m2.makeTranslation(c.x, c.y, c.z)).scale(size);
+    l.material.color.set(far ? 0x7fd4ff : 0xffffff);
+    l.visible = true;
+  }
+
   handUpdate(dt, h, holsters){
-    if (!h.tracked){ if (h.held) this.release(h, holsters); return; }
+    const hi = h.side === 'left' ? 0 : 1;
+    this.showHover(hi, null);
+    if (!h.tracked){ if (h.held) this.release(h, holsters); if (h.pulling) this.stopPull(h); return; }
     if (h.held && h.held.dead){ h.held = null; }
     if (h.held){
       if (h.squeezeUp || h.squeeze < 0.25){ this.release(h, holsters); return; }
@@ -271,24 +325,53 @@ export class Items {
       if (it.kind === 'gun' && h.triggerDown) this.fire(it, h);
       return;
     }
-    if (h.squeezeDown){
-      // nearest thing in reach: snap-grab points first, then anything you're touching
-      let best = null, bd = 1e9;
-      for (const it of this.list){
-        if (it.dead || it.spawnT < 0.5) continue;
-        let d;
-        if (it.grabPoint){ v1.copy(it.grabPoint).applyMatrix4(it.mesh.matrixWorld); d = v1.distanceTo(h.pos) - 0.06; }
-        else d = it.mesh.position.distanceTo(h.pos) - it.radius * 0.9;
-        if (d < 0.07 && d < bd){ bd = d; best = it; }
-      }
-      if (best){ this.grab(h, best); return; }
-      const c = this.creatures && this.creatures.grabAt(h);
-      if (c){ h.heldCreature = c; h.haptic(0.4, 40); this.emit('grab', { kind: c.kind }); return; }
+    // pulling something toward you from afar
+    if (h.pulling){
+      const it = h.pulling;
+      if (it.dead || h.squeeze < 0.25){ this.stopPull(h); return; }
+      const p = it.mesh.position, before = p.clone();
+      p.lerp(v1.copy(h.pos), Math.min(1, dt * 6)); p.y += Math.sin(Math.min(1, it.pullT) * Math.PI) * dt * 1.5;
+      it.pullT += dt;
+      it.vel.subVectors(p, before).divideScalar(Math.max(dt, 1e-3));
+      it.mesh.updateMatrixWorld();
+      if (p.distanceTo(h.pos) < 0.2 || it.pullT > 1.5){ it.pulledBy = null; h.pulling = null; this.grab(h, it); }
+      return;
     }
     if (h.heldCreature){
       if (h.squeezeUp || h.squeeze < 0.25){ this.creatures.release(h.heldCreature, h.vel); h.heldCreature = null; }
       else this.creatures.holdUpdate(h.heldCreature, h);
+      return;
     }
+    if (h.pullingCreature){
+      if (h.squeeze < 0.25){ this.creatures.stopPull(h.pullingCreature); h.pullingCreature = null; }
+      return;
+    }
+    // what would this hand grab?
+    const near = this.nearCandidate(h);
+    const nearC = !near && this.creatures ? this.creatures.near(h) : null;
+    let far = null, farC = null;
+    if (!near && !nearC && !(h.triggerTouch && !h.squeezeDown)){
+      far = this.pointCandidate(h);
+      farC = this.creatures ? this.creatures.pointAt(h) : null;
+      if (far && farC){ if (farC.score < far.score) far = null; else farC = null; }
+    }
+    if (near) this.showHover(hi, near, false); else if (far) this.showHover(hi, far.it, true);
+    if (!h.squeezeDown) return;
+    if (near){ this.grab(h, near); return; }
+    if (nearC){ this.creatures.grab(nearC, h); h.heldCreature = nearC; h.haptic(0.4, 40); this.emit('grab', { kind: nearC.kind }); return; }
+    if (far){
+      const it = far.it;
+      it.pulledBy = h; it.pullT = 0; h.pulling = it; it.sleeping = false; it.holster = null;
+      if (it.isFruit) for (const p of this.posts) if (p.item === it){ p.item = null; it.temp = true; it.age = 0; }
+      for (const b of this.bottleSlots) if (b.item === it) b.item = null;
+      h.haptic(0.25, 30); sfx.grab(it.mesh.position); this.emit('pull', { kind: it.kind });
+      return;
+    }
+    if (farC){ this.creatures.pull(farC.c, h); h.pullingCreature = farC.c; h.haptic(0.25, 30); this.emit('pull', { kind: farC.c.kind }); }
+  }
+  stopPull(h){
+    const it = h.pulling; h.pulling = null;
+    if (it){ it.pulledBy = null; it.sleeping = false; }
   }
   grab(h, it){
     // take it from the other hand if need be
@@ -427,6 +510,7 @@ export class Items {
       }
       if (this.creatures){ const c = this.creatures.hitSphere(p, it.radius + 0.05); if (c){ this.creatures.hit(c, it.vel.clone().normalize(), 0.6); it.vel.multiplyScalar(-0.3); } }
       if (this.npcs){ const n = this.npcs.hitSphere(p, it.radius + 0.05); if (n){ this.npcs.hit(n, it.vel.clone().normalize()); it.vel.multiplyScalar(-0.3); } }
+      if (this.dragon && this.dragon.hitSphere(p, it.radius)){ this.dragon.hit(); it.vel.multiplyScalar(-0.3); }
     }
   }
 
@@ -468,6 +552,8 @@ export class Items {
     }
     // animals and people get a bonk, not a cut
     const tipVel = v3.subVectors(tip, sw.prevTip).divideScalar(Math.max(dt, 1e-3)).clone();
+    if (this.builder && this.builder.swordSweep(pts.slice(2), tipVel.length(), tipVel.clone().normalize())) h.haptic(0.6, 40);
+    if (this.dragon && tipVel.length() > 2.2){ for (let i = 2; i < N; i++) if (this.dragon.hitSphere(pts[i], 0.05)){ this.dragon.hit(); break; } }
     if (tipVel.length() > 2.2){
       for (let i = 2; i < N; i++){
         if (this.creatures){ const c = this.creatures.hitSphere(pts[i], 0.05); if (c && c.hitCool <= 0){ this.creatures.hit(c, tipVel.clone().normalize(), 0.8); h.haptic(0.6, 50); this.emit('bonk', { kind: c.kind }); break; } }
@@ -545,6 +631,8 @@ export class Items {
     }
     if (this.creatures){ const c = this.creatures.raycast(muzzle, dir, best.t); if (c) best = { t: c.t, type: 'creature', c: c.c }; }
     if (this.npcs){ const n = this.npcs.raycast(muzzle, dir, best.t); if (n) best = { t: n.t, type: 'npc', n: n.n }; }
+    if (this.dragon){ const n = this.dragon.raycast(muzzle, dir, best.t); if (n) best = { t: n.t, type: 'dragon' }; }
+    if (this.builder){ const b = this.builder.raycast(muzzle, dir, best.t + 0.1); if (b && b.t <= best.t + 0.06) best = { t: b.t, type: 'block', cell: b.cell }; }
     const end = muzzle.clone().addScaledVector(dir, Math.min(best.t, max));
     // tracer
     const tr = this.tracers.find((t) => !t.visible) || this.tracers[0];
@@ -565,6 +653,10 @@ export class Items {
       this.creatures.hit(best.c, dir, 1.2);
     } else if (best.type === 'npc'){
       this.npcs.hit(best.n, dir);
+    } else if (best.type === 'dragon'){
+      this.dragon.hit();
+    } else if (best.type === 'block'){
+      this.builder.breakCell(best.cell, dir);
     } else if (best.t < max){
       this.particles.burst(end, best.type === 'ground' ? 0x8a6142 : 0xc8a060, 8, 1.6, 0.03, 0.6, 1, dir.clone().negate());
     }

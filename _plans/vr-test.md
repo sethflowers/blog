@@ -54,6 +54,39 @@ worker and icons.
 - **Wrist watch** on the left wrist: time, frame rate, turning mode.
 - **Sound**: synthesised, placed in 3D with HRTF; wind and birds in the background.
 
+## Version 2
+
+- **Grabbing fixes.** You could not get close to the table: leaning over it moved your head "into" it and
+  the game pushed you back. Now only tall things (walls, trees, block towers) stop your real head; low
+  things (table, fences, low walls) only stop the stick. Grab range is measured to the object's actual
+  outline (10 cm), with a white outline on whatever your hand would take. Point at something up to 12 m
+  away and squeeze to pull it to your hand (blue outline). Chickens no longer run from anyone within
+  1.4 m (that is why they could never be caught); like the other animals, they only run if you rush them.
+- **Building** (`build.js`). Half-metre blocks on a grid, 12 kinds. A finger resting on the right
+  trigger shows a ghost block where you point; pull to place; keep holding and sweep to paint a row or
+  floor along the face you started on. Flick the right stick up/down for the next/previous block (a
+  little one floats over your right hand). The left trigger breaks what you point at (hold to keep
+  breaking); punching, the sword, the pistol and tank shells break blocks too. Blocks are solid: you can
+  climb half-block steps, walls stop you, things rest on them. Picking uses an exact grid walk
+  (Amanatides & Woo) so the face you point at is always the one you get. Saved in the browser; the red
+  button by the start clears everything (hit it twice). Each block kind is one instanced mesh.
+- **Dragon** (`dragon.js`). About 14 m across the wings. Circles the valley, glides, flaps with a
+  whoosh. Raise both hands over your head to call it: it finds flat open ground near you (or its meadow
+  behind the start), lands facing you, watches you, blinks, breathes, sways its tail, and rumbles with
+  little hearts when you pet it. Hitting it gets a huff of smoke. It is solid while sitting.
+- **Vehicles** (`vehicles.js`), in the yard to the right of the start. Touch one and squeeze to get in,
+  click the left stick to get out. Your view rides in the seat (turning with the vehicle, never tilting).
+  Truck: left stick drives and steers, trigger honks. Tank: left stick drives and turns on the spot,
+  right stick turns the turret and raises the barrel, right trigger fires shells that blow up blocks and
+  knock things over. Helicopter: right stick up/down climbs and descends, right stick left/right turns,
+  left stick flies; it settles gently if you get out in the air (you drop to the ground). Engines are
+  synthesised loops.
+- **Mirror fix.** A sword pushed into the mirror used to show inside the hollow "reflection room", and
+  its reflection came out toward you. Real things are now clipped away inside the room, and reflections
+  are clipped to behind the glass (material clipping planes).
+- **Robustness.** An error in one frame used to stop the three.js loop for good (it asks for the next
+  frame after the callback); the frame is now wrapped so the game keeps running.
+
 ## Performance choices
 
 - One material (Lambert, vertex colour times a 16x16 speckle texture) for almost everything.
@@ -73,5 +106,4 @@ villager, and saves screenshots. Headless frames are slow, so the test waits on 
 
 - Comfort vignette while moving; teleport as an option.
 - Hand tracking (no controllers).
-- Distance grab (point and pull).
 - Climbing, doors, a dungeon to explore, enemies that fight back.
