@@ -11,7 +11,12 @@
 //  - your hands sit on the controllers and the fingers follow trigger, grip and thumb touches
 //  - the sword can be picked up and really cuts a melon; it goes in the hip holster
 //  - the pistol shoots a bottle off the range rail
-//  - a chicken can be picked up; the mirror shows you; a villager talks to you
+//  - you can lean over the table; things can be grabbed from a few cm away or pulled from afar
+//  - chickens let you walk up and pick them up (or pull them to you)
+//  - blocks can be placed (and swept into rows), climbed onto, broken with the left trigger or a punch
+//  - raising both hands calls the dragon, which lands near you and likes being petted
+//  - the truck drives, the tank fires and blows up blocks, the helicopter climbs; you can get out
+//  - the mirror shows you, and a sword pushed into it doesn't come out the other side; a villager talks
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -102,7 +107,13 @@ const shot = (name) => pg.screenshot({ path: path.join(OUT, name + '.png') });
 const ev = (s) => pg.evaluate(s);
 const wait = (ms) => pg.waitForTimeout(ms);
 // headless frames are slow and the game caps its time step, so wait on the game's own clock
-const waitGame = async (sec) => { const t0 = await ev('__vrtest.time'); while ((await ev('__vrtest.time')) - t0 < sec) await wait(40); };
+const waitGame = async (sec) => {
+  const t0 = await ev('__vrtest.time'), start = Date.now();
+  while ((await ev('__vrtest.time')) - t0 < sec){
+    if (Date.now() - start > 30000 + sec * 15000) throw new Error('the game stopped running' + (errors.length ? ': ' + errors.slice(-3).join(' | ') : ''));
+    await wait(40);
+  }
+};
 const q = (yaw, pitch = 0, roll = 0) => ev(`(() => { const T = __vrtest, Q = T.rig.quaternion.constructor, E = T.rig.rotation.constructor; return new Q().setFromEuler(new E(${pitch}, ${yaw}, ${roll}, 'YXZ')).toArray(); })()`);
 
 console.log('VR Test ' + VERSION);
@@ -177,6 +188,19 @@ await ev(`__t.teleport(0, 0.4, 0); __t.head([0, 1.7, 0.4], 0, 0)`);
 await ev(`__t.stick('left', 0, -1)`); await waitGame(1.5); await ev(`__t.stick('left', 0, 0)`);
 const headZ = await ev(`__vrtest.head[2]`);
 check(headZ > -1.2, `the table blocks you (head stopped at z=${headZ.toFixed(2)})`);
+// but leaning over it (moving your real head) doesn't push you back
+await ev(`__t.teleport(0, -0.55, 0); __t.head([0, 1.7, -0.55], 0, -0.5)`); await waitGame(0.3);
+const rigZ0 = await ev(`__vrtest.rig.position.z`);
+await ev(`__t.head([0, 1.45, -1.4], 0, -0.9)`); await waitGame(0.6);
+check(Math.abs(await ev(`__vrtest.rig.position.z`) - rigZ0) < 0.01, 'leaning right over the table doesn\'t push you back');
+await shot('03b-lean-over-table');
+// grab the ball from the far side of the table, hand a few cm off it
+const ball = await ev(`__vrtest.items.get('ball').mesh.position.toArray()`);
+await ev(`__t.grip('right', [${ball[0]}, ${ball[1] + 0.17}, ${ball[2]}], ${JSON.stringify(await q(0, 1.0))})`);
+await ev(`__t.btn('right', 'squeeze', 1)`); await waitGame(0.2);
+check(await ev(`__vrtest.hands[1].held && __vrtest.hands[1].held.kind`) === 'ball', 'grabs the ball with the hand 7 cm above it, leaning over the table');
+await ev(`__t.btn('right', 'squeeze', 0)`); await waitGame(1.5);
+await ev(`__vrtest.items.recallAll()`); await waitGame(0.5);
 
 // ---- the sword ----
 await ev(`__t.teleport(0, -0.5, 0); __t.head([0, 1.7, -0.6], 0, -0.6)`);
@@ -266,20 +290,180 @@ await ev(`__t.btn('right', 'squeeze', 0)`); await wait(300);
 check(await ev(`__vrtest.holsters[1].item && __vrtest.holsters[1].item.kind`) === 'gun', 'the pistol goes in the right hip holster');
 
 // ---- a chicken ----
-const chick = await ev(`(() => { const c = __vrtest.creatures.list.find(c => c.kind === 'chicken'); c.state = 'idle'; c.timer = 99; return [c.pos.x, c.pos.z]; })()`);
-await ev(`__t.teleport(${chick[0]}, ${chick[1] + 0.9}, 0); __t.head([${chick[0]}, 1.7, ${chick[1] + 0.9}], 0, -0.9)`);
-await ev(`(() => { const c = __vrtest.creatures.list.find(c => c.kind === 'chicken'); c.state = 'idle'; c.timer = 99; })()`);
-await wait(200);
-const cc = await ev(`(() => { const c = __vrtest.creatures.list.find(c => c.kind === 'chicken'); c.state = 'idle'; c.timer = 99; return __vrtest.creatures.center(c).toArray(); })()`);
-await ev(`__t.grip('right', ${JSON.stringify(cc)}, ${JSON.stringify(await q(0, 0.3))})`);
-await ev(`__t.btn('right', 'squeeze', 1)`); await wait(300);
-check(await ev(`!!__vrtest.hands[1].heldCreature`), 'grip picks up a chicken');
-await ev(`__t.grip('right', [${chick[0] + 0.2}, 1.35, ${chick[1] + 0.5}], ${JSON.stringify(await q(0, 0.3))})`);
-await ev(`__t.head([${chick[0]}, 1.7, ${chick[1] + 0.9}], 0, -0.3)`);
-await wait(300);
+// walk up to one slowly: it shouldn't run off
+const chick = await ev(`(() => { const c = __vrtest.creatures.list.find(c => c.kind === 'chicken'); return [c.pos.x, c.pos.z]; })()`);
+await ev(`__t.teleport(${chick[0]}, ${chick[1] + 2.5}, 0); __t.head([${chick[0]}, 1.7, ${chick[1] + 2.5}], 0, -0.6)`);
+await waitGame(0.3);
+await ev(`__t.stick('left', 0, -0.45)`);
+const cId = await ev(`__vrtest.creatures.list.findIndex(c => c.kind === 'chicken')`);
+for (let k = 0; k < 40; k++){
+  const d = await ev(`(() => { const c = __vrtest.creatures.list[${cId}]; return Math.hypot(c.pos.x - __vrtest.head[0], c.pos.z - __vrtest.head[2]); })()`);
+  if (d < 0.75) break;
+  await ev(`(() => { const c = __vrtest.creatures.list[${cId}], h = __vrtest.head; const dx = c.pos.x - h[0], dz = c.pos.z - h[2]; __t.head([h[0], 1.7, h[2]], Math.atan2(-dx, -dz), -0.6); })()`);
+  await waitGame(0.1);
+}
+await ev(`__t.stick('left', 0, 0)`); await waitGame(0.2);
+check(await ev(`__vrtest.creatures.list[${cId}].state !== 'flee'`), 'a chicken lets you walk up to it');
+const cc = await ev(`__vrtest.creatures.center(__vrtest.creatures.list[${cId}]).toArray()`);
+await ev(`__t.grip('right', [${cc[0] + 0.05}, ${cc[1] + 0.12}, ${cc[2]}], ${JSON.stringify(await q(0, 0.3))})`);
+await ev(`__t.btn('right', 'squeeze', 1)`); await waitGame(0.3);
+check(await ev(`!!__vrtest.hands[1].heldCreature`), 'grip picks up a chicken (hand 13 cm off it)');
+const hp2 = await ev(`__vrtest.head`);
+await ev(`__t.grip('right', [${hp2[0] + 0.2}, 1.35, ${hp2[2] - 0.4}], ${JSON.stringify(await q(0, 0.3))})`);
+await ev(`__t.head([${hp2[0]}, 1.7, ${hp2[2]}], 0, -0.3)`);
+await waitGame(0.3);
 await shot('09-chicken');
 await ev(`__t.btn('right', 'squeeze', 0)`); await waitGame(2);
-check(await ev(`!__vrtest.hands[1].heldCreature && !__vrtest.creatures.list.find(c => c.kind === 'chicken').air`), 'let go, the chicken flaps down and lands');
+check(await ev(`!__vrtest.hands[1].heldCreature && !__vrtest.creatures.list[${cId}].air`), 'let go, the chicken flaps down and lands');
+// point at another chicken and squeeze: it comes to your hand
+const c2 = await ev(`(() => { const i = __vrtest.creatures.list.findIndex((c, k) => c.kind === 'chicken' && k !== ${cId}); const c = __vrtest.creatures.list[i]; c.state = 'idle'; c.timer = 99; return [i, ...__vrtest.creatures.center(c).toArray()]; })()`);
+await ev(`__t.teleport(${c2[1]}, ${c2[3] + 3.5}, 0); __t.head([${c2[1]}, 1.7, ${c2[3] + 3.5}], 0, -0.3)`); await waitGame(0.3);
+await ev(`(async () => {
+  const T = __vrtest, c = __iwer.controllers.right, V = T.rig.position.constructor, Q = T.rig.quaternion.constructor;
+  const from = new V(${c2[1]} + 0.2, 1.3, ${c2[3]} + 3.1), to = new V(...T.creatures.center(T.creatures.list[${c2[0]}]).toArray());
+  const q = new Q().setFromUnitVectors(new V(0, 0, -1), to.clone().sub(from).normalize());
+  const L = __t.local(from.toArray()), LQ = __t.localQ(q.toArray());
+  c.position.set(L.x, L.y, L.z); c.quaternion.set(LQ.x, LQ.y, LQ.z, LQ.w); await __t.frames(3);
+})()`);
+await ev(`__t.btn('right', 'squeeze', 1)`); await waitGame(1.8);
+check(await ev(`__vrtest.hands[1].heldCreature === __vrtest.creatures.list[${c2[0]}]`), 'pointing at a chicken 3 m away and squeezing pulls it into your hand');
+await ev(`__t.btn('right', 'squeeze', 0)`); await waitGame(1);
+
+// ---- building ----
+await ev(`__t.teleport(-1, 6, 0); __t.head([-1, 1.7, 6], 0, -0.5)`); await waitGame(0.3);
+await ev(`__vrtest.builder.clearAll()`);
+const sel0 = await ev(`__vrtest.builder.selected`);
+await ev(`__t.stick('right', 0, -1)`); await waitGame(0.15); await ev(`__t.stick('right', 0, 0)`); await waitGame(0.15);
+check(await ev(`__vrtest.builder.selected`) === (sel0 + 1) % 12, 'flicking the right stick up picks the next block');
+// point at the ground 2 m ahead with a finger resting on the trigger
+const aim = async (side, from, to) => ev(`(async () => {
+  const T = __vrtest, c = __iwer.controllers['${side}'], V = T.rig.position.constructor, Q = T.rig.quaternion.constructor;
+  const f = new V(...${JSON.stringify(from)}), t = new V(...${JSON.stringify(to)});
+  const q = new Q().setFromUnitVectors(new V(0, 0, -1), t.clone().sub(f).normalize());
+  const L = __t.local(f.toArray()), LQ = __t.localQ(q.toArray());
+  c.position.set(L.x, L.y, L.z); c.quaternion.set(LQ.x, LQ.y, LQ.z, LQ.w); await __t.frames(2);
+})()`);
+await aim('right', [-0.8, 1.3, 5.7], [-1, 0, 4.0]);
+await ev(`__t.touch('right', 'trigger', true)`); await waitGame(0.2);
+check(await ev(`__vrtest.builder.ghost.visible`), 'a finger on the right trigger shows a ghost block where you point');
+await ev(`__t.btn('right', 'trigger', 1)`); await waitGame(0.15);
+check(await ev(`__vrtest.builder.count`) === 1, 'pulling the trigger places a block');
+// sweep sideways while holding: a row
+for (let k = 1; k <= 8; k++){ await aim('right', [-0.8, 1.3, 5.7], [-1 + k * 0.3, 0, 4.0]); await waitGame(0.05); }
+await ev(`__t.btn('right', 'trigger', 0)`); await waitGame(0.1);
+const row = await ev(`__vrtest.builder.count`);
+check(row >= 4, `holding the trigger and sweeping lays a row (${row} blocks)`);
+// a block on top of the row (one click, no extra blocks), then look at it
+const n1 = await ev(`__vrtest.builder.count`);
+await aim('right', [-0.8, 1.3, 5.7], [0.75, 0.5, 4.25]);
+await ev(`__t.btn('right', 'trigger', 1)`); await waitGame(0.3); await ev(`__t.btn('right', 'trigger', 0)`); await waitGame(0.1);
+check(await ev(`__vrtest.builder.count`) === n1 + 1 && await ev(`__vrtest.builder.where.has('1,1,8')`), 'clicking the top of a block puts exactly one block on it');
+await ev(`__t.touch('right', 'trigger', false)`);
+await ev(`__t.head([-1, 1.7, 6], 0, -0.45)`); await waitGame(0.3);
+await shot('13-building');
+await ev(`__t.teleport(-0.75, 6, 0); __t.head([-0.75, 1.7, 6], 0, -0.3)`); await waitGame(0.3);
+// walk onto the row: blocks are solid and half a block is a step
+await ev(`__t.stick('left', 0, -0.8)`); await waitGame(0.95); await ev(`__t.stick('left', 0, 0)`); await waitGame(0.4);
+const standY = await ev(`__vrtest.rig.position.y`);
+check(standY > 0.45, `you can step up onto blocks (standing at ${standY.toFixed(2)} m)`);
+await ev(`__t.teleport(-1, 6, 0); __t.head([-1, 1.7, 6], 0, -0.5)`); await waitGame(0.3);
+// break one with the left trigger
+const before = await ev(`__vrtest.builder.count`);
+await aim('left', [-1.2, 1.3, 5.7], [-1, 0.25, 4.25]);
+await ev(`__t.touch('left', 'trigger', true); __t.btn('left', 'trigger', 1)`); await waitGame(0.15);
+await ev(`__t.btn('left', 'trigger', 0); __t.touch('left', 'trigger', false)`); await waitGame(0.1);
+check(await ev(`__vrtest.builder.count`) === before - 1, 'the left trigger breaks the block you point at');
+// punch one
+const blockC = await ev(`(() => { const k = [...__vrtest.builder.where.keys()][0].split(',').map(Number); return [(k[0] + 0.5) * 0.5, (k[1] + 0.5) * 0.5, (k[2] + 0.5) * 0.5]; })()`);
+await ev(`__t.grip('left', [${blockC[0]}, ${blockC[1] + 0.5}, ${blockC[2] + 0.5}], ${JSON.stringify(await q(0, 0.3))})`);
+const nB = await ev(`__vrtest.builder.count`);
+await ev(`(async () => { const c = __iwer.controllers.left; for (let k = 0; k < 6; k++){ c.position.y -= 0.12; c.position.z -= 0.12; await __t.frames(1); } })()`);
+await waitGame(0.2);
+check(await ev(`__vrtest.builder.count`) < nB, 'punching a block breaks it');
+await ev(`__vrtest.builder.clearAll()`);
+
+// ---- the dragon ----
+check(await ev(`__vrtest.dragon.pos.y > 8 && __vrtest.dragon.state === 'fly'`), 'the dragon is flying circles high up');
+await ev(`__t.teleport(0, 4, 0); __t.head([0, 1.7, 4], Math.PI, 0)`); await waitGame(0.2);
+await ev(`__t.grip('left', [-0.25, 2.0, 4.0], ${JSON.stringify(await q(Math.PI, 1.2))})`);
+await ev(`__t.grip('right', [0.25, 2.0, 4.0], ${JSON.stringify(await q(Math.PI, 1.2))})`);
+await waitGame(1);
+check(await ev(`__vrtest.dragon.state`) !== 'fly', 'raising both hands calls the dragon');
+await ev(`__t.grip('left', [-0.25, 1.1, 3.8], ${JSON.stringify(await q(Math.PI, 0.4))})`);
+await ev(`__t.grip('right', [0.25, 1.1, 3.8], ${JSON.stringify(await q(Math.PI, 0.4))})`);
+for (let k = 0; k < 120 && (await ev(`__vrtest.dragon.state`)) !== 'rest'; k++) await waitGame(0.5);
+const dpos = await ev(`__vrtest.dragon.pos.toArray()`);
+check(await ev(`__vrtest.dragon.state`) === 'rest' && Math.hypot(dpos[0], dpos[2] - 4) < 14, `the dragon lands near you (${Math.hypot(dpos[0], dpos[2] - 4).toFixed(1)} m away)`);
+await ev(`__t.head([0, 1.7, 4], Math.atan2(-(${dpos[0]}), -(${dpos[2]} - 4)), 0.15)`); await waitGame(1);
+await shot('14-dragon');
+// pet its head
+const dh = await ev(`__vrtest.dragon.head.getWorldPosition(__vrtest.rig.position.clone()).toArray()`);
+const nearD = [dh[0] + (0 - dh[0]) * 0.0, dh[1], dh[2]];
+await ev(`__t.teleport(${dh[0]}, ${dh[2] + 1.6}, 0); __t.head([${dh[0]}, 1.7, ${dh[2] + 1.6}], 0, -0.2)`); await waitGame(0.3);
+const dh2 = await ev(`__vrtest.dragon.head.getWorldPosition(__vrtest.rig.position.clone()).toArray()`);
+await ev(`(async () => { for (let k = 0; k < 10; k++){ await __t.grip('right', [${dh2[0]} + Math.sin(k) * 0.15, ${dh2[1]} + 0.3, ${dh2[2]} + 0.3], ${JSON.stringify(await q(0, 0.5))}); } })()`);
+check(await ev(`__vrtest.dragon.happy > 0 && __vrtest.dragon.events.includes('pet')`), 'petting the dragon makes it happy');
+await shot('15-pet-dragon');
+
+// ---- vehicles ----
+const enter = async (kind) => {
+  const v = await ev(`(() => { const v = __vrtest.vehicles.${kind}; return { p: v.pos.toArray(), yaw: v.yaw, box: v.box } })()`);
+  // stand beside it and put a hand on its side
+  const f = [-Math.sin(v.yaw), -Math.cos(v.yaw)], r = [-f[1], f[0]];
+  const side = v.box[1] + 0.6;
+  const px = v.p[0] + r[0] * side, pz = v.p[2] + r[1] * side;
+  await ev(`__t.teleport(${px}, ${pz}, 0); __t.head([${px}, 1.7, ${pz}], 0, -0.3)`); await waitGame(0.3);
+  const hx = v.p[0] + r[0] * (v.box[1] + 0.02), hz = v.p[2] + r[1] * (v.box[1] + 0.02);
+  await ev(`__t.grip('right', [${hx}, ${v.p[1] + 1.1}, ${hz}], ${JSON.stringify(await q(0, 0.3))})`);
+  await ev(`__t.btn('right', 'squeeze', 1)`); await waitGame(0.2); await ev(`__t.btn('right', 'squeeze', 0)`); await waitGame(0.2);
+  return ev(`__vrtest.vehicles.current && __vrtest.vehicles.current.kind`);
+};
+const getOut = async () => { await ev(`__t.btn('left', 'thumbstick', 1)`); await waitGame(0.15); await ev(`__t.btn('left', 'thumbstick', 0)`); await waitGame(0.3); };
+check(await enter('truck') === 'truck', 'touching the truck and squeezing gets you in');
+await ev(`__t.head(__vrtest.head, __vrtest.vehicles.truck.yaw, -0.1)`);
+await ev(`__t.grip('left', [0, 0, 0], ${JSON.stringify(await q(0, 0))})`);
+const t0 = await ev(`__vrtest.vehicles.truck.pos.toArray()`);
+await ev(`__t.stick('left', 0, -1)`); await waitGame(1.5);
+await shot('16-truck');
+await ev(`__t.stick('left', 0, 0)`); await waitGame(1);
+const t1 = await ev(`__vrtest.vehicles.truck.pos.toArray()`);
+const seatGap = await ev(`__vrtest.vehicles.truck.seatWorld(__vrtest.rig.position.clone()).distanceTo(__vrtest.rig.position.clone().fromArray(__vrtest.head))`);
+check(Math.hypot(t1[0] - t0[0], t1[2] - t0[2]) > 2, `the left stick drives the truck (${Math.hypot(t1[0] - t0[0], t1[2] - t0[2]).toFixed(1)} m)`);
+check(seatGap < 0.3, 'you ride along in the driver\'s seat');
+await getOut();
+check(await ev(`__vrtest.vehicles.current === null && Math.abs(__vrtest.rig.position.y) < 0.6`), 'clicking the left stick gets you out, onto the ground');
+
+check(await enter('tank') === 'tank', 'getting into the tank');
+await ev(`__t.head(__vrtest.head, __vrtest.vehicles.tank.yaw, -0.1)`); await waitGame(0.3);
+await ev(`__t.stick('right', 0.6, 0)`); await waitGame(0.5); await ev(`__t.stick('right', 0, 0)`);
+check(Math.abs(await ev(`__vrtest.vehicles.tank.turretYaw`)) > 0.2, 'the right stick turns the turret');
+// a wall of blocks in front of the barrel to shoot at
+await ev(`(() => { const T = __vrtest, v = T.vehicles.tank, b = v.barrel, V = T.rig.position.constructor;
+  if (T.dragon.state === 'rest') T.dragon.takeOff();
+  T.dragon.state = 'fly'; T.dragon.pos.set(-20, 25, -20);     // out of the line of fire
+  b.updateMatrixWorld(true); const p = new V(0, 0, -6); b.localToWorld(p); const d = new V(0, 0, -1).applyQuaternion(b.getWorldQuaternion(T.rig.quaternion.clone()));
+  for (let i = -2; i <= 2; i++) for (let j = 0; j < 6; j++) T.builder.add(Math.floor((p.x + d.z * i * 0.5) / 0.5), Math.floor(p.y / 0.5) - 2 + j, Math.floor((p.z - d.x * i * 0.5) / 0.5), 4, true); })()`);
+const wall = await ev(`__vrtest.builder.count`);
+await ev(`__t.btn('right', 'trigger', 1)`); await waitGame(0.15); await ev(`__t.btn('right', 'trigger', 0)`);
+await waitGame(0.12); await shot('17-tank-fire');
+await waitGame(1);
+check(await ev(`__vrtest.vehicles.events.includes('fire')`), 'the right trigger fires the tank\'s cannon');
+check(await ev(`__vrtest.builder.count`) < wall, `the shell blows a hole in a wall of blocks (${wall} -> ${await ev('__vrtest.builder.count')}; ${await ev('__vrtest.vehicles.events.join()')})`);
+await ev(`__vrtest.builder.clearAll()`);
+await getOut();
+
+check(await enter('heli') === 'heli', 'getting into the helicopter');
+await ev(`__t.head(__vrtest.head, __vrtest.vehicles.heli.yaw, -0.2)`);
+await waitGame(1.5);
+await ev(`__t.stick('right', 0, -1)`); await waitGame(2.5); await ev(`__t.stick('right', 0, 0)`);
+await ev(`__t.stick('left', 0, -1)`); await waitGame(1.5); await ev(`__t.stick('left', 0, 0)`);
+const alt = await ev(`__vrtest.vehicles.heli.alt`);
+check(alt > 3, `the helicopter climbs (${alt.toFixed(1)} m up)`);
+await ev(`__t.head(__vrtest.head, __vrtest.vehicles.heli.yaw, -0.45)`); await waitGame(0.3);
+await shot('18-helicopter');
+await getOut();
+check(await ev(`__vrtest.vehicles.current === null`), 'getting out of the helicopter');
+await waitGame(1.5);
 
 // ---- the mirror ----
 const M = await ev(`({ x: -4.2, z: -1.2 })`);
@@ -289,6 +473,16 @@ await ev(`__t.grip('right', [${M.x + 1.3}, 1.2, ${M.z + 0.35}], ${JSON.stringify
 await wait(1200);
 check(await ev(`(() => { let g = __vrtest.mirrorAvatar.root.parent; return g.visible })()`), 'standing in front of the mirror shows your reflection');
 await shot('10-mirror');
+check(await ev(`__vrtest.builder.meshes[0].material.clippingPlanes.length === 6 && __vrtest.mirrorAvatar.parts[0].material.clippingPlanes.length === 1`), 'real things are clipped at the mirror glass and reflections behind it');
+// draw the sword and push it into the mirror
+const sg = await ev(`(() => { const s = __vrtest.items.get('sword'); s.mesh.updateMatrixWorld(); return s.grabPoint.clone().applyMatrix4(s.mesh.matrixWorld).toArray(); })()`);
+await ev(`__t.grip('right', ${JSON.stringify(sg)}, ${JSON.stringify(await q(Math.PI / 2, 0))})`);
+await ev(`__t.btn('right', 'squeeze', 1)`); await waitGame(0.2);
+check(await ev(`__vrtest.hands[1].held && __vrtest.hands[1].held.kind`) === 'sword', 'draw the sword from the hip holster');
+await ev(`__t.grip('right', [${M.x + 0.55}, 1.45, ${M.z + 0.3}], ${JSON.stringify(await q(Math.PI / 2, 0.15))})`);
+await ev(`__t.head([${M.x + 1.6}, 1.7, ${M.z + 0.9}], Math.PI / 2 - 0.5, -0.1)`); await waitGame(0.4);
+await shot('10b-mirror-sword');
+await ev(`__t.btn('right', 'squeeze', 0)`); await waitGame(0.3);
 
 // ---- a villager ----
 const mara = await ev(`__vrtest.villagers.list[0].pos.toArray()`);

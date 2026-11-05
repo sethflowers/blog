@@ -2,7 +2,7 @@
    Caches everything the game needs so it runs offline once it has been opened.
    Everything is fetched from the network first (so an update arrives the next time you open it),
    falling back to the cached copy when offline or when the network takes more than three seconds. */
-var CACHE = 'vr-test-v1';
+var CACHE = 'vr-test-v2';
 var BASE = '/experiments/vr-test/';
 var ASSETS = [
   BASE,
@@ -14,10 +14,13 @@ var ASSETS = [
   BASE + 'lib/three.module.min.js',
   BASE + 'js/audio.js',
   BASE + 'js/avatar.js',
+  BASE + 'js/build.js',
   BASE + 'js/creatures.js',
+  BASE + 'js/dragon.js',
   BASE + 'js/items.js',
   BASE + 'js/main.js',
   BASE + 'js/util.js',
+  BASE + 'js/vehicles.js',
   BASE + 'js/world.js'
 ];
 

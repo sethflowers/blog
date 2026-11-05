@@ -15,6 +15,9 @@ export const PLACES = {
   posts: [ { x: 3.6, z: 0.2 }, { x: 3.9, z: -1.4 }, { x: 4.2, z: -3.0 }, { x: 3.0, z: -4.4 } ],
   range: { z: -11, x0: -3.2, x1: 3.2, h: 1.05 },
   pond: { x: -9, z: 9, r: 3.6 },
+  meadow: { x: -3, z: 14 },
+  yard: { x: 12, z: 5, r: 7.5 },
+  clear: { x: -1.9, z: -0.6 },
   sign: { x: 1.8, z: -0.9 },
 };
 
@@ -36,6 +39,9 @@ function rawHeight(x, z){
   const p = PLACES.pond, pr = Math.hypot(x - p.x, z - p.z);
   if (pr < p.r) h = -0.5; else if (pr < p.r + 1.2) h = Math.min(h, 0);
   if (Math.abs(x) < 7 && z > -14 && z < 4) h = Math.min(h, 0);
+  // the dragon's meadow behind where you start
+  if (Math.hypot(x - PLACES.meadow.x, z - PLACES.meadow.z) < 8) h = Math.min(h, 0);
+  if (Math.hypot(x - PLACES.yard.x, z - PLACES.yard.z) < PLACES.yard.r) h = Math.min(h, 0);
   return Math.round(h * 2) / 2;
 }
 for (let i = 0; i < SIZE; i++) for (let j = 0; j < SIZE; j++) heights[i * SIZE + j] = rawHeight(j - HALF + 0.5, i - HALF + 0.5);
@@ -52,39 +58,77 @@ export const solids = [];
 // Round things (tree trunks, posts): { x, z, r, top }.
 export const pillars = [];
 
-// Height of the highest thing (ground, table top, post...) under (x, z) that isn't far above y.
+// ----- blocks you build (half-metre cubes on a grid) -----
+export const VOX = 0.5;
+// column "i,k" -> Map(j -> type). Kept here because the ground, walls and rays all need it.
+export const columns = new Map();
+export const cellOf = (v) => Math.floor(v / VOX);
+export function blockAt(i, j, k){ const c = columns.get(i + ',' + k); return c ? c.get(j) : undefined; }
+export function setBlock(i, j, k, t){
+  const key = i + ',' + k; let c = columns.get(key);
+  if (t === undefined || t === null){ if (c){ c.delete(j); if (!c.size) columns.delete(key); } return; }
+  if (!c){ c = new Map(); columns.set(key, c); }
+  c.set(j, t);
+}
+// Is this point inside something solid (terrain, a block, a box like the table)?
+export function solidAt(x, y, z){
+  if (y < groundHeight(x, z)) return true;
+  if (blockAt(cellOf(x), cellOf(y), cellOf(z)) !== undefined) return true;
+  for (const s of solids) if (x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && y < s.top && y > s.y0) return true;
+  for (const p of pillars) if (y < p.top && y > (p.y0 ?? -1e9) && (x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r) return true;
+  return false;
+}
+
+// Height of the highest thing (ground, table top, post, block...) under (x, z) that isn't far above y.
 export function surfaceHeight(x, z, y = 1e9){
   let h = groundHeight(x, z);
   for (const s of solids) if (x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && s.top <= y + 0.25 && s.top > h) h = s.top;
   for (const p of pillars) if (p.top <= y + 0.25 && p.top > h && (x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r) h = p.top;
+  const c = columns.get(cellOf(x) + ',' + cellOf(z));
+  if (c) for (const j of c.keys()){ const top = (j + 1) * VOX; if (top <= y + 0.25 && top > h) h = top; }
   return h;
 }
 
-// Pushes a circle (x, z, radius r, feet at y) out of everything solid it overlaps. Returns the push.
-export function pushOut(pos, r, y, maxStep = STEP){
+// Pushes a circle (x, z, radius r, feet at y) out of everything solid it overlaps. Returns true if moved.
+// Only things taller than maxStep above the feet count. opts.minTop / opts.maxTop limit it to obstacles
+// whose tops are above / below a height (so you can lean over a table but not through a wall).
+export function pushOut(pos, r, y, maxStep = STEP, opts = {}){
   let moved = false;
-  for (const s of solids){
-    if (s.top <= y + maxStep || s.y0 > y + 1.6) continue;
-    const cx = Math.max(s.x0, Math.min(pos.x, s.x1)), cz = Math.max(s.z0, Math.min(pos.z, s.z1));
+  const lo = Math.max(y + maxStep, opts.minTop ?? -1e9), hi = opts.maxTop ?? 1e9;
+  const pushBox = (x0, x1, z0, z1) => {
+    const cx = Math.max(x0, Math.min(pos.x, x1)), cz = Math.max(z0, Math.min(pos.z, z1));
     const dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
-    if (d2 < r * r){
-      if (d2 > 1e-8){ const d = Math.sqrt(d2); pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; }
-      else { // centre inside: leave by the nearest side
-        const o = [pos.x - s.x0, s.x1 - pos.x, pos.z - s.z0, s.z1 - pos.z], m = Math.min(...o), k = o.indexOf(m);
-        if (k === 0) pos.x = s.x0 - r; else if (k === 1) pos.x = s.x1 + r; else if (k === 2) pos.z = s.z0 - r; else pos.z = s.z1 + r;
-      }
-      moved = true;
+    if (d2 >= r * r) return;
+    if (d2 > 1e-8){ const d = Math.sqrt(d2); pos.x = cx + dx / d * r; pos.z = cz + dz / d * r; }
+    else { // centre inside: leave by the nearest side
+      const o = [pos.x - x0, x1 - pos.x, pos.z - z0, z1 - pos.z], m = Math.min(...o), k = o.indexOf(m);
+      if (k === 0) pos.x = x0 - r; else if (k === 1) pos.x = x1 + r; else if (k === 2) pos.z = z0 - r; else pos.z = z1 + r;
     }
+    moved = true;
+  };
+  for (const s of solids){
+    if (s.top <= lo || s.top > hi || s.y0 > y + 1.6) continue;
+    pushBox(s.x0, s.x1, s.z0, s.z1);
   }
   for (const p of pillars){
-    if (p.top <= y + maxStep) continue;
+    if (p.top <= lo || p.top > hi || (p.y0 ?? -1e9) > y + 1.6 || (opts.ignore && p.owner === opts.ignore)) continue;
     const dx = pos.x - p.x, dz = pos.z - p.z, d2 = dx * dx + dz * dz, rr = r + p.r;
     if (d2 < rr * rr){ const d = Math.sqrt(d2) || 1e-4; pos.x = p.x + dx / d * rr; pos.z = p.z + dz / d * rr; moved = true; }
+  }
+  // built blocks: a column is a wall where it has a block between your knees and your head
+  const bi = cellOf(pos.x), bk = cellOf(pos.z);
+  for (let i = bi - 1; i <= bi + 1; i++) for (let k = bk - 1; k <= bk + 1; k++){
+    const c = columns.get(i + ',' + k); if (!c) continue;
+    let top = -1e9;
+    for (const j of c.keys()){ const b = j * VOX, t = b + VOX; if (b < y + 1.6 && t > y + maxStep) top = Math.max(top, t); }
+    if (top <= lo || top > hi) continue;
+    pushBox(i * VOX, (i + 1) * VOX, k * VOX, (k + 1) * VOX);
   }
   // terrain ledges too high to step up: treat the cell as a wall
   const fx = Math.floor(pos.x + HALF), fz = Math.floor(pos.z + HALF);
   for (let ix = fx - 1; ix <= fx + 1; ix++) for (let iz = fz - 1; iz <= fz + 1; iz++){
-    if (cellHeight(ix, iz) <= y + maxStep) continue;
+    const ch = cellHeight(ix, iz);
+    if (ch <= lo || ch > hi) continue;
     const x0 = ix - HALF, z0 = iz - HALF;
     const cx = Math.max(x0, Math.min(pos.x, x0 + 1)), cz = Math.max(z0, Math.min(pos.z, z0 + 1));
     const dx = pos.x - cx, dz = pos.z - cz, d2 = dx * dx + dz * dz;
@@ -93,13 +137,12 @@ export function pushOut(pos, r, y, maxStep = STEP){
   return moved;
 }
 
-// Ray against the terrain (marching), for bullets. Returns distance or Infinity.
+// Ray against the terrain, blocks and boxes (marching), for bullets. Returns distance or Infinity.
 export function rayGround(o, d, max){
   let t = 0;
-  const stepLen = 0.1;
+  const stepLen = 0.08;
   while (t < max){
-    const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
-    if (y < surfaceHeight(x, z, y)) return t;
+    if (solidAt(o.x + d.x * t, o.y + d.y * t, o.z + d.z * t)) return t;
     t += stepLen;
   }
   return Infinity;
@@ -140,6 +183,8 @@ export function buildWorld(scene){
   const free = (x, z, pad) => {
     if (Math.abs(x) < 7.5 && z > -14.5 && z < 4.5) return false;
     if (Math.hypot(x - pond.x, z - pond.z) < pond.r + 1.5) return false;
+    if (Math.hypot(x - PLACES.meadow.x, z - PLACES.meadow.z) < 9) return false;
+    if (Math.hypot(x - PLACES.yard.x, z - PLACES.yard.z) < PLACES.yard.r + 1.5) return false;
     for (const t of trees) if (Math.hypot(t.x - x, t.z - z) < pad) return false;
     return true;
   };
@@ -280,8 +325,8 @@ export function buildWorld(scene){
   scene.add(mesh);
 
   // ----- signs with words on them -----
-  const welcome = sign(1.5, 0.95, 'VR TEST', 'Walk with the left stick, or just walk. Turn with the right stick. Click the left stick to run.\nGrab with the side grip, fire with the trigger. Let go of a weapon by your hip to holster it.\nA: jump    B: bring everything back\nX: set my height    Y: smooth / snap turn');
-  welcome.position.set(SG.x, 1.6, SG.z + 0.07); welcome.rotation.y = -0.35;
+  const welcome = sign(1.7, 1.15, 'VR TEST', 'Walk with the left stick, or just walk. Right stick turns. Click left stick to run.\nGrip grabs (point + grip pulls things to you). Trigger fires. Let go of a weapon by your hip to holster it.\nBUILD: rest a finger on the right trigger, pull to place, hold and sweep for rows. Right stick up/down picks the block. Left trigger or a punch breaks.\nBoth hands up: call the dragon. Touch a vehicle + grip to get in, click left stick to get out.\nA jump  B bring things back  X set height  Y snap turn');
+  welcome.position.set(SG.x, 1.68, SG.z + 0.07); welcome.rotation.y = -0.35;
   scene.add(welcome);
   const mirrorSign = sign(0.9, 0.3, 'MIRROR', null);
   mirrorSign.position.set(S.x1 + 0.08, M.h + 0.38, M.z); mirrorSign.rotation.y = Math.PI / 2;
@@ -326,19 +371,19 @@ export function buildWorld(scene){
 
 // A wooden sign with a title and optional text, drawn once.
 export function sign(w, h, title, body){
-  const px = 512, ph = Math.round(px * h / w);
+  const px = 1024, ph = Math.round(px * h / w), k = 2;
   const { ctx, tex } = textCanvas(px, ph);
   ctx.fillStyle = '#b48a55'; ctx.fillRect(0, 0, px, ph);
   ctx.fillStyle = 'rgba(0,0,0,0.08)';
-  for (let y = 0; y < ph; y += 24) ctx.fillRect(0, y, px, 3);
-  ctx.strokeStyle = '#5a3c22'; ctx.lineWidth = 12; ctx.strokeRect(6, 6, px - 12, ph - 12);
+  for (let y = 0; y < ph; y += 24 * k) ctx.fillRect(0, y, px, 3 * k);
+  ctx.strokeStyle = '#5a3c22'; ctx.lineWidth = 12 * k; ctx.strokeRect(6 * k, 6 * k, px - 12 * k, ph - 12 * k);
   ctx.fillStyle = '#2b1a0e'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.font = `bold ${body ? 54 : Math.round(ph * 0.55)}px "Trebuchet MS", Helvetica, Arial, sans-serif`;
-  ctx.fillText(title, px / 2, body ? 22 : ph * 0.2);
+  ctx.font = `bold ${body ? 54 * k : Math.round(ph * 0.55)}px "Trebuchet MS", Helvetica, Arial, sans-serif`;
+  ctx.fillText(title, px / 2, body ? 20 * k : ph * 0.2);
   if (body){
-    ctx.font = '22px "Trebuchet MS", Helvetica, Arial, sans-serif'; ctx.textAlign = 'left';
-    const lines = wrapText(ctx, body, px - 56);
-    lines.forEach((l, i) => ctx.fillText(l, 28, 92 + i * 28));
+    ctx.font = `${19 * k}px "Trebuchet MS", Helvetica, Arial, sans-serif`; ctx.textAlign = 'left';
+    const lines = wrapText(ctx, body, px - 56 * k);
+    lines.forEach((l, i) => ctx.fillText(l, 28 * k, 82 * k + i * 24 * k));
   }
   tex.needsUpdate = true;
   const g = new THREE.Group();
