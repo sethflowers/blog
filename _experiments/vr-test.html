@@ -1,8 +1,8 @@
 ---
 title: VR Test
-description: A small blocky world for a VR headset. Walk around with the sticks or your own feet, see your arms, body and legs, build with blocks, slice melons, shoot bottles, drive a truck, a tank and a helicopter, pet a huge friendly dragon and say hi to the villagers. Install it from the headset's browser.
+description: A small blocky world for a VR headset. Walk around with the sticks or your own feet, see your arms, body and legs, build with blocks, slice melons, shoot bottles, drive a truck, a tank and a helicopter, pet a huge friendly dragon and say hi to the villagers. Open it in the headset's browser.
 date: 2026-11-05
-version: "2.0"
+version: "2.1"
 layout: null
 ---
 {% raw %}
@@ -43,8 +43,21 @@ layout: null
   .controls b{color:#ffd24a;}
   .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;pointer-events:none;}
 </style>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
 <script type="importmap">
-{ "imports": { "three": "/experiments/vr-test/lib/three.module.min.js" } }
+{ "imports": {
+    "three": "/experiments/vr-test/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/lib/three.core.min.js": "/experiments/vr-test/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/audio.js": "/experiments/vr-test/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/avatar.js": "/experiments/vr-test/js/avatar.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/build.js": "/experiments/vr-test/js/build.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/creatures.js": "/experiments/vr-test/js/creatures.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/dragon.js": "/experiments/vr-test/js/dragon.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/items.js": "/experiments/vr-test/js/items.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/util.js": "/experiments/vr-test/js/util.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/vehicles.js": "/experiments/vr-test/js/vehicles.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/vr-test/js/world.js": "/experiments/vr-test/js/world.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
 </script>
 </head>
 <body data-version="{% endraw %}{{ page.version }}{% raw %}">
@@ -62,12 +75,12 @@ layout: null
       <b>Finger on right trigger</b> build &middot; <b>Left trigger</b> break &middot; <b>Right stick up/down</b> pick a block<br>
       <b>Point + grip</b> pull things to you &middot; <b>Both hands up</b> call the dragon<br>
       <b>Touch a vehicle + grip</b> get in &middot; <b>Click left stick</b> get out<br>
-      To install: use the install button in the browser&rsquo;s address bar.
+      On the headset, bookmark this page; it keeps working offline once opened.
     </div>
   </div>
   <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
-<script type="module" src="/experiments/vr-test/js/main.js"></script>
+<script type="module" src="/experiments/vr-test/js/main.js?v={% endraw %}{{ page.version }}{% raw %}"></script>
 <script>
 if ('serviceWorker' in navigator){
   addEventListener('load', function(){

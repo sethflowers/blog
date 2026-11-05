@@ -1,7 +1,9 @@
 # VR Test
 
-A capability test for making games for a standalone VR headset as a web app (WebXR), installed from the
-headset's browser like the iPad games are installed as PWAs. No store, no developer mode. Simple blocky
+A capability test for making games for a standalone VR headset as a web app (WebXR), opened in the
+headset's browser. No store, no developer mode. (The Quest Browser has no "install" for web apps the
+way Chrome and Safari do; bookmark the page instead. Meta's route to an app icon is packaging the site
+as an Android app with Bubblewrap and sideloading it, which needs developer mode.) Simple blocky
 graphics (in the spirit of games like Ancient Dungeon), aiming for smooth frame rates over looks.
 
 Same shape as Wildcat: one HTML page (`_experiments/vr-test.html`) that is mostly the title screen, ES
@@ -86,6 +88,16 @@ worker and icons.
   are clipped to behind the glass (material clipping planes).
 - **Robustness.** An error in one frame used to stop the three.js loop for good (it asks for the next
   frame after the callback); the frame is now wrapped so the game keeps running.
+
+## Version 2.1: updates that actually arrive
+
+On the headset the title said 2.0 but the game was still 1.0. The page was fresh, but its scripts could
+come from a cache: the service worker fell back to its stored copy whenever the network took over 3
+seconds, and its stored copy could itself have come from the browser's 10-minute HTTP cache. Now every
+script address carries the version (`main.js?v=2.1`, and an import map gives every module and three.js
+the same `?v=`), so a new page can only run matching code. The worker only uses its stored copy when
+the network fails, stores scripts by their full versioned address, and fills its store bypassing the
+HTTP cache. The version is on the big sign in VR as well as the title screen and the watch.
 
 ## Performance choices
 

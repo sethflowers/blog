@@ -1,8 +1,10 @@
 /* Service worker for VR Test.
    Caches everything the game needs so it runs offline once it has been opened.
-   Everything is fetched from the network first (so an update arrives the next time you open it),
-   falling back to the cached copy when offline or when the network takes more than three seconds. */
-var CACHE = 'vr-test-v2';
+   Everything comes from the network first (so an update arrives the next time you open it); the
+   cached copy is only used when the network fails (or, for the page itself, takes over 4 seconds).
+   Scripts are requested with ?v=<version> by the page, and are cached by that full address, so an old
+   copy can never stand in for a new version. */
+var CACHE = 'vr-test-v3';
 var BASE = '/experiments/vr-test/';
 var ASSETS = [
   BASE,
@@ -27,8 +29,10 @@ var ASSETS = [
 self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(CACHE).then(function (c) {
-      // add one by one so a single failure doesn't lose the rest
-      return Promise.all(ASSETS.map(function (a) { return c.add(a).catch(function () {}); }));
+      // add one by one so a single failure doesn't lose the rest; skip the browser's own HTTP cache
+      return Promise.all(ASSETS.map(function (a) {
+        return fetch(a, { cache: 'reload' }).then(function (res) { if (res.ok) return c.put(a, res); }).catch(function () {});
+      }));
     }).then(function () { return self.skipWaiting(); })
   );
 });
@@ -47,17 +51,22 @@ self.addEventListener('fetch', function (e) {
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
   if (url.origin !== self.location.origin || url.pathname.indexOf(BASE) !== 0) return;
-  var key = (req.mode === 'navigate' || url.pathname === BASE || url.pathname === BASE + 'index.html') ? BASE : url.pathname;
+  var page = req.mode === 'navigate' || url.pathname === BASE || url.pathname === BASE + 'index.html';
+  // the page by its path; everything else by its full address (including ?v=)
+  var key = page ? BASE : url.pathname + url.search;
   e.respondWith(
     caches.open(CACHE).then(function (c) {
-      var network = fetch(key, { cache: 'no-store' }).then(function (res) {
+      var network = fetch(page ? BASE : req.url, { cache: 'no-store' }).then(function (res) {
         if (res && res.ok) c.put(key, res.clone());
         return res;
       });
-      var slow = new Promise(function (resolve) { setTimeout(resolve, 3000); });
+      var fallback = function () {
+        return c.match(key).then(function (hit) { return hit || c.match(url.pathname); }).then(function (hit) { return hit || network; });
+      };
+      if (!page) return network.catch(fallback);
+      var slow = new Promise(function (resolve) { setTimeout(resolve, 4000); });
       return Promise.race([network.catch(function () {}), slow]).then(function (res) {
-        if (res && res.ok) return res;
-        return c.match(key).then(function (cached) { return cached || network; });
+        return (res && res.ok) ? res : fallback();
       });
     })
   );
