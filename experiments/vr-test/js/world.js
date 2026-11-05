@@ -325,7 +325,7 @@ export function buildWorld(scene){
   scene.add(mesh);
 
   // ----- signs with words on them -----
-  const welcome = sign(1.7, 1.15, 'VR TEST', 'Walk with the left stick, or just walk. Right stick turns. Click left stick to run.\nGrip grabs (point + grip pulls things to you). Trigger fires. Let go of a weapon by your hip to holster it.\nBUILD: rest a finger on the right trigger, pull to place, hold and sweep for rows. Right stick up/down picks the block. Left trigger or a punch breaks.\nBoth hands up: call the dragon. Touch a vehicle + grip to get in, click left stick to get out.\nA jump  B bring things back  X set height  Y snap turn');
+  const welcome = sign(1.7, 1.15, 'VR TEST  v' + (document.body.dataset.version || ''), 'Walk with the left stick, or just walk. Right stick turns. Click left stick to run.\nGrip grabs (point + grip pulls things to you). Trigger fires. Let go of a weapon by your hip to holster it.\nBUILD: rest a finger on the right trigger, pull to place, hold and sweep for rows. Right stick up/down picks the block. Left trigger or a punch breaks.\nBoth hands up: call the dragon. Touch a vehicle + grip to get in, click left stick to get out.\nA jump  B bring things back  X set height  Y snap turn');
   welcome.position.set(SG.x, 1.68, SG.z + 0.07); welcome.rotation.y = -0.35;
   scene.add(welcome);
   const mirrorSign = sign(0.9, 0.3, 'MIRROR', null);
