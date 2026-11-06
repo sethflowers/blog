@@ -749,7 +749,7 @@ export class Farm {
         if (st.bedding < 0.5) J.push({ text: `Add fresh shavings to ${n}'s stall`, done: false, where: 'bedding' });
       }
       if (h.model.dirtiness() > 0.12) J.push({ text: `Groom ${n}: curry comb, then body brush`, done: false, where: 'groom' });
-      if (D.hooves.some((x) => x > 0.45)) J.push({ text: `Pick out ${n}'s hooves`, done: false, where: 'hooves' });
+      if (D.hooves.some((x) => x > 0.45)) J.push({ text: `Pick out ${n}'s hooves: hoof pick from the grooming kit, then tap each hoof`, done: false, where: 'hooves' });
       if (D.needs.happy < 60 && h.mode === 'stall') J.push({ text: `Turn ${n} out in the paddock or go for a ride`, done: false, where: 'turnout' });
       if (D.shoes < 30) J.push({ text: `${n} needs the farrier (Farm Office)`, done: false, where: 'office' });
       if (D.needs.health < 60) J.push({ text: `${n} is unwell: call the vet (Farm Office)`, done: false, where: 'office' });

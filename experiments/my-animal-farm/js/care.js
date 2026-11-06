@@ -179,13 +179,21 @@ export class Care {
 
   // things that aren't carried but are touched: feed bins for pig feed and corn, a tool rack
   buildExtras(){
-    const steel = mat('plain-steel', { color: 0x9aa2a8, rough: 0.35, metal: 0.9 });
+    const steel = mat('plain-steel', { color: 0xb4bac0, rough: 0.42, metal: 0.35 });
     for (const [k, p] of Object.entries(BINS)){
       if (k === 'grain') continue;
       const can = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.2, 0.6, 18), steel); can.position.set(p.x, 0.3, p.z); can.castShadow = true; this.scene.add(can);
       const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.04, 18), steel); lid.position.set(p.x, 0.62, p.z); this.scene.add(lid);
-      const s = sign(k === 'pigfeed' ? 'PIG FEED' : 'CORN', 0.3, 0.1, { font: 'bold 70px Arial' }); s.position.set(p.x, 0.42, p.z + 0.205); this.scene.add(s);
+      const s = sign(k === 'pigfeed' ? 'PIG FEED' : 'CORN', 0.4, 0.18, { font: 'bold 120px Arial' }); s.position.set(p.x, 0.36, p.z + 0.245); this.scene.add(s);
     }
+    // big signs on the wall above the feed bins
+    for (const [k, p, text] of [['grain', BINS.grain, 'GRAIN · horses'], ['pigfeed', BINS.pigfeed, 'PIG FEED'], ['corn', BINS.corn, 'CORN · hens']]){
+      const s = sign(text, k === 'grain' ? 0.75 : 0.5, 0.22, { font: 'bold 110px Arial' });
+      s.position.set(p.x + (k === 'pigfeed' ? 0.12 : k === 'corn' ? -0.08 : 0.15), k === 'grain' ? 1.45 : 1.15, -22.52); this.scene.add(s);
+      void k;
+    }
+    // the grooming kit is labelled too
+    const gk = sign('GROOMING KIT', 0.56, 0.2, { font: 'bold 110px Arial' }); gk.position.set(GB.x - 0.312, 0.14, GB.z); gk.rotation.y = -Math.PI / 2; this.scene.add(gk);
     // tool rack on the back wall for the fork
     const wood = mat('oak', { rough: 0.7 });
     const rack = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.08, 0.06), wood); rack.position.set(1.2, 1.4, -22.5); this.scene.add(rack);
@@ -276,9 +284,16 @@ export class Care {
       case 'hoofpick': {
         if (target.type !== 'hoof') return false;
         const h = target.horse, i = target.hoof, D = h.data;
-        h.lift[i] = true; h._liftT = 1.5;
-        if (D.hooves[i] > 0){ D.hooves[i] = Math.max(0, D.hooves[i] - 0.35 * strength); sfx.scrape(target.point); }
-        if (D.hooves[i] <= 0.01 && strength >= 1) this.hint(`${['Left front', 'Right front', 'Left hind', 'Right hind'][i]} hoof is clean.`);
+        // she picks that foot up for you (one at a time)
+        h.lift = [false, false, false, false]; h.lift[i] = true; h._liftT = 1.8;
+        const name = ['left front', 'right front', 'left hind', 'right hind'][i];
+        const was = D.hooves[i];
+        // a tap scrapes it clean; in VR, scraping with the pick does it bit by bit
+        if (was > 0){ D.hooves[i] = strength >= 1 ? 0 : Math.max(0, was - 0.35 * strength); sfx.scrape(target.point); }
+        if (was > 0.01 && D.hooves[i] <= 0.01){
+          const left = D.hooves.filter((x) => x > 0.1).length;
+          this.hint(left ? `The ${name} hoof is clean. ${left} more to go (the yellow rings).` : `All four hooves are clean!`);
+        } else if (was <= 0.01 && strength >= 1) this.hint(`The ${name} hoof is already clean.`);
         return true;
       }
       case 'pad': case 'saddle': {

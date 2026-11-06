@@ -140,13 +140,16 @@ export function loft(sections, { ring = 16, steps = 6, capStart = true, capEnd =
   const R = ring + 1;
   for (let j = 0; j < n; j++) for (let i = 0; i < ring; i++){
     const a = j * R + i, b = a + 1, c = a + R, d = c + 1;
-    idx.push(a, c, b, b, c, d);
+    // counter-clockwise seen from outside (around the ring, then along the path)
+    idx.push(a, b, c, b, d, c);
   }
-  // end caps: a fan to the centre
-  const cap = (j, flip) => {
+  // end caps: a fan to the centre, wound so the cap faces outward (away from the shape)
+  const cap = (j, end) => {
     const c = curve.getPoint(j / n), ci = pos.length / 3;
+    const out = curve.getTangent(j / n).multiplyScalar(end ? 1 : -1);
     pos.push(c.x, c.y, c.z); uv.push(0.5, 0.5);
-    for (let i = 0; i < ring; i++){ const a = j * R + i, b = a + 1; if (flip) idx.push(ci, a, b); else idx.push(ci, b, a); }
+    const tri = (a, b) => fanFacing(pos, ci, a, b, out) ? idx.push(ci, a, b) : idx.push(ci, b, a);
+    for (let i = 0; i < ring; i++){ const a = j * R + i; tri(a, a + 1); }
   };
   if (capStart) cap(0, false);
   if (capEnd) cap(n, true);
@@ -194,11 +197,12 @@ function loftDown(sections, ring){
     const a = j * R + i, b = a + 1, c = a + R, d = c + 1;
     idx.push(a, b, c, b, d, c);
   }
-  // round caps
-  for (const [j, flip] of [[0, false], [sections.length - 1, true]]){
+  // round caps, facing outward (up at the top, down at the bottom)
+  for (const [j, end] of [[0, false], [sections.length - 1, true]]){
     const s = sections[j], ci = pos.length / 3;
-    pos.push(s.p[0], s.p[1] + (flip ? -0.5 : 0.5) * Math.min(s.rx, s.ry), s.p[2]);
-    for (let i = 0; i < ring; i++){ const a = j * R + i, b = a + 1; if (flip) idx.push(ci, b, a); else idx.push(ci, a, b); }
+    pos.push(s.p[0], s.p[1] + (end ? -0.5 : 0.5) * Math.min(s.rx, s.ry), s.p[2]);
+    const out = new THREE.Vector3(0, end ? -1 : 1, 0);
+    for (let i = 0; i < ring; i++){ const a = j * R + i, b = a + 1; if (fanFacing(pos, ci, a, b, out)) idx.push(ci, a, b); else idx.push(ci, b, a); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -206,6 +210,13 @@ function loftDown(sections, ring){
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
+}
+
+// does the triangle (ci, a, b), counter-clockwise, face along `out`?
+function fanFacing(pos, ci, a, b, out){
+  const P = (k) => new THREE.Vector3(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]);
+  const c = P(ci), e1 = P(a).sub(c), e2 = P(b).sub(c);
+  return e1.cross(e2).dot(out) >= 0;
 }
 
 // An ellipsoid.

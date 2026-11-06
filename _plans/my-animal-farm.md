@@ -106,3 +106,14 @@ simulation faster (`__farm.timeScale`).
 
 ## v1.1
 - Round pebbles in the dirt (paths, paddock, pens) instead of square, pixelated ones.
+
+## v1.2
+- The horse's face (and the rest of every lofted shape: body, neck, head, goats, sheep, pigs) was
+  built inside out: the faces pointed inward, so you saw the inside of the far side and the face
+  looked see-through, with the legs showing inside the chest. The loft now winds its triangles
+  outward, and end caps are checked to face outward. Lighting on the coat is right as a result.
+- Signs are drawn at twice the resolution; the feed bins have big labels on the wall above them and
+  their own labels no longer cut into the curve; galvanized steel no longer renders black.
+- Hoof picking is clear: holding the hoof pick shows a yellow ring round every hoof that needs
+  doing; tap one (or touch it with the pick in VR), she lifts the foot, one scrape cleans it, and
+  you're told how many are left. The grooming kit is labelled and the jobs list says where it is.

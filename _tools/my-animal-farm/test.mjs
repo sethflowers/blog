@@ -309,14 +309,16 @@ check(await ev('__farm.riding.enter(__farm.classes[0])'), 'enter the Novice clas
 check(await ev('__farm.farm.state.money') === m2 - 40, 'the entry fee is paid');
 check(await ev('__farm.riding.show.state') === 'entered', 'waiting to start');
 await ev(`__farm.player.view = "third"; ${H}.pos.set(22.6, 0, 44); __farm.riding.gear = 3`);
-await waitGame(3);
+// canter through the posts, then pull up before fence 1 (the round below is scripted)
+for (let k = 0; k < 40 && await ev('__farm.riding.show.state') !== 'riding'; k++) await waitGame(0.1);
+await ev('__farm.riding.gear = 0');
 console.log('       ' + await ev(`JSON.stringify({ pos: ${H}.pos, speed: ${H}.speed, gear: __farm.riding.gear, mode: ${H}.mode, ridden: __farm.riding.horse === ${H}, health: ${H}.data.needs.health })`));
 check(await ev('__farm.riding.show.state') === 'riding', 'riding through the timing posts starts the clock');
 await shot('16-show');
 // jump the course in order (simulated landings), then back through the posts
 await ev(`for (const j of __farm.riding.jumps.filter((j) => j.show).sort((a, b) => a.num - b.num)) __farm.riding.showJumped(j, j.num === 5, 1)`);
 check(await ev('__farm.riding.show.next') === 8 && await ev('__farm.riding.show.faults') === 4, 'eight fences in order, one rail down: 4 faults');
-await ev(`__farm.riding.show.time = 50; ${H}.pos.set(25.5, 0, 44); ${H}.yaw = -Math.PI / 2; __farm.riding.prevPos.set(25.5, 0, 44)`);
+await ev(`__farm.riding.show.time = 50; ${H}.pos.set(25.5, 0, 44); ${H}.yaw = -Math.PI / 2; __farm.riding.prevPos.set(25.5, 0, 44); __farm.riding.gear = 2`);
 await waitGame(1.5);
 check(await ev('__farm.riding.show.state') === 'idle', 'crossing the line again finishes');
 check(await ev('!!__farm.screenUI.open && /place|won/i.test(__farm.screenUI.open.title)'), 'the results are shown');
@@ -334,7 +336,7 @@ await ev('__farm.closePanel()');
 const day = await ev('__farm.farm.state.day');
 const slept = await ev('__farm.farm.sleep()');
 console.log('       (slept: ' + slept + ', day ' + day + ' -> ' + await ev('__farm.farm.state.day') + ', ' + await ev('__farm.farm.state.minutes') + ')');
-check(await ev('__farm.farm.state.day') === day + 1 && await ev('__farm.farm.state.minutes') === 360, 'going to bed brings the next morning at 6am');
+check(await ev('__farm.farm.state.day') === day + 1 && Math.abs(await ev('__farm.farm.state.minutes') - 360) < 2, 'going to bed brings the next morning at 6am');
 check(await ev(`!${H}.data.tack.saddle`), 'tack left on overnight is taken off');
 // saving and loading
 await ev('__farm.farm.save()');

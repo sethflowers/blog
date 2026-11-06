@@ -105,6 +105,7 @@ function resolve(obj, point){
   for (let o = obj; o; o = o.parent){
     const u = o.userData;
     if (u.itemRef) return { type: 'item', item: u.itemRef, point };
+    if (u.ringHoof != null && u.horse) return { type: 'hoof', horse: u.horse, hoof: u.ringHoof, point: u.horse.model.hoof(u.ringHoof) };
     if (u.hot) return { ...u.hot, point };
     if (u.kind === 'manure' || u.kind === 'wet') return { type: u.kind, stall: u.stall, index: u.index, point };
     if (u.kind === 'dropping') return { type: 'dropping', pen: u.pen, index: u.index, point };
@@ -135,6 +136,7 @@ function pickables(){
   const list = [...hot];
   for (const it of care.pickables()) if (it.mesh.visible && (!it.held || it.kind === 'barrow')) list.push(it.mesh);
   for (const b of care.stallBuckets) list.push(b);
+  for (const r of hoofRingMeshes) if (r.visible) list.push(r);
   for (const h of farm.horses) if (h.root.visible && h !== riding.horse) list.push(h.root);
   for (const a of farm.animals) list.push(a.root);
   for (const s of farm.stalls){ list.push(...s.manureMeshes); if (s.wetMesh && s.wetMesh.visible) list.push(s.wetMesh); }
@@ -217,7 +219,7 @@ function hintFor(it){
   const t = {
     curry: 'Curry comb: rub it in circles over the muddy patches to loosen the dirt.',
     brush: 'Body brush: flick it along the coat to lift the loosened dirt away.',
-    hoofpick: 'Hoof pick: touch each hoof to pick it up and clean it out.',
+    hoofpick: 'Hoof pick: tap each hoof with a yellow ring round it (in VR, touch it with the pick). She lifts her foot and you scrape it clean.',
     pad: 'Saddle pad: put it on the horse\'s back first.',
     saddle: 'Saddle: goes on top of the pad, then do up the girth.',
     bridle: 'Bridle: put it over the horse\'s head.',
@@ -321,7 +323,7 @@ function horsePanel(h){
   const where = { stall: `in stall ${D.stall + 1}`, paddock: 'in the paddock', tied: 'tied at the rail', led: 'on a lead', loose: 'standing loose', ridden: 'being ridden' }[h.mode] || '';
   showPanel({ title: D.name, sections: [
     { text: `${D.age}-year-old ${COATS[D.coat].name.toLowerCase()} ${B.name} ${D.sex}, ${where}.${D.owner ? ` Boarding for ${D.owner.who} (${D.owner.daysLeft} more day${D.owner.daysLeft === 1 ? '' : 's'}).` : ''}` },
-    { bars: [['Food', N.food], ['Water', N.water], ['Energy', N.energy], ['Happiness', N.happy], ['Health', N.health], ['Clean coat', clean], ['Hooves', hooves], ['Shoes', D.shoes]] },
+    { bars: [['Food', N.food], ['Water', N.water], ['Energy', N.energy], ['Happiness', N.happy], ['Health', N.health], ['Clean coat', clean], ['Hooves', hooves, hooves < 60 ? 'pick them out' : ''], ['Shoes', D.shoes]] },
     { bars: [['Jumping', D.skill * 100, `${Math.round(D.skill * 100)}%`], ['Fitness', D.fitness * 100]] },
     { text: tackList.length ? `Wearing: ${tackList.join(', ')}.` : 'No tack on (just a halter).' },
     { buttons },
@@ -779,6 +781,24 @@ const camOrbit = { yaw: 0, pitch: 0.28, dist: 5.2 };
 const camPos = V(), camLook = V();
 function seatPos(h, out = V()){ return h.model.body.localToWorld(out.set(0, 1.68 + 0.8, 0.12)); }
 
+// ---------- while you hold the hoof pick, yellow rings show which hooves still need picking ----------
+const ringMat = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+const hoofRingMeshes = [0, 1, 2, 3].map((i) => { const m = new THREE.Mesh(new THREE.RingGeometry(0.11, 0.15, 28), ringMat); m.userData.ringHoof = i; m.rotation.x = -Math.PI / 2; m.visible = false; m.renderOrder = 2; scene.add(m); return m; });
+function hoofRings(t){
+  const holding = player.heldBy.some((it) => it && it.kind === 'hoofpick');
+  let h = null, bd = 4.5;
+  if (holding) for (const x of farm.horses){ if (!x.root.visible || x === riding.horse) continue; const d = x.pos.distanceTo(mode === 'vr' ? V(headPos.x, 0, headPos.z) : player.pos); if (d < bd){ bd = d; h = x; } }
+  for (let i = 0; i < 4; i++){
+    const m = hoofRingMeshes[i];
+    m.visible = !!h && h.data.hooves[i] > 0.1;
+    if (!m.visible) continue;
+    const p = h.model.hoof(i);
+    m.position.set(p.x, 0.06 + (insideBarn(p) ? 0.1 : 0), p.z);
+    m.scale.setScalar(1 + Math.sin(t * 5 + i) * 0.12);
+    m.userData.horse = h;
+  }
+}
+
 // ---------- stall doors open as you (or a horse you're leading) come near ----------
 function doors(dt){
   for (const s of farm.stalls){
@@ -929,6 +949,7 @@ function simulate(dt, first){
     farm.update(dt, { player: player.pos });
     care.update(dt);
     doors(dt);
+    hoofRings(gameTime);
     world.update(dt, gameTime);
   }
   // the screen: what you hold sits at the bottom right of the view
