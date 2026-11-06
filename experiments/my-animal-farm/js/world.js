@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { V, Batch, boxUV, rng, fbm, vnoise, clamp, textCanvas, mergeGeometries, ellipsoid } from './util.js';
 import { mat, tex } from './textures.js';
 
+// the farmhouse: a hall, kitchen and living room at the front, your bedroom at the back (west)
+export const HOUSE = { hx: -17, hz: 12, W: 9, D: 8, x0: -21.5, x1: -12.5, z0: 8, z1: 16, partition: -18, bedDoor: [12.2, 13.2], bed: { z: 10.6 } };
 export const BARN = { x0: -5.5, x1: 5.5, z0: -22.6, z1: -4, aisle: 1.5, wallH: 4.2, peak: 7.4 };
 export const STALL_W = 3.6;
 export const ARENA = { x0: 10, x1: 50, z0: 0, z1: 20, gate: { x: 10, z0: 8, z1: 11.5 } };
@@ -809,36 +811,159 @@ function buildPens(B, root, world, M){
 
 // ---------- the farmhouse ----------
 function buildHouse(B, root, world, M){
-  const hx = -17, hz = 12, W = 9, D = 8, H = 5.6;
-  B.box(W + 0.4, 0.6, D + 0.4, M.stone, hx, 0.3, hz);
-  B.box(W, H, D, M.clap, hx, 0.6 + H / 2, hz, 0, 0.35);
+  const { hx, hz, W, D } = HOUSE, H = 5.6, base = 0.15, top = 0.6 + H, T = 0.2, CEIL = 3.0;
+  const x0 = hx - W / 2, x1 = hx + W / 2, z0 = hz - D / 2, z1 = hz + D / 2;
+  const DOOR = 0.6;   // half the front door's width
+  B.box(W + 0.4, base, D + 0.4, M.stone, hx, base / 2, hz);
+  // the outside walls, hollow now, with the front door open (clapboard outside, plaster inside)
+  const plaster = mat('plain-plaster', { color: 0xe6dccb, rough: 0.85 });
+  const wallH = top - base, wy = base + wallH / 2;
+  B.box(T, wallH, D, M.clap, x0 + T / 2, wy, hz, 0, 0.35);                 // west
+  B.box(W, wallH, T, M.clap, hx, wy, z0 + T / 2, 0, 0.35);                 // north
+  B.box(W, wallH, T, M.clap, hx, wy, z1 - T / 2, 0, 0.35);                 // south
+  const segN = (hz - DOOR) - z0, segS = z1 - (hz + DOOR);
+  B.box(T, wallH, segN, M.clap, x1 - T / 2, wy, z0 + segN / 2, 0, 0.35);  // east, either side of the door
+  B.box(T, wallH, segS, M.clap, x1 - T / 2, wy, z1 - segS / 2, 0, 0.35);
+  B.box(T, top - 2.45, DOOR * 2, M.clap, x1 - T / 2, (2.45 + top) / 2, hz, 0, 0.35);
+  // inside: plaster lining, a plank floor, a ceiling
+  const ix0 = x0 + T, ix1 = x1 - T, iz0 = z0 + T, iz1 = z1 - T, iy = (base + CEIL) / 2, ih = CEIL - base;
+  B.box(0.02, ih, iz1 - iz0, plaster, ix0 + 0.01, iy, hz);
+  B.box(ix1 - ix0, ih, 0.02, plaster, hx, iy, iz0 + 0.01);
+  B.box(ix1 - ix0, ih, 0.02, plaster, hx, iy, iz1 - 0.01);
+  B.box(0.02, ih, (hz - DOOR) - iz0, plaster, ix1 - 0.01, iy, (iz0 + hz - DOOR) / 2);
+  B.box(0.02, ih, iz1 - (hz + DOOR), plaster, ix1 - 0.01, iy, (iz1 + hz + DOOR) / 2);
+  B.box(0.02, CEIL - 2.45, DOOR * 2, plaster, ix1 - 0.01, (2.45 + CEIL) / 2, hz);
+  B.box(ix1 - ix0, 0.03, iz1 - iz0, M.oak, hx, base + 0.015, hz, Math.PI / 2, 0.6);
+  B.box(ix1 - ix0, 0.08, iz1 - iz0, M.white, hx, CEIL + 0.04, hz);
+  // skirting boards
+  for (const [w, d, x, z] of [[0.03, iz1 - iz0, ix0 + 0.03, hz], [ix1 - ix0, 0.03, hx, iz0 + 0.03], [ix1 - ix0, 0.03, hx, iz1 - 0.03]]) B.box(w, 0.12, d, M.trim, x, base + 0.06, z);
+  // the front door, standing open into the hall
+  B.box(1.1, 2.25, 0.06, mat('plain-door', { color: 0x7a2a1a, rough: 0.6 }), x1 - T - 0.55, base + 1.13, hz - DOOR + 0.05);
+  B.box(0.08, 2.35, 0.12, M.trim, x1 - 0.02, base + 1.15, hz - DOOR - 0.04); B.box(0.08, 2.35, 0.12, M.trim, x1 - 0.02, base + 1.15, hz + DOOR + 0.04);
+  B.box(0.08, 0.1, DOOR * 2 + 0.2, M.trim, x1 - 0.02, base + 2.33, hz);
+  // windows: glass and frames on both faces (the ground floor ones light the rooms)
+  const sky = mat('plain-window', { color: 0x9fb8cc, rough: 0.1, metal: 0.2, emissive: 0x6a7f90, emissiveIntensity: 0.35 });
+  const win = (axis, pos, y, along, out, inner) => {
+    // axis 'x': a window in an east/west wall at x = pos; 'z': in a north/south wall at z = pos
+    const o = out, i = inner;
+    if (axis === 'x'){
+      B.box(0.05, 1.3, 1.0, M.glass, pos + o * 0.03, y, along);
+      B.box(0.1, 0.1, 1.2, M.trim, pos + o * 0.06, y + 0.7, along); B.box(0.1, 0.1, 1.2, M.trim, pos + o * 0.06, y - 0.7, along);
+      B.box(0.1, 1.4, 0.1, M.trim, pos + o * 0.06, y, along - 0.55); B.box(0.1, 1.4, 0.1, M.trim, pos + o * 0.06, y, along + 0.55);
+      B.box(0.08, 1.4, 0.45, M.green, pos + o * 0.07, y, along - 0.85); B.box(0.08, 1.4, 0.45, M.green, pos + o * 0.07, y, along + 0.85);
+      if (i){ B.box(0.03, 1.2, 0.9, sky, pos - o * (T + 0.05), y, along); B.box(0.06, 1.36, 1.06, M.trim, pos - o * (T + 0.03), y, along); B.box(0.2, 0.05, 1.2, M.trim, pos - o * (T + 0.1), y - 0.66, along); }
+    } else {
+      B.box(1.0, 1.3, 0.05, M.glass, along, y, pos + o * 0.03);
+      B.box(1.2, 0.1, 0.1, M.trim, along, y + 0.7, pos + o * 0.06); B.box(1.2, 0.1, 0.1, M.trim, along, y - 0.7, pos + o * 0.06);
+      B.box(0.1, 1.4, 0.1, M.trim, along - 0.55, y, pos + o * 0.06); B.box(0.1, 1.4, 0.1, M.trim, along + 0.55, y, pos + o * 0.06);
+      B.box(0.45, 1.4, 0.08, M.green, along - 0.85, y, pos + o * 0.07); B.box(0.45, 1.4, 0.08, M.green, along + 0.85, y, pos + o * 0.07);
+      if (i){ B.box(0.9, 1.2, 0.03, sky, along, y, pos - o * (T + 0.05)); B.box(1.06, 1.36, 0.06, M.trim, along, y, pos - o * (T + 0.03)); B.box(1.2, 0.05, 0.2, M.trim, along, y - 0.66, pos - o * (T + 0.1)); }
+    }
+  };
+  for (const z of [hz - 2.6, hz + 2.6]){ win('x', x1, 1.75, z, 1, true); win('x', x1, 4.6, z, 1, false); }
+  win('x', x1, 4.6, hz, 1, false);
+  win('x', x0, 1.75, hz + 0.9, -1, true); win('x', x0, 4.6, hz - 1.2, -1, false); win('x', x0, 4.6, hz + 2.2, -1, false);
+  for (const x of [hx - 2.5, hx + 2]){ win('z', z0, 1.75, x, -1, true); win('z', z1, 1.75, x, 1, true); win('z', z0, 4.6, x, -1, false); win('z', z1, 4.6, x, 1, false); }
   // gable roof with shingles
   const ang = 0.62, half = D / 2 + 0.5, slope = half / Math.cos(ang);
   for (const s of [-1, 1]){
-    B.box(W + 1, 0.12, slope, M.shingles, hx, 0.6 + H + Math.tan(ang) * half / 2 - 0.2, hz + s * half / 2, 0, 0.4, s * ang);
+    B.box(W + 1, 0.12, slope, M.shingles, hx, top + Math.tan(ang) * half / 2 - 0.2, hz + s * half / 2, 0, 0.4, s * ang);
   }
   const gable = new THREE.Shape([new THREE.Vector2(-D / 2, 0), new THREE.Vector2(D / 2, 0), new THREE.Vector2(0, Math.tan(ang) * D / 2)]);
   for (const s of [-1, 1]){
     const g = new THREE.ShapeGeometry(gable); const uv = g.attributes.uv, p = g.attributes.position;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i) * 0.35, p.getY(i) * 0.35);
-    B.add(g, M.clap, new THREE.Matrix4().makeTranslation(hx + s * W / 2, 0.6 + H, hz).multiply(new THREE.Matrix4().makeRotationY(s * Math.PI / 2)));
+    B.add(g, M.clap, new THREE.Matrix4().makeTranslation(hx + s * W / 2, top, hz).multiply(new THREE.Matrix4().makeRotationY(s * Math.PI / 2)));
   }
-  B.box(0.6, 2, 0.6, M.stone, hx - 2.5, 0.6 + H + 1.6, hz - 1.5);    // chimney
-  // windows and door on the east face (toward the yard)
-  const ex = hx + W / 2 + 0.03;
-  for (const [y, z] of [[2.0, hz - 2.6], [2.0, hz + 2.6], [4.6, hz - 2.6], [4.6, hz + 2.6], [4.6, hz]]){
-    B.box(0.05, 1.3, 1.0, M.glass, ex, y, z);
-    B.box(0.1, 0.1, 1.2, M.trim, ex + 0.03, y + 0.7, z); B.box(0.1, 0.1, 1.2, M.trim, ex + 0.03, y - 0.7, z);
-    B.box(0.1, 1.4, 0.1, M.trim, ex + 0.03, y, z - 0.55); B.box(0.1, 1.4, 0.1, M.trim, ex + 0.03, y, z + 0.55);
-    B.box(0.08, 1.4, 0.45, M.green, ex + 0.04, y, z - 0.85); B.box(0.08, 1.4, 0.45, M.green, ex + 0.04, y, z + 0.85);
+  B.box(0.6, 2, 0.6, M.stone, hx - 2.5, top + 1.6, hz - 1.5);    // chimney
+  // colliders: the walls, with the doorway open
+  addBox(x0, x0 + T, z0, z1, 4); addBox(x0, x1, z0, z0 + T, 4); addBox(x0, x1, z1 - T, z1, 4);
+  addBox(x1 - T, x1, z0, hz - DOOR, 4); addBox(x1 - T, x1, hz + DOOR, z1, 4);
+  // ---- the rooms: a kitchen and living room in front, your bedroom at the back ----
+  const PX = HOUSE.partition, PD0 = HOUSE.bedDoor[0], PD1 = HOUSE.bedDoor[1];
+  B.box(0.12, ih, PD0 - iz0, plaster, PX, iy, (iz0 + PD0) / 2); B.box(0.12, ih, iz1 - PD1, plaster, PX, iy, (iz1 + PD1) / 2);
+  B.box(0.12, CEIL - 2.2, PD1 - PD0, plaster, PX, (2.2 + CEIL) / 2, (PD0 + PD1) / 2);
+  B.box(0.16, 0.06, PD1 - PD0 + 0.16, M.trim, PX, 2.2, (PD0 + PD1) / 2);
+  addBox(PX - 0.06, PX + 0.06, iz0, PD0, 4); addBox(PX - 0.06, PX + 0.06, PD1, iz1, 4);
+  const fy = base + 0.03;
+  // kitchen along the north wall: cupboards, a worktop with a sink, a stove, wall shelves
+  const cab = mat('plain-cabinet', { color: 0x6f8a78, rough: 0.6 });
+  const worktop = mat('oak', { rough: 0.5, color: 0xd8c8b0 });
+  const kx0 = PX + 0.4, kx1 = ix1 - 0.4;
+  B.box(kx1 - kx0, 0.86, 0.6, cab, (kx0 + kx1) / 2, fy + 0.43, iz0 + 0.32);
+  B.box(kx1 - kx0 + 0.04, 0.04, 0.64, worktop, (kx0 + kx1) / 2, fy + 0.88, iz0 + 0.33);
+  for (let x = kx0 + 0.3; x < kx1; x += 0.6) B.box(0.02, 0.7, 0.01, M.trim, x, fy + 0.43, iz0 + 0.63);
+  B.box(0.55, 0.06, 0.4, M.steel, kx0 + 1.4, fy + 0.89, iz0 + 0.32); B.cyl(0.015, 0.015, 0.3, M.steel, kx0 + 1.4, fy + 1.05, iz0 + 0.1, 6);
+  B.box(0.62, 0.9, 0.62, M.black, kx1 - 0.6, fy + 0.45, iz0 + 0.33);
+  for (const dx of [-0.14, 0.14]) for (const dz of [-0.12, 0.12]) B.cyl(0.09, 0.09, 0.01, M.metal, kx1 - 0.6 + dx, fy + 0.905, iz0 + 0.33 + dz, 12);
+  B.box(kx1 - kx0 - 1.2, 0.04, 0.26, M.oak, (kx0 + kx1) / 2 - 0.4, fy + 1.75, iz0 + 0.14);
+  for (let k = 0; k < 6; k++) B.cyl(0.05, 0.04, 0.12, k % 2 ? M.blue : M.trim, kx0 + 0.3 + k * 0.32, fy + 1.83, iz0 + 0.14, 10);
+  addBox(kx0, kx1, iz0, iz0 + 0.65, 1);
+  // a table and four chairs, with a jug of flowers
+  const tx = (PX + ix1) / 2 - 0.2, tz = hz - 1.05;
+  B.box(1.4, 0.05, 0.85, M.oak, tx, fy + 0.75, tz);
+  for (const [dx, dz] of [[-0.62, -0.36], [0.62, -0.36], [-0.62, 0.36], [0.62, 0.36]]) B.box(0.06, 0.73, 0.06, M.oak, tx + dx, fy + 0.37, tz + dz);
+  for (const [dx, dz] of [[-0.35, -0.6], [0.35, -0.6], [-0.35, 0.6], [0.35, 0.6]]){
+    const cx = tx + dx, cz = tz + dz, s = Math.sign(dz);
+    B.box(0.42, 0.04, 0.42, M.oak, cx, fy + 0.45, cz);
+    for (const [ex, ez] of [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]]) B.box(0.035, 0.45, 0.035, M.oak, cx + ex, fy + 0.22, cz + ez);
+    B.box(0.42, 0.45, 0.04, M.oak, cx, fy + 0.7, cz + s * 0.19);
   }
-  B.box(0.06, 2.2, 1.1, mat('plain-door', { color: 0x7a2a1a, rough: 0.6 }), ex, 1.7, hz);
-  // porch with posts and a roof
-  B.box(2.6, 0.15, W - 0.6, M.oak, ex + 1.3, 0.55, hz, 0, 0.5);
-  for (const z of [hz - 4, hz - 1.3, hz + 1.3, hz + 4]) B.box(0.14, 2.8, 0.14, M.trim, ex + 2.45, 2.0, z);
+  B.cyl(0.06, 0.05, 0.16, M.blue, tx, fy + 0.86, tz, 10);
+  for (let k = 0; k < 5; k++) B.add(new THREE.SphereGeometry(0.035, 6, 4), k % 2 ? M.yellow : M.red, new THREE.Matrix4().makeTranslation(tx + Math.cos(k * 1.3) * 0.05, fy + 0.98 + (k % 3) * 0.02, tz + Math.sin(k * 1.3) * 0.05));
+  addBox(tx - 0.75, tx + 0.75, tz - 0.85, tz + 0.85, 1);
+  // a sofa, a rug, a low table and a bookcase in the living room (the south side)
+  const sofa = mat('wool', { color: 0x5a6f8a, rough: 0.95 });
+  const sx = (PX + ix1) / 2 - 0.3, sz = iz1 - 0.5;
+  B.box(2.0, 0.42, 0.8, sofa, sx, fy + 0.21, sz); B.box(2.0, 0.5, 0.18, sofa, sx, fy + 0.62, sz + 0.32);
+  for (const s of [-1, 1]) B.box(0.18, 0.6, 0.8, sofa, sx + s * 0.95, fy + 0.3, sz);
+  for (const k of [-0.5, 0.5]) B.box(0.88, 0.1, 0.62, sofa, sx + k * 0.95, fy + 0.47, sz - 0.06);
+  addBox(sx - 1.05, sx + 1.05, sz - 0.42, iz1, 1);
+  B.box(2.4, 0.012, 1.7, mat('quilt', { color: 0xc07a5a, rough: 0.95 }), sx, fy + 0.006, sz - 1.2);
+  B.box(0.9, 0.04, 0.5, M.oak, sx, fy + 0.4, sz - 1.15); for (const [dx, dz] of [[-0.4, -0.2], [0.4, -0.2], [-0.4, 0.2], [0.4, 0.2]]) B.box(0.04, 0.38, 0.04, M.oak, sx + dx, fy + 0.19, sz - 1.15 + dz);
+  addBox(sx - 0.47, sx + 0.47, sz - 1.42, sz - 0.88, 0.5);
+  const bk = PX + 0.22;
+  B.box(0.03, 1.9, 1.1, M.oak, bk - 0.145, fy + 0.95, iz1 - 1.6);
+  for (const s of [-1, 1]) B.box(0.32, 1.9, 0.03, M.oak, bk, fy + 0.95, iz1 - 1.6 + s * 0.535);
+  B.box(0.32, 0.03, 1.1, M.oak, bk, fy + 1.885, iz1 - 1.6); B.box(0.32, 0.1, 1.1, M.oak, bk, fy + 0.05, iz1 - 1.6);
+  for (let k = 0; k < 4; k++){
+    B.box(0.3, 0.03, 1.05, M.oak, bk + 0.01, fy + 0.3 + k * 0.45, iz1 - 1.6);
+    if (k === 3) continue;
+    for (let j = 0; j < 7; j++) B.box(0.2, 0.26 + ((j * 7 + k) % 3) * 0.03, 0.08, [M.red, M.blue, M.green, M.yellow, M.trim][(j + k) % 5], bk + 0.02, fy + 0.45 + k * 0.45 + ((j * 7 + k) % 3) * 0.015, iz1 - 1.99 + j * 0.13);
+  }
+  addBox(PX, bk + 0.18, iz1 - 2.2, iz1 - 1.0, 2);
+  // the bedroom: a big bed with a quilt, bedside table and lamp, a wardrobe, a rug
+  const bx0 = ix0 + 0.06, bedL = 2.1, bedWd = 1.6, bz = HOUSE.bed.z;
+  const bedX = bx0 + bedL / 2;
+  B.box(0.08, 1.15, bedWd + 0.1, M.oak, bx0 + 0.04, fy + 0.58, bz);
+  B.box(0.06, 0.6, bedWd + 0.1, M.oak, bx0 + bedL - 0.03, fy + 0.3, bz);
+  B.box(bedL - 0.1, 0.25, bedWd, M.oak, bedX, fy + 0.22, bz);
+  B.box(bedL - 0.12, 0.2, bedWd - 0.04, M.trim, bedX, fy + 0.44, bz);
+  B.box(bedL - 0.6, 0.06, bedWd + 0.04, mat('quilt', { color: 0xd8a8b0, rough: 0.95 }), bedX + 0.25, fy + 0.56, bz, 0, 1.5);
+  for (const s of [-1, 1]) B.add(ellipsoid(0.2, 0.08, 0.32, 10, 6), M.trim, new THREE.Matrix4().makeTranslation(bx0 + 0.3, fy + 0.6, bz + s * 0.38));
+  B.box(0.45, 0.55, 0.45, M.oak, bx0 + 0.25, fy + 0.28, bz - bedWd / 2 - 0.3);
+  B.cyl(0.05, 0.08, 0.3, M.trim, bx0 + 0.25, fy + 0.7, bz - bedWd / 2 - 0.3, 10);
+  const shade = mat('plain-shade', { color: 0xfff0d0, rough: 0.8, emissive: 0xffc070, emissiveIntensity: 0.9 });
+  B.cyl(0.08, 0.16, 0.2, shade, bx0 + 0.25, fy + 0.94, bz - bedWd / 2 - 0.3, 14);
+  B.box(1.7, 0.012, 1.2, mat('quilt', { color: 0x7a8a5a, rough: 0.95 }), bedX + 1.1, fy + 0.006, bz + 0.2);
+  addBox(bx0 - 0.1, bx0 + bedL, bz - bedWd / 2 - 0.55, bz + bedWd / 2 + 0.05, 1);
+  B.box(0.62, 2.0, 1.4, M.oak, ix0 + 0.33, fy + 1.0, iz1 - 0.9); B.box(0.02, 1.8, 0.01, M.black, ix0 + 0.65, fy + 1.0, iz1 - 0.9);
+  addBox(ix0, ix0 + 0.65, iz1 - 1.6, iz1, 2.2);
+  // ceiling lamps, and warm lights that are on in the evenings
+  for (const [x, z] of [[tx, hz], [(ix0 + PX) / 2, hz]]){
+    B.cyl(0.008, 0.008, 0.4, M.black, x, CEIL - 0.2, z, 4);
+    B.cyl(0.12, 0.26, 0.2, shade, x, CEIL - 0.48, z, 16);
+  }
+  const lamps = [new THREE.PointLight(0xffd6a0, 5, 7, 1.5), new THREE.PointLight(0xffd6a0, 4, 6, 1.5)];
+  lamps[0].position.set(tx, CEIL - 0.7, hz); lamps[1].position.set((ix0 + PX) / 2, CEIL - 0.7, hz);
+  for (const L of lamps) root.add(L);
+  world.houseLights = { lamps, shade, sky };
+  world.fixtures.bed = { pos: V(bedX, fy + 0.5, bz) };
+  // porch with posts and a roof, and a step down to the yard
+  const ex = x1;
+  B.box(2.6, 0.12, W - 0.6, M.oak, ex + 1.3, 0.09, hz, 0, 0.5);
+  for (const z of [hz - 4, hz - 1.3, hz + 1.3, hz + 4]) B.box(0.14, 3.35, 0.14, M.trim, ex + 2.45, 1.75, z);
   B.box(2.9, 0.12, W, M.shingles, ex + 1.35, 3.45, hz, 0, 0.5, -0.2);
-  B.box(0.9, 0.22, 1.4, M.oak, ex + 3, 0.3, hz, 0, 0.5); B.box(0.5, 0.15, 1.4, M.oak, ex + 3.45, 0.1, hz, 0, 0.5);
-  addBox(hx - W / 2 - 0.2, hx + W / 2 + 0.2, hz - D / 2 - 0.2, hz + D / 2 + 0.2, 5);
   // the farm office notice board on the porch: where you buy, sell and enter shows
   const bp = PLACES.board;
   B.box(0.1, 1.6, 0.1, M.oak, bp.x, 0.8, bp.z - 0.75); B.box(0.1, 1.6, 0.1, M.oak, bp.x, 0.8, bp.z + 0.75);

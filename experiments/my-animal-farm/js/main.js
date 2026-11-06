@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { V, clamp, lerp, damp, angleDiff, fmtMoney, fmtTime } from './util.js';
 import { setAnisotropy } from './textures.js';
 import { Sky } from './sky.js';
-import { buildWorld, pushOut, colliders, PLACES, BARN, PADDOCK, PENS, ARENA, SHOW, stallAt, inBox, insideBarn, STALL_W } from './world.js';
+import { buildWorld, pushOut, colliders, PLACES, BARN, PADDOCK, PENS, ARENA, SHOW, stallAt, inBox, insideBarn, STALL_W, HOUSE } from './world.js';
 import { Farm, Horse, DAY_START, NIGHT, PRICES, SUPPLY_UNITS, SUPPLY_PACK, isShowDay, dayName, horseValue, SAVE_KEY } from './farm.js';
 import { Care, BINS } from './care.js';
 import { Riding, GEARS, CLASSES } from './riding.js';
@@ -69,6 +69,7 @@ farm.on('horseGone', (h) => { if (player.leading === h) player.leading = null; }
 function groundAt(p){
   if (inBox(p, ARENA) || inBox(p, SHOW)) return 'sand';
   if (insideBarn(p)) return Math.abs(p.x) < BARN.aisle ? 'hard' : 'sand';
+  if (inBox(p, HOUSE, 2.6)) return 'hard';
   if (inBox(p, { x0: -8, x1: 8, z0: -4, z1: 8 }) || inBox(p, { x0: -3, x1: 3, z0: 8, z1: 30 }) || inBox(p, { x0: -90, x1: 120, z0: 24, z1: 30 })) return 'gravel';
   return 'grass';
 }
@@ -93,6 +94,7 @@ hotspot('heap', V(PLACES.manureHeap.x, 0.6, PLACES.manureHeap.z), [3.6, 1.2, 3])
 hotspot('board', world.fixtures.board.pos, [0.3, 1.2, 1.6]);
 hotspot('rail', V(PLACES.rail.x, 1.0, PLACES.rail.z), [2.8, 0.4, 0.3]);
 hotspot('lights', world.barnLights.switchPos, [0.3, 0.4, 0.2]);
+hotspot('bed', world.fixtures.bed.pos, [2.1, 0.5, 1.6]);
 hotspot('paddockTrough', V(-13, 0.4, -7), [1.9, 0.7, 0.8]);
 hotspot('showOffice', V(28, 1.6, 33.4), [3, 2.4, 0.6]);
 farm.pens.forEach((p, i) => {
@@ -135,7 +137,7 @@ function horseTarget(h, point){
 const raycaster = new THREE.Raycaster();
 function pickables(){
   const list = [...hot];
-  for (const it of care.pickables()) if (it.mesh.visible && (!it.held || it.kind === 'barrow')) list.push(it.mesh);
+  for (const it of care.pickables()) if (it.mesh.visible && !it.held && it !== player.barrow) list.push(it.mesh);
   for (const b of care.stallBuckets) list.push(b);
   for (const r of hoofRingMeshes) if (r.visible) list.push(r);
   for (const h of farm.horses) if (h.root.visible && h !== riding.horse) list.push(h.root);
@@ -225,7 +227,7 @@ function hintFor(it){
     saddle: 'Saddle: goes on top of the pad, then do up the girth.',
     bridle: 'Bridle: put it over the horse\'s head.',
     fork: 'Manure fork: lift droppings and wet bedding into the wheelbarrow.',
-    barrow: 'Pushing the wheelbarrow. Tip it on the muck heap behind the barn.',
+    barrow: mode === 'vr' ? 'Wheelbarrow: hold both handles (grip) and walk. Wheel it up to the muck heap behind the barn and it tips out.' : 'Pushing the wheelbarrow: it rolls along in front of you. Park it by a stall, pick up the fork and tap the muck. When it\'s full, push it out the back door to the muck heap and it tips out. Let go with the button at the bottom.',
     bucket: 'Water bucket: fill it at the tap in the feed room.',
     scoop: 'Feed scoop: fill it from a feed bin.',
     flake: 'A flake of hay: put it in a horse\'s hay rack or the goat/sheep feeder.',
@@ -417,7 +419,8 @@ function goToSleep(){
   const f = $('fade'); f.classList.add('on');
   setTimeout(() => {
     if (farm.sleep()){
-      player.pos.set(PLACES.board.x + 2.5, 0, PLACES.board.z + 1); player.yaw = -Math.PI / 2;
+      player.pos.set(HOUSE.partition - 0.9, 0, (HOUSE.bedDoor[0] + HOUSE.bedDoor[1]) / 2); player.yaw = -Math.PI / 2;
+      player.barrow = null;
       if (mode === 'vr') placeRigAt(player.pos);
       farm.say(`Good morning! ${dayName(farm.state.day)}, day ${farm.state.day}.${isShowDay(farm.state.day) ? ' It\'s show day!' : ''}`, 'info');
     }
@@ -431,6 +434,7 @@ function activate(t, handIdx = 1){
   const it = player.heldBy[handIdx];
   if (t.type === 'board'){ office('jobs'); return true; }
   if (t.type === 'lights'){ toggleLights(); return true; }
+  if (t.type === 'bed'){ goToBed(); return true; }
   if (t.type === 'showOffice'){ office('shows'); return true; }
   if (t.type === 'visitor'){ visitorPanel(t.offer); return true; }
   if (!it){
@@ -459,7 +463,7 @@ function handleTap(t){
   if (t.type === 'item'){
     if (t.item === it){ return; }
     if (it && it.kind === 'fork' && t.item.kind === 'barrow'){ if (care.use(it, { type: 'barrow', point: t.point })) return; }
-    if (t.item.kind === 'barrow'){ if (player.barrow){ player.barrow = null; farm.say('Left the wheelbarrow here.', 'hint'); } else { player.barrow = t.item; t.item.homeNow = false; hintFor(t.item); } return; }
+    if (t.item.kind === 'barrow'){ player.barrow = t.item; t.item.homeNow = false; barrowFollow(1); hintFor(t.item); updateHeldUI(); return; }
     pickUp(t.item, 1); return;
   }
   if (it){
@@ -484,6 +488,7 @@ function handleTap(t){
   if (t.type === 'hayStack' || t.type === 'carrots' || t.type === 'shavings'){ takeFrom(t.type); return; }
   if (t.type === 'nest'){ collectEggs(t.pen); return; }
   if (t.type === 'heap' && player.barrow){ care.use(player.barrow, t); return; }
+  if (t.type === 'bed'){ goToBed(); return; }
   if (t.type === 'tap') { farm.say('Pick up the water bucket first (it\'s on the floor by the tap).', 'hint'); return; }
   if (t.type === 'bin') { farm.say('Pick up the feed scoop first (it hangs on the grain bin).', 'hint'); return; }
   if (t.type === 'rack' || t.type === 'tub' || t.type === 'stallBucket'){ const s = farm.stalls[t.stall].state; farm.say(`Hay rack: ${s.hay.toFixed(1)} flakes · grain tub: ${s.grain > 0 ? 'some' : 'empty'} · water: ${Math.round(s.water)} of 20 litres.`, 'hint'); return; }
@@ -573,7 +578,7 @@ addEventListener('keyup', (e) => { touch.keys[e.code] = false; });
 // on-screen buttons
 $('b-menu').onclick = () => { if (!paused) office(); };
 $('b-jobs').onclick = () => { if (!paused) office('jobs'); };
-$('b-drop').onclick = () => { const it = player.heldBy[1]; if (it) putBack(it); if (player.barrow){ player.barrow = null; } updateHeldUI(); };
+$('b-drop').onclick = () => { const it = player.heldBy[1]; if (it) putBack(it); else if (player.barrow){ player.barrow = null; farm.say('Left the wheelbarrow here.', 'hint'); } updateHeldUI(); };
 $('b-lead').onclick = () => { if (player.leading) letGo(); };
 $('b-up').onclick = () => { riding.input.up = true; };
 $('b-down').onclick = () => { riding.input.down = true; };
@@ -652,9 +657,11 @@ function vrHands(dt){
     if (!hs.length) player.barrow = null;
     else {
       const c = hs.reduce((a, h) => a.add(h.pos), V()).multiplyScalar(1 / hs.length);
-      const fwd = V(0, 0, -1).applyQuaternion(headQuat); fwd.y = 0; fwd.normalize();
+      const fwd = V(c.x - headPos.x, 0, c.z - headPos.z);
+      if (fwd.lengthSq() < 0.01){ fwd.set(0, 0, -1).applyQuaternion(headQuat); fwd.y = 0; }
+      fwd.normalize();
       const b = player.barrow.mesh; b.position.set(c.x + fwd.x * 0.75, 0, c.z + fwd.z * 0.75); b.rotation.set(0, Math.atan2(fwd.x, fwd.z), 0);
-      if (b.position.distanceTo(PLACES.manureHeap) < 2.2 && player.barrow.load > 0) care.use(player.barrow, { type: 'heap', point: b.position });
+      barrowAtHeap();
     }
     for (const h of vr) if (h.barrow && h.squeezeUp) h.barrow = false;
   }
@@ -752,7 +759,7 @@ function vrPointing(){
     }
     if (player.heldBy[h.i] || h.lead || riding.horse) continue;
     const t = castFrom(h.rayPos, dir, 12);
-    const can = t && ['horse', 'head', 'hoof', 'pet', 'visitor', 'board', 'showOffice', 'lights'].includes(t.type);
+    const can = t && ['horse', 'head', 'hoof', 'pet', 'visitor', 'board', 'showOffice', 'lights', 'bed'].includes(t.type);
     laser.visible = h.trigger > 0.1 || can; laser.position.copy(h.rayPos); laser.quaternion.setFromUnitVectors(V(0, 0, 1), dir); laser.scale.set(1, 1, t ? Math.min(t.dist, 12) : 3);
     laser.material.color.set(can ? 0xffe060 : 0xffffff);
     if (h.triggerDown && can){ activate(t, h.i); h.haptic(0.2, 30); }
@@ -773,12 +780,45 @@ function moveOnFoot(dt, mx, my, yaw){
   const before = player.pos.clone();
   player.pos.addScaledVector(player.vel, dt);
   pushOut(player.pos, 0.28, { ignore: ignoreCol });
+  if (player.barrow && mode === 'screen'){
+    // the wheelbarrow in front of you can't go through walls either: if it bumps one, you stop
+    const fwd = V(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    const bp = player.pos.clone().addScaledVector(fwd, BARROW_AHEAD), q = bp.clone();
+    pushOut(q, 0.3, { ignore: ignoreCol });
+    player.pos.x += q.x - bp.x; player.pos.z += q.z - bp.z;
+    pushOut(player.pos, 0.28, { ignore: ignoreCol });
+  }
   // don't walk through horses
   for (const h of farm.horses){ if (!h.root.visible || h === riding.horse) continue; const fx = Math.sin(h.yaw), fz = Math.cos(h.yaw); for (const o of [-0.6, 0, 0.6]){ const cx = h.pos.x + fx * o * h.model.scale, cz = h.pos.z + fz * o * h.model.scale, dx = player.pos.x - cx, dz = player.pos.z - cz, d = Math.hypot(dx, dz), r = 0.33 * h.model.scale + 0.25; if (d < r && d > 1e-4){ player.pos.x = cx + dx / d * r; player.pos.z = cz + dz / d * r; } } }
   const moved = before.distanceTo(player.pos);
   player.stepT = (player.stepT || 0) + moved;
   if (player.stepT > 0.75){ player.stepT = 0; sfx.step(player.pos, groundAt(player.pos)); }
 }
+// ---------- the wheelbarrow ----------
+const BARROW_AHEAD = 1.1;
+function barrowFollow(dt){
+  const b = player.barrow.mesh, fwd = V(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+  const want = V(player.pos.x + fwd.x * BARROW_AHEAD, 0, player.pos.z + fwd.z * BARROW_AHEAD);
+  const k = Math.min(1, dt * 14);
+  b.position.lerp(want, k);
+  b.rotation.order = 'YXZ';
+  b.rotation.y += angleDiff(b.rotation.y, player.yaw + Math.PI) * k;
+  b.rotation.x = 0;
+  barrowAtHeap();
+}
+function barrowAtHeap(){
+  const it = player.barrow, b = it.mesh;
+  if (it.load > 0 && Math.hypot(b.position.x - PLACES.manureHeap.x, b.position.z - PLACES.manureHeap.z) < 3.2){
+    care.use(it, { type: 'heap', point: b.position.clone() });
+    updateHeldUI();
+  }
+}
+function goToBed(){
+  const S = farm.state;
+  if (S.minutes < 18 * 60 && S.minutes >= DAY_START){ farm.say(`It's only ${fmtTime(S.minutes)}. You can go to bed from 6pm.`, 'hint'); return; }
+  goToSleep();
+}
+
 function placeRigAt(p){
   // VR: move the play space so your head is over p
   rig.updateMatrixWorld(true);
@@ -848,7 +888,8 @@ function updateHUD(){
 function updateHeldUI(){
   const it = player.heldBy[1];
   $('held').style.display = it || player.barrow ? 'flex' : 'none';
-  $('held-name').textContent = it ? it.name + (it.kind === 'bucket' ? ` (${Math.round(it.water)} L)` : it.kind === 'scoop' && it.amount ? ` (${it.content === 'pigfeed' ? 'pig feed' : it.content})` : it.kind === 'fork' && it.load ? ' (loaded)' : '') + (player.barrow ? ' + wheelbarrow' : '') : player.barrow ? `Wheelbarrow (${player.barrow.load} forkfuls)` : '';
+  $('held-name').textContent = it ? it.name + (it.kind === 'bucket' ? ` (${Math.round(it.water)} L)` : it.kind === 'scoop' && it.amount ? ` (${it.content === 'pigfeed' ? 'pig feed' : it.content})` : it.kind === 'fork' && it.load ? ' (loaded)' : '') + (player.barrow ? ` + wheelbarrow (${player.barrow.load}/14)` : '') : player.barrow ? `Wheelbarrow (${player.barrow.load} of 14 forkfuls)` : '';
+  $('b-drop').textContent = it ? 'Put back' : 'Let go';
   $('b-lead').style.display = player.leading ? 'block' : 'none';
   if (player.leading) $('b-lead').textContent = `Let go of ${player.leading.data.name}`;
 }
@@ -977,12 +1018,7 @@ function simulate(dt, first){
       if (swingT > 0 && swingItem === it){ swingT -= dt; const lp = camera.worldToLocal(swingPoint.clone()); it.mesh.position.lerp(lp, 0.5); }
       else it.mesh.position.lerp(p, Math.min(1, dt * 10));
     }
-    if (player.barrow && !player.heldBy[1]){ /* pushing the barrow with both hands */ }
-    if (player.barrow){
-      const b = player.barrow.mesh, fwd = V(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-      b.position.set(player.pos.x + fwd.x * 1.25, 0, player.pos.z + fwd.z * 1.25); b.rotation.set(0, player.yaw + Math.PI, 0);
-      if (b.position.distanceTo(PLACES.manureHeap) < 2.4 && player.barrow.load > 0) care.use(player.barrow, { type: 'heap', point: b.position });
-    }
+    if (player.barrow) barrowFollow(dt);
   }
   // rider model (third person on screen)
   rider.root.visible = !!riding.horse && mode === 'screen' && player.view === 'third';
@@ -997,6 +1033,7 @@ function simulate(dt, first){
   const night = S.minutes > NIGHT + 30 || S.minutes < DAY_START - 30 ? 1 : 0;
   setNight(night);
   sky.update(S.minutes, player.pos, dt);
+  world.houseLights.sky.emissiveIntensity = 0.03 + 0.4 * sky.light;   // the house windows: daylight outside, dark at night
   // your eyes adjust to the dim barn
   const indoors = insideBarn(headPos) || inBox(headPos, BARN, 0.6);
   renderer.toneMappingExposure = damp(renderer.toneMappingExposure, indoors ? 1.75 : 1.0, 2.5, dt);

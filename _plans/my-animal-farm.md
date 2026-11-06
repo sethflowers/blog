@@ -126,3 +126,14 @@ simulation faster (`__farm.timeScale`).
   lights and glowing bulbs) that light the stalls. The dusk message (7pm) says where it is. Remembered
   in the save.
 - Messages no longer flicker: the HUD redrew them four times a second, replaying their pop-in.
+
+## v1.4
+- Wheelbarrow: on the screen it rolls along just in front of you and taps go straight past it (it used
+  to catch taps meant for the muck behind it, and a stray tap let go of it). It bumps into walls
+  instead of going through them, so you stop. The button at the bottom says "Let go". The fork drops
+  muck in from up to 6.5 m away, and it tips when you wheel it within about 3 m of the muck heap. In VR
+  it points where your hands are, not where you look.
+- The farmhouse is yours to go in: the front door on the porch stands open into a kitchen (cupboards,
+  sink, stove), a table and chairs, a living room (sofa, rug, bookcase), and your bedroom at the back.
+  Tap the bed (or point at it in VR) to sleep from 6pm; you wake up there. Warm lamps inside; the
+  windows show daylight by day and go dark at night.
