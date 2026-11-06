@@ -99,6 +99,26 @@ the same `?v=`), so a new page can only run matching code. The worker only uses 
 the network fails, stores scripts by their full versioned address, and fills its store bypassing the
 HTTP cache. The version is on the big sign in VR as well as the title screen and the watch.
 
+## Version 3.0: a big world, a real truck cab, fast tests
+
+- **The world is 512 m across** (was 72). The valley is unchanged in the middle; around it are rolling
+  terraced hills (half-block steps, so the truck can climb them), forests, lakes, a dirt road in a ring
+  round the valley with a road out to it from the yard, and mountains at the edge. The ground is built
+  in 32 m chunks as you come within view (115 m, where the fog closes in) and dropped when you're far
+  away, one chunk a frame. Runs of flat ground of the same kind are merged into single faces, and trees
+  are four boxes each. Trunks and rocks are looked up on an 8 m grid so collisions only check what's near.
+  The dragon circles wherever you are.
+- **Truck cab**: you sit under the roof with the windscreen in front; seats, dashboard with gauges and a
+  radio, a steering wheel that turns as you steer, gear stick, mirrors, open side windows.
+- **No more white box** round things you can grab: a light tap on the controller when something comes in
+  reach, and a little spinning diamond over something you're pointing at from afar.
+- **Blocks can't be placed inside the ground** (they fought with it for the same faces and flickered).
+- **Tests in 2 minutes instead of 25.** Nearly all the time went into drawing frames in software (no GPU).
+  The game now has two test switches: `__vrtest.noRender` skips drawing (screenshots turn it on for a
+  frame), and `__vrtest.timeScale` runs the simulation several steps per frame, so game time runs 4x
+  faster than real time. Quick hand movements (sword swings, punches) are done at normal speed. A
+  button press only counts on the first of the steps. `TIME_SCALE=1` runs it the old way.
+
 ## Performance choices
 
 - One material (Lambert, vertex colour times a 16x16 speckle texture) for almost everything.

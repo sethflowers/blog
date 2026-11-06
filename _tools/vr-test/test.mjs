@@ -103,7 +103,16 @@ const pg = await ctx.newPage();
 const errors = [];
 pg.on('pageerror', (e) => errors.push(e.message));
 pg.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-const shot = (name) => pg.screenshot({ path: path.join(OUT, name + '.png') });
+// The slow part of testing is drawing: there is no GPU, so every frame is drawn in software. The game
+// runs undrawn and several times faster than real time (__vrtest.noRender / timeScale), and draws
+// only for the screenshots. Quick hand movements (a sword swing, a punch) run at normal speed.
+const FAST = Number(process.env.TIME_SCALE || 4);
+const shot = async (name) => {
+  await pg.evaluate('__vrtest.noRender = false'); await pg.evaluate('__t.frames(2)');
+  await pg.screenshot({ path: path.join(OUT, name + '.png') });
+  await pg.evaluate('__vrtest.noRender = true');
+};
+const realTime = (on) => pg.evaluate(`__vrtest.timeScale = ${on ? 1 : FAST}`);
 const ev = (s) => pg.evaluate(s);
 const wait = (ms) => pg.waitForTimeout(ms);
 // headless frames are slow and the game caps its time step, so wait on the game's own clock
@@ -117,8 +126,10 @@ const waitGame = async (sec) => {
 const q = (yaw, pitch = 0, roll = 0) => ev(`(() => { const T = __vrtest, Q = T.rig.quaternion.constructor, E = T.rig.rotation.constructor; return new Q().setFromEuler(new E(${pitch}, ${yaw}, ${roll}, 'YXZ')).toArray(); })()`);
 
 console.log('VR Test ' + VERSION);
+const started = Date.now();
 await pg.goto(BASE);
 await wait(1500);
+await realTime(false); await ev('__vrtest.noRender = true');
 check((await pg.textContent('.build-version')).includes(VERSION), 'title shows version ' + VERSION);
 check(await ev(`!document.getElementById('enter-vr').disabled`), 'Enter VR is offered (emulated headset found)');
 await shot('01-title');
@@ -224,10 +235,12 @@ if (melon){
   const hx = melon[0] + 0.5, hz = melon[2];
   await ev(`__t.grip('right', [${hx}, 1.7, ${hz}], ${JSON.stringify(bladeLeft)})`);
   await wait(200);
+  await realTime(true);
   await ev(`(async () => {
     const c = __iwer.controllers.right, L0 = c.position.y;
     for (let k = 1; k <= 8; k++){ c.position.y = L0 - k * 0.12; await __t.frames(1); }
   })()`);
+  await realTime(false);
   await wait(300);
   const cuts = await ev(`__vrtest.items.events.filter(e => e.type === 'cut').length`);
   check(cuts >= 1, 'a fast downward swing cuts the melon');
@@ -363,7 +376,9 @@ await ev(`__t.head([-1, 1.7, 6], 0, -0.45)`); await waitGame(0.3);
 await shot('13-building');
 await ev(`__t.teleport(-0.75, 6, 0); __t.head([-0.75, 1.7, 6], 0, -0.3)`); await waitGame(0.3);
 // walk onto the row: blocks are solid and half a block is a step
-await ev(`__t.stick('left', 0, -0.8)`); await waitGame(0.95); await ev(`__t.stick('left', 0, 0)`); await waitGame(0.4);
+await ev(`__t.stick('left', 0, -0.6)`);
+for (let k = 0; k < 100 && (await ev('__vrtest.head[2]')) > 4.35; k++) await wait(20);
+await ev(`__t.stick('left', 0, 0)`); await waitGame(0.5);
 const standY = await ev(`__vrtest.rig.position.y`);
 check(standY > 0.45, `you can step up onto blocks (standing at ${standY.toFixed(2)} m)`);
 await ev(`__t.teleport(-1, 6, 0); __t.head([-1, 1.7, 6], 0, -0.5)`); await waitGame(0.3);
@@ -377,7 +392,9 @@ check(await ev(`__vrtest.builder.count`) === before - 1, 'the left trigger break
 const blockC = await ev(`(() => { const k = [...__vrtest.builder.where.keys()][0].split(',').map(Number); return [(k[0] + 0.5) * 0.5, (k[1] + 0.5) * 0.5, (k[2] + 0.5) * 0.5]; })()`);
 await ev(`__t.grip('left', [${blockC[0]}, ${blockC[1] + 0.5}, ${blockC[2] + 0.5}], ${JSON.stringify(await q(0, 0.3))})`);
 const nB = await ev(`__vrtest.builder.count`);
+await realTime(true);
 await ev(`(async () => { const c = __iwer.controllers.left; for (let k = 0; k < 6; k++){ c.position.y -= 0.12; c.position.z -= 0.12; await __t.frames(1); } })()`);
+await realTime(false);
 await waitGame(0.2);
 check(await ev(`__vrtest.builder.count`) < nB, 'punching a block breaks it');
 await ev(`__vrtest.builder.clearAll()`);
@@ -503,5 +520,6 @@ check(info.calls < 400, 'draw calls stay modest');
 check(errors.length === 0, 'no errors on the page' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 await browser.close();
 server.close();
+console.log(`  took ${((Date.now() - started) / 1000).toFixed(0)} s`);
 console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
 process.exit(failures ? 1 : 0);

@@ -296,13 +296,16 @@ function frame(time, xrFrame){
   try { step(time, xrFrame); }
   catch (e){ if (frameErrors++ < 5) console.error(e); if (frameErrors < 3) setTimeout(() => { throw e; }); }
 }
+// Tests can run the game faster than real time without drawing: __vrtest.timeScale runs the
+// simulation that many times per frame, and __vrtest.noRender skips drawing (screenshots turn it back on).
 function step(time, xrFrame){
   const dt = Math.max(1e-4, Math.min(clock.getDelta(), 1 / 30));
-  gameTime += dt;
+  const T = window.__vrtest, steps = T && T.timeScale > 1 ? Math.round(T.timeScale) : 1;
+  const draw = !(T && T.noRender);
   frames++; fpsT += dt; if (fpsT >= 1){ fps = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
   avatar.root.visible = mode !== 'title';
   for (const h of holsters) h.mesh.visible = mode !== 'title';
-  if (mode === 'title'){ watch.visible = false; titleSpin(dt); renderer.render(scene, camera); return; }
+  if (mode === 'title'){ watch.visible = false; for (let k = 0; k < steps; k++){ gameTime += dt; titleSpin(dt); } if (draw) renderer.render(scene, camera); return; }
 
   rig.updateMatrixWorld(true);
   if (mode === 'vr'){
@@ -314,7 +317,7 @@ function step(time, xrFrame){
       headFromLocal();
       // learn how tall you are from the first couple of seconds
       if (!calib.done){
-        calib.t += dt;
+        calib.t += dt * steps;
         if (calib.t > 1.2){ calib.sum += t.position.y; calib.n++; }
         if (calib.t > 2.2 && calib.n){ setEyeHeight(calib.sum / calib.n); calib.done = true; }
       }
@@ -322,7 +325,38 @@ function step(time, xrFrame){
     readVRInput(renderer.xr.getSession());
   } else desktopInput(dt);
   edges();
+  for (let k = 0; k < steps; k++){
+    gameTime += dt;
+    simulate(dt);
+    // a press happens once, not once per step
+    if (k === 0) for (const h of hands){ h.triggerDown = h.squeezeDown = h.squeezeUp = h.aDown = h.bDown = h.stickDown = false; }
+  }
+  // watch
+  if (hands[0].tracked){
+    watch.visible = true;
+    m1.compose(hands[0].pos, hands[0].quat, v1.set(1, 1, 1)).multiply(watchLocal);
+    m1.decompose(watch.position, watch.quaternion, v1);
+  } else watch.visible = false;
+  toast.t -= dt; watchT -= dt;
+  if (watchT <= 0){ watchT = 0.5; drawWatch(); }
+  // sound follows your head
+  setListener(headPos, v1.set(0, 0, -1).applyQuaternion(headQuat), v2.set(0, 1, 0).applyQuaternion(headQuat));
 
+  if (!draw) return;
+  if (mode === 'desktop'){
+    camera.position.copy(headPos).sub(rig.position).applyAxisAngle(THREE.Object3D.DEFAULT_UP, -rig.rotation.y);
+    camera.quaternion.copy(headQuat).premultiply(q1.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -rig.rotation.y));
+    if (window.__vrtest && window.__vrtest.spectate){
+      const s = window.__vrtest.spectate;
+      specCam.position.set(...s.pos); specCam.lookAt(...s.look); specCam.aspect = window.innerWidth / window.innerHeight; specCam.updateProjectionMatrix();
+      renderer.render(scene, specCam); return;
+    }
+  }
+  renderer.render(scene, camera);
+}
+
+// one step of the game: vehicles, moving, hands, body, things, creatures, the world
+function simulate(dt){
   const L = hands[0], Rh = hands[1];
   // getting into a vehicle: squeeze while your hand is on it (and not on something to pick up)
   if (!vehicles.current) for (const h of hands){
@@ -367,29 +401,8 @@ function step(time, xrFrame){
   creatures.update(dt, player);
   villagers.update(dt, player, headPos);
   particles.update(dt);
-  world.update(dt);
+  world.update(dt, headPos);
   updateMirror();
-  // watch
-  if (hands[0].tracked){
-    watch.visible = true;
-    m1.compose(hands[0].pos, hands[0].quat, v1.set(1, 1, 1)).multiply(watchLocal);
-    m1.decompose(watch.position, watch.quaternion, v1);
-  } else watch.visible = false;
-  toast.t -= dt; watchT -= dt;
-  if (watchT <= 0){ watchT = 0.5; drawWatch(); }
-  // sound follows your head
-  setListener(headPos, v1.set(0, 0, -1).applyQuaternion(headQuat), v2.set(0, 1, 0).applyQuaternion(headQuat));
-
-  if (mode === 'desktop'){
-    camera.position.copy(headPos).sub(rig.position).applyAxisAngle(THREE.Object3D.DEFAULT_UP, -rig.rotation.y);
-    camera.quaternion.copy(headQuat).premultiply(q1.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -rig.rotation.y));
-    if (window.__vrtest && window.__vrtest.spectate){
-      const s = window.__vrtest.spectate;
-      specCam.position.set(...s.pos); specCam.lookAt(...s.look); specCam.aspect = window.innerWidth / window.innerHeight; specCam.updateProjectionMatrix();
-      renderer.render(scene, specCam); return;
-    }
-  }
-  renderer.render(scene, camera);
 }
 const specCam = new THREE.PerspectiveCamera(60, 1, 0.05, 600);
 renderer.setAnimationLoop(frame);
@@ -483,7 +496,7 @@ function titleSpin(dt){
   items.update(dt, [], holsters);
   dragon.update(dt, { pos: new THREE.Vector3(0, 0, 50), head: new THREE.Vector3(0, 1.6, 50), speed: 0 }, null);
   vehicles.update(dt, hands);
-  world.update(dt);
+  world.update(dt, camera.position);
 }
 
 // ---------- desktop mode: mouse and keyboard ----------
@@ -594,7 +607,8 @@ addEventListener('resize', () => {
 
 // for the headless test
 window.__vrtest = {
-  get mode(){ return mode; }, items, creatures, villagers, builder, dragon, vehicles, avatar, mirrorAvatar, hands, rig, player, settings, holsters, renderer,
+  get mode(){ return mode; }, items, creatures, villagers, builder, dragon, vehicles, world,
+  timeScale: 1, noRender: false, avatar, mirrorAvatar, hands, rig, player, settings, holsters, renderer,
   enterVR, startDesktop, spectate: null, input: null,
   get eyeHeight(){ return eyeHeight; }, get time(){ return gameTime; }, get fps(){ return fps; },
   get head(){ return headPos.toArray(); }, get headQuat(){ return headQuat.toArray(); },

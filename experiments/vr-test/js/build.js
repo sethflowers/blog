@@ -144,7 +144,9 @@ export class Builder {
     const cx = (c[0] + 0.5) * VOX, cz = (c[2] + 0.5) * VOX, y0 = c[1] * VOX, y1 = y0 + VOX;
     const dx = Math.max(Math.abs(cx - player.head.x) - VOX / 2, 0), dz = Math.max(Math.abs(cz - player.head.z) - VOX / 2, 0);
     if (Math.hypot(dx, dz) < 0.2 && y1 > player.pos.y + 0.05 && y0 < player.head.y + 0.15) return false;
-    if (y0 < -2 || y0 > 40) return false;
+    if (y0 < -2 || y0 > 60) return false;
+    // never inside the ground or the table: a block there would fight with it for the same faces
+    if (solidAt(cx, y0 + VOX / 2, cz)) return false;
     return true;
   }
   place(c, quiet){
