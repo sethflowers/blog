@@ -92,6 +92,7 @@ hotspot('tap', world.fixtures.tap.pos, [0.35, 0.5, 0.5]);
 hotspot('heap', V(PLACES.manureHeap.x, 0.6, PLACES.manureHeap.z), [3.6, 1.2, 3]);
 hotspot('board', world.fixtures.board.pos, [0.3, 1.2, 1.6]);
 hotspot('rail', V(PLACES.rail.x, 1.0, PLACES.rail.z), [2.8, 0.4, 0.3]);
+hotspot('lights', world.barnLights.switchPos, [0.3, 0.4, 0.2]);
 hotspot('paddockTrough', V(-13, 0.4, -7), [1.9, 0.7, 0.8]);
 hotspot('showOffice', V(28, 1.6, 33.4), [3, 2.4, 0.6]);
 farm.pens.forEach((p, i) => {
@@ -237,6 +238,12 @@ function hintFor(it){
 
 // a flake, carrot or bag that got used up leaves your hand
 care.onDropTemp = (it) => { const i = player.heldBy.indexOf(it); if (i >= 0) player.heldBy[i] = null; };
+
+function toggleLights(){
+  const on = !world.barnLights.on;
+  world.barnLights.set(on); farm.state.lights = on; sfx.ui();
+  farm.say(on ? 'Barn lights on.' : 'Barn lights off.', 'hint');
+}
 
 // ---------- leading a horse ----------
 function startLead(h){
@@ -423,6 +430,7 @@ function activate(t, handIdx = 1){
   if (!t) return false;
   const it = player.heldBy[handIdx];
   if (t.type === 'board'){ office('jobs'); return true; }
+  if (t.type === 'lights'){ toggleLights(); return true; }
   if (t.type === 'showOffice'){ office('shows'); return true; }
   if (t.type === 'visitor'){ visitorPanel(t.offer); return true; }
   if (!it){
@@ -677,6 +685,8 @@ function vrGrab(h){
     if (T.saddle && p.distanceTo(sp) < 0.35){ const it = care.untack(hs, 'saddle'); if (it){ pickUp(it, h.i); return true; } }
     if (T.pad && !T.saddle && p.distanceTo(sp) < 0.35){ const it = care.untack(hs, 'pad'); if (it){ pickUp(it, h.i); return true; } }
   }
+  // the light switch
+  if (p.distanceTo(world.barnLights.switchPos) < 0.25){ toggleLights(); return true; }
   // supplies
   if (p.distanceTo(V(PLACES.hayStack.x, Math.min(p.y, 1.4), PLACES.hayStack.z + 0.25)) < 0.75){ const it = care.takeFlake(); if (it){ pickUp(it, h.i); return true; } }
   if (p.distanceTo(world.fixtures.carrots.pos) < 0.35){ const it = care.takeCarrot(); if (it){ pickUp(it, h.i); return true; } }
@@ -742,7 +752,7 @@ function vrPointing(){
     }
     if (player.heldBy[h.i] || h.lead || riding.horse) continue;
     const t = castFrom(h.rayPos, dir, 12);
-    const can = t && ['horse', 'head', 'hoof', 'pet', 'visitor', 'board', 'showOffice'].includes(t.type);
+    const can = t && ['horse', 'head', 'hoof', 'pet', 'visitor', 'board', 'showOffice', 'lights'].includes(t.type);
     laser.visible = h.trigger > 0.1 || can; laser.position.copy(h.rayPos); laser.quaternion.setFromUnitVectors(V(0, 0, 1), dir); laser.scale.set(1, 1, t ? Math.min(t.dist, 12) : 3);
     laser.material.color.set(can ? 0xffe060 : 0xffffff);
     if (h.triggerDown && can){ activate(t, h.i); h.haptic(0.2, 30); }
@@ -813,6 +823,7 @@ function doors(dt){
 }
 
 // ---------- HUD ----------
+let lastMsgKey = '';
 function updateHUD(){
   const S = farm.state;
   $('h-money').textContent = fmtMoney(S.money);
@@ -821,8 +832,14 @@ function updateHUD(){
   $('h-jobs').innerHTML = '';
   for (const j of J.slice(0, 3)){ const li = document.createElement('li'); li.textContent = j.text; $('h-jobs').appendChild(li); }
   if (!J.length){ const li = document.createElement('li'); li.textContent = 'All jobs done!'; $('h-jobs').appendChild(li); }
-  $('h-msg').innerHTML = '';
-  for (const m of msgs){ const d = document.createElement('div'); d.className = 'msg ' + (m.kind || ''); d.textContent = m.text; $('h-msg').appendChild(d); }
+  // only redraw the messages when they change (redrawing replays their pop-in animation)
+  const key = msgs.map((m) => m.text).join('|');
+  if (key !== lastMsgKey){
+    lastMsgKey = key;
+    const box = $('h-msg'), keep = new Map([...box.children].map((el) => [el.textContent, el]));
+    box.innerHTML = '';
+    for (const m of msgs){ const d = keep.get(m.text) || document.createElement('div'); d.className = 'msg ' + (m.kind || ''); d.textContent = m.text; box.appendChild(d); keep.delete(m.text); }
+  }
   updateHeldUI(); updateRideUI();
   const sh = riding.show;
   $('h-show').style.display = sh.state !== 'idle' ? 'block' : 'none';
@@ -1067,6 +1084,7 @@ function refreshTitle(){
 }
 function ensureGame(fresh){
   if (fresh || !farm.state){ if (fresh || !farm.load()) farm.newGame(); care.syncTack(); }
+  world.barnLights.set(!!farm.state.lights);
 }
 function startScreen(fresh){
   startAudio(); ensureGame(fresh);
