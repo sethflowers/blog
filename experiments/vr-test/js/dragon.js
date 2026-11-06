@@ -3,7 +3,7 @@
 // breathes, and rumbles happily when you pet it. Hitting it just gets a huff of smoke.
 import * as THREE from 'three';
 import { multiBox, rng } from './util.js';
-import { groundHeight, surfaceHeight, solidAt, columns, cellOf, pillars, PLACES } from './world.js';
+import { groundHeight, surfaceHeight, solidAt, columns, cellOf, pillars, PLACES, EDGE } from './world.js';
 import { blobShadow } from './avatar.js';
 import { sfx } from './audio.js';
 
@@ -122,7 +122,7 @@ export class Dragon {
     for (let dx = -3; dx <= 3; dx += 1) for (let dz = -3.5; dz <= 3.5; dz += 1){
       const px = x + dx, pz = z + dz;
       if (Math.abs(groundHeight(px, pz) - g0) > 0.01) return false;
-      if (Math.hypot(px, pz) > 24) return false;
+      if (Math.hypot(px, pz) > EDGE - 5) return false;
       if (solidAt(px, g0 + 0.3, pz) || solidAt(px, g0 + 2, pz)) return false;
       if (columns.has(cellOf(px) + ',' + cellOf(pz))) return false;
     }
@@ -145,9 +145,13 @@ export class Dragon {
     if (st === 'fly' || st === 'approach'){
       let target;
       if (st === 'fly'){
-        const cx = 0, cz = -2, rad = 27;
+        // circle round wherever you are (drifting after you as you travel)
+        this.center = this.center || new THREE.Vector3(0, 0, -2);
+        this.center.lerp(v2.set(player.pos.x, 0, player.pos.z), Math.min(1, dt * 0.08));
+        const cx = this.center.x, cz = this.center.z, rad = 30;
         this.orbit = Math.atan2(this.pos.z - cz, this.pos.x - cx) + 0.5;
-        target = v1.set(cx + Math.cos(this.orbit) * rad, 17 + Math.sin(this.t * 0.2) * 3, cz + Math.sin(this.orbit) * rad);
+        const tx = cx + Math.cos(this.orbit) * rad, tz = cz + Math.sin(this.orbit) * rad;
+        target = v1.set(tx, Math.max(17, groundHeight(tx, tz) + 14) + Math.sin(this.t * 0.2) * 3, tz);
       } else {
         target = v1.copy(this.spot); target.y += 8;
         // come in from the far side so it lands facing you

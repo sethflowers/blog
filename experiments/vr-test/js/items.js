@@ -3,7 +3,7 @@
 // Loose things fall, bounce, settle flat and roll; they go home if lost.
 import * as THREE from 'three';
 import { BoxBuilder, boxGeo, blockMaterial, COL, rng } from './util.js';
-import { surfaceHeight, solids, pillars, rayGround, PLACES } from './world.js';
+import { surfaceHeight, solids, nearPillars, rayGround, groundHeight, PLACES } from './world.js';
 import { sfx } from './audio.js';
 
 const UPV = new THREE.Vector3(0, 1, 0);
@@ -145,16 +145,20 @@ export class Items {
   constructor(scene, { particles, creatures, npcs, dragon }){
     this.scene = scene; this.particles = particles; this.creatures = creatures; this.npcs = npcs; this.dragon = dragon;
     this.builder = null;
-    // outlines on whatever each hand would grab: white within reach, blue when pointing at it from afar
-    const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1));
-    this.hover = [0, 1].map(() => { const l = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xffffff })); l.visible = false; l.matrixAutoUpdate = false; scene.add(l); return l; });
+    // what each hand would grab: in reach you feel a light tap; pointing from afar puts a little
+    // spinning diamond over the thing that would come to you
+    this.hover = [0, 1].map(() => {
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.035), new THREE.MeshBasicMaterial({ color: 0x9fe0ff }));
+      m.visible = false; scene.add(m); return m;
+    });
+    this.lastNear = [null, null];
     this.list = [];
     this.tracers = [];
     for (let i = 0; i < 4; i++){
       const t = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xfff0a0 }));
       t.visible = false; t.userData.life = 0; scene.add(t); this.tracers.push(t);
     }
-    this.posts = PLACES.posts.map((p, i) => ({ ...p, item: null, timer: 0.1 + i * 0.15, fruit: FRUIT[i % 2] }));
+    this.posts =PLACES.posts.map((p, i) => ({ ...p, item: null, timer: 0.1 + i * 0.15, fruit: FRUIT[i % 2] }));
     this.bottleSlots = [];
     this.events = [];     // things the test can read: 'cut', 'shot', 'shatter', 'grab', ...
 
@@ -237,7 +241,7 @@ export class Items {
       }
       if (it.home){
         it.idle += dt;
-        const far = it.mesh.position.y < -3 || Math.hypot(it.mesh.position.x, it.mesh.position.z) > 33;
+        const far = it.mesh.position.y < groundHeight(it.mesh.position.x, it.mesh.position.z) - 3 || it.mesh.position.distanceTo(it.home.pos) > 120;
         if (far || (it.idle > 40 && it.mesh.position.distanceTo(it.home.pos) > 2)) this.sendHome(it);
       }
     }
@@ -303,15 +307,12 @@ export class Items {
     return best ? { it: best, score: bs } : null;
   }
   showHover(i, it, far){
-    const l = this.hover[i];
-    if (!it){ l.visible = false; return; }
-    const b = it.localBox, size = v1.subVectors(b.max, b.min).addScalar(0.03), c = v2.addVectors(b.min, b.max).multiplyScalar(0.5);
-    it.mesh.updateMatrixWorld();
-    l.matrix.copy(it.mesh.matrixWorld).multiply(m2.makeTranslation(c.x, c.y, c.z)).scale(size);
-    l.material.color.set(far ? 0x7fd4ff : 0xffffff);
-    l.visible = true;
+    const m = this.hover[i];
+    if (!it || !far){ m.visible = false; return; }
+    const b = it.localBox;
+    m.position.copy(it.mesh.position); m.position.y += (b.max.y - b.min.y) * 0.5 * it.mesh.scale.y + 0.12;
+    m.rotation.y += 0.05; m.visible = true;
   }
-
   handUpdate(dt, h, holsters){
     const hi = h.side === 'left' ? 0 : 1;
     this.showHover(hi, null);
@@ -355,7 +356,9 @@ export class Items {
       farC = this.creatures ? this.creatures.pointAt(h) : null;
       if (far && farC){ if (farC.score < far.score) far = null; else farC = null; }
     }
-    if (near) this.showHover(hi, near, false); else if (far) this.showHover(hi, far.it, true);
+    if (near && near !== this.lastNear[hi]) h.haptic(0.12, 12);
+    this.lastNear[hi] = near;
+    if (far) this.showHover(hi, far.it, true);
     if (!h.squeezeDown) return;
     if (near){ this.grab(h, near); return; }
     if (nearC){ this.creatures.grab(nearC, h); h.heldCreature = nearC; h.haptic(0.4, 40); this.emit('grab', { kind: nearC.kind }); return; }
@@ -465,7 +468,7 @@ export class Items {
         else if (k === 2){ p.z = s.z0 - r; it.vel.z = -Math.abs(it.vel.z) * 0.4; } else { p.z = s.z1 + r; it.vel.z = Math.abs(it.vel.z) * 0.4; }
       }
     }
-    for (const pl of pillars){
+    for (const pl of nearPillars(p.x, p.z)){
       if (p.y - ey >= pl.top - 0.02) continue;
       const dx = p.x - pl.x, dz = p.z - pl.z, rr = pl.r + r, d2 = dx * dx + dz * dz;
       if (d2 < rr * rr){ const d = Math.sqrt(d2) || 1e-3, nx = dx / d, nz = dz / d; p.x = pl.x + nx * rr; p.z = pl.z + nz * rr; const vn = it.vel.x * nx + it.vel.z * nz; if (vn < 0){ it.vel.x -= 1.4 * vn * nx; it.vel.z -= 1.4 * vn * nz; } }

@@ -248,7 +248,7 @@ export class Creatures {
 // ---------- villagers ----------
 const LINES = {
   Mara: ["Hi! I'm Mara.", 'Grab the sword off the table with your side grip.', 'Swing it fast to slice the melons on the posts!', 'The pistol fires with the trigger. Try the bottles at the range.', 'Let go of a weapon by your hip to holster it.', 'Press B to send everything back to the table.', 'Rest a finger on the right trigger to build. Left trigger breaks.', 'Wave both hands over your head and the dragon comes!'],
-  Bo: ["Howdy, I'm Bo. These are my animals.", 'You can pick the chickens up. Gently! Or point at one and squeeze.', 'Throw the ball to knock bottles off the rail.', 'Seen yourself in the mirror? It\'s on the shed.', 'Y switches smooth and snap turning.', 'Stand up tall and press X if your body looks the wrong size.', 'The truck, tank and chopper are in the yard. Touch one and squeeze to get in.', 'Click the left stick to climb out of a vehicle.'],
+  Bo: ["Howdy, I'm Bo. These are my animals.", 'You can pick the chickens up. Gently! Or point at one and squeeze.', 'Throw the ball to knock bottles off the rail.', 'Seen yourself in the mirror? It\'s on the shed.', 'Y switches smooth and snap turning.', 'Stand up tall and press X if your body looks the wrong size.', 'The truck, tank and chopper are in the yard. Touch one and squeeze to get in.', 'Click the left stick to climb out of a vehicle.', 'Follow the dirt road out of the yard. The land goes on for miles!'],
 };
 const OUCH = ['Ouch!', 'Hey! Watch it!', "I'm not a melon!", 'Careful with that!'];
 

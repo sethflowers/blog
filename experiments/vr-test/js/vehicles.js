@@ -4,8 +4,8 @@
 //  Tank:       left stick drives (turns on the spot), right stick aims the turret, right trigger fires.
 //  Helicopter: left stick flies forward/back/sideways, right stick turns and climbs/descends.
 import * as THREE from 'three';
-import { multiBox } from './util.js';
-import { surfaceHeight, pushOut, pillars, solidAt, PLACES } from './world.js';
+import { multiBox, boxGeo, blockMaterial } from './util.js';
+import { surfaceHeight, groundHeight, pushOut, pillars, solidAt, PLACES, EDGE } from './world.js';
 import { sfx, engine } from './audio.js';
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), m1 = new THREE.Matrix4(), q1 = new THREE.Quaternion();
@@ -70,32 +70,78 @@ class Vehicle {
     }
     if (hitWall && Math.abs(this.speed) > 2){ sfx.thud(this.pos, Math.abs(this.speed)); this.speed *= -0.25; }
     else if (hitWall) this.speed *= 0.5;
-    if (Math.hypot(this.pos.x, this.pos.z) > 30){ this.pos.copy(before); this.speed = 0; }
+    if (Math.hypot(this.pos.x, this.pos.z) > EDGE){ this.pos.copy(before); this.speed = 0; }
   }
 }
 
 // ---------- truck ----------
+// A cab you can see out of: seats, a dashboard with gauges, a steering wheel that turns, a clear
+// windscreen, open side windows, mirrors, and the roof well above your head.
 function truckModel(v){
-  const red = 0xc8413a, dark = 0x2a2c30, glass = 0x2a4a6a, wood = 0x9b7444;
-  v.body = multiBox([
-    [2.1, 0.35, 5.2, dark, 0, 0.75, 0],                                  // chassis
-    [2.1, 1.2, 1.9, red, 0, 1.5, -1.45], [2.06, 0.55, 1.2, glass, 0, 1.75, -1.25],    // cab with windows
-    [2.12, 0.5, 0.05, glass, 0, 1.75, -2.38], [2.1, 0.14, 1.95, 0xb83530, 0, 2.15, -1.45],
-    [2.1, 0.6, 1.0, red, 0, 1.15, -2.95],                                // bonnet
-    [0.3, 0.18, 0.06, 0xfff0b0, -0.7, 1.3, -3.46], [0.3, 0.18, 0.06, 0xfff0b0, 0.7, 1.3, -3.46], [1.0, 0.3, 0.05, 0x8a8f96, 0, 1.0, -3.46],
-    [2.1, 0.12, 3.0, wood, 0, 1.0, 1.0],                                 // bed
-    [0.1, 0.6, 3.0, wood, -1.0, 1.35, 1.0], [0.1, 0.6, 3.0, wood, 1.0, 1.35, 1.0], [2.1, 0.6, 0.1, wood, 0, 1.35, 2.45],
-    [0.5, 0.6, 0.5, 0x7a6a50, -0.45, 1.35, -0.75],                       // driver's seat inside the cab
-  ]);
-  v.root.add(v.body);
+  const red = 0xc8413a, red2 = 0xb33a33, dark = 0x2a2c30, grey = 0x8a8f96, seat = 0x3a4a5a, wood = 0x9b7444, trim = 0x1d1d1f;
+  const parts = [
+    [2.1, 0.35, 5.2, dark, 0, 0.75, 0],                                   // chassis
+    // cab shell: floor, back wall (window above), roof, pillars, doors (window above)
+    [2.0, 0.08, 1.95, 0x3a3a3e, 0, 1.0, -1.45],
+    [2.1, 0.75, 0.1, red, 0, 1.4, -0.48], [2.1, 0.12, 0.1, red, 0, 2.66, -0.48], [0.22, 1.3, 0.1, red, -0.94, 2.1, -0.48], [0.22, 1.3, 0.1, red, 0.94, 2.1, -0.48],
+    [2.16, 0.1, 2.05, red2, 0, 2.76, -1.45], [2.0, 0.02, 1.9, 0xd8d4c8, 0, 2.7, -1.45],
+    [0.1, 1.05, 0.1, red, -1.02, 2.2, -2.38], [0.1, 1.05, 0.1, red, 1.02, 2.2, -2.38],
+    [0.08, 0.7, 1.85, red, -1.04, 1.38, -1.45], [0.08, 0.7, 1.85, red, 1.04, 1.38, -1.45],
+    [0.12, 0.05, 1.85, trim, -1.04, 1.75, -1.45], [0.12, 0.05, 1.85, trim, 1.04, 1.75, -1.45],
+    [0.06, 0.1, 0.03, 0x9aa0a8, -1.09, 1.55, -1.1], [0.06, 0.1, 0.03, 0x9aa0a8, 1.09, 1.55, -1.1],       // door handles
+    [2.1, 0.1, 0.1, red, 0, 1.68, -2.42], [2.1, 0.08, 0.1, red, 0, 2.7, -2.4],                          // windscreen frame
+    // dashboard with two gauges in front of the driver, a radio in the middle
+    [1.96, 0.3, 0.45, 0x3a3c40, 0, 1.55, -2.15], [1.96, 0.04, 0.47, dark, 0, 1.72, -2.16],
+    [0.16, 0.16, 0.02, 0xe8e8e0, -0.56, 1.58, -1.92], [0.16, 0.16, 0.02, 0xe8e8e0, -0.34, 1.58, -1.92],
+    [0.02, 0.07, 0.01, 0xd42a2a, -0.56, 1.6, -1.905], [0.02, 0.07, 0.01, 0xd42a2a, -0.34, 1.6, -1.905],
+    [0.3, 0.12, 0.03, 0x1a1a1a, 0.1, 1.55, -1.92], [0.18, 0.04, 0.01, 0x6ad06a, 0.1, 1.57, -1.905],
+    // seats: cushions, backrests and headrests
+    [0.55, 0.16, 0.55, seat, -0.45, 1.3, -1.0], [0.55, 0.7, 0.12, seat, -0.45, 1.72, -0.66], [0.32, 0.2, 0.1, seat, -0.45, 2.17, -0.64],
+    [0.55, 0.16, 0.55, seat, 0.45, 1.3, -1.0], [0.55, 0.7, 0.12, seat, 0.45, 1.72, -0.66], [0.32, 0.2, 0.1, seat, 0.45, 2.17, -0.64],
+    [0.2, 0.22, 0.6, 0x2e2e32, 0, 1.15, -1.0], [0.03, 0.22, 0.03, dark, 0, 1.36, -1.3], [0.06, 0.06, 0.06, 0x1a1a1a, 0, 1.48, -1.3],   // console and gear stick
+    [0.24, 0.08, 0.03, 0x1a1a1a, 0, 2.6, -2.3],                                                            // rear-view mirror
+    [0.04, 0.04, 0.25, dark, -1.12, 1.95, -2.25], [0.04, 0.22, 0.14, dark, -1.22, 1.95, -2.15], [0.04, 0.04, 0.25, dark, 1.12, 1.95, -2.25], [0.04, 0.22, 0.14, dark, 1.22, 1.95, -2.15],
+    // bonnet, grille, lights, bumper
+    [2.06, 0.55, 1.05, red, 0, 1.2, -2.95], [1.9, 0.04, 1.0, red2, 0, 1.49, -2.95],
+    [1.1, 0.35, 0.05, 0x5a5e66, 0, 1.15, -3.48], [0.28, 0.18, 0.06, 0xfff0b0, -0.72, 1.28, -3.48], [0.28, 0.18, 0.06, 0xfff0b0, 0.72, 1.28, -3.48],
+    [2.2, 0.18, 0.15, grey, 0, 0.85, -3.55],
+    // the bed behind
+    [2.1, 0.12, 3.0, wood, 0, 1.0, 1.0], [0.1, 0.6, 3.0, wood, -1.0, 1.35, 1.0], [0.1, 0.6, 3.0, wood, 1.0, 1.35, 1.0], [2.1, 0.6, 0.1, wood, 0, 1.35, 2.45],
+  ];
+  v.body = multiBox(parts); v.root.add(v.body);
+  // the steering wheel, on a column, tilted toward you; v.wheelSpin turns with the steering
+  const col = new THREE.Group(); col.position.set(-0.45, 1.72, -1.78); col.rotation.x = 0.5; v.root.add(col);
+  col.add(multiBox([[0.05, 0.05, 0.36, dark, 0, 0, -0.18]]));
+  v.wheelSpin = new THREE.Group(); col.add(v.wheelSpin);
+  const pieces = [];
+  for (let i = 0; i < 10; i++){
+    const a = i / 10 * Math.PI * 2;
+    pieces.push(boxGeo(0.125, 0.035, 0.035, trim).applyMatrix4(new THREE.Matrix4().makeRotationZ(a + Math.PI / 2).setPosition(Math.cos(a) * 0.19, Math.sin(a) * 0.19, 0)));
+  }
+  pieces.push(boxGeo(0.36, 0.03, 0.025, trim, 0, 0, 0.005), boxGeo(0.03, 0.18, 0.025, trim, 0, -0.09, 0.005), boxGeo(0.08, 0.08, 0.04, 0xc8413a, 0, 0, 0.01));
+  v.wheelSpin.add(new THREE.Mesh(mergeGeos(pieces), blockMaterial()));
+  // a clear windscreen
+  v.glass = new THREE.Mesh(new THREE.PlaneGeometry(1.94, 0.95), new THREE.MeshBasicMaterial({ color: 0xbfe4ff, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
+  v.glass.position.set(0, 2.2, -2.42); v.root.add(v.glass);
   v.wheels = [[-1.05, -2.2], [1.05, -2.2], [-1.05, 1.7], [1.05, 1.7]].map(([x, z]) => {
     const g = new THREE.Group(); g.position.set(x, 0.48, z);
     g.add(multiBox([[0.4, 0.95, 0.95, 0x1d1d1f], [0.42, 0.4, 0.4, 0xb0b5bc]]));
     v.root.add(g); return g;
   });
-  v.box = [-1.15, 1.15, 0, 2.3, -3.5, 2.5];
-  v.seat = new THREE.Vector3(-0.45, 2.15, -0.85);
-  v.height = 2.2;
+  v.box = [-1.15, 1.15, 0, 2.85, -3.6, 2.5];
+  v.seat = new THREE.Vector3(-0.45, 2.15, -0.95);     // the driver's eyes: half a metre under the roof
+  v.height = 2.8;
+}
+// join box geometries (same attributes) into one
+function mergeGeos(geos){
+  const out = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'uv', 'color']){
+    const arrs = geos.map((g) => g.attributes[name].array), len = arrs.reduce((a, b) => a + b.length, 0);
+    const all = new Float32Array(len); let o = 0; for (const a of arrs){ all.set(a, o); o += a.length; }
+    out.setAttribute(name, new THREE.BufferAttribute(all, geos[0].attributes[name].itemSize));
+  }
+  out.computeBoundingSphere();
+  return out;
 }
 
 // ---------- tank ----------
@@ -202,6 +248,7 @@ export class Vehicles {
         v.drive(dt, acc, 13, 5, v.speed * Math.tan(steerAng) / 3.9, 1.05);
         v.followGround(dt, 2.2, 1.0);
         v.wheels.forEach((w, i) => { w.children[0].rotation.x -= v.speed * dt / 0.48; w.rotation.y = i < 2 ? steerAng : 0; });
+        v.wheelSpin.rotation.z = steerAng * 3;
         if (drive && Rh.triggerDown && !Rh.held) sfx.horn(v.pos);
         this.runOver(v, 3.2);
       } else if (v.kind === 'tank'){
@@ -233,8 +280,9 @@ export class Vehicles {
         v.yaw = wrap(v.yaw - dz(rx) * 1.3 * dt * (lift ? 1 : 0));
         const before = v.pos.clone();
         v.pos.addScaledVector(v.vel, dt);
-        if (v.pos.y > 45) { v.pos.y = 45; v.vel.y = Math.min(0, v.vel.y); }
-        if (Math.hypot(v.pos.x, v.pos.z) > 40){ v.pos.x = before.x; v.pos.z = before.z; v.vel.x = v.vel.z = 0; }
+        const ceil = Math.max(60, groundHeight(v.pos.x, v.pos.z) + 50);
+        if (v.pos.y > ceil) { v.pos.y = ceil; v.vel.y = Math.min(0, v.vel.y); }
+        if (Math.hypot(v.pos.x, v.pos.z) > EDGE + 25){ v.pos.x = before.x; v.pos.z = before.z; v.vel.x = v.vel.z = 0; }
         // bump into tall things
         for (const k of v.colliderAt){
           const c = v3.set(v.pos.x + f.x * k, 0, v.pos.z + f.z * k), was = c.clone();

@@ -3,9 +3,11 @@
 import * as THREE from 'three';
 import { BoxBuilder, blockMaterial, vnoise, hash2, rng, COL, textCanvas, wrapText } from './util.js';
 
-export const SIZE = 72;           // terrain is SIZE x SIZE one-metre cells, centred on the origin
+export const SIZE = 512;          // the world is SIZE x SIZE one-metre cells, centred on the origin
 const HALF = SIZE / 2;
 export const STEP = 0.55;         // the highest ledge you can walk up
+export const WATER = -0.1;        // lakes fill everything below this
+export const EDGE = 205;          // past this the mountains start; vehicles stop here
 
 // Places on the map, shared with the rest of the game.
 export const PLACES = {
@@ -23,23 +25,35 @@ export const PLACES = {
 
 // ----- height map -----
 const heights = new Float32Array(SIZE * SIZE);
+const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const fbm = (x, z) => vnoise(x, z) * 0.6 + vnoise(x * 2.1 + 17, z * 2.1 - 9) * 0.28 + vnoise(x * 4.3 - 5, z * 4.3 + 31) * 0.12;
+// the roads: a ring round the valley and a road from the vehicle yard out east to it
+export const ROAD = { ring: 58, width: 2.6 };
+export function onRoad(x, z){
+  const r = Math.hypot(x, z);
+  if (Math.abs(r - ROAD.ring) < ROAD.width) return true;
+  if (x > 14 && x < ROAD.ring + 2 && Math.abs(z - 5) < ROAD.width) return true;
+  return false;
+}
 function rawHeight(x, z){
   const r = Math.hypot(x, z);
   let h = 0;
-  // little plateaus in the meadow, half a block high
+  // the valley: little plateaus half a block high
   if (r > 9 && r < 19){ const n = vnoise(x * 0.12 + 40, z * 0.12 - 7); if (n > 0.66) h = 0.5; if (n > 0.8 && r > 12) h = 1.0; }
-  // hills, then a ring of cliffs you can't climb
-  if (r > 18){
-    const t = (r - 18) / 10;
-    const n = vnoise(x * 0.09, z * 0.09) * 0.6 + vnoise(x * 0.23 + 9, z * 0.23) * 0.4;
-    h = Math.max(h, t * t * 3.2 + n * t * 2.4);
+  // open country: big, gentle hills (half-block steps a truck can climb), shallow lakes in the hollows
+  const w = smooth(20, 48, r);
+  if (w > 0){
+    let c = (fbm(x * 0.0065 + 3.1, z * 0.0065 - 7.7) - 0.36) * 24 + (vnoise(x * 0.03 + 11, z * 0.03) - 0.5) * 2.4;
+    if (c < 0) c = Math.max(c * 0.3, -1.5);
+    if (onRoad(x, z)) c = Math.max(c, 0) * 0.85;          // roads stay out of the water
+    h = h * (1 - w) + c * w;
   }
-  if (r > 27) h = Math.max(h, 3.5 + (r - 27) * 1.0 + vnoise(x * 0.2, z * 0.2) * 2.5);
+  // mountains all round the edge
+  if (r > EDGE) h = Math.max(h, 0) + Math.pow(r - EDGE, 1.35) * 0.7 + vnoise(x * 0.05, z * 0.05) * 10 * smooth(EDGE, EDGE + 30, r);
   // keep the middle flat and the pond low
   const p = PLACES.pond, pr = Math.hypot(x - p.x, z - p.z);
   if (pr < p.r) h = -0.5; else if (pr < p.r + 1.2) h = Math.min(h, 0);
   if (Math.abs(x) < 7 && z > -14 && z < 4) h = Math.min(h, 0);
-  // the dragon's meadow behind where you start
   if (Math.hypot(x - PLACES.meadow.x, z - PLACES.meadow.z) < 8) h = Math.min(h, 0);
   if (Math.hypot(x - PLACES.yard.x, z - PLACES.yard.z) < PLACES.yard.r) h = Math.min(h, 0);
   return Math.round(h * 2) / 2;
@@ -47,7 +61,7 @@ function rawHeight(x, z){
 for (let i = 0; i < SIZE; i++) for (let j = 0; j < SIZE; j++) heights[i * SIZE + j] = rawHeight(j - HALF + 0.5, i - HALF + 0.5);
 
 export function cellHeight(ix, iz){
-  if (ix < 0 || iz < 0 || ix >= SIZE || iz >= SIZE) return 12;
+  if (ix < 0 || iz < 0 || ix >= SIZE || iz >= SIZE) return 80;
   return heights[iz * SIZE + ix];
 }
 // Terrain height under a point.
@@ -55,8 +69,22 @@ export function groundHeight(x, z){ return cellHeight(Math.floor(x + HALF), Math
 
 // Boxes the player and loose items bump into: { x0, x1, z0, z1, y0, top }.
 export const solids = [];
-// Round things (tree trunks, posts): { x, z, r, top }.
+// Round things that move or are few (posts, vehicles, the dragon): { x, z, r, top, y0? }.
 export const pillars = [];
+// The thousands of tree trunks and rocks live on a grid so only nearby ones are looked at.
+const GRID = 8, grid = new Map();
+const gk = (gx, gz) => gx * 100003 + gz;
+export function addStatic(p){ const k = gk(Math.floor(p.x / GRID), Math.floor(p.z / GRID)); let l = grid.get(k); if (!l){ l = []; grid.set(k, l); } l.push(p); }
+// every round collider near (x, z): the moving ones and the trees/rocks around
+// (fills and returns one shared array: use it straight away, don't keep it)
+const NEAR = [];
+export function nearPillars(x, z){
+  NEAR.length = 0;
+  for (const p of pillars) NEAR.push(p);
+  const gx = Math.floor(x / GRID), gz = Math.floor(z / GRID);
+  for (let a = gx - 1; a <= gx + 1; a++) for (let b = gz - 1; b <= gz + 1; b++){ const l = grid.get(gk(a, b)); if (l) for (const p of l) NEAR.push(p); }
+  return NEAR;
+}
 
 // ----- blocks you build (half-metre cubes on a grid) -----
 export const VOX = 0.5;
@@ -75,7 +103,7 @@ export function solidAt(x, y, z){
   if (y < groundHeight(x, z)) return true;
   if (blockAt(cellOf(x), cellOf(y), cellOf(z)) !== undefined) return true;
   for (const s of solids) if (x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && y < s.top && y > s.y0) return true;
-  for (const p of pillars) if (y < p.top && y > (p.y0 ?? -1e9) && (x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r) return true;
+  for (const p of nearPillars(x, z)) if (y < p.top && y > (p.y0 ?? -1e9) && (x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r) return true;
   return false;
 }
 
@@ -83,7 +111,7 @@ export function solidAt(x, y, z){
 export function surfaceHeight(x, z, y = 1e9){
   let h = groundHeight(x, z);
   for (const s of solids) if (x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && s.top <= y + 0.25 && s.top > h) h = s.top;
-  for (const p of pillars) if (p.top <= y + 0.25 && p.top > h && (x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r) h = p.top;
+  for (const p of nearPillars(x, z)) if (p.top <= y + 0.25 && p.top > h && (x - p.x) ** 2 + (z - p.z) ** 2 < p.r * p.r) h = p.top;
   const c = columns.get(cellOf(x) + ',' + cellOf(z));
   if (c) for (const j of c.keys()){ const top = (j + 1) * VOX; if (top <= y + 0.25 && top > h) h = top; }
   return h;
@@ -110,7 +138,7 @@ export function pushOut(pos, r, y, maxStep = STEP, opts = {}){
     if (s.top <= lo || s.top > hi || s.y0 > y + 1.6) continue;
     pushBox(s.x0, s.x1, s.z0, s.z1);
   }
-  for (const p of pillars){
+  for (const p of nearPillars(pos.x, pos.z)){
     if (p.top <= lo || p.top > hi || (p.y0 ?? -1e9) > y + 1.6 || (opts.ignore && p.owner === opts.ignore)) continue;
     const dx = pos.x - p.x, dz = pos.z - p.z, d2 = dx * dx + dz * dz, rr = r + p.r;
     if (d2 < rr * rr){ const d = Math.sqrt(d2) || 1e-4; pos.x = p.x + dx / d * rr; pos.z = p.z + dz / d * rr; moved = true; }
@@ -152,74 +180,48 @@ export function rayGround(o, d, max){
 export function buildWorld(scene){
   const B = new BoxBuilder(32);
   const R = rng(42);
+  const trees = [], rocks = [];
   const jit = (hex, amt) => { const c = new THREE.Color(hex); const k = 1 + (R() - 0.5) * amt; c.r *= k; c.g *= k; c.b *= k; return c; };
 
-  // terrain: a column per cell, grass on top, dirt (or stone up high) down the sides
   const pond = PLACES.pond;
-  for (let iz = 0; iz < SIZE; iz++) for (let ix = 0; ix < SIZE; ix++){
-    const h = cellHeight(ix, iz);
-    const x = ix - HALF + 0.5, z = iz - HALF + 0.5;
-    const nb = [cellHeight(ix + 1, iz), cellHeight(ix - 1, iz), cellHeight(ix, iz + 1), cellHeight(ix, iz - 1)];
-    const lo = Math.min(h - 0.5, ...nb);
-    const nearPond = Math.hypot(x - pond.x, z - pond.z) < pond.r + 0.9;
-    const high = h >= 5.5;
-    const topCol = nearPond ? jit(COL.sand, 0.08) : (high && h >= 9) ? jit(h >= 11 ? COL.white : COL.stone, 0.1) : jit(hash2(ix, iz) > 0.5 ? COL.grass : COL.grass2, 0.12);
-    const sideCol = high ? jit(COL.stone2, 0.1) : jit(COL.dirt, 0.1);
-    const skip = { ny: true, px: nb[0] >= h, nx: nb[1] >= h, pz: nb[2] >= h, nz: nb[3] >= h };
-    const slab = (nearPond || h >= 9) ? 0 : 0.14;
-    // top layer (grass edge) then the rest of the column
-    B.box(x, h - (slab || 0.001) / 2, z, 1, slab || 0.001, 1, { all: topCol, py: topCol }, null, { skip, ao: 0.05 });
-    if (h - slab - lo > 0.001){
-      const s2 = { ...skip, py: true };
-      B.box(x, (h - slab + lo) / 2, z, 1, h - slab - lo, 1, sideCol, null, { skip: s2, ao: 0.3 });
-    }
-  }
-
-  // water: one flat block, opaque so it draws the same everywhere
-  B.box(pond.x, -0.12, pond.z, pond.r * 2 + 0.4, 0.04, pond.r * 2 + 0.4, jit(COL.water, 0), null, { skip: { ny: true }, ao: 0 });
-
-  // trees
-  const trees = [];
-  const free = (x, z, pad) => {
+  // trees in the valley (placed by hand-picked rules) and all over the open country (on a jittered grid)
+  const free = (x, z) => {
     if (Math.abs(x) < 7.5 && z > -14.5 && z < 4.5) return false;
     if (Math.hypot(x - pond.x, z - pond.z) < pond.r + 1.5) return false;
     if (Math.hypot(x - PLACES.meadow.x, z - PLACES.meadow.z) < 9) return false;
     if (Math.hypot(x - PLACES.yard.x, z - PLACES.yard.z) < PLACES.yard.r + 1.5) return false;
-    for (const t of trees) if (Math.hypot(t.x - x, t.z - z) < pad) return false;
     return true;
   };
-  let tries = 0;
-  while (trees.length < 46 && tries++ < 3000){
+  let tries = 0, valley = 0;
+  while (valley < 40 && tries++ < 3000){
     const a = R() * Math.PI * 2, r = 8 + R() * 22;
     const x = Math.floor(Math.cos(a) * r) + 0.5, z = Math.floor(Math.sin(a) * r) + 0.5;
-    if (!free(x, z, 3.2)) continue;
-    const g = groundHeight(x, z); if (g > 6) continue;
-    trees.push({ x, z, g, h: 3 + Math.floor(R() * 3) * 0.5, birch: R() < 0.25 });
+    if (!free(x, z) || trees.some((t) => Math.hypot(t.x - x, t.z - z) < 3.2)) continue;
+    const g = groundHeight(x, z); if (g < 0 || onRoad(x, z)) continue;
+    trees.push({ x, z, g, h: 3 + Math.floor(R() * 3) * 0.5, birch: R() < 0.25 }); valley++;
   }
-  for (const t of trees){
-    const trunk = t.birch ? 0xe8e4d8 : COL.trunk, leaf = t.birch ? 0x7fbf4a : COL.leaves;
-    B.box(t.x, t.g + t.h / 2, t.z, 0.5, t.h, 0.5, { all: jit(trunk, 0.05), py: 0x9a7650 }, null, { ao: 0.25 });
-    const top = t.g + t.h;
-    for (let dy = -1; dy <= 1; dy++){
-      const rad = dy === 1 ? 0 : 1;
-      for (let dx = -rad; dx <= rad; dx++) for (let dz = -rad; dz <= rad; dz++){
-        if (rad && Math.abs(dx) + Math.abs(dz) === 2 && R() < 0.6) continue;
-        if (dy === -1 && dx === 0 && dz === 0) continue;
-        B.box(t.x + dx * 0.9, top + dy * 0.9 - 0.2, t.z + dz * 0.9, 0.9, 0.9, 0.9, jit(R() < 0.5 ? leaf : COL.leaves2, 0.15), null, { ao: 0.25 });
-      }
-    }
-    pillars.push({ x: t.x, z: t.z, r: 0.3, top: t.g + t.h + 2 });
+  for (let gx = -42; gx < 42; gx++) for (let gz = -42; gz < 42; gz++){
+    const x = Math.floor(gx * 6 + 1 + hash2(gx, gz) * 4) + 0.5, z = Math.floor(gz * 6 + 1 + hash2(gz + 99, gx) * 4) + 0.5;
+    const r = Math.hypot(x, z);
+    if (r < 31 || r > EDGE + 8) continue;
+    const forest = vnoise(x * 0.018 + 50, z * 0.018 - 20);
+    if (hash2(gx + 7, gz - 3) > (forest > 0.55 ? 0.85 : 0.07)) continue;
+    const g = groundHeight(x, z);
+    if (g < 0 || onRoad(x, z) || onRoad(x + 1.5, z) || onRoad(x - 1.5, z) || onRoad(x, z + 1.5) || onRoad(x, z - 1.5)) continue;
+    let lo = g, hi = g; for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){ const n = groundHeight(x + dx, z + dz); lo = Math.min(lo, n); hi = Math.max(hi, n); }
+    if (lo < 0 || hi - lo > 0.5) continue;
+    trees.push({ x, z, g, h: 3 + Math.floor(hash2(gx, gz + 5) * 4) * 0.5, birch: hash2(gx - 2, gz) < 0.22 });
   }
-
+  for (const t of trees) addStatic({ x: t.x, z: t.z, r: 0.3, top: t.g + t.h + 2 });
   // boulders
-  for (let i = 0; i < 18; i++){
-    const a = R() * Math.PI * 2, r = 9 + R() * 16;
+  for (let i = 0; i < 260; i++){
+    const a = R() * Math.PI * 2, r = 9 + Math.sqrt(R()) * (EDGE - 9);
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    if (!free(x, z, 2.2)) continue;
-    const g = groundHeight(x, z), s = 0.6 + R() * 0.7;
-    B.box(x, g + s / 2 - 0.05, z, s * 1.3, s, s, jit(COL.stone, 0.15), null, { ao: 0.35 });
-    B.box(x + s * 0.3, g + s + s * 0.2 - 0.05, z + s * 0.1, s * 0.6, s * 0.4, s * 0.6, jit(COL.stone2, 0.1));
-    solids.push({ x0: x - s * 0.65, x1: x + s * 0.65, z0: z - s / 2, z1: z + s / 2, y0: g, top: g + s - 0.05 });
+    if (!free(x, z) || onRoad(x, z) || trees.some((t) => Math.abs(t.x - x) < 2.2 && Math.abs(t.z - z) < 2.2)) continue;
+    const g = groundHeight(x, z); if (g < 0) continue;
+    const s = 0.6 + R() * (r > 30 ? 1.4 : 0.7);
+    rocks.push({ x, z, g, s });
+    addStatic({ x, z, r: s * 0.6, top: g + s - 0.05 });
   }
 
   // flowers and grass tufts
@@ -361,12 +363,106 @@ export function buildWorld(scene){
 
   scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x6b5a3a, 1.6));
   const dl = new THREE.DirectionalLight(0xfff1d6, 1.9); dl.position.copy(sunDir); scene.add(dl);
-  scene.fog = new THREE.Fog(0xc4e2fa, 35, 110);
+  scene.fog = new THREE.Fog(0xc4e2fa, 45, VIEW - 5);
   scene.background = new THREE.Color(0xc4e2fa);
 
+  const terrain = new Terrain(scene, trees, rocks);
   return {
-    update(dt){ clouds.position.x += dt * 1.2; if (clouds.position.x > 150) clouds.position.x -= 300; },
+    terrain,
+    update(dt, at){ clouds.position.x += dt * 1.2; if (clouds.position.x > 150) clouds.position.x -= 300; if (at) terrain.update(at); },
   };
+}
+
+// ----- the ground, in 32 m chunks built as you come near and dropped when you leave -----
+export const VIEW = 115;                 // how far you can see (the fog closes in by then)
+const CH = 32;
+class Terrain {
+  constructor(scene, trees, rocks){
+    this.scene = scene; this.chunks = new Map();
+    // trees and rocks sorted into the chunks they stand in
+    this.byChunk = new Map();
+    const put = (kind, o) => { const k = this.key(Math.floor((o.x + HALF) / CH), Math.floor((o.z + HALF) / CH)); let b = this.byChunk.get(k); if (!b){ b = { trees: [], rocks: [] }; this.byChunk.set(k, b); } b[kind].push(o); };
+    trees.forEach((t) => put('trees', t)); rocks.forEach((r) => put('rocks', r));
+    this.at = null; this.update(new THREE.Vector3(0, 0, 0), true);
+  }
+  key(cx, cz){ return cx * 1000 + cz; }
+  // build what's in range (all of it at once when asked, else one a frame), drop what's far behind
+  update(at, all = false){
+    const n = SIZE / CH, want = [];
+    for (let cx = 0; cx < n; cx++) for (let cz = 0; cz < n; cz++){
+      const x0 = cx * CH - HALF, z0 = cz * CH - HALF;
+      const dx = Math.max(x0 - at.x, 0, at.x - (x0 + CH)), dz = Math.max(z0 - at.z, 0, at.z - (z0 + CH));
+      const d = Math.hypot(dx, dz), k = this.key(cx, cz), have = this.chunks.get(k);
+      if (d < VIEW && !have) want.push([d, cx, cz]);
+      else if (d > VIEW + 30 && have){ this.scene.remove(have); have.geometry.dispose(); this.chunks.delete(k); }
+    }
+    want.sort((a, b) => a[0] - b[0]);
+    for (const [, cx, cz] of all ? want : want.slice(0, 1)) this.build(cx, cz);
+  }
+  build(cx, cz){
+    const B = new BoxBuilder(32), R = rng(cx * 7919 + cz);
+    const jit = (hex, amt) => { const c = new THREE.Color(hex); const k = 1 + (R() - 0.5) * amt; c.r *= k; c.g *= k; c.b *= k; return c; };
+    const pond = PLACES.pond;
+    const topKind = (ix, iz, h) => {
+      const x = ix - HALF + 0.5, z = iz - HALF + 0.5;
+      if (h >= 22) return 'snow';
+      if (h >= 13) return 'stone';
+      if (onRoad(x, z) && h >= 0) return 'road';
+      if (h < 0 || Math.hypot(x - pond.x, z - pond.z) < pond.r + 0.9) return 'sand';
+      if (h <= 0.5 && (cellHeight(ix + 1, iz) < 0 || cellHeight(ix - 1, iz) < 0 || cellHeight(ix, iz + 1) < 0 || cellHeight(ix, iz - 1) < 0)) return 'sand';
+      return 'grass';
+    };
+    const TOP = { grass: [COL.grass, COL.grass2], sand: [COL.sand, 0xcfbf86], stone: [COL.stone, COL.stone2], snow: [COL.white, 0xe8eef2], road: [0x9a8566, 0x8f7b5d] };
+    for (let iz = cz * CH; iz < (cz + 1) * CH; iz++){
+      // tops: runs of the same height and kind become one long face
+      let run = null;
+      const flush = () => {
+        if (!run) return;
+        const w = run.end - run.start + 1, x = run.start - HALF + w / 2, z = iz - HALF + 0.5;
+        const col = jit(TOP[run.kind][(run.start + iz) % 2 ? 1 : 0], 0.06);
+        B.box(x, run.h - 0.0005, z, w, 0.001, 1, { all: col, py: col }, null, { skip: { px: true, nx: true, pz: true, nz: true, ny: true }, ao: 0 });
+        run = null;
+      };
+      for (let ix = cx * CH; ix < (cx + 1) * CH; ix++){
+        const h = cellHeight(ix, iz), kind = topKind(ix, iz, h);
+        if (run && run.h === h && run.kind === kind && ix - run.start < 16 && hash2(ix, iz) > 0.12) run.end = ix;
+        else { flush(); run = { start: ix, end: ix, h, kind }; }
+        // sides, where a neighbour is lower: grass/dirt edge then dirt (stone up high)
+        const nb = [cellHeight(ix + 1, iz), cellHeight(ix - 1, iz), cellHeight(ix, iz + 1), cellHeight(ix, iz - 1)];
+        const lo = Math.min(...nb);
+        if (lo < h){
+          const x = ix - HALF + 0.5, z = iz - HALF + 0.5;
+          const skip = { py: true, ny: true, px: nb[0] >= h, nx: nb[1] >= h, pz: nb[2] >= h, nz: nb[3] >= h };
+          const rock = h >= 12, slab = kind === 'grass' ? 0.14 : 0;
+          if (slab) B.box(x, h - slab / 2, z, 1, slab, 1, jit(COL.grass, 0.1), null, { skip, ao: 0.05 });
+          B.box(x, (h - slab + lo) / 2, z, 1, h - slab - lo, 1, jit(rock ? COL.stone2 : COL.dirt, 0.1), null, { skip, ao: 0.3 });
+        }
+        // water over anything below the waterline
+        if (h < 0){ const x = ix - HALF + 0.5, z = iz - HALF + 0.5; B.box(x, WATER - 0.0005, z, 1, 0.001, 1, { all: 0x3f78d0, py: (ix + iz) % 2 ? 0x3f78d0 : 0x4482d6 }, null, { skip: { px: true, nx: true, pz: true, nz: true, ny: true }, ao: 0 }); }
+      }
+      flush();
+    }
+    const stuff = this.byChunk.get(this.key(cx, cz));
+    if (stuff){
+      for (const t of stuff.trees){
+        const trunk = t.birch ? 0xe8e4d8 : COL.trunk, leaf = t.birch ? 0x7fbf4a : COL.leaves;
+        B.box(t.x, t.g + t.h / 2, t.z, 0.5, t.h, 0.5, { all: jit(trunk, 0.05), py: 0x9a7650 }, null, { ao: 0.25, skip: { ny: true } });
+        // the crown: a cross of leaves, a full layer over it, a cap on top (4 boxes, few faces)
+        const top = t.g + t.h - 0.2, c1 = jit(leaf, 0.15), c2 = jit(COL.leaves2, 0.15);
+        B.box(t.x, top - 0.9, t.z, 2.7, 0.9, 0.9, c1, null, { ao: 0.25 });
+        B.box(t.x, top - 0.9, t.z, 0.9, 0.9, 2.7, c2, null, { ao: 0.25, skip: { py: true } });
+        B.box(t.x, top, t.z, 2.7, 0.9, 2.7, c2, null, { ao: 0.25 });
+        B.box(t.x + (R() - 0.5) * 0.6, top + 0.9, t.z + (R() - 0.5) * 0.6, 0.9, 0.9, 0.9, c1, null, { ao: 0.2, skip: { ny: true } });
+      }
+      for (const r of stuff.rocks){
+        B.box(r.x, r.g + r.s / 2 - 0.05, r.z, r.s * 1.3, r.s, r.s, jit(COL.stone, 0.15), null, { ao: 0.35, skip: { ny: true } });
+        B.box(r.x + r.s * 0.3, r.g + r.s + r.s * 0.2 - 0.05, r.z + r.s * 0.1, r.s * 0.6, r.s * 0.4, r.s * 0.6, jit(COL.stone2, 0.1), null, { skip: { ny: true } });
+      }
+    }
+    const mesh = new THREE.Mesh(B.build(), blockMaterial());
+    mesh.matrixAutoUpdate = false;
+    this.scene.add(mesh); this.chunks.set(this.key(cx, cz), mesh);
+  }
 }
 
 // A wooden sign with a title and optional text, drawn once.
