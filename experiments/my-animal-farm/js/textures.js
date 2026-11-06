@@ -58,8 +58,13 @@ const GEN = {
       const n = fbm(u * 8, v * 8, 5, 11, 8), f = vnoise(u * 120, v * 120, 12, 120);
       let c = mix([84, 62, 42], [128, 98, 68], n);
       let h = n * 0.6 + f * 0.2;
-      const cell = hash2(Math.floor(u * 70), Math.floor(v * 70), 5);
-      if (cell > 0.93){ const pc = 0.8 + 0.4 * hash2(Math.floor(u * 70), Math.floor(v * 70), 6); c = mix(c, [150 * pc, 140 * pc, 126 * pc], 0.7); h += 0.4; }
+      // small round pebbles (one at most per cell, a random size and spot within it)
+      const cx = Math.floor(u * 70), cy = Math.floor(v * 70), cell = hash2(cx, cy, 5);
+      if (cell > 0.9){
+        const px = hash2(cx, cy, 7) * 0.5 + 0.25, py = hash2(cx, cy, 8) * 0.5 + 0.25, r = 0.18 + hash2(cx, cy, 9) * 0.2;
+        const d = Math.hypot(u * 70 - cx - px, v * 70 - cy - py) / r;
+        if (d < 1){ const pc = 0.8 + 0.4 * hash2(cx, cy, 6), k = Math.sqrt(1 - d * d); c = mix(c, [150 * pc, 140 * pc, 126 * pc], 0.75 * Math.min(1, k * 2)); h += 0.4 * k; }
+      }
       return [...mul(c, 0.85 + f * 0.3), h];
     }, { normal: 2 });
   },

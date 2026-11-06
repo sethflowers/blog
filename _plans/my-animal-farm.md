@@ -103,3 +103,6 @@ simulation faster (`__farm.timeScale`).
 - Lunging, a cross-country course, dressage tests in the arena.
 - Hand tracking in VR (no controllers).
 - Smoother join between the legs and the chest on the horse model.
+
+## v1.1
+- Round pebbles in the dirt (paths, paddock, pens) instead of square, pixelated ones.
