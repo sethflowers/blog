@@ -268,7 +268,7 @@ await ev('__farm.player.barrow = null');
 await ev(`__farm.putBack(__farm.player.heldBy[1]); __farm.player.pos.set(15.5, 0, -6.5); __farm.look(0, -0.25)`);
 await waitGame(1);
 await shot('12-goats');
-await ev(`__farm.player.pos.set(27.5, 0, -19.5); __farm.look(0.3, -0.3)`);
+await ev(`__farm.player.pos.set(28.5, 0, -20.9); __farm.look(0, -0.3)`);
 await waitGame(0.5);
 await shot('13-hens');
 
