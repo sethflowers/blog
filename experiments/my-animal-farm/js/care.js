@@ -394,7 +394,7 @@ export class Care {
       }
       case 'fork': {
         const barrow = this.items.barrow;
-        const nearBarrow = (p) => barrow.mesh.position.distanceTo(V(p.x, barrow.mesh.position.y, p.z)) < (target.touch ? 5 : 0.7);
+        const nearBarrow = (p) => barrow.mesh.position.distanceTo(V(p.x, barrow.mesh.position.y, p.z)) < (target.touch ? 6.5 : 0.7);
         if (target.type === 'barrow' && it.load > 0){ barrow.load += it.load; it.load = 0; this.refreshItem(it); this.refreshItem(barrow); sfx.thud(target.point); return true; }
         if (target.type === 'manure' || target.type === 'wet' || target.type === 'dropping'){
           if (it.load > 0 && !target.touch){ this.hint('Tip the fork into the wheelbarrow first.'); return false; }

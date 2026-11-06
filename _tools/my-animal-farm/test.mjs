@@ -162,6 +162,35 @@ await ev('__farm.player.pos.set(3.5, 0, -24.4); __farm.look(0, 0)');
 await waitGame(0.5);
 check(await ev(`${I('barrow')}.load`) === 0, 'the wheelbarrow tips out on the muck heap');
 await ev('__farm.player.barrow = null');
+// the wheelbarrow on the screen: tap it to push it; taps go past it while you push; it can't go through
+// walls (you stop instead); the button at the bottom lets go of it
+await ev(`__farm.putBack(__farm.player.heldBy[1]); ${I('barrow')}.mesh.position.set(-9, 0, 10.5); __farm.player.pos.set(-7.6, 0, 10.5); __farm.look(Math.PI / 2, -0.3)`);
+await ev(`__farm.handleTap({ type: 'item', item: ${I('barrow')}, point: ${I('barrow')}.mesh.position })`);
+check(await ev(`__farm.player.barrow === ${I('barrow')}`), 'tapping the wheelbarrow starts pushing it');
+check(await ev(`(() => { const c = __farm.player.pos.clone().setY(1.6), d = ${I('barrow')}.mesh.position.clone().setY(0.5).sub(c).normalize(); const t = __farm.castFrom(c, d, 6); return !t || t.item !== ${I('barrow')}; })()`), 'taps go past the wheelbarrow you are pushing');
+await ev('__farm.input = { x: 0, y: -1 }'); await waitGame(2.5); await ev('__farm.input = null');
+const bx = await ev(`${I('barrow')}.mesh.position.x`), px = await ev('__farm.player.pos.x');
+console.log(`       (pushed into the house wall: barrow x ${bx.toFixed(2)}, you ${px.toFixed(2)})`);
+check(bx > -12.6 && px > -11.6, 'the wheelbarrow stops at a wall instead of going through it');
+await ev(`document.getElementById('b-drop').click()`);
+check(await ev('!__farm.player.barrow'), 'the Let go button leaves the wheelbarrow');
+// the farmhouse: walk in through the front door, past the kitchen, into the bedroom
+await ev('__farm.player.pos.set(-10.5, 0, 12); __farm.look(Math.PI / 2, 0)');
+await ev('__farm.input = { x: 0, y: -0.9 }'); await waitGame(2.6); await ev('__farm.input = null');
+const hp = await ev('__farm.player.pos.x');
+console.log(`       (walked in to x ${hp.toFixed(2)})`);
+check(hp < -14, 'you can walk into the farmhouse');
+await ev('__farm.player.pos.set(-13.2, 0, 12.6); __farm.look(Math.PI / 2 + 0.25, -0.12)');
+await waitGame(0.3);
+await shot('13-house');
+await ev('__farm.player.pos.set(-18.6, 0, 12.9); __farm.look(0.75, -0.3)');
+await waitGame(0.3);
+await shot('14-bedroom');
+await ev('__farm.player.pos.set(-18.3, 0, 12.7); __farm.look(Math.PI / 2 + 0.2, -0.3)');
+check(await ev(`(() => { const c = __farm.player.pos.clone().setY(1.6), d = __farm.world.fixtures.bed.pos.clone().sub(c).normalize(); const t = __farm.castFrom(c, d, 6); return t && t.type; })()`) === 'bed', 'the bed can be tapped');
+const early = await ev('__farm.farm.state.day');
+await ev(`__farm.activate({ type: 'bed' })`); await wait(1500);
+check(await ev('__farm.farm.state.day') === early, 'you can\'t go to bed in the middle of the day');
 // fresh shavings
 const bed0 = await ev('__farm.farm.stalls[0].state.bedding');
 await ev(`__farm.takeFrom('shavings')`);
@@ -334,10 +363,13 @@ await ev('__farm.letGo(); __farm.farm.state.minutes = 21 * 60 + 10');
 await ev(`__farm.office('day')`);
 await ev('__farm.closePanel()');
 const day = await ev('__farm.farm.state.day');
-const slept = await ev('__farm.farm.sleep()');
+await ev(`__farm.player.pos.set(-18.3, 0, 12.7); __farm.activate({ type: 'bed' })`);
+await wait(2000);
+const slept = true;
 console.log('       (slept: ' + slept + ', day ' + day + ' -> ' + await ev('__farm.farm.state.day') + ', ' + await ev('__farm.farm.state.minutes') + ')');
 check(await ev('__farm.farm.state.day') === day + 1 && Math.abs(await ev('__farm.farm.state.minutes') - 360) < 2, 'going to bed brings the next morning at 6am');
 check(await ev(`!${H}.data.tack.saddle`), 'tack left on overnight is taken off');
+check(await ev('__farm.player.pos.x') < -18, 'you wake up in your bedroom');
 // saving and loading
 await ev('__farm.farm.save()');
 await pg.reload();

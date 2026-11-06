@@ -502,7 +502,7 @@ export class Farm {
     }
     if (hour === 9) this.morningVisitors();
     if (hour === 17) this.eveningCheck();
-    if (hour === 19) this.say('It\'s getting dark. Switch on the barn lights (the switch is just inside the barn door), give the horses their evening hay, then go to bed (Farm Office > Day > Sleep).');
+    if (hour === 19) this.say('It\'s getting dark. Switch on the barn lights (the switch is just inside the barn door), give the horses their evening hay, then go to bed: your bed is in the farmhouse, through the door at the back of the kitchen.');
     this.save();
   }
   newDay(){
