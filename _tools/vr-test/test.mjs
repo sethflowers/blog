@@ -168,6 +168,23 @@ await wait(500);
 await shot('03-hands');
 await ev(`__t.btn('left', 'squeeze', 0); __t.touch('left', 'thumbstick', false)`);
 
+// the watch: lift the left wrist in front of you, the back of the hand up (and turned toward you a
+// little), like checking the time; nothing of your own arm, hand or body may cover the face
+const watchQ = (tilt) => ev(`(() => { const T = __vrtest, V = T.rig.position.constructor, M = T.rig.matrix.constructor, Q = T.rig.quaternion.constructor;
+  const m = new M().makeBasis(new V(0, -1, 0), new V(-1, 0, 0), new V(0, 0, -1));
+  return new Q().setFromAxisAngle(new V(1, 0, 0), ${tilt}).multiply(new Q().setFromRotationMatrix(m)).toArray(); })()`);
+let watchOk = true;
+for (const [gp, tilt] of [[[-0.05, 1.3, 0.85], 0], [[-0.08, 1.35, 0.9], 0.5], [[-0.12, 1.25, 0.8], 0.2]]){
+  const dx = gp[0], dy = 1.7 - gp[1], dz = 1.2 - gp[2];
+  await ev(`__t.head([0, 1.7, 1.2], ${Math.atan2(-dx, dz)}, ${-Math.atan2(dy, Math.hypot(dx, dz))})`);
+  await ev(`__t.grip('left', ${JSON.stringify(gp)}, ${JSON.stringify(await watchQ(tilt))})`);
+  await waitGame(0.4);
+  const wv = await ev(`__vrtest.watchView()`);
+  if (!(wv.hidden === 0 && wv.facing > 0.4)){ watchOk = false; console.log('    watch view', JSON.stringify(gp), tilt, JSON.stringify(wv)); }
+}
+check(watchOk, 'the watch face can be seen when you lift your wrist (no arm or hand in the way)');
+await shot('03b-watch');
+
 // ---- walking and turning ----
 let z0 = await ev(`__vrtest.rig.position.z`);
 await ev(`__t.head([0, 1.7, 1.2], 0, 0)`);

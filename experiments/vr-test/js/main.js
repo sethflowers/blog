@@ -129,12 +129,11 @@ const headPos = new THREE.Vector3(), headQuat = new THREE.Quaternion();
 // ---------- the watch on your left wrist ----------
 const watch = new THREE.Group();
 const watchFace = textCanvas(256, 160);
-const watchBody = boxMesh(0.07, 0.012, 0.05, 0x2a2a2e, 0, 0, 0);
-const watchScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.062, 0.04), new THREE.MeshBasicMaterial({ map: watchFace.tex }));
+const watchBody = boxMesh(0.078, 0.012, 0.055, 0x2a2a2e, 0, 0, 0);
+const watchScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.045), new THREE.MeshBasicMaterial({ map: watchFace.tex }));
 watchBody.rotation.x = Math.PI / 2; watchScreen.position.z = 0.0065;
 watch.add(watchBody, watchScreen);
 scene.add(watch);
-const watchLocal = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)).setPosition(-0.032, 0.105, 0.005);
 let callT = 0, lastCall = -10;
 const headLocal = new THREE.Vector3(0, 1.6, 0), headLocalQ = new THREE.Quaternion();
 let gameTime = 0, fps = 0, frames = 0, fpsT = 0, watchT = 0;
@@ -334,8 +333,7 @@ function step(time, xrFrame){
   // watch
   if (hands[0].tracked){
     watch.visible = true;
-    m1.compose(hands[0].pos, hands[0].quat, v1.set(1, 1, 1)).multiply(watchLocal);
-    m1.decompose(watch.position, watch.quaternion, v1);
+    avatar.watchMatrix.decompose(watch.position, watch.quaternion, v1);
   } else watch.visible = false;
   toast.t -= dt; watchT -= dt;
   if (watchT <= 0){ watchT = 0.5; drawWatch(); }
@@ -612,4 +610,21 @@ window.__vrtest = {
   enterVR, startDesktop, spectate: null, input: null,
   get eyeHeight(){ return eyeHeight; }, get time(){ return gameTime; }, get fps(){ return fps; },
   get head(){ return headPos.toArray(); }, get headQuat(){ return headQuat.toArray(); },
+  watch,
+  // can your eye see the watch face? (how squarely it faces you, and how many of its centre and
+  // corners are hidden behind your own arm, hand or body)
+  watchView(){
+    watch.updateMatrixWorld(true); avatar.root.updateMatrixWorld(true);
+    const eye = headPos.clone(), n = new THREE.Vector3(0, 0, 1).transformDirection(watch.matrixWorld);
+    const ray = new THREE.Raycaster(), pts = [[0, 0], [-0.025, -0.015], [0.025, -0.015], [-0.025, 0.015], [0.025, 0.015]];
+    let hidden = 0;
+    for (const [x, y] of pts){
+      const p = watchScreen.localToWorld(new THREE.Vector3(x, y, 0.001));
+      const d = p.clone().sub(eye), len = d.length();
+      ray.set(eye, d.normalize()); ray.far = len - 0.003;
+      if (ray.intersectObjects(avatar.parts, true).some((h) => h.object.visible)) hidden++;
+    }
+    const facing = n.dot(eye.clone().sub(watch.position).normalize());
+    return { facing, hidden, dist: eye.distanceTo(watch.position) };
+  },
 };

@@ -89,7 +89,7 @@ export function blobShadow(size){
 const tmp = {
   fwd: new THREE.Vector3(), up: new THREE.Vector3(), right: new THREE.Vector3(), v: new THREE.Vector3(), w: new THREE.Vector3(),
   neck: new THREE.Vector3(), axis: new THREE.Vector3(), q: new THREE.Quaternion(), m: new THREE.Matrix4(),
-  wrist: new THREE.Vector3(), elbow: new THREE.Vector3(), pole: new THREE.Vector3(), gy: new THREE.Vector3(), gx: new THREE.Vector3(),
+  wpos: new THREE.Vector3(), wrist: new THREE.Vector3(), elbow: new THREE.Vector3(), pole: new THREE.Vector3(), gy: new THREE.Vector3(), gx: new THREE.Vector3(),
   hip: new THREE.Vector3(), knee: new THREE.Vector3(), ankle: new THREE.Vector3(), a: new THREE.Vector3(), b: new THREE.Vector3(),
 };
 const wrapAngle = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
@@ -107,7 +107,10 @@ export class Avatar {
     this.belly = limb(0.33, 0.2, shirt);
     this.chest = limb(0.38, 0.22, shirt);
     this.upper = [limb(0.1, 0.1, shirt), limb(0.1, 0.1, shirt)];
-    this.fore = [limb(0.08, 0.08, skin), limb(0.08, 0.08, skin)];
+    // forearms a little flatter than they are wide, like real ones, so a watch can sit on top
+    this.fore = [limb(0.072, 0.06, skin), limb(0.072, 0.06, skin)];
+    // where a watch sits on the back of the left forearm, just above the wrist (updated every frame)
+    this.watchMatrix = new THREE.Matrix4();
     this.thigh = [limb(0.15, 0.15, pants), limb(0.15, 0.15, pants)];
     this.shin = [limb(0.12, 0.12, pants), limb(0.12, 0.12, pants)];
     this.foot = [add(boxMesh(0.12, 0.08, 0.27, { all: COL.shoe, ny: 0x1d140e }, 0, 0.04, -0.06)), add(boxMesh(0.12, 0.08, 0.27, { all: COL.shoe, ny: 0x1d140e }, 0, 0.04, -0.06))];
@@ -223,6 +226,18 @@ export class Avatar {
       placeLimb(this.fore[i], T.elbow, T.wrist, T.gx);
       this.upper[i].scale.x = this.upper[i].scale.z = s;
       this.fore[i].scale.x = this.fore[i].scale.z = s;
+      if (i === 0){
+        // the watch lies on the forearm's outer surface (the side the back of the hand faces), its
+        // length along the arm, so the arm itself can never cover it
+        T.a.subVectors(T.elbow, T.wrist); const fl = T.a.length() || 1; T.a.divideScalar(fl);
+        T.b.copy(T.gx).addScaledVector(T.a, -T.gx.dot(T.a)).normalize();
+        T.wpos.copy(T.wrist).addScaledVector(T.a, Math.min(0.06 * s, fl * 0.4)).addScaledVector(T.b, 0.03 * s + 0.012);
+        // face halfway between the forearm and the back of the hand, the way a wrist turns to read it
+        T.b.add(T.gx).normalize();
+        T.a.addScaledVector(T.b, -T.a.dot(T.b)).normalize();
+        T.v.crossVectors(T.a, T.b); T.a.negate();
+        this.watchMatrix.makeBasis(T.a, T.v, T.b).setPosition(T.wpos);
+      }
     }
 
     // ---- legs and stepping feet ----
