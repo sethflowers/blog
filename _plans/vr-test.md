@@ -139,3 +139,10 @@ villager, and saves screenshots. Headless frames are slow, so the test waits on 
 - Comfort vignette while moving; teleport as an option.
 - Hand tracking (no controllers).
 - Climbing, doors, a dungeon to explore, enemies that fight back.
+
+## v3.1
+- The watch was placed in grip space, 3 cm out from the grip, which put it inside the forearm box and
+  cuff, so the arm hid it. It is now placed from the avatar's own forearm: on its outer surface just
+  above the wrist, angled halfway between the forearm and the back of the hand. Forearms are a little
+  flatter (7.2 x 6 cm). The test lifts the wrist in three poses and raycasts from the eye to the watch
+  face's centre and corners against the body.
