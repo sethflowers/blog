@@ -84,7 +84,7 @@ function materials(){
     concrete: mat('concrete', { rough: 0.9 }),
     rubber: mat('rubber', { rough: 0.95 }),
     metal: mat('plain-metal', { color: 0x2a2c2e, rough: 0.4, metal: 0.8 }),
-    steel: mat('plain-steel', { color: 0x9aa2a8, rough: 0.35, metal: 0.9 }),
+    steel: mat('plain-steel', { color: 0xb4bac0, rough: 0.42, metal: 0.35 }),
     glass: mat('plain-glass', { color: 0x1a2630, rough: 0.08, metal: 0.6 }),
     bark: mat('bark', { rough: 0.95 }),
     leaves: mat('leaves', { rough: 0.9, alpha: 0.5, side: THREE.DoubleSide }),
@@ -145,13 +145,13 @@ function fenceRect(B, b, opts, gate){
 
 // a sign with text, painted on a canvas
 export function sign(text, w = 1.6, h = 0.5, { bg = '#f4efe2', fg = '#3a2a1a', font = 'bold 64px Georgia, serif', border = '#6a4a2a' } = {}){
-  const tc = textCanvas(512, Math.round(512 * h / w));
+  const tc = textCanvas(1024, Math.round(1024 * h / w));
   const g = tc.ctx, W = tc.canvas.width, H = tc.canvas.height;
   g.fillStyle = bg; g.fillRect(0, 0, W, H);
-  g.strokeStyle = border; g.lineWidth = 12; g.strokeRect(6, 6, W - 12, H - 12);
+  g.strokeStyle = border; g.lineWidth = 20; g.strokeRect(10, 10, W - 20, H - 20);
   g.fillStyle = fg; g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
-  let size = parseInt(font.match(/(\d+)px/)[1]);
-  while (g.measureText(text).width > W - 40 && size > 12){ size -= 4; g.font = font.replace(/\d+px/, size + 'px'); }
+  let size = parseInt(font.match(/(\d+)px/)[1]) * 2; g.font = font.replace(/\d+px/, size + 'px');
+  while (g.measureText(text).width > W - 80 && size > 12){ size -= 4; g.font = font.replace(/\d+px/, size + 'px'); }
   g.fillText(text, W / 2, H / 2 + 4);
   tc.tex.needsUpdate = true;
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tc.tex, roughness: 0.7 }));
@@ -441,7 +441,7 @@ function buildBarn(B, F, root, world, M){
     const can = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.3, 0.8, 24), M.steel); can.position.y = 0.4; can.castShadow = true; bin.add(can);
     const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 24), M.steel); lid.position.set(0, 0.82, 0); bin.add(lid);
     const lidH = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.03), M.metal); lidH.position.y = 0.06; lid.add(lidH);
-    const binSign = sign('GRAIN', 0.4, 0.14, { font: 'bold 70px Arial' }); binSign.position.set(0, 0.55, 0.311); bin.add(binSign);
+    const binSign = sign('GRAIN', 0.5, 0.2, { font: 'bold 120px Arial' }); binSign.position.set(0, 0.5, 0.345); bin.add(binSign);
     fx.grainBin = { group: bin, lid };
     // shavings bags
     const sh = new THREE.Group(); sh.position.copy(PLACES.shavings); root.add(sh);
