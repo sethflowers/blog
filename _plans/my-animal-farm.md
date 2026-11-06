@@ -117,3 +117,12 @@ simulation faster (`__farm.timeScale`).
 - Hoof picking is clear: holding the hoof pick shows a yellow ring round every hoof that needs
   doing; tap one (or touch it with the pick in VR), she lifts the foot, one scrape cleans it, and
   you're told how many are left. The grooming kit is labelled and the jobs list says where it is.
+
+## v1.3
+- Stars scattered evenly over the sky (one possible star per cell in 3D direction space, at a random
+  spot), mostly faint with a few bright, tinted blue or gold, twinkling, a faint Milky Way, hidden by
+  clouds. They used to sit on a grid.
+- Barn lights: a switch just inside the front door turns on warm lights down the aisle (four point
+  lights and glowing bulbs) that light the stalls. The dusk message (7pm) says where it is. Remembered
+  in the save.
+- Messages no longer flicker: the HUD redrew them four times a second, replaying their pop-in.

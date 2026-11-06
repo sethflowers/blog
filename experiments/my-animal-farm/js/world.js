@@ -326,12 +326,34 @@ function buildBarn(B, F, root, world, M){
   // ceiling boards (the hay loft floor)
   B.box(W, 0.06, D, M.pine, 0, wallH + 0.03, cz, 0, 0.5);
   // hanging lamps down the aisle
-  const lampMat = new THREE.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xffd890, emissiveIntensity: 1.2 });
+  const lampMat = new THREE.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xffd890, emissiveIntensity: 0.15 });
   for (let k = 0; k < 5; k++){
     const z = z1 - 1.8 - k * 3.6;
     B.cyl(0.01, 0.01, 0.6, M.metal, 0, wallH - 0.3, z, 4);
     B.cyl(0.28, 0.06, 0.18, M.metal, 0, wallH - 0.65, z, 12);
     B.add(new THREE.SphereGeometry(0.07, 10, 6), lampMat, new THREE.Matrix4().makeTranslation(0, wallH - 0.75, z));
+  }
+  // the lights: warm bulbs down the aisle that light the stalls, worked by a switch inside the front door
+  {
+    const lights = [];
+    for (const z of [-6.2, -11.4, -16.6, -20.6]){
+      const L = new THREE.PointLight(0xffd8a0, 0, 11, 1.6); L.position.set(0, wallH - 0.85, z); root.add(L); lights.push(L);
+    }
+    const sw = new THREE.Group(); sw.position.set(1.95, 1.3, z1 - 0.08); root.add(sw);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.02), M.trim); sw.add(plate);
+    const lever = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.03), M.black); lever.position.z = -0.02; sw.add(lever);
+    const label = sign('LIGHTS', 0.22, 0.08, { font: 'bold 110px Arial' }); label.position.set(0, 0.15, -0.012); label.rotation.y = Math.PI; sw.add(label);
+    plate.rotation.y = Math.PI;
+    world.barnLights = {
+      on: false, switchPos: sw.position.clone(),
+      set(on){
+        this.on = on;
+        for (const L of lights) L.intensity = on ? 9 : 0;
+        lampMat.emissiveIntensity = on ? 3 : 0.15;
+        lever.position.y = on ? 0.03 : -0.03; lever.rotation.x = on ? -0.4 : 0.4;
+      },
+    };
+    world.barnLights.set(false);
   }
   // colliders: outer walls (with the doorways open)
   addBox(x0 - 0.1, x0 + 0.1, z0, z1, 4); addBox(x1 - 0.1, x1 + 0.1, z0, z1, 4);
