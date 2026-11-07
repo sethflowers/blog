@@ -1,0 +1,16 @@
+{
+  "name": "Rollercoaster Bros",
+  "short_name": "Coaster Bros",
+  "description": "Build your own rollercoaster, ride it, and earn money from the people who ride it. On an iPad or in VR.",
+  "start_url": "/experiments/rollercoaster-bros/",
+  "scope": "/experiments/rollercoaster-bros/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1e4aa8",
+  "theme_color": "#1e4aa8",
+  "icons": [
+    { "src": "/experiments/rollercoaster-bros/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/rollercoaster-bros/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/rollercoaster-bros/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

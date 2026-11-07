@@ -1,0 +1,688 @@
+// Rollercoaster Bros: the main loop. Plays two ways from the same game:
+//  - iPad / phone / computer: a camera that orbits the park (drag to turn, pinch or scroll to zoom, two
+//    fingers or WASD to move), a row of track pieces to tap along the bottom, and buttons to ride, watch,
+//    set the speed and shop.
+//  - VR (WebXR, e.g. a Quest's browser): you stand in the park (or tower over it at giant size), a tablet
+//    in your left hand holds the same buttons, you point with the right controller and pull the trigger.
+//    Riding puts you in the front seat.
+import * as THREE from 'three';
+import { V, clamp, lerp, damp, fmtMoney } from './util.js';
+import { Track, PIECES, GROUPS, BUILD_ORDER, COLORS, pieceIcon, TILE, GRID } from './track.js';
+import { Train, CARTS, SPEEDS, PARK } from './train.js';
+import { Park, SAVE_KEY } from './park.js';
+import { ScreenPanel, Tablet } from './ui.js';
+import { startAudio, setListener, sfx, trainSound } from './audio.js';
+
+const $ = (id) => document.getElementById(id);
+const VERSION = document.body.dataset.version || '';
+
+// ---------- renderer and the sky ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.xr.enabled = true; renderer.xr.setReferenceSpaceType('local-floor'); renderer.xr.setFoveation(0.5);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1500);
+const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
+scene.fog = new THREE.Fog(0xcfe2f4, 160, 700);
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { sun: { value: V(0.45, 0.75, 0.35).normalize() } },
+  vertexShader: 'varying vec3 d; void main(){ d = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }',
+  fragmentShader: `uniform vec3 sun; varying vec3 d;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+    void main(){ vec3 v = normalize(d); float y = max(v.y, 0.0);
+      vec3 c = mix(vec3(0.81, 0.89, 0.96), vec3(0.24, 0.5, 0.88), pow(y, 0.6));
+      float s = max(dot(v, sun), 0.0); c += vec3(1.0, 0.95, 0.8) * (pow(s, 200.0) * 2.0 + pow(s, 8.0) * 0.15);
+      if (v.y > 0.02){ vec2 uv = v.xz / (v.y + 0.1) * 1.6; float k = n(uv) * 0.5 + n(uv * 2.1) * 0.3 + n(uv * 4.3) * 0.2; c = mix(c, vec3(1.0), smoothstep(0.58, 0.85, k) * smoothstep(0.02, 0.3, v.y) * 0.85); }
+      gl_FragColor = vec4(c, 1.0);
+      #include <colorspace_fragment>
+    }`,
+}));
+skyDome.frustumCulled = false; skyDome.renderOrder = -1; scene.add(skyDome);
+const hemi = new THREE.HemisphereLight(0xcfe4ff, 0x5a7a3a, 1.1); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.6);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.04;
+Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 1, far: 300 });
+scene.add(sun, sun.target);
+const SUN_DIR = V(0.45, 0.75, 0.35).normalize();
+
+// ---------- the game ----------
+const track = new Track(scene);
+const train = new Train(scene, track);
+const park = new Park(scene, track, train);
+const panel = new ScreenPanel();
+const tablet = new Tablet();
+
+let mode = 'title';             // 'title' | 'screen' | 'vr'
+let view = 'build';             // 'build' | 'watch' | 'ride'
+let gameTime = 0, saveT = 0, hudT = 0;
+const orbit = { target: V(0, 0, -6), yaw: 0.6, pitch: 0.55, dist: 60, follow: true };
+const look = { yaw: 0, pitch: 0 };     // looking around from your seat
+const msgs = [];
+const building = [];            // pieces waiting to go down one by one (Finish)
+let buildT = 0;
+let screamT = 0, lastPay = 0, payAcc = 0, payN = 0;
+
+park.on('say', ({ text, kind }) => say(text, kind));
+park.on('pay', ({ amount }) => { payAcc += amount; payN++; });
+park.on('scared', () => { if (!park.scaredT || gameTime - park.scaredT > 40){ park.scaredT = gameTime; say('Some people think your coaster is too scary! A slower speed might help.', 'bad'); } });
+train.on('dispatch', () => { sfx.bell(train.cars[0].position); });
+train.on('arrive', () => { sfx.hiss(train.cars[0].position); if (train.riders().length) sfx.cheer(train.cars[1].position); refreshTablet(); });
+
+function say(text, kind = ''){
+  msgs.push({ text, kind, t: 4.5 });
+  while (msgs.length > 3) msgs.shift();
+  if (kind === 'bad') sfx.bad();
+  drawMsgs(); refreshTablet();
+}
+function drawMsgs(){
+  const box = $('h-msg'); box.innerHTML = '';
+  for (const m of msgs){ const d = document.createElement('div'); d.className = 'msg ' + m.kind; d.textContent = m.text; box.appendChild(d); }
+}
+
+// ---------- building ----------
+const owned = () => BUILD_ORDER.filter((t) => park.owns(PIECES[t].group));
+function addPiece(type, quiet){
+  if (!park.owns(PIECES[type].group)){ shop('parts'); return false; }
+  if (view === 'ride') stopRide();
+  const r = track.add(type);
+  if (!r.ok){
+    if (!quiet){ say(r.why, 'bad'); track.preview(type, false, r.s); }
+    return false;
+  }
+  track.clearGhost();
+  sfx.place();
+  changed();
+  if (track.complete) finished();
+  return true;
+}
+function finished(){
+  sfx.done();
+  say('Your coaster is finished! People are coming to ride it.', 'good');
+  if (!park.state.built){ park.state.built = true; setTimeout(() => { if (mode !== 'title') say('Tap “Ride it!” to have a go yourself.', ''); }, 2500); }
+}
+function undo(){
+  building.length = 0;
+  if (!track.undo()){ sfx.bad(); return; }
+  sfx.undo(); changed();
+}
+function finishTrack(){
+  if (track.complete){ say('It\'s already finished!', ''); return; }
+  const path = track.finish(owned());
+  if (!path){ say('I can\'t find a way back to the station from here. Undo a few pieces and try again.', 'bad'); return; }
+  building.push(...path); buildT = 0;
+}
+function clearTrack(){
+  const go = () => { building.length = 0; track.reset(); changed(); sfx.undo(); closePanels(); };
+  if (track.pieces.length <= 1) return;
+  showPanel({ title: 'Start again?', sections: [{ text: 'Take away all of the track (but keep the station)?' }, { buttons: [{ label: 'Yes, clear it', kind: 'danger', go }, { label: 'No', go: closePanels }] }] });
+}
+// whenever the track changes: the train goes back to the station, people get off
+function changed(){
+  if (view === 'ride') stopRide();
+  park.clearRiders();
+  train.reset();
+  park.rerate();
+  park.save();
+  orbit.follow = true;
+  refreshPalette(); updateHUD(); refreshTablet();
+}
+
+// ---------- the palette (screen) ----------
+const icons = {}; for (const t of BUILD_ORDER) icons[t] = pieceIcon(t, 96);
+function refreshPalette(){
+  const P = $('palette'); P.innerHTML = '';
+  const tool = (ic, label, go, cls = '') => { const b = document.createElement('button'); b.className = 'pb tool ' + cls; b.innerHTML = `<span class="ic">${ic}</span>${label}`; b.onclick = () => { startAudio(); go(); }; P.appendChild(b); return b; };
+  tool('↶', 'Undo', undo);
+  if (!track.complete) tool('✓', 'Finish', finishTrack, 'go');
+  for (const t of BUILD_ORDER){
+    const P0 = PIECES[t], own = park.owns(P0.group);
+    if (!own && t !== GROUPS[P0.group].pieces[0]) continue;     // show one locked piece per pack
+    const b = document.createElement('button'); b.className = 'pb' + (own ? '' : ' locked');
+    const img = new Image(); img.src = icons[t].toDataURL(); b.appendChild(img);
+    const l = document.createElement('span'); l.textContent = own ? P0.name : GROUPS[P0.group].name; b.appendChild(l);
+    if (!own){ const pr = document.createElement('span'); pr.className = 'price'; pr.textContent = '🔒 ' + fmtMoney(GROUPS[P0.group].price); b.appendChild(pr); }
+    b.onclick = () => { startAudio(); addPiece(t); };
+    b.onpointerenter = (e) => { if (e.pointerType === 'mouse' && own && !track.complete){ const c = track.check(t); track.preview(t, c.ok, c.s, 999); } };
+    b.onpointerleave = () => { if (track.ghostT > 100) track.clearGhost(); };
+    P.appendChild(b);
+  }
+  const sep = document.createElement('div'); sep.className = 'sep'; P.appendChild(sep);
+  tool('🗑', 'Clear', clearTrack);
+}
+
+// ---------- HUD ----------
+function updateHUD(){
+  if (mode !== 'screen') return;
+  const S = park.state, R = park.rating;
+  $('h-money').textContent = fmtMoney(S.money);
+  if (track.complete){
+    $('h-rate').innerHTML = `⭐ Fun <b>${R.excitement.toFixed(1)}</b> · 😱 Scary <b>${R.intensity.toFixed(1)}</b><br>🎟 Ticket <b>${fmtMoney(park.ticket(R))}</b> · 👥 Waiting <b>${park.queueLength()}</b><br>🏆 Riders <b>${S.riders.toLocaleString()}</b>`;
+  } else $('h-rate').innerHTML = `🚧 <b>Build back to the station</b><br>to open your coaster!`;
+  $('b-ride').disabled = !track.complete;
+  $('b-ride').textContent = view === 'ride' ? '⬅ Get off' : '🎢 Ride it!';
+  $('b-watch').disabled = !track.complete;
+  $('b-watch').textContent = view === 'watch' ? '🏗 Build' : '🎥 Watch';
+  $('b-speed').textContent = `⚡ ${SPEEDS[S.speed].name}`;
+  document.body.classList.toggle('riding', view === 'ride');
+  document.body.classList.toggle('watching', view === 'watch');
+  $('b-look').style.display = view === 'ride' ? '' : 'none';
+  $('b-off').textContent = view === 'ride' ? '⬅ Get off' : '🏗 Build';
+}
+function moneyPop(text){
+  const p = document.createElement('div'); p.className = 'pop'; p.textContent = text; $('h-money').appendChild(p);
+  setTimeout(() => p.remove(), 1500);
+}
+
+// ---------- panels: shop, speed, menu ----------
+function showPanel(spec){ if (mode === 'vr'){ vrPage = spec; refreshTablet(); } else panel.show(spec); }
+function closePanels(){ panel.close(); vrPage = null; refreshTablet(); }
+function cartIcon(c){
+  const cv = document.createElement('canvas'); cv.width = cv.height = 96; const g = cv.getContext('2d');
+  const cols = { classic: ['#d8282a', '#f0f0f0'], ocean: ['#1e6ad8', '#ffffff'], lightning: ['#f6cc1a', '#1a1a1a'], dragon: ['#2a9a3a', '#e8c040'], shark: ['#7a8a9a', '#f4f4f4'], rocket: ['#e8eaf0', '#d8302a'], rainbow: ['#e83a3a', '#3a7ae8'], gold: ['#e8b830', '#7a2ab0'] }[c.id];
+  g.fillStyle = '#1e3a7a'; g.fillRect(0, 0, 96, 96);
+  g.fillStyle = cols[0]; g.beginPath(); g.moveTo(8, 40); g.lineTo(80, 40); g.quadraticCurveTo(92, 40, 92, 58); g.lineTo(92, 66); g.lineTo(8, 66); g.closePath(); g.fill();
+  g.fillStyle = cols[1]; g.fillRect(8, 52, 84, 5);
+  if (c.id === 'rainbow') ['#e83a3a', '#f0a020', '#3ab84a', '#3a7ae8'].forEach((x, i) => { g.fillStyle = x; g.fillRect(8 + i * 21, 40, 21, 12); });
+  g.fillStyle = '#2a2a2e'; for (const x of [24, 72]){ g.beginPath(); g.arc(x, 70, 7, 0, 7); g.fill(); }
+  g.font = '30px sans-serif'; g.textAlign = 'center'; g.fillText({ classic: '🎢', ocean: '🌊', lightning: '⚡', dragon: '🐉', shark: '🦈', rocket: '🚀', rainbow: '🌈', gold: '👑' }[c.id], 48, 32);
+  return cv;
+}
+const cartIcons = Object.fromEntries(CARTS.map((c) => [c.id, cartIcon(c)]));
+let shopTab = 'parts';
+function shop(tab = shopTab){
+  shopTab = tab;
+  const S = park.state;
+  const tabs = [['parts', '🛤 Track parts'], ['carts', '🚃 Trains'], ['paint', '🎨 Paint']].map(([k, l]) => ({ label: l, on: tab === k, go: () => shop(k) }));
+  const sections = [];
+  if (tab === 'parts'){
+    sections.push({ text: 'New kinds of track. Buy them once and use them as much as you like.' });
+    sections.push({ rows: Object.entries(GROUPS).filter(([k]) => k !== 'starter').map(([k, G]) => {
+      const own = park.owns(k);
+      return { title: G.name, sub: G.text, icon: icons[G.pieces[0]], on: own, button: own ? { label: '✓ Yours', disabled: true, go(){} } : { label: fmtMoney(G.price), disabled: S.money < G.price, go: () => buyGroup(k) } };
+    }) });
+  } else if (tab === 'carts'){
+    sections.push({ text: 'Cool new trains for your coaster.' });
+    sections.push({ rows: CARTS.map((c) => {
+      const own = S.carts.includes(c.id), using = S.cart === c.id;
+      return { title: c.name, sub: c.text, icon: cartIcons[c.id], on: using, button: using ? { label: '✓ Riding', disabled: true, go(){} } : own ? { label: 'Use it', go: () => { S.cart = c.id; train.setStyle(c.id); sfx.click(); park.save(); shop('carts'); } } : { label: fmtMoney(c.price), disabled: S.money < c.price, go: () => buyCart(c) } };
+    }) });
+  } else {
+    sections.push({ text: 'Pick a colour for your track (free!).' });
+    sections.push({ grid: COLORS.map((c, i) => ({ label: c.name, on: S.color === i, icon: swatch(c.rail), go: () => { S.color = i; track.setColor(i); sfx.click(); park.save(); shop('paint'); } })) });
+  }
+  showPanel({ title: '🛒 Shop', money: fmtMoney(S.money), tabs, sections, onClose(){} });
+}
+function swatch(hex){ const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#' + hex.toString(16).padStart(6, '0'); g.beginPath(); g.arc(32, 32, 26, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 4; g.stroke(); return c; }
+function buyGroup(k){
+  const G = GROUPS[k];
+  if (!park.spend(G.price)){ say('Not enough money yet!', 'bad'); return; }
+  park.state.groups.push(k); sfx.buy(); park.save();
+  say(`You bought ${G.name}! Find ${G.pieces.length > 1 ? 'them' : 'it'} at the bottom.`, 'good');
+  refreshPalette(); shop('parts');
+}
+function buyCart(c){
+  if (!park.spend(c.price)){ say('Not enough money yet!', 'bad'); return; }
+  park.state.carts.push(c.id); park.state.cart = c.id; train.setStyle(c.id); sfx.buy(); park.save();
+  say(`Your coaster now has the ${c.name} train!`, 'good');
+  shop('carts');
+}
+function speedPanel(){
+  const S = park.state;
+  const rows = SPEEDS.map((sp, i) => {
+    const r = track.complete ? track.rate(sp.v) : null;
+    return { title: `${sp.icon} ${sp.name}`, sub: r ? `Fun ${r.excitement.toFixed(1)} · Scary ${r.intensity.toFixed(1)} · ticket ${fmtMoney(Math.round(2 + r.excitement * 2))}` : `Leaves the station at ${Math.round(sp.v * 2.237)} mph`, on: S.speed === i,
+      button: S.speed === i ? { label: '✓ Now', disabled: true, go(){} } : { label: 'Pick', go: () => setSpeed(i, true) } };
+  });
+  showPanel({ title: '⚡ How fast?', sections: [{ text: 'Faster is more fun, and people pay more... but if it gets too scary (over 7) some won\'t ride.' }, { rows }] });
+}
+function setSpeed(i, reopen){
+  park.state.speed = clamp(i, 0, SPEEDS.length - 1); park.rerate(); park.save(); sfx.click();
+  updateHUD(); refreshTablet();
+  if (reopen) speedPanel();
+}
+function menu(){
+  const S = park.state;
+  showPanel({ title: '☰ Menu', sections: [
+    { text: `Money: ${fmtMoney(S.money)} · Earned so far: ${fmtMoney(S.earned)} · Riders: ${S.riders}` },
+    { heading: 'How to play', list: [
+      'Tap the track pieces at the bottom to add them to the end of your track (the yellow arrow).',
+      'Get back round to the station (from behind it, at ground level) to finish your coaster. “Finish” does it for you.',
+      'People come and ride. Each ride earns you a ticket. A more fun coaster has a dearer ticket and more people.',
+      'Buy hills, big drops, loops, barrel rolls and jumps in the Shop, and new trains and colours.',
+      'Too fast or too wild and some people will be too scared to ride!',
+    ] },
+    { buttons: [{ label: 'Back to the game', kind: 'primary', go: closePanels }, { label: 'Title screen', go: () => { closePanels(); toTitle(); } }] },
+  ] });
+}
+$('b-shop').onclick = () => { startAudio(); sfx.click(); shop(); };
+$('b-speed').onclick = () => { startAudio(); sfx.click(); speedPanel(); };
+$('b-menu').onclick = () => { startAudio(); sfx.click(); menu(); };
+$('b-ride').onclick = () => { startAudio(); if (view === 'ride') stopRide(); else startRide(); };
+$('b-watch').onclick = () => { startAudio(); sfx.click(); if (view === 'ride') stopRide(); view = view === 'watch' ? 'build' : 'watch'; updateHUD(); };
+$('b-off').onclick = () => { sfx.click(); if (view === 'ride') stopRide(); else { view = 'build'; updateHUD(); } };
+$('b-look').onclick = () => { look.yaw = 0; look.pitch = 0; };
+
+// ---------- riding ----------
+function startRide(){
+  if (!track.complete){ say('Finish your track first!', 'bad'); return; }
+  closePanels();
+  const v = train.seats[0];
+  if (v && v !== 'player'){
+    const free = train.emptySeats().find((i) => i > 0);
+    if (free != null) train.seatRider(free, v); else { v.state = 'queue'; v.root.visible = true; v.joined = -1; }
+  }
+  train.seatRider(0, 'player');
+  view = 'ride'; look.yaw = 0; look.pitch = 0;
+  if (mode === 'vr') vrSeat();
+  sfx.click(); updateHUD(); refreshTablet();
+}
+function stopRide(){
+  if (train.seats[0] === 'player') train.seatRider(0, null);
+  view = 'build';
+  if (mode === 'vr') vrStand();
+  updateHUD(); refreshTablet();
+}
+
+// ---------- screen input: orbit, look, zoom, pan ----------
+const pointers = new Map();
+let pinch = null;
+const keys = {};
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (mode !== 'screen') return;
+  startAudio();
+  renderer.domElement.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2){ const [a, b] = [...pointers.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; }
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (pointers.size >= 2 && pinch){
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    if (view !== 'ride'){ orbit.dist = clamp(orbit.dist * pinch.d / Math.max(20, d), 8, 220); pan(mx - pinch.mx, my - pinch.my); }
+    pinch = { d, mx, my };
+    return;
+  }
+  if (view === 'ride'){ look.yaw = clamp(look.yaw - dx * 0.005, -2.6, 2.6); look.pitch = clamp(look.pitch - dy * 0.005, -1.2, 1.2); }
+  else { orbit.yaw -= dx * 0.006; orbit.pitch = clamp(orbit.pitch + dy * 0.005, 0.08, 1.45); }
+});
+const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; };
+renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('pointercancel', up);
+renderer.domElement.addEventListener('wheel', (e) => { e.preventDefault(); if (view !== 'ride') orbit.dist = clamp(orbit.dist * Math.exp(e.deltaY * 0.0012), 8, 220); }, { passive: false });
+function pan(dx, dy){
+  const s = orbit.dist * 0.0022;
+  const f = V(-Math.sin(orbit.yaw), 0, -Math.cos(orbit.yaw)), r = V(Math.cos(orbit.yaw), 0, -Math.sin(orbit.yaw));
+  orbit.target.addScaledVector(r, -dx * s).addScaledVector(f, dy * s);
+  clampTarget(); orbit.follow = false;
+}
+function clampTarget(){ const L = TILE * (GRID + 1); orbit.target.x = clamp(orbit.target.x, -L, L); orbit.target.z = clamp(orbit.target.z, -L, L + 40); }
+addEventListener('keydown', (e) => {
+  if (mode !== 'screen') return;
+  keys[e.code] = true;
+  if (e.code === 'KeyZ' || e.code === 'Backspace'){ e.preventDefault(); undo(); }
+  if (e.code === 'KeyR'){ if (view === 'ride') stopRide(); else startRide(); }
+  if (e.code === 'Escape'){ if (panel.open) closePanels(); else if (view !== 'build'){ if (view === 'ride') stopRide(); view = 'build'; updateHUD(); } }
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+function placeScreenCamera(dt){
+  rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0); rig.scale.setScalar(1);
+  if (view === 'ride'){
+    const car = train.cars[0];
+    camera.position.copy(train.seatEye());
+    camera.quaternion.copy(car.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(look.pitch, look.yaw, 0, 'YXZ')));
+    if (!pointers.size){ look.yaw = damp(look.yaw, 0, 0.4, dt); look.pitch = damp(look.pitch, 0, 0.4, dt); }
+    camera.fov = 78; camera.updateProjectionMatrix();
+    return;
+  }
+  camera.fov = 60; camera.updateProjectionMatrix();
+  // keyboard: WASD moves, arrows turn
+  const k = (c) => (keys[c] ? 1 : 0);
+  const mx = k('KeyD') - k('KeyA'), mz = k('KeyS') - k('KeyW');
+  if (mx || mz) pan(-mx * 600 * dt, -mz * 600 * dt);
+  orbit.yaw += (k('ArrowLeft') - k('ArrowRight')) * dt * 1.5;
+  orbit.pitch = clamp(orbit.pitch + (k('ArrowUp') - k('ArrowDown')) * dt, 0.08, 1.45);
+  let target = orbit.target;
+  if (view === 'watch'){
+    const c = train.cars[1].position;
+    orbit.watch = orbit.watch || c.clone(); orbit.watch.lerp(c, Math.min(1, dt * 4));
+    target = orbit.watch;
+    // swing round behind the train (and a little to the side) unless you're turning the camera yourself
+    if (!pointers.size && train.frontFwd && train.v > 1){
+      const f = train.frontFwd, want = Math.atan2(-f.x, -f.z) + 0.7;
+      orbit.yaw += Math.atan2(Math.sin(want - orbit.yaw), Math.cos(want - orbit.yaw)) * (1 - Math.exp(-1.2 * dt));
+      orbit.pitch = damp(orbit.pitch, 0.38, 1, dt);
+    }
+  } else if (orbit.follow){
+    const e = track.endPoint(); e.y = Math.max(0, e.y - 2);
+    if (track.complete) e.set(0, 0, 0);
+    orbit.target.lerp(e, Math.min(1, dt * 2.5));
+  }
+  const d = view === 'watch' ? clamp(orbit.dist, 10, 24) : orbit.dist;
+  camera.position.set(target.x + Math.sin(orbit.yaw) * Math.cos(orbit.pitch) * d, target.y + Math.sin(orbit.pitch) * d, target.z + Math.cos(orbit.yaw) * Math.cos(orbit.pitch) * d);
+  camera.position.y = Math.max(1.2, camera.position.y);
+  camera.lookAt(target);
+}
+
+// ---------- VR ----------
+function makeVRHand(i){
+  return { i, side: i ? 'right' : 'left', tracked: false, pos: V(), quat: new THREE.Quaternion(), rayPos: V(), rayQuat: new THREE.Quaternion(),
+    trigger: 0, squeeze: 0, stick: { x: 0, y: 0 }, a: false, b: false, last: {}, gamepad: null,
+    haptic(v, ms){ const g = this.gamepad; try { if (g && g.hapticActuators && g.hapticActuators[0]) g.hapticActuators[0].pulse(v, ms); } catch (e) {} } };
+}
+const vr = [makeVRHand(0), makeVRHand(1)];
+const grips = [renderer.xr.getControllerGrip(0), renderer.xr.getControllerGrip(1)], rays = [renderer.xr.getController(0), renderer.xr.getController(1)];
+const sources = [null, null];
+for (let i = 0; i < 2; i++){ rig.add(grips[i], rays[i]); grips[i].addEventListener('connected', (e) => { sources[i] = e.data; }); grips[i].addEventListener('disconnected', () => { sources[i] = null; }); }
+// simple hands: a rounded controller shape in each hand
+const handMeshes = [0, 1].map((i) => {
+  const g = new THREE.Group();
+  const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.025, 0.08, 4, 10), new THREE.MeshStandardMaterial({ color: i ? 0x2a6ad8 : 0xd8302a, roughness: 0.5 }));
+  m.rotation.x = Math.PI / 2; g.add(m);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.008, 6, 16), new THREE.MeshStandardMaterial({ color: 0xffe040 })); ring.position.set(0, 0.02, -0.04); ring.rotation.x = 0.6; g.add(ring);
+  g.visible = false; scene.add(g); return g;
+});
+// the tablet sits above your left hand, facing you
+const tabletHolder = new THREE.Group(); scene.add(tabletHolder);
+tabletHolder.add(tablet.mesh); tablet.mesh.position.set(0, 0.2, -0.05); tablet.mesh.rotation.x = -0.35;
+tabletHolder.visible = false;
+const laser = new THREE.Mesh(new THREE.CylinderGeometry(0.002, 0.002, 1, 6), new THREE.MeshBasicMaterial({ color: 0xffe040, transparent: true, opacity: 0.7 }));
+laser.geometry.translate(0, 0.5, 0); laser.geometry.rotateX(-Math.PI / 2); laser.visible = false; scene.add(laser);
+const dot = new THREE.Mesh(new THREE.SphereGeometry(0.006, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff })); dot.visible = false; scene.add(dot);
+const headPos = V(), headQuat = new THREE.Quaternion();
+const v1 = V(), v2 = V();
+const vrs = { giant: true, tablet: true, snapReady: true, seatHead: null, seatYaw: 0 };
+let vrPage = null;
+
+function readVR(){
+  for (const h of vr){
+    const idx = sources.findIndex((s) => s && s.handedness === h.side);
+    const src = idx >= 0 ? sources[idx] : null, g = src && src.gamepad;
+    h.gamepad = g || null;
+    h.tracked = !!(src && grips[idx].visible);
+    if (h.tracked){
+      grips[idx].updateMatrixWorld(true); grips[idx].matrixWorld.decompose(h.pos, h.quat, v1);
+      rays[idx].updateMatrixWorld(true); rays[idx].matrixWorld.decompose(h.rayPos, h.rayQuat, v1);
+    }
+    const B = (k) => (g && g.buttons[k]) || { value: 0, pressed: false };
+    h.trigger = B(0).value; h.squeeze = B(1).value; h.a = B(4).pressed; h.b = B(5).pressed;
+    const ax = g ? g.axes : [];
+    h.stick.x = ax.length >= 4 ? ax[2] : (ax[0] || 0); h.stick.y = ax.length >= 4 ? ax[3] : (ax[1] || 0);
+    const L = h.last;
+    h.triggerDown = h.trigger > 0.7 && !L.t; h.aDown = h.a && !L.a; h.bDown = h.b && !L.b;
+    L.t = h.trigger > 0.7 ? true : h.trigger < 0.4 ? false : L.t; L.a = h.a; L.b = h.b;
+  }
+}
+function vrUpdate(dt){
+  readVR();
+  const L = vr[0], R = vr[1];
+  for (const h of vr){ const m = handMeshes[h.i]; m.visible = h.tracked; if (h.tracked){ m.position.copy(h.pos); m.quaternion.copy(h.quat); m.scale.setScalar(rig.scale.x); } }
+  // the tablet on the left hand
+  tabletHolder.visible = L.tracked && vrs.tablet;
+  if (tabletHolder.visible){ tabletHolder.position.copy(L.pos); tabletHolder.quaternion.copy(L.quat); tabletHolder.scale.setScalar(rig.scale.x); }
+  // pointing with the right hand
+  laser.visible = false; dot.visible = false;
+  if (R.tracked && tabletHolder.visible){
+    const dir = V(0, 0, -1).applyQuaternion(R.rayQuat);
+    tabletHolder.updateMatrixWorld(true);
+    const hit = tablet.ray(R.rayPos, dir, R.triggerDown, 3 * rig.scale.x);
+    if (hit){
+      laser.visible = true; dot.visible = true;
+      laser.position.copy(R.rayPos); laser.lookAt(hit.point); laser.scale.set(rig.scale.x, rig.scale.x, R.rayPos.distanceTo(hit.point));
+      dot.position.copy(hit.point); dot.scale.setScalar(rig.scale.x);
+      if (hit.clicked){ R.haptic(0.3, 30); sfx.click(); refreshTablet(); }
+      if (Math.abs(R.stick.y) > 0.3) tablet.scrollBy(R.stick.y * dt * 900);
+    }
+  }
+  // buttons: A rides, B giant size, X/Y shows or hides the tablet
+  if (R.aDown){ if (view === 'ride') stopRide(); else startRide(); }
+  if (R.bDown){ if (view === 'ride') stopRide(); else setGiant(!vrs.giant); }
+  if (L.aDown || L.bDown){ vrs.tablet = !vrs.tablet; }
+  if (view === 'ride') return;     // (the seat is placed after the train moves)
+  // turning (snap, round your head)
+  const sx = R.stick.x;
+  if (Math.abs(sx) > 0.7 && vrs.snapReady && !laser.visible){ turnRig(-Math.sign(sx) * Math.PI / 6); vrs.snapReady = false; }
+  if (Math.abs(sx) < 0.35) vrs.snapReady = true;
+  // walking (or striding, when you're a giant) where you look
+  let mx = L.stick.x, my = L.stick.y; if (Math.hypot(mx, my) < 0.15){ mx = 0; my = 0; }
+  if (mx || my){
+    const f = V(0, 0, -1).applyQuaternion(headQuat); f.y = 0; f.normalize();
+    const r = V(-f.z, 0, f.x);
+    const sp = 3.2 * rig.scale.x * dt;
+    rig.position.addScaledVector(f, -my * sp).addScaledVector(r, mx * sp);
+    const lim = TILE * (GRID + 2); rig.position.x = clamp(rig.position.x, -lim, lim); rig.position.z = clamp(rig.position.z, -lim, lim + 40);
+  }
+}
+function turnRig(a){ v1.copy(headPos); rig.position.sub(v1).applyAxisAngle(V(0, 1, 0), a).add(v1); rig.rotation.y += a; rig.updateMatrixWorld(true); }
+// giant size: the park becomes a model you can stand over and build on
+const GIANT = 9;
+function setGiant(on){
+  vrs.giant = on;
+  const before = V(headPos.x, 0, headPos.z);
+  rig.scale.setScalar(on ? GIANT : 1);
+  rig.updateMatrixWorld(true);
+  const local = camera.position.clone().multiplyScalar(rig.scale.x).applyQuaternion(rig.quaternion);
+  rig.position.set(before.x - local.x, 0, before.z - local.z);
+  sfx.whoosh(); refreshTablet();
+}
+function vrSeat(){
+  // you sit in the front seat: the whole play space rides with the car
+  const car = train.cars[0];
+  if (!vrs.seatHead){
+    // remember how your head sits in the play space, so it lines up with the seat
+    vrs.seatHead = camera.position.clone();
+    const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ'); vrs.seatYaw = e.y;
+  }
+  rig.scale.setScalar(1);
+  const q = car.quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), -vrs.seatYaw));
+  rig.quaternion.copy(q);
+  const eye = train.seatEye();
+  rig.position.copy(eye).sub(vrs.seatHead.clone().applyQuaternion(q));
+  rig.updateMatrixWorld(true);
+}
+function vrStand(){
+  vrs.seatHead = null;
+  rig.quaternion.identity(); rig.rotation.set(0, 0, 0);
+  rig.scale.setScalar(vrs.giant ? GIANT : 1);
+  if (vrs.giant) rig.position.set(-camera.position.x * GIANT, 0, 46 - camera.position.z * GIANT);
+  else rig.position.set(12 - camera.position.x, 0, 16 - camera.position.z);
+  rig.updateMatrixWorld(true);
+}
+
+// the tablet's pages
+let tabletT = 0;
+function refreshTablet(){ tabletT = 0; }
+function tabletSpec(){
+  const S = park.state, R = park.rating;
+  if (vrPage) return { ...vrPage, sections: [...(vrPage.sections || []), { buttons: [{ label: '⬅ Back', go: () => { vrPage = null; refreshTablet(); } }] }] };
+  if (view === 'ride'){
+    return { title: '🎢 Riding!', money: fmtMoney(S.money), sections: [
+      { text: `Speed: ${Math.round(train.v * 2.237)} mph · ${SPEEDS[S.speed].name}` },
+      { buttons: [{ label: '⬅ Get off (A)', kind: 'danger', go: stopRide }] },
+      { buttons: [{ label: '− Slower', disabled: S.speed === 0, go: () => setSpeed(S.speed - 1) }, { label: '+ Faster', disabled: S.speed === SPEEDS.length - 1, go: () => setSpeed(S.speed + 1) }] },
+    ] };
+  }
+  const grid = [];
+  for (const t of BUILD_ORDER){
+    const P0 = PIECES[t], own = park.owns(P0.group);
+    if (!own && t !== GROUPS[P0.group].pieces[0]) continue;
+    grid.push(own ? { label: P0.name, icon: icons[t], disabled: track.complete, go: () => addPiece(t) } : { label: '🔒 ' + fmtMoney(GROUPS[P0.group].price), icon: icons[t], go: () => shop('parts') });
+  }
+  const last = msgs.length ? msgs[msgs.length - 1].text : null;
+  const status = last || (track.complete ? `Open! ⭐ Fun ${R.excitement.toFixed(1)} · 😱 ${R.intensity.toFixed(1)} · 🎟 ${fmtMoney(park.ticket(R))} · 👥 ${park.queueLength()}` : 'Build back round to the station!');
+  return { title: 'Coaster Bros', money: fmtMoney(S.money), sections: [
+    { text: status },
+    { grid, cols: 4, cellH: 150 },
+    { buttons: [{ label: '↶ Undo', go: undo }, { label: '✓ Finish', disabled: track.complete, go: finishTrack }, { label: '🗑 Clear', go: clearTrack }] },
+    { buttons: [{ label: '−', disabled: S.speed === 0, go: () => setSpeed(S.speed - 1) }, { label: `⚡ ${SPEEDS[S.speed].name}`, go: speedPanel }, { label: '+', disabled: S.speed === SPEEDS.length - 1, go: () => setSpeed(S.speed + 1) }] },
+    { buttons: [{ label: '🎢 Ride (A)', kind: 'primary', disabled: !track.complete, go: startRide }, { label: vrs.giant ? '🧍 Normal (B)' : '🦖 Giant (B)', go: () => setGiant(!vrs.giant) }, { label: '🛒 Shop', go: () => shop() }] },
+  ] };
+}
+
+// ---------- the loop ----------
+const clock = new THREE.Clock();
+function frame(){
+  try { step(); } catch (e) { console.error(e); }
+}
+function step(){
+  const dt = Math.min(clock.getDelta(), 1 / 20);
+  const T = window.__rcb, steps = T && T.timeScale > 1 ? Math.round(T.timeScale) : 1;
+  for (let k = 0; k < steps; k++){ gameTime += dt; simulate(dt, k === 0); }
+  if (T && T.noRender) return;
+  if (mode !== 'vr') placeScreenCamera(dt);
+  renderer.render(scene, camera);
+}
+function simulate(dt, first){
+  if (mode === 'vr'){
+    rig.updateMatrixWorld(true);
+    renderer.xr.getCamera().matrixWorld.decompose(headPos, headQuat, v1);
+    vrUpdate(dt);
+  } else { camera.updateMatrixWorld(true); camera.matrixWorld.decompose(headPos, headQuat, v1); }
+  if (mode === 'title') titleSpin(dt);
+  // pieces from Finish go down one at a time
+  if (building.length){ buildT -= dt; if (buildT <= 0){ buildT = 0.13; const t = building.shift(); if (!addPiece(t, true)){ building.length = 0; say('Something is in the way. Try Finish again.', 'bad'); } } }
+  train.update(dt, park.speedV, gameTime);
+  if (mode === 'vr' && view === 'ride') vrSeat();
+  park.update(dt, view === 'ride');
+  track.update(dt, gameTime, mode !== 'title' && view === 'build');
+  // screams on the big moments
+  screamT -= dt;
+  if (train.thrill > 1.2 && screamT <= 0 && train.riders().length){ screamT = 4 + Math.random() * 3; sfx.scream(train.cars[1].position, Math.min(4, 1 + train.riders().length / 3)); }
+  trainSound(train.cars[1].position, train.v, view === 'ride');
+  // the sun's shadows follow what you're looking at
+  const focus = mode === 'vr' ? headPos : (view === 'ride' || view === 'watch') ? train.cars[1].position : orbit.target;
+  sun.target.position.set(Math.round(focus.x), 0, Math.round(focus.z));
+  sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 150);
+  skyDome.position.copy(headPos);
+  setListener(headPos, v1.set(0, 0, -1).applyQuaternion(headQuat), v2.set(0, 1, 0).applyQuaternion(headQuat));
+  if (!first) return;
+  // money coming in
+  if (payN && gameTime - lastPay > 1.2){ lastPay = gameTime; if (mode === 'screen') moneyPop('+' + fmtMoney(payAcc)); sfx.coin(); payAcc = 0; payN = 0; refreshTablet(); }
+  for (const m of msgs) m.t -= dt;
+  if (msgs.length && msgs[0].t <= 0){ while (msgs.length && msgs[0].t <= 0) msgs.shift(); drawMsgs(); }
+  hudT -= dt; if (hudT <= 0){ hudT = 0.3; updateHUD(); if (view === 'ride') $('speedo').textContent = `${Math.round(train.v * 2.237)} mph`; else if (view === 'watch') $('speedo').textContent = `🎥 ${Math.round(train.v * 2.237)} mph`; }
+  if (mode === 'vr'){ tabletT -= dt; if (tabletT <= 0){ tabletT = view === 'ride' ? 0.25 : 1; tablet.show(tabletSpec()); } }
+  saveT += dt; if (saveT > 10 && mode !== 'title'){ saveT = 0; park.save(); }
+}
+renderer.setAnimationLoop(frame);
+
+// ---------- title screen ----------
+let spin = 0;
+function titleSpin(dt){
+  spin += dt * 0.05;
+  rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0); rig.scale.setScalar(1);
+  orbit.target.set(0, 4, -10); orbit.yaw = spin; orbit.pitch = 0.32; orbit.dist = 62; orbit.follow = false;
+}
+// a coaster to look at behind the title, when there's no saved park yet
+const DEMO = ['straight', 'up', 'steepUp', 'steepDown', 'loop', 'bigLeft', 'straight', 'roll', 'left', 'up', 'down', 'jump', 'left', 'straight'];
+function showDemo(){
+  track.load(DEMO);
+  const f = track.finish(BUILD_ORDER);
+  if (f) for (const t of f){ const c = track.check(t); if (!c.ok) break; const e = track.end; track.place(t, e.i, e.j, e.level, e.d, c); }
+  track.changed(); train.setStyle('dragon'); train.reset(); park.rerate();
+}
+function toTitle(){
+  if (renderer.xr.isPresenting) renderer.xr.getSession().end();
+  park.save();
+  mode = 'title'; view = 'build'; $('title').classList.remove('hidden'); document.body.classList.remove('playing');
+  refreshTitle();
+}
+function refreshTitle(){
+  const has = !!localStorage.getItem(SAVE_KEY);
+  $('b-new').style.display = has ? '' : 'none';
+}
+// load the saved park (or start a new one)
+function ensureGame(fresh){
+  if (fresh || !park.load()) park.newGame();
+  const S = park.state;
+  track.setColor(S.color || 0);
+  track.load(S.track || []);
+  train.setStyle(S.cart || 'classic');
+  for (const v of park.visitors) v.gone = true;
+  park.clearRiders(); train.reset(); park.rerate();
+  view = 'build';
+  orbit.target.copy(track.endPoint()).setY(0); orbit.yaw = 0.7; orbit.pitch = 0.6; orbit.dist = 55; orbit.follow = true;
+  refreshPalette();
+}
+function startScreen(fresh){
+  startAudio(); ensureGame(fresh);
+  mode = 'screen'; $('title').classList.add('hidden'); document.body.classList.add('playing');
+  clock.getDelta();
+  updateHUD();
+  if (track.pieces.length <= 1 && !park.state.built) welcome();
+}
+async function startVR(fresh){
+  startAudio(); ensureGame(fresh);
+  try {
+    const session = await navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['local-floor'], optionalFeatures: ['bounded-floor'] });
+    session.addEventListener('end', () => {
+      if (mode === 'vr'){ mode = 'title'; view = 'build'; $('title').classList.remove('hidden'); document.body.classList.remove('playing'); camera.position.set(0, 0, 0); camera.quaternion.identity(); park.save(); tabletHolder.visible = false; laser.visible = false; dot.visible = false; for (const m of handMeshes) m.visible = false; refreshTitle(); }
+    });
+    sun.shadow.mapSize.set(1024, 1024); if (sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map = null; }
+    await renderer.xr.setSession(session);
+    try { if (session.supportedFrameRates && session.updateTargetFrameRate){ const r = [...session.supportedFrameRates]; if (r.includes(72)) await session.updateTargetFrameRate(72); } } catch (e) {}
+    mode = 'vr'; $('title').classList.add('hidden');
+    vrs.giant = true; vrs.tablet = true; vrPage = null;
+    rig.rotation.set(0, 0, 0); rig.scale.setScalar(GIANT); rig.position.set(0, 0, 46);
+    clock.getDelta();
+    refreshTablet();
+    if (track.pieces.length <= 1 && !park.state.built) welcome();
+  } catch (e) { $('status').textContent = 'Could not start VR: ' + (e && e.message ? e.message : e); }
+}
+function welcome(){
+  showPanel({ title: 'Welcome, coaster builder!', sections: [
+    { text: 'This is your station. Build a rollercoaster that goes out of the front of it and comes all the way back round into the back of it.' },
+    { list: [
+      'Tap a track piece to add it where the yellow arrow is.',
+      'To start with you only have straights and turns: enough for a simple loop. “Finish” builds the way back for you.',
+      'When it\'s finished, people come to ride it and pay for tickets.',
+      'Spend your money on hills, drops, loops, barrel rolls, jumps and cool new trains!',
+    ] },
+    { buttons: [{ label: 'Let\'s build!', kind: 'primary', go: closePanels }] },
+  ] });
+}
+$('b-play').onclick = () => startScreen(false);
+$('b-vr').onclick = () => startVR(false);
+$('b-new').onclick = () => {
+  if (localStorage.getItem(SAVE_KEY) && !confirm('Start a new park? Your saved coaster and money will be lost.')) return;
+  localStorage.removeItem(SAVE_KEY);
+  if (navigator.xr && $('b-vr').dataset.ok === '1' && confirm('Play the new park in VR? (Cancel to play on this screen.)')) startVR(true); else startScreen(true);
+};
+refreshTitle();
+if (navigator.xr && navigator.xr.isSessionSupported){
+  navigator.xr.isSessionSupported('immersive-vr').then((ok) => {
+    $('b-vr').disabled = !ok; $('b-vr').dataset.ok = ok ? '1' : '0';
+    $('status').textContent = ok ? 'Headset found: press Enter VR.' : 'No VR headset here: play on this screen (or open this page in a headset\'s browser).';
+  }).catch(() => { $('b-vr').disabled = true; });
+} else { $('b-vr').disabled = true; $('status').textContent = 'Play on this screen, or open this page in a VR headset\'s browser.'; }
+// behind the title: your park if you have one, or a demo coaster
+if (park.load() && park.state.track && park.state.track.length){ track.setColor(park.state.color || 0); track.load(park.state.track); train.setStyle(park.state.cart || 'classic'); train.reset(); park.rerate(); }
+else showDemo();
+refreshPalette();
+
+addEventListener('resize', () => {
+  if (renderer.xr.isPresenting) return;
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+addEventListener('pagehide', () => { if (mode !== 'title') park.save(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && mode !== 'title') park.save(); });
+
+// ---------- for the headless test ----------
+window.__rcb = {
+  get mode(){ return mode; }, get view(){ return view; }, track, train, park, renderer, camera, scene, rig, vr, tablet, orbit, vrs,
+  timeScale: 1, noRender: false, version: VERSION, CARTS,
+  startScreen, startVR, addPiece, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
+  get building(){ return building.length; }, get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
+};
+void lerp; void PARK;

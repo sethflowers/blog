@@ -1,0 +1,171 @@
+---
+title: Rollercoaster Bros
+description: Build your own rollercoaster on a big flat field, ride it (on an iPad or in VR), and earn money from the people who come to ride it. Buy hills, big drops, loops, barrel rolls and jumps, cool new trains, and set how fast it goes.
+date: 2026-11-07
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1e4aa8">
+<meta name="apple-mobile-web-app-title" content="Coaster Bros">
+<link rel="manifest" href="/experiments/rollercoaster-bros/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/rollercoaster-bros/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/rollercoaster-bros/icon-192.png">
+<title>Rollercoaster Bros</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#7ab0e8;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;
+    font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  button{font-family:inherit;cursor:pointer;}
+  /* title */
+  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;
+    background:linear-gradient(180deg,rgba(10,20,60,.05) 0%,rgba(10,20,60,.65) 75%);}
+  #title.hidden{display:none;}
+  .card{max-width:620px;width:100%;text-align:center;}
+  h1{font-family:"Arial Black","Avenir Next",Arial,sans-serif;font-size:clamp(44px,10vw,96px);line-height:.92;letter-spacing:.01em;
+    color:#ffe040;text-shadow:0 5px 0 #d8302a,0 9px 0 #8a1e1a,0 14px 30px rgba(0,0,0,.5);transform:rotate(-3deg);}
+  h1 span{display:block;color:#fff;font-size:.62em;letter-spacing:.12em;text-shadow:0 5px 0 #1e4aa8,0 9px 0 #0e2a6a,0 14px 30px rgba(0,0,0,.5);}
+  .sub{margin:22px 0 22px;font-size:19px;font-weight:600;text-shadow:0 2px 6px rgba(0,0,0,.6);}
+  .tbtn{display:block;width:100%;max-width:360px;margin:12px auto;padding:17px 20px;font-size:23px;font-weight:bold;line-height:1;color:#1a1a2a;
+    background:#ffe040;border:0;border-radius:16px;box-shadow:0 6px 0 #c09a10;}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 3px 0 #c09a10;}
+  .tbtn:disabled{background:#8a90a0;box-shadow:0 6px 0 #5a6070;color:#2a2e38;cursor:default;}
+  .tbtn.second{background:#e8f0ff;box-shadow:0 6px 0 #8aa0c8;font-size:18px;padding:14px;}
+  #status{margin-top:10px;font-size:15px;opacity:.95;min-height:20px;text-shadow:0 1px 4px #000;}
+  .help{margin-top:14px;font-size:13.5px;opacity:.95;line-height:1.6;text-shadow:0 1px 4px #000;}
+  .help b{color:#ffe040;}
+  .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.8;pointer-events:none;}
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
+  body.playing #hud{display:block;}
+  .chip{position:absolute;background:rgba(14,24,56,.74);border-radius:16px;padding:9px 14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  #h-stat{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));min-width:190px;}
+  #h-money{font-weight:900;font-size:26px;color:#ffe040;position:relative;}
+  #h-rate{font-size:14px;margin-top:3px;line-height:1.45;}
+  #h-rate b{color:#ffe040;}
+  .pop{position:absolute;left:100%;top:0;margin-left:10px;color:#7aff8a;font-weight:900;font-size:20px;animation:up 1.4s ease-out forwards;white-space:nowrap;text-shadow:0 2px 4px #000;}
+  @keyframes up{from{transform:translateY(8px);opacity:0}20%{opacity:1}to{transform:translateY(-26px);opacity:0}}
+  #h-msg{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));width:min(520px,52vw);display:flex;flex-direction:column;gap:6px;}
+  .msg{background:rgba(14,24,56,.84);border-radius:12px;padding:9px 14px;font-size:16px;font-weight:600;text-align:center;animation:pop .25s ease-out;}
+  .msg.good{background:rgba(30,130,60,.9);} .msg.bad{background:rgba(170,40,30,.9);} .msg.money{background:rgba(170,120,10,.92);}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+  #topbtns{position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+  .hbtn{pointer-events:auto;border:0;border-radius:14px;background:rgba(14,24,56,.78);color:#fff;font-weight:800;font-size:17px;padding:11px 15px;min-width:118px;text-align:left;}
+  .hbtn:active,.hbtn.on{background:#ffe040;color:#1a1a2a;}
+  .hbtn.big{background:#d8302a;font-size:19px;}
+  .hbtn:disabled{opacity:.45;}
+  /* building palette */
+  #palette{position:absolute;left:0;right:0;bottom:0;padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));
+    display:flex;gap:8px;overflow-x:auto;pointer-events:auto;background:linear-gradient(0deg,rgba(14,24,56,.85),rgba(14,24,56,.55));touch-action:pan-x;-webkit-overflow-scrolling:touch;}
+  body.riding #palette,body.watching #palette{display:none;}
+  .pb{flex:0 0 auto;width:88px;height:96px;border:0;border-radius:14px;background:#2a4a9a;color:#fff;font-weight:800;font-size:12.5px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:4px 2px 7px;position:relative;}
+  .pb img{width:58px;height:58px;margin-bottom:2px;}
+  .pb:active{background:#ffe040;color:#1a1a2a;}
+  .pb.tool{background:#3a3e58;width:74px;font-size:13px;}
+  .pb.tool .ic{font-size:32px;line-height:58px;}
+  .pb.go{background:#2a9a4a;}
+  .pb.locked{background:#3a3e48;color:#c8ccd8;}
+  .pb.locked img{opacity:.35;}
+  .pb .price{position:absolute;top:6px;left:0;right:0;font-size:13px;color:#ffe040;}
+  .sep{flex:0 0 2px;background:rgba(255,255,255,.25);margin:6px 2px;}
+  #ridebar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));display:none;gap:10px;pointer-events:auto;align-items:center;}
+  body.riding #ridebar,body.watching #ridebar{display:flex;}
+  #speedo{font-size:22px;font-weight:900;min-width:120px;text-align:center;}
+  #ridebar .hbtn{text-align:center;min-width:0;}
+  /* panels */
+  #panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(0,0,20,.35);padding:14px;}
+  #panel.show{display:flex;}
+  .card-panel{width:min(660px,100%);max-height:min(90vh,900px);display:flex;flex-direction:column;background:#f4f6fc;color:#1a2038;border-radius:22px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .phead{display:flex;align-items:center;gap:12px;background:#1e4aa8;color:#fff;padding:13px 16px;}
+  .phead h2{font-family:"Arial Black",Arial,sans-serif;font-size:23px;flex:1;}
+  .pmoney{font-weight:900;color:#ffe040;font-size:20px;}
+  .phead .x{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:10px;width:42px;height:42px;font-size:18px;}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0;background:#dfe6f6;}
+  .tabs button{border:0;border-radius:12px 12px 0 0;padding:11px 14px;font-weight:800;font-size:15px;background:#c4d0ec;color:#2a3a6a;}
+  .tabs button.on{background:#f4f6fc;color:#1a2038;}
+  .pbody{overflow-y:auto;padding:6px 16px 18px;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  .psec{margin-top:12px;}
+  .psec h3{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#3a5aa8;margin-bottom:6px;}
+  .psec p{font-size:16px;line-height:1.45;}
+  .psec ul{padding-left:20px;font-size:15.5px;line-height:1.55;}
+  .row{display:flex;align-items:center;gap:12px;padding:9px 12px;margin:6px 0;background:#e4eaf6;border-radius:14px;}
+  .row.on{background:#fff2b0;}
+  .ricon{width:58px;height:58px;flex:0 0 58px;background:#1e3a7a;border-radius:10px;}
+  .rl{flex:1;}
+  .row b{display:block;font-size:16px;} .row small{display:block;font-size:13px;color:#4a5068;margin-top:2px;}
+  .row button,.btns button,.grid button{border:0;border-radius:12px;padding:11px 15px;font-weight:800;font-size:15px;background:#1e4aa8;color:#fff;white-space:nowrap;}
+  .row button:disabled,.btns button:disabled,.grid button:disabled{background:#b8bccc;color:#f4f4f4;}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .btns button.primary{background:#2a9a4a;font-size:18px;padding:13px 22px;} .btns button.danger{background:#b83a30;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;}
+  .grid button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;white-space:normal;}
+  .grid button.on{background:#ffe040;color:#1a1a2a;}
+  .grid button small{font-weight:600;font-size:12px;opacity:.9;}
+  .bicon{width:44px;height:44px;}
+</style>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "three": "/experiments/rollercoaster-bros/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/rollercoaster-bros/lib/three.core.min.js": "/experiments/rollercoaster-bros/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/rollercoaster-bros/js/audio.js": "/experiments/rollercoaster-bros/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/rollercoaster-bros/js/park.js": "/experiments/rollercoaster-bros/js/park.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/rollercoaster-bros/js/track.js": "/experiments/rollercoaster-bros/js/track.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/rollercoaster-bros/js/train.js": "/experiments/rollercoaster-bros/js/train.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/rollercoaster-bros/js/ui.js": "/experiments/rollercoaster-bros/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/rollercoaster-bros/js/util.js": "/experiments/rollercoaster-bros/js/util.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<div id="title">
+  <div class="card">
+    <h1><span>Rollercoaster</span>BROS</h1>
+    <p class="sub">Build it. Ride it. Get rich!</p>
+    <button id="b-play" class="tbtn">Play on this screen</button>
+    <button id="b-vr" class="tbtn">Enter VR</button>
+    <button id="b-new" class="tbtn second">Start a new park</button>
+    <p id="status">&nbsp;</p>
+    <div class="help">
+      <b>Build:</b> tap a track piece to add it to the end of your track · get back to the station to finish it<br>
+      <b>iPad:</b> drag to look around · pinch to zoom · two fingers to move<br>
+      <b>Computer:</b> drag to look · scroll to zoom · WASD to move · Z undo · R ride<br>
+      <b>VR:</b> the tablet is in your left hand · point and pull the trigger · left stick walks · A rides · B giant size
+    </div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="hud">
+  <div id="h-stat" class="chip"><div id="h-money"></div><div id="h-rate"></div></div>
+  <div id="h-msg"></div>
+  <div id="topbtns">
+    <button id="b-ride" class="hbtn big">🎢 Ride it!</button>
+    <button id="b-watch" class="hbtn">🎥 Watch</button>
+    <button id="b-speed" class="hbtn">⚡ Speed</button>
+    <button id="b-shop" class="hbtn">🛒 Shop</button>
+    <button id="b-menu" class="hbtn">☰ Menu</button>
+  </div>
+  <div id="palette"></div>
+  <div id="ridebar"><button id="b-off" class="hbtn big">⬅ Get off</button><div id="speedo" class="chip" style="position:static"></div><button id="b-look" class="hbtn">🔄 Look ahead</button></div>
+</div>
+<div id="panel"></div>
+<script type="module" src="/experiments/rollercoaster-bros/js/main.js?v={% endraw %}{{ page.version }}{% raw %}"></script>
+<script>
+if ('serviceWorker' in navigator){
+  addEventListener('load', function(){
+    navigator.serviceWorker.register('/experiments/rollercoaster-bros/sw.js', { updateViaCache: 'none' }).catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
+{% endraw %}
