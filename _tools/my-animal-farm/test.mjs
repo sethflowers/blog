@@ -162,9 +162,30 @@ await ev('__farm.player.pos.set(3.5, 0, -24.4); __farm.look(0, 0)');
 await waitGame(0.5);
 check(await ev(`${I('barrow')}.load`) === 0, 'the wheelbarrow tips out on the muck heap');
 await ev('__farm.player.barrow = null');
+// the thumb stick: a touch whose end got lost used to leave you unable to walk; a new touch takes over
+await ev(`__farm.player.pos.set(-6, 0, 12); __farm.look(Math.PI / 2, 0)`);
+await ev(`(() => { const c = __farm.renderer.domElement, ev = (t, id, x, y) => c.dispatchEvent(new PointerEvent(t, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true }));
+  ev('pointerdown', 41, 120, innerHeight - 120);            // this touch never ends
+  ev('pointerdown', 42, 130, innerHeight - 130); ev('pointermove', 42, 130, innerHeight - 200); })()`);
+const sx0 = await ev('__farm.player.pos.x'); await waitGame(1.2);
+check(await ev('__farm.player.pos.x') < sx0 - 1, 'a new touch on the stick always walks, even if an old touch got stuck');
+await ev(`__farm.renderer.domElement.dispatchEvent(new PointerEvent('pointerup', { pointerId: 42, pointerType: 'touch', bubbles: true }))`);
+check(await ev('!__farm.touch.stick'), 'lifting the finger stops walking');
+// the wheelbarrow carries tools: pushing it, whatever you swap out goes in the barrow, and comes out again
+await ev(`__farm.player.pos.set(0.95, 0, -15.6); __farm.look(0, -0.3); __farm.handleTap({ type: 'item', item: ${I('barrow')}, point: ${I('barrow')}.mesh.position })`);
+await ev(`__farm.pickUp(${I('fork')}, 1); __farm.pickUp(${I('curry')}, 1)`);
+check(await ev(`${I('fork')}.inBarrow && __farm.player.heldBy[1] === ${I('curry')}`), 'picking up another tool while pushing the barrow puts the fork in the barrow');
+await ev(`document.getElementById('b-drop').click()`);
+check(await ev(`${I('curry')}.inBarrow && !__farm.player.heldBy[1] && __farm.care.cargo().length === 2`), 'Put in barrow stows what you hold');
+await ev('__farm.input = { x: 0, y: -1 }'); await waitGame(1); await ev('__farm.input = null');
+check(await ev(`${I('fork')}.mesh.getWorldPosition(${I('barrow')}.mesh.position.clone()).distanceTo(${I('barrow')}.mesh.position) < 1.2`), 'the tools ride along in the barrow');
+await waitGame(0.3); await shot('12b-barrow');
+await ev(`__farm.handleTap({ type: 'item', item: ${I('fork')}, point: ${I('fork')}.mesh.getWorldPosition(${I('fork')}.mesh.position.clone()) })`);
+check(await ev(`!${I('fork')}.inBarrow && __farm.player.heldBy[1] === ${I('fork')}`), 'tapping a tool in the barrow takes it out');
+await ev(`__farm.putBack(${I('fork')}); __farm.care.home(${I('curry')}); __farm.player.barrow = null`);
 // the wheelbarrow on the screen: tap it to push it; taps go past it while you push; it can't go through
 // walls (you stop instead); the button at the bottom lets go of it
-await ev(`__farm.putBack(__farm.player.heldBy[1]); ${I('barrow')}.mesh.position.set(-9, 0, 10.5); __farm.player.pos.set(-7.6, 0, 10.5); __farm.look(Math.PI / 2, -0.3)`);
+await ev(`__farm.player.heldBy[1] && __farm.putBack(__farm.player.heldBy[1]); ${I('barrow')}.mesh.position.set(-9, 0, 10.5); __farm.player.pos.set(-7.6, 0, 10.5); __farm.look(Math.PI / 2, -0.3)`);
 await ev(`__farm.handleTap({ type: 'item', item: ${I('barrow')}, point: ${I('barrow')}.mesh.position })`);
 check(await ev(`__farm.player.barrow === ${I('barrow')}`), 'tapping the wheelbarrow starts pushing it');
 check(await ev(`(() => { const c = __farm.player.pos.clone().setY(1.6), d = ${I('barrow')}.mesh.position.clone().setY(0.5).sub(c).normalize(); const t = __farm.castFrom(c, d, 6); return !t || t.item !== ${I('barrow')}; })()`), 'taps go past the wheelbarrow you are pushing');
@@ -204,8 +225,16 @@ check(await ev('__farm.farm.stalls[0].state.hay') < 1.8, 'Hazel eats from her ha
 await ev('__farm.player.pos.set(-0.7, 0, -6.2); __farm.look(Math.PI / 2, -0.3)');
 await shot('05-clean-stall');
 
+// in her stall behind her: lead her and walk out past her (you used to get pinned between her and the wall)
+await ev(`__farm.player.heldBy[1] && __farm.putBack(__farm.player.heldBy[1])`);
+const st0 = await ev(`(() => { const s = __farm.farm.stalls[0], h = ${H}; h.pos.set(s.front + s.side * 1.0, 0, s.center.z); h.yaw = s.side > 0 ? -Math.PI / 2 : Math.PI / 2; __farm.player.pos.set(s.front + s.side * 2.6, 0, s.center.z + 0.2); __farm.look(s.side > 0 ? Math.PI / 2 : -Math.PI / 2, 0); return s.front; })()`);
+await ev(`__farm.startLead(${H}); __farm.input = { x: 0, y: -0.6 }`); await waitGame(3); await ev('__farm.input = null');
+console.log(`       (walked out of the stall to x ${(await ev('__farm.player.pos.x')).toFixed(2)})`);
+check(await ev(`Math.abs(__farm.player.pos.x) < ${Math.abs(st0) - 0.2}`), 'you can walk out of the stall past the horse you are leading');
+await ev('__farm.letGo()');
+check(await ev(`${H}.mode`) === 'stall' && !(await ev('__farm.player.leading')), 'letting go at her stall door puts her in her stall');
 // lead her out to the hitching rail
-await ev(`__farm.player.heldBy[1] && __farm.putBack(__farm.player.heldBy[1]); __farm.startLead(${H})`);
+await ev(`__farm.startLead(${H})`);
 check(await ev(`${H}.mode`) === 'led', 'Hazel can be led on her lead rope');
 for (const [x, z] of [[0, -6.2], [0, -4], [0, -1], [3, 0.4], [5.2, 0.6]]){ await ev(`__farm.player.pos.set(${x}, 0, ${z})`); await waitGame(3); }
 check(await ev(`${H}.pos.x`) > 0.5 && await ev(`${H}.pos.z`) > -3.5, 'she follows out of the stall, through the door and down the aisle');
@@ -317,6 +346,14 @@ check(await ev('__farm.farm.horses.length') > nh || await ev('__farm.farm.animal
 const m0 = await ev('__farm.farm.state.money');
 await ev('__farm.farm.dailyPay()');
 check(await ev('__farm.farm.state.money') > m0, 'boarders pay each day for the care');
+// their stay is over: the owner comes back, and you can give the animal back from its own panel
+const bid = await ev('(() => { const c = [...__farm.farm.horses, ...__farm.farm.animals].find((x) => x.data.owner); c.data.owner.daysLeft = 0; return c.data.id; })()');
+await ev('__farm.farm.morningVisitors()');
+check(await ev(`!!__farm.farm.pickupFor(${JSON.stringify(bid)})`), 'the owner comes back to collect their animal');
+check(await ev(`__farm.farm.jobs().some((j) => / back: tap /.test(j.text))`), 'the jobs list says how to give it back');
+await ev(`(() => { const id = ${JSON.stringify(bid)}, h = __farm.farm.horseById(id); if (h) __farm.horsePanel(h); else __farm.animalPanel(__farm.farm.creatureById(id)); })()`);
+const gave = await ev(`(() => { const b = [...document.querySelectorAll('#panel button')].find((x) => /back/.test(x.textContent)); if (!b) return false; b.click(); return true; })()`);
+check(gave && await ev(`!__farm.farm.creatureById(${JSON.stringify(bid)})`), 'Give back on the animal\'s own panel hands it over to the owner');
 
 // ---------- the shop and the horse market ----------
 const m1 = await ev('__farm.farm.state.money');
