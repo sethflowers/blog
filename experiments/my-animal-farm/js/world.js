@@ -374,7 +374,7 @@ function buildBarn(B, F, root, world, M){
         B.box(Math.abs(xb - xa), 0.08, 0.1, M.metal, xc, 1.42, z);
         B.box(Math.abs(xb - xa), 0.06, 0.08, M.metal, xc, 2.3, z);
         for (let i = 1; i < 16; i++) B.box(0.022, 0.86, 0.022, M.metal, xa + (xb - xa) * i / 16, 1.86, z);
-        addBox(xa, xb, z - 0.08, z + 0.08, 2.3);
+        addBox(xa, xb, z - 0.08, z + 0.08, 2.3, 'stall');
       }
       // front onto the aisle, with a sliding door (left open a bit when a horse is out)
       const front = xa + s * 0.03;
@@ -384,7 +384,7 @@ function buildBarn(B, F, root, world, M){
         B.box(0.08, 0.06, Math.abs(z1s - z0s), M.metal, front, 2.3, (z0s + z1s) / 2);
         const n = Math.round(Math.abs(z1s - z0s) / 0.1);
         for (let i = 1; i < n; i++) B.box(0.022, 0.96, 0.022, M.metal, front, 1.82, z0s + (z1s - z0s) * i / n);
-        addBox(front - 0.06, front + 0.06, Math.min(z0s, z1s), Math.max(z0s, z1s), 2.3);
+        addBox(front - 0.06, front + 0.06, Math.min(z0s, z1s), Math.max(z0s, z1s), 2.3, 'stall');
       }
       B.box(0.08, 0.06, 4.2, M.metal, front + s * 0.05, 2.42, zc - 0.9);  // door track
       const door = new THREE.Group();

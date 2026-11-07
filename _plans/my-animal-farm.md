@@ -137,3 +137,20 @@ simulation faster (`__farm.timeScale`).
   sink, stove), a table and chairs, a living room (sofa, rug, bookcase), and your bedroom at the back.
   Tap the bed (or point at it in VR) to sleep from 6pm; you wake up there. Warm lamps inside; the
   windows show daylight by day and go dark at night.
+
+## v1.5
+- The wheelbarrow carries up to four things as well as muck: tools, hay flakes, bags of shavings.
+  While you push it, whatever you put down (the button says "Put in barrow") or swap for another tool
+  goes in the barrow; tap a thing in it to take it out. In VR, let go of something over the tray.
+- You can't get stuck any more: a new touch on the thumb stick always takes it over (a lost touch-end
+  used to leave it dead), touches and keys are forgotten when you switch apps, horses push you before
+  walls do (they used to pin you against stall walls), the horse you're leading doesn't block you,
+  and if you're pushing but not moving for half a second, horses let you slip past. The barrow can't
+  be pushed further into a wall but never pins you.
+- Leading out of a stall: the led horse slips through stall doorways instead of snagging on the posts.
+- Letting go always does something: at a stall door she goes in her stall, near or in the paddock she
+  goes in it, at the rail she's tied, otherwise she stands loose and you're told so. In VR letting go
+  of the rope works even with a panel open.
+- Owners collecting animals: the message and jobs list say who has come for which animal and how to
+  give it back; the animal's own panel has "Give back to …"; the office lists everyone waiting by the
+  house with a button each. People collecting are shown first by the house.

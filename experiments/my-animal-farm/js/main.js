@@ -165,10 +165,23 @@ function castFrom(origin, dir, far = 8){
 const handsVR = [new Hand('left'), new Hand('right')];
 const held = (i = 1) => player.heldBy ? player.heldBy[i] : null;
 player.heldBy = [null, null];
+function barrowHandy(){
+  // is the wheelbarrow with you? (you're pushing it, or it's right next to you)
+  const b = care.items.barrow;
+  return player.barrow === b || Math.hypot(b.mesh.position.x - player.pos.x, b.mesh.position.z - player.pos.z) < 2.6;
+}
+function stowItem(it){
+  const i = player.heldBy.indexOf(it);
+  if (!care.stow(it)) return false;
+  if (i >= 0) player.heldBy[i] = null;
+  sfx.pickup(); updateHeldUI();
+  return true;
+}
 function pickUp(it, hand = 1){
-  // whatever's in that hand goes back
+  if (it.inBarrow) care.unstow(it);
+  // whatever's in that hand goes in the wheelbarrow if it's with you, or back where it lives
   const cur = player.heldBy[hand];
-  if (cur && cur !== it) putBack(cur);
+  if (cur && cur !== it && !(barrowHandy() && stowItem(cur))) putBack(cur);
   if (it.held != null){ const other = player.heldBy.indexOf(it); if (other >= 0) player.heldBy[other] = null; }
   player.heldBy[hand] = it; it.held = { hand }; it.homeNow = false; it.onFloor = false;
   if (it.kind !== 'barrow'){
@@ -227,7 +240,7 @@ function hintFor(it){
     saddle: 'Saddle: goes on top of the pad, then do up the girth.',
     bridle: 'Bridle: put it over the horse\'s head.',
     fork: 'Manure fork: lift droppings and wet bedding into the wheelbarrow.',
-    barrow: mode === 'vr' ? 'Wheelbarrow: hold both handles (grip) and walk. Wheel it up to the muck heap behind the barn and it tips out.' : 'Pushing the wheelbarrow: it rolls along in front of you. Park it by a stall, pick up the fork and tap the muck. When it\'s full, push it out the back door to the muck heap and it tips out. Let go with the button at the bottom.',
+    barrow: mode === 'vr' ? 'Wheelbarrow: hold the handles (grip) and walk. Let go of a tool over it to carry it in the barrow. Wheel it up to the muck heap behind the barn and it tips out.' : 'Pushing the wheelbarrow. Fork muck straight into it, then push it to the muck heap behind the barn to tip it. Tools you put down or swap go in the barrow too, so one trip does it; tap one to take it out.',
     bucket: 'Water bucket: fill it at the tap in the feed room.',
     scoop: 'Feed scoop: fill it from a feed bin.',
     flake: 'A flake of hay: put it in a horse\'s hay rack or the goat/sheep feeder.',
@@ -260,16 +273,26 @@ function startLead(h){
 function letGo(){
   const h = player.leading; if (!h) return;
   player.leading = null;
+  for (const x of vr) if (x.lead === h) x.lead = null;
   const p = h.pos;
-  const si = stallAt(p);
-  if (si >= 0 && (!farm.stalls[si].horse || farm.stalls[si].horse === h.data.id)){
+  const him = (t) => (h.data.sex === 'mare' ? t : t.replace(/\bher\b/g, 'him').replace(/\bshe\b/g, 'he').replace(/\bShe\b/g, 'He'));
+  // a stall: the one she's in, the one you're in, or the one whose doorway she's standing at
+  let si = stallAt(p);
+  if (si < 0) si = stallAt(player.pos);
+  if (si < 0){ let bd = 1.9; farm.stalls.forEach((s, i) => { const d = Math.hypot(s.front - p.x, s.center.z - p.z); if (d < bd){ bd = d; si = i; } }); }
+  if (si >= 0 && farm.stalls[si].horse && farm.stalls[si].horse !== h.data.id) si = -1;
+  if (si >= 0){
     if (h.stall && h.data.stall !== si) h.stall.horse = null;
-    h.toStall(si); farm.say(`${h.data.name} is in stall ${si + 1}.`, 'hint'); return;
+    h.toStall(si); farm.say(`${h.data.name} is in stall ${si + 1}.`, 'hint'); updateHeldUI(); return;
   }
-  if (inBox(p, PADDOCK, -0.5)){ h.toPaddock(); farm.say(`${h.data.name} is out in the paddock.`, 'hint'); sfx.whinny(h.model.muzzle()); return; }
-  if (p.distanceTo(PLACES.rail) < 3.5){ tieAtRail(h); return; }
-  h.mode = 'loose'; h.data.place = 'loose'; h.leader = null;
-  farm.say(`${h.data.name} is standing loose. Tie her up at the rail or put her in a stall.`.replace(/her/g, h.data.sex === 'mare' ? 'her' : 'him'), 'hint');
+  if (inBox(p, PADDOCK, -0.5) || inBox(player.pos, PADDOCK, -0.5) || p.distanceTo(PLACES.paddockGate) < 2.5){
+    if (!inBox(p, PADDOCK, -1.2)){ p.x = clamp(p.x, PADDOCK.x0 + 1.5, PADDOCK.x1 - 1.5); p.z = clamp(p.z, PADDOCK.z0 + 1.5, PADDOCK.z1 - 1.5); }
+    h.toPaddock(); farm.say(`${h.data.name} is out in the paddock.`, 'hint'); sfx.whinny(h.model.muzzle()); updateHeldUI(); return;
+  }
+  if (p.distanceTo(PLACES.rail) < 3.5 || player.pos.distanceTo(PLACES.rail) < 3){ tieAtRail(h); updateHeldUI(); return; }
+  h.mode = 'loose'; h.data.place = 'loose'; h.leader = null; h.speed = 0;
+  farm.say(him(`You let go of ${h.data.name}. She's standing loose here: lead her to a stall, the paddock or the hitching rail to put her away.`), 'hint');
+  updateHeldUI();
 }
 function tieAtRail(h){
   const taken = farm.horses.filter((x) => x !== h && x.mode === 'tied').map((x) => x.tie.pos.x);
@@ -318,6 +341,8 @@ function horsePanel(h){
   const B = BREEDS[D.breed];
   const buttons = [];
   const ridingThis = riding.horse === h;
+  const pickup = farm.pickupFor(D.id);
+  if (pickup) buttons.push({ label: `Give ${D.name} back to ${pickup.who}`, kind: 'primary', go: () => { closePanel(); handOver(pickup); } });
   if (!ridingThis){
     if (player.leading === h) buttons.push({ label: 'Let go here', go: () => { closePanel(); letGo(); } });
     else buttons.push({ label: h.mode === 'stall' ? 'Lead out' : 'Lead', kind: 'primary', go: () => { closePanel(); startLead(h); } });
@@ -341,18 +366,28 @@ function horsePanel(h){
 function animalPanel(a){
   const D = a.data;
   const btns = [{ label: 'Pet', kind: 'primary', go: () => { D.happy = Math.min(100, D.happy + 5); sfx.bleat(a.pos, a.kind); closePanel(); } }];
+  const pickup = farm.pickupFor(D.id);
+  if (pickup) btns.unshift({ label: `Give back to ${pickup.who}`, kind: 'primary', go: () => { closePanel(); handOver(pickup); } });
   showPanel({ title: `${D.name} the ${SPECIES[a.kind].name.toLowerCase()}`, sections: [
     { text: D.owner ? `Boarding for ${D.owner.who} (${D.owner.daysLeft} more days).` : `One of your ${a.kind === 'chicken' ? 'hens' : a.kind + 's'}.` },
     { bars: [['Food', D.food], ['Water', D.water], ['Happiness', D.happy], ['Health', D.health], ...(a.kind === 'sheep' ? [['Fleece', D.wool * 100]] : [])] },
     { buttons: btns },
   ] });
 }
+// giving a boarder's animal back to its owner (from the owner, the animal's panel, or the office)
+function handOver(o){
+  const h = farm.horseById(o.pickup);
+  if (h && riding.horse === h) riding.dismount();
+  if (h && player.leading === h) letGo();
+  farm.acceptOffer(o);
+  updateHeldUI();
+}
 function visitorPanel(o){
   if (!o) return;
   if (o.pickup){
     const h = farm.horseById(o.pickup), a = farm.animals.find((x) => x.data.id === o.pickup), D = (h || a).data;
     const avg = (D.owner.scores || []).reduce((x, y) => x + y, 0) / Math.max(1, (D.owner.scores || []).length);
-    showPanel({ title: o.who, sections: [{ text: `"I've come to collect ${D.name}. How did it go?" They paid ${fmtMoney(D.owner.paid || 0)} so far; your care score is ${Math.round(avg * 100)}%. Great care earns a tip.` }, { buttons: [{ label: `Hand over ${D.name}`, kind: 'primary', go: () => { closePanel(); farm.acceptOffer(o); } }] }] });
+    showPanel({ title: o.who, sections: [{ text: `"I've come to collect ${D.name}. How did it go?" They paid ${fmtMoney(D.owner.paid || 0)} so far; your care score is ${Math.round(avg * 100)}%. Great care earns a tip.` }, { buttons: [{ label: `Hand over ${D.name}`, kind: 'primary', go: () => { closePanel(); handOver(o); } }] }] });
     return;
   }
   const what = o.kind === 'horse' ? `my ${BREEDS[o.horse.breed].name.toLowerCase()} ${o.horse.name}` : `my ${o.n} ${o.kind === 'chicken' ? 'hens' : o.kind + (o.n > 1 ? 's' : '')}`;
@@ -392,7 +427,8 @@ function office(tab = officeTab){
   }
   if (tab === 'animals'){
     secs.push({ heading: 'Buy animals', rows: Object.entries(SPECIES).map(([k, sp]) => { const pen = farm.pens.find((p) => p.kind === k); return { title: sp.name, sub: `${pen.list.length}/${farm.penCapacity(k)} in the pen · eats ${sp.food}`, button: { label: fmtMoney(sp.price), disabled: S.money < sp.price || pen.list.length >= farm.penCapacity(k), go: () => { farm.buyAnimal(k); refreshPanel(() => office('animals')); } } }; }) });
-    secs.push({ heading: 'Boarders', text: farm.offers.length ? `${farm.offers.map((o) => o.who).join(', ')} waiting by the house.` : 'Customers come by in the morning to ask if you can look after their animals. Good care means more pay and tips.' });
+    if (farm.offers.length) secs.push({ heading: 'Waiting by the house', rows: farm.offers.map((o) => { const c = o.pickup ? farm.creatureById(o.pickup) : null; return { title: o.who, sub: c ? `Here to collect ${c.data.name}` : `Would like you to look after their ${o.kind === 'horse' ? 'horse' : o.kind === 'chicken' ? 'hens' : o.kind + (o.n > 1 ? 's' : '')}`, button: { label: c ? `Give back ${c.data.name}` : 'Talk', go: () => { if (c){ closePanel(); handOver(o); } else refreshPanel(() => visitorPanel(o)); } } }; }) });
+    else secs.push({ heading: 'Boarders', text: 'Customers come by in the morning to ask if you can look after their animals. Good care means more pay and tips.' });
   }
   if (tab === 'shows'){
     const why = riding.showOpen();
@@ -515,8 +551,8 @@ function stickZone(x, y){ return x < window.innerWidth * 0.42 && y > window.inne
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (mode !== 'screen' || paused) return;
   startAudio();
-  renderer.domElement.setPointerCapture(e.pointerId);
-  if (e.pointerType !== 'mouse' && touch.stickId == null && stickZone(e.clientX, e.clientY)){
+  try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+  if (e.pointerType !== 'mouse' && stickZone(e.clientX, e.clientY)){
     touch.stickId = e.pointerId; touch.stick = { x0: e.clientX, y0: e.clientY, x: 0, y: 0 };
     stickEl.style.left = (e.clientX - 60) + 'px'; stickEl.style.top = (e.clientY - 60) + 'px'; stickEl.classList.add('on');
     return;
@@ -562,7 +598,17 @@ const endPointer = (e) => {
   if (L.moved < 12 && performance.now() - L.t < 500) tap(e.clientX, e.clientY);
 };
 renderer.domElement.addEventListener('pointerup', endPointer);
-renderer.domElement.addEventListener('pointercancel', (e) => { touch.look.delete(e.pointerId); if (e.pointerId === touch.stickId){ touch.stickId = null; touch.stick = null; stickEl.classList.remove('on'); } });
+function releaseStick(){ touch.stickId = null; touch.stick = null; stickEl.classList.remove('on'); knobEl.style.transform = ''; }
+const cancelPointer = (e) => { touch.look.delete(e.pointerId); if (e.pointerId === touch.stickId) releaseStick(); };
+renderer.domElement.addEventListener('pointercancel', cancelPointer);
+renderer.domElement.addEventListener('lostpointercapture', (e) => { if (e.pointerId === touch.stickId) releaseStick(); });
+// a touch that ends somewhere else (over a button, or outside the page) still lets go of the stick
+addEventListener('pointerup', cancelPointer);
+addEventListener('pointercancel', cancelPointer);
+// switching apps or tabs: forget every touch and key that was down
+const resetInput = () => { releaseStick(); touch.look.clear(); touch.keys = {}; };
+addEventListener('blur', resetInput);
+document.addEventListener('visibilitychange', () => { if (document.hidden) resetInput(); });
 addEventListener('keydown', (e) => {
   touch.keys[e.code] = true;
   if (mode !== 'screen') return;
@@ -578,7 +624,7 @@ addEventListener('keyup', (e) => { touch.keys[e.code] = false; });
 // on-screen buttons
 $('b-menu').onclick = () => { if (!paused) office(); };
 $('b-jobs').onclick = () => { if (!paused) office('jobs'); };
-$('b-drop').onclick = () => { const it = player.heldBy[1]; if (it) putBack(it); else if (player.barrow){ player.barrow = null; farm.say('Left the wheelbarrow here.', 'hint'); } updateHeldUI(); };
+$('b-drop').onclick = () => { const it = player.heldBy[1]; if (it){ if (!(player.barrow && stowItem(it))) putBack(it); } else if (player.barrow){ player.barrow = null; farm.say('Left the wheelbarrow here.', 'hint'); } updateHeldUI(); };
 $('b-lead').onclick = () => { if (player.leading) letGo(); };
 $('b-up').onclick = () => { riding.input.up = true; };
 $('b-down').onclick = () => { riding.input.down = true; };
@@ -637,6 +683,9 @@ function vrHands(dt){
     h.vel.subVectors(h.pos, h.prev).divideScalar(Math.max(dt, 1e-3));
     const it = player.heldBy[h.i];
     H.pose(it || h.lead ? 1 : h.squeeze, it || h.lead ? 0.9 : Math.max(0.1, h.trigger));
+    // letting go of a lead rope always works, even with a panel open
+    if (h.squeezeUp && h.lead){ h.lead = null; if (player.leading) letGo(); continue; }
+    if (h.lead && player.leading !== h.lead) h.lead = null;
     if (vrPanel.open || riding.horse) continue;
     // grab
     if (h.squeezeDown && !it && !h.lead){
@@ -716,6 +765,8 @@ function vrRelease(h, it){
     for (const [i, pen] of farm.pens.entries()) if (p.distanceTo(pen.feedPos.clone().setY(0.4)) < 0.9){ if (care.use(it, { type: 'feeder', pen: i, point: p })){ player.heldBy[h.i] = null; return; } }
   }
   if (it.kind === 'bag'){ const si = stallAt(p); if (si >= 0 && care.use(it, { type: 'stall', stall: si, point: p })){ player.heldBy[h.i] = null; return; } }
+  const tray = care.items.barrow.mesh.localToWorld(V(0, 0.6, 0));
+  if (it.mesh.getWorldPosition(V()).distanceTo(tray) < 0.75 && stowItem(it)){ h.haptic(0.3, 30); return; }
   dropHere(it);
 }
 function vrContact(h, it, dt){
@@ -779,26 +830,45 @@ function moveOnFoot(dt, mx, my, yaw){
   player.vel.lerp(want, Math.min(1, dt * 10));
   const before = player.pos.clone();
   player.pos.addScaledVector(player.vel, dt);
+  // horses first (except the one you're leading: you can squeeze past her), then walls, so a horse
+  // can never shove you into a wall and pin you there
+  const ghost = player.ghostT > 0;
+  if (!ghost) for (const h of farm.horses){
+    if (!h.root.visible || h === riding.horse || h === player.leading) continue;
+    const fx = Math.sin(h.yaw), fz = Math.cos(h.yaw);
+    for (const o of [-0.6, 0, 0.6]){ const cx = h.pos.x + fx * o * h.model.scale, cz = h.pos.z + fz * o * h.model.scale, dx = player.pos.x - cx, dz = player.pos.z - cz, d = Math.hypot(dx, dz), r = 0.33 * h.model.scale + 0.25; if (d < r && d > 1e-4){ player.pos.x = cx + dx / d * r; player.pos.z = cz + dz / d * r; } }
+  }
   pushOut(player.pos, 0.28, { ignore: ignoreCol });
   if (player.barrow && mode === 'screen'){
-    // the wheelbarrow in front of you can't go through walls either: if it bumps one, you stop
-    const fwd = V(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-    const bp = player.pos.clone().addScaledVector(fwd, BARROW_AHEAD), q = bp.clone();
-    pushOut(q, 0.3, { ignore: ignoreCol });
-    player.pos.x += q.x - bp.x; player.pos.z += q.z - bp.z;
-    pushOut(player.pos, 0.28, { ignore: ignoreCol });
+    // the wheelbarrow in front of you can't be pushed further into a wall: you slide along it or stop
+    const p0 = barrowInWall(before);
+    if (barrowInWall(player.pos) > p0 + 1e-3){
+      const tx = V(player.pos.x, 0, before.z), tz = V(before.x, 0, player.pos.z);
+      if (barrowInWall(tx) <= p0 + 1e-3) player.pos.copy(tx); else if (barrowInWall(tz) <= p0 + 1e-3) player.pos.copy(tz); else player.pos.copy(before);
+      pushOut(player.pos, 0.28, { ignore: ignoreCol });
+    }
   }
-  // don't walk through horses
-  for (const h of farm.horses){ if (!h.root.visible || h === riding.horse) continue; const fx = Math.sin(h.yaw), fz = Math.cos(h.yaw); for (const o of [-0.6, 0, 0.6]){ const cx = h.pos.x + fx * o * h.model.scale, cz = h.pos.z + fz * o * h.model.scale, dx = player.pos.x - cx, dz = player.pos.z - cz, d = Math.hypot(dx, dz), r = 0.33 * h.model.scale + 0.25; if (d < r && d > 1e-4){ player.pos.x = cx + dx / d * r; player.pos.z = cz + dz / d * r; } } }
+  // stuck (pushing but not getting anywhere)? let horses stop blocking you for a moment
+  const movedNow = before.distanceTo(player.pos);
+  if (Math.hypot(mx, my) > 0.3 && movedNow < dt * 0.3) player.stuckT = (player.stuckT || 0) + dt; else player.stuckT = 0;
+  if (player.stuckT > 0.5){ player.ghostT = 1.5; player.stuckT = 0; }
+  player.ghostT = (player.ghostT || 0) - dt;
   const moved = before.distanceTo(player.pos);
   player.stepT = (player.stepT || 0) + moved;
   if (player.stepT > 0.75){ player.stepT = 0; sfx.step(player.pos, groundAt(player.pos)); }
 }
 // ---------- the wheelbarrow ----------
 const BARROW_AHEAD = 1.1;
+function barrowInWall(p){
+  // how far the barrow (in front of you at p) is inside a wall
+  const bp = V(p.x - Math.sin(player.yaw) * BARROW_AHEAD, 0, p.z - Math.cos(player.yaw) * BARROW_AHEAD), q = bp.clone();
+  pushOut(q, 0.3, { ignore: ignoreCol });
+  return Math.hypot(q.x - bp.x, q.z - bp.z);
+}
 function barrowFollow(dt){
   const b = player.barrow.mesh, fwd = V(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   const want = V(player.pos.x + fwd.x * BARROW_AHEAD, 0, player.pos.z + fwd.z * BARROW_AHEAD);
+  pushOut(want, 0.3, { ignore: ignoreCol });
   const k = Math.min(1, dt * 14);
   b.position.lerp(want, k);
   b.rotation.order = 'YXZ';
@@ -886,10 +956,10 @@ function updateHUD(){
   if (sh.state !== 'idle') $('h-show').textContent = sh.state === 'entered' ? `${sh.cls.name}: ride through the red posts to start` : `${sh.cls.name} · ${sh.time.toFixed(1)}s / ${sh.cls.time}s · faults ${sh.faults} · next: ${sh.next < 8 ? sh.next + 1 : 'finish'}`;
 }
 function updateHeldUI(){
-  const it = player.heldBy[1];
+  const it = player.heldBy[1], cargo = care.cargo().length;
   $('held').style.display = it || player.barrow ? 'flex' : 'none';
-  $('held-name').textContent = it ? it.name + (it.kind === 'bucket' ? ` (${Math.round(it.water)} L)` : it.kind === 'scoop' && it.amount ? ` (${it.content === 'pigfeed' ? 'pig feed' : it.content})` : it.kind === 'fork' && it.load ? ' (loaded)' : '') + (player.barrow ? ` + wheelbarrow (${player.barrow.load}/14)` : '') : player.barrow ? `Wheelbarrow (${player.barrow.load} of 14 forkfuls)` : '';
-  $('b-drop').textContent = it ? 'Put back' : 'Let go';
+  $('held-name').textContent = it ? it.name + (it.kind === 'bucket' ? ` (${Math.round(it.water)} L)` : it.kind === 'scoop' && it.amount ? ` (${it.content === 'pigfeed' ? 'pig feed' : it.content})` : it.kind === 'fork' && it.load ? ' (loaded)' : '') + (player.barrow ? ` + wheelbarrow (${player.barrow.load}/14${cargo ? `, ${cargo} in it` : ''})` : '') : player.barrow ? `Wheelbarrow (${player.barrow.load} of 14 forkfuls${cargo ? ` · carrying ${care.cargo().map((c) => c.name.toLowerCase()).join(', ')}` : ''})` : '';
+  $('b-drop').textContent = it ? (player.barrow ? 'Put in barrow' : 'Put back') : 'Let go';
   $('b-lead').style.display = player.leading ? 'block' : 'none';
   if (player.leading) $('b-lead').textContent = `Let go of ${player.leading.data.name}`;
 }
@@ -1191,7 +1261,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) farm.
 window.__farm = {
   get mode(){ return mode; }, farm, care, riding, world, player, renderer, camera, scene, settings, vr, vrPanel, screenUI, rig, sky, classes: CLASSES,
   timeScale: 1, noRender: false, input: null,
-  startScreen, startVR, office, horsePanel, closePanel, tap, handleTap, pickUp, putBack, startLead, letGo, tieAtRail, activate, castFrom, resolve, takeFrom, collectEggs,
+  startScreen, startVR, office, horsePanel, animalPanel, closePanel, handOver, touch, tap, handleTap, pickUp, putBack, startLead, letGo, tieAtRail, activate, castFrom, resolve, takeFrom, collectEggs,
   get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
   look(yaw, pitch){ player.yaw = yaw; player.pitch = pitch; },
   // tap whatever is at a world point (projects it to the screen first)

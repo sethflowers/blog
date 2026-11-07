@@ -167,6 +167,8 @@ export class Horse {
           // in and out of stalls: go through the doorway, not the wall
           const inS = stallAt(this.pos), leadS = stallAt(lp);
           const st = inS >= 0 ? this.farm.stalls[inS] : leadS >= 0 ? this.farm.stalls[leadS] : null;
+          // going through a stall doorway, the stall's walls and door don't catch on her
+          this.viaDoor = !!(st && inS !== leadS) || (inS >= 0 && Math.abs(this.pos.x - this.farm.stalls[inS].front) < 1.6);
           if (st && inS !== leadS){
             const out = V(st.front - st.side * 1.1, 0, st.center.z), inn = V(st.front + st.side * 0.9, 0, st.center.z);
             const offLine = Math.abs(this.pos.z - st.center.z) > 0.35;
@@ -209,7 +211,7 @@ export class Horse {
       const s = this.model.scale;
       const pts = [0, 0.75 * s, -0.75 * s].map((o) => V(this.pos.x + fx * o, 0, this.pos.z + fz * o));
       let cx = 0, cz = 0;
-      for (const p of pts){ const q = p.clone(); pushOut(q, 0.36 * s, { ignore: this.ignoreCollider }); cx += q.x - p.x; cz += q.z - p.z; }
+      for (const p of pts){ const q = p.clone(); pushOut(q, 0.36 * s, { ignore: (c) => (this.ignoreCollider && this.ignoreCollider(c)) || (this.mode === 'led' && this.viaDoor && (c.kind === 'stall' || c.kind === 'door')) }); cx += q.x - p.x; cz += q.z - p.z; }
       if (cx || cz){ this.pos.x += cx; this.pos.z += cz; this.bumped = true; } else this.bumped = false;
     }
     this.neck = neck; this.headYaw = headYaw;
@@ -602,13 +604,19 @@ export class Farm {
       S.nextOfferDay = S.day + 1;
     }
     this.spawnVisitors();
-    if (this.offers.length) this.say(`${this.offers[0].who} has arrived by the house.`);
+    for (const o of this.offers){
+      const c = o.pickup ? this.creatureById(o.pickup) : null;
+      if (c) this.say(`${o.who} has come to collect ${c.data.name}. Give ${c.data.name} back by tapping ${o.who} (by the house) or ${c.data.name}.`);
+      else if (!o.pickup) this.say(`${o.who} has arrived by the house and would like a word.`);
+    }
   }
   // people (and their trailer) waiting by the house
   spawnVisitors(){
     for (const v of this.visitors){ this.scene.remove(v.person.root); if (v.trailer) this.scene.remove(v.trailer); if (v.horse) this.scene.remove(v.horse.root); }
     this.visitors = [];
-    this.offers.slice(0, 2).forEach((o, k) => {
+    // people collecting their animals first: they're the ones you mustn't keep waiting
+    this.offers.sort((a, b) => (b.pickup ? 1 : 0) - (a.pickup ? 1 : 0));
+    this.offers.slice(0, 3).forEach((o, k) => {
       const p = new Person({ seed: hashStr(o.who) });
       p.root.position.set(PLACES.dropoff.x - k * 3, 0, PLACES.dropoff.z); p.root.rotation.y = Math.PI * 0.9;
       p.root.traverse((m) => { if (m.isMesh) m.userData.visitor = o.id; });
@@ -656,6 +664,8 @@ export class Farm {
     return true;
   }
   declineOffer(o){ this.offers = this.offers.filter((x) => x !== o); this.spawnVisitors(); this.say(`${o.who} drove off.`); }
+  creatureById(id){ return this.horseById(id) || this.animals.find((x) => x.data.id === id) || null; }
+  pickupFor(id){ return this.offers.find((o) => o.pickup === id) || null; }
   removeCreature(x){
     const S = this.state;
     if (x instanceof Horse){
@@ -763,7 +773,12 @@ export class Farm {
       if (p.kind === 'chicken' && p.saved.eggs > 0) J.push({ text: `Collect ${p.saved.eggs} egg${p.saved.eggs > 1 ? 's' : ''} from the coop`, done: false, where: 'pens' });
       if (p.kind === 'sheep' && p.list.some((a) => a.data.wool > 0.8)) J.push({ text: 'Shear the sheep (shears hang on the pen gate)', done: false, where: 'pens' });
     }
-    if (this.offers.length) J.unshift({ text: `${this.offers[0].who} is waiting by the house`, done: false, where: 'house' });
+    for (const o of [...this.offers].reverse()){
+      const c = o.pickup ? this.creatureById(o.pickup) : null;
+      J.unshift(o.pickup && c
+        ? { text: `${o.who} wants ${c.data.name} back: tap ${o.who} by the house, or tap ${c.data.name} and choose Give back`, done: false, where: 'house' }
+        : { text: `${o.who} is waiting by the house (tap them to talk)`, done: false, where: 'house' });
+    }
     if (isShowDay(S.day) && S.minutes < 17 * 60 && !S.shows[S.day]) J.push({ text: 'Show day! Tack up and ride to the show grounds (9am–5pm)', done: false, where: 'show' });
     void morning; void evening;
     return J;

@@ -138,6 +138,7 @@ function build(kind){
 }
 
 // ---------- items: where they live, how they're held ----------
+const STOW_SLOTS = [[-0.16, 0.62, 0.22], [0.16, 0.62, 0.22], [-0.16, 0.62, -0.12], [0.16, 0.62, -0.12]];
 const DEFS = {
   curry:    { name: 'Curry comb', home: V(2.25, 0.3, GB.z), homeRot: [0, 0, 0] },
   brush:    { name: 'Body brush', home: V(2.45, 0.3, GB.z), homeRot: [0, 0, 0] },
@@ -218,6 +219,7 @@ export class Care {
   }
   home(it){
     if (it.held) this.release(it);
+    if (it.inBarrow) this.unstow(it);
     it.mesh.position.copy(it.home); it.mesh.rotation.set(...it.homeRot); it.onFloor = false; it.homeNow = true;
     this.refreshItem(it);
   }
@@ -232,6 +234,29 @@ export class Care {
   pickables(){ return [...Object.values(this.items), ...this.temp]; }
   release(it){ if (it.held){ it.held.item = null; it.held = null; } }
 
+  // the wheelbarrow carries up to four things (tools, flakes, bags of shavings) as well as muck
+  cargo(){ return this.pickables().filter((x) => x.inBarrow); }
+  stow(it){
+    const b = this.items.barrow;
+    if (it === b || it.inBarrow || it.onHorse) return false;
+    const cargo = this.cargo();
+    if (cargo.length >= STOW_SLOTS.length){ this.hint('The wheelbarrow is full of things already.'); return false; }
+    this.release(it);
+    const slot = STOW_SLOTS.findIndex((_, k) => !cargo.some((c) => c.slot === k));
+    it.inBarrow = true; it.slot = slot; it.homeNow = false; it.onFloor = false; it.fallV = 0;
+    b.mesh.add(it.mesh);
+    const [x, y, z] = STOW_SLOTS[slot];
+    if (it.kind === 'fork'){ it.mesh.position.set(x * 0.6, 0.66, -0.1); it.mesh.rotation.set(-(Math.PI / 2 - 0.3), 0, 0); }
+    else if (it.kind === 'saddle' || it.kind === 'bag'){ it.mesh.position.set(x, y + 0.08, z); it.mesh.rotation.set(0, Math.PI / 2, 0); }
+    else { it.mesh.position.set(x, y, z); it.mesh.rotation.set(it.kind === 'hoofpick' || it.kind === 'shears' ? Math.PI / 2 : 0, slot * 0.8, 0); }
+    return true;
+  }
+  unstow(it){
+    if (!it.inBarrow) return;
+    it.inBarrow = false; it.slot = null;
+    this.scene.attach(it.mesh);
+  }
+
   // a temporary item: a flake of hay, a carrot, a bag of shavings
   makeTemp(kind){
     const mesh = build(kind);
@@ -240,7 +265,7 @@ export class Care {
     this.scene.add(mesh); this.temp.push(it);
     return it;
   }
-  dropTemp(it){ this.release(it); it.mesh.removeFromParent(); this.temp = this.temp.filter((x) => x !== it); this.onDropTemp && this.onDropTemp(it); }
+  dropTemp(it){ this.release(it); it.inBarrow = false; it.mesh.removeFromParent(); this.temp = this.temp.filter((x) => x !== it); this.onDropTemp && this.onDropTemp(it); }
 
   // ---------- sources: where things come from ----------
   takeFlake(){
@@ -470,7 +495,7 @@ export class Care {
     }
     // things left on the floor settle on it
     for (const it of this.pickables()){
-      if (it.held || it.homeNow || it.kind === 'barrow') continue;
+      if (it.held || it.homeNow || it.inBarrow || it.kind === 'barrow') continue;
       if (it.mesh.position.y > 0.08){ it.fallV = (it.fallV || 0) + 9.8 * dt; it.mesh.position.y = Math.max(0.08, it.mesh.position.y - it.fallV * dt); }
       else it.fallV = 0;
       // lost? (dropped far away) send it home
