@@ -1,0 +1,83 @@
+# Rollercoaster Bros
+
+Build your own rollercoaster, ride it, and earn money from the people who come to ride it. Plays on an
+iPad (or any screen) and in VR (WebXR in a headset's browser, e.g. a Quest) from the same page.
+
+Same shape as My Animal Farm and VR Test: one page (`_experiments/rollercoaster-bros.html`) that is
+mostly the title screen and the HUD, ES modules in `experiments/rollercoaster-bros/js/`, three.js r180
+in `experiments/rollercoaster-bros/lib/`, a manifest, a service worker and icons
+(`_tools/rollercoaster-bros/icons.mjs` draws them). Every script address carries the version (`?v=`).
+
+## The land (park.js)
+
+Flat grass to the horizon, no trees. The station (a platform with a striped roof) sits in the middle,
+facing north; the queue (a switchback with rails) is beside it, a path leads to the entrance gate in
+the south, and riders leave down steps at the north end and walk back along the exit path. Benches,
+lamps, flower beds, a "QUEUE HERE" sign and a ticket price sign that changes with the ticket.
+
+## Track (track.js)
+
+- The ground is a grid of 8 m tiles; heights come in 4 m levels (0 to 6). Every piece starts and ends
+  on a grid point, level and upright, facing N/E/S/W, so any piece fits after any other.
+- Pieces: straight; left and right turns (8 m radius); wide turns (16 m); hill up / down (one level);
+  steep climb / big drop (two levels); loop-the-loop (13 m tall, swings 3.5 m sideways at the bottom so it
+  misses itself); barrel roll (the track turns round the riders' hearts); jump (a kicker, a gap with no
+  track, and a landing).
+- Each piece is a path in its own frame (forward, right, up) plus a roll. Placed in the world it is
+  sampled, given "up" by a rotation-minimising frame (so loops turn riders upside down by themselves),
+  any leftover twist is spread along the piece so it ends upright, then banking and rolls are added.
+  Rails, the spine and the ties are swept along it; supports go down to the ground every 5.5 m where the
+  track is upright and nothing is underneath.
+- Pieces can't overlap: each one marks the half-tile cells it passes over with the heights it uses, and
+  a new piece is refused if it comes within 3.4 m (up or down) of track already there, or of the station
+  and the queue. It can't go below the ground, above level 6, or out of the park (20 tiles each way).
+- The track is finished when it comes back to the station's back end at ground level, facing north.
+  **Finish** searches (A*, over grid points, with what you own) for the way back and lays it one piece
+  at a time. Undo takes the last piece off; Clear starts again.
+
+## The train (train.js)
+
+Three cars of four seats. The station launches it at the chosen speed (Slow 6, Gentle 9, Normal 12,
+Fast 16, Turbo 21 m/s); after that height turns into speed and back (`v² = v0² + 2·g·0.75·(station
+height − height)`, never below 3 m/s, so it always gets round), then it brakes into the station, the
+riders get off, new ones get on, and it goes again (about 5 s in the station). Changing the track sends
+the train straight back to the station.
+
+Trains: Classic Red (free), Ocean Wave, Lightning, Dragon (head, wings that flap, tail, spikes), Shark
+(fin and teeth), Rocket (nose cone, fins, flames that grow with speed), Rainbow, Golden King (with a
+crown). Riders put their hands up on the exciting bits (fast, falling, upside down, in the air).
+
+## Money and visitors
+
+Start with $200 and the starter track (straights and turns: enough for a simple loop). Track packs:
+wide turns $150, hills $300, big drops $800, loop $1,500, barrel roll $2,500, jump $4,000. Trains $300
+to $7,000. Track paint is free.
+
+The coaster gets a **Fun** rating (each piece's fun, variety, height, speed, length) and a **Scary**
+rating (speed, inversions, jumps, drops, tight turns at speed). Ticket = $2 + 2 × Fun. More fun brings
+people faster (a group every 1 to 6 seconds). Over Scary 7, some people get to the queue, say "Too
+scary for me!" and leave. People walk in from the gate, queue, board, ride, get off, sometimes say what
+they thought, and walk out.
+
+## Playing it two ways (main.js, ui.js)
+
+- **Screen**: the camera orbits the end of the track while you build (drag to turn, pinch / scroll to
+  zoom, two fingers or WASD to move). Track pieces along the bottom (locked ones show their price and
+  open the shop); on a computer, hovering shows a green or red ghost of the piece. Ride it (front seat,
+  drag to look round), Watch (a camera that chases the train), Speed (with the Fun / Scary / ticket for
+  each speed), Shop (track parts, trains, paint), Menu.
+- **VR**: you start at giant size (9×) standing over the park like a model; B switches to normal size.
+  A tablet in your left hand has the same buttons; point the right controller at it and pull the
+  trigger. Left stick walks (strides when you're a giant), right stick snap-turns, A rides (the play
+  space rides in the front seat, loops and all), X/Y hides the tablet.
+
+## Testing
+
+`_tools/rollercoaster-bros/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated
+Quest 3, installed with `npm i --prefix _tools/vr-test iwer`) and saves screenshots. About 3 minutes.
+
+## Ideas for later
+
+- More rides (a second coaster, a log flume), food stalls, a bigger park to buy.
+- Chain lift hills and launch boosters, a helix, a corkscrew, tunnels.
+- Two players: brothers building one coaster together.
