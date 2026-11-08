@@ -2,7 +2,7 @@
 title: Rollercoaster Bros
 description: Build your own rollercoaster on a big flat field, ride it (on an iPad or in VR), and earn money from the people who come to ride it. Buy hills, big drops, loops, barrel rolls and jumps, cool new trains, and set how fast it goes.
 date: 2026-11-07
-version: "1.1"
+version: "1.2"
 layout: null
 ---
 {% raw %}
@@ -43,6 +43,36 @@ layout: null
   #status{margin-top:10px;font-size:15px;opacity:.95;min-height:20px;text-shadow:0 1px 4px #000;}
   .help{margin-top:14px;font-size:13.5px;opacity:.95;line-height:1.6;text-shadow:0 1px 4px #000;}
   .help b{color:#ffe040;}
+  #t-park{margin:-8px 0 14px;font-size:17px;text-shadow:0 2px 6px rgba(0,0,0,.7);min-height:20px;}
+  #t-park b{color:#ffe040;}
+  /* the parks list and the new park form */
+  .dlg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:40;background:rgba(0,0,20,.45);padding:14px;}
+  .dlg.show{display:flex;}
+  .dbox{width:100%;max-width:520px;max-height:100%;overflow-y:auto;background:#f4f6fc;color:#1a2038;border-radius:20px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,.4);}
+  .dbox h2{font-size:24px;margin-bottom:6px;}
+  .dsub{font-size:14px;opacity:.8;margin:6px 0 12px;}
+  .dlab{display:block;font-weight:800;font-size:16px;margin:14px 0 8px;}
+  .nprow{display:flex;gap:8px;}
+  #np-name{flex:1;min-width:0;font-family:inherit;font-weight:700;font-size:20px;padding:12px 14px;border:3px solid #9aa8d0;border-radius:12px;background:#fff;color:#1a2038;}
+  #np-name:focus{outline:none;border-color:#1e4aa8;}
+  #np-dice{border:0;border-radius:12px;font-size:24px;padding:0 14px;background:#dfe6f8;}
+  .npmodes{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .npmode{display:flex;flex-direction:column;align-items:center;gap:4px;border:3px solid #c4d0ec;border-radius:16px;padding:12px 10px;background:#fff;color:#1a2038;text-align:center;}
+  .npmode span{font-size:32px;} .npmode b{font-size:18px;} .npmode small{font-size:13px;line-height:1.35;opacity:.85;}
+  .npmode.on{border-color:#2a9a4a;background:#e4f8e8;box-shadow:0 0 0 2px #2a9a4a inset;}
+  .dbtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+  .dbtns button{border:0;border-radius:12px;padding:13px 18px;font-weight:800;font-size:17px;background:#c4d0ec;color:#1a2038;}
+  .dbtns button.go{background:#2a9a4a;color:#fff;flex:1;}
+  .dbtns button:disabled{background:#b8bccc;color:#eef0f4;}
+  .prow{display:flex;align-items:center;gap:8px;padding:10px;border-radius:14px;background:#fff;margin-bottom:8px;border:3px solid transparent;}
+  .prow.on{border-color:#ffd020;background:#fffbe4;}
+  .prow .pt{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .prow .pt b{font-size:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .prow .pt small{font-size:13px;opacity:.8;}
+  .prow button{border:0;border-radius:12px;padding:10px 14px;font-weight:800;font-size:15px;background:#1e4aa8;color:#fff;}
+  .prow.on .pplay{background:#b8bccc;}
+  .prow .pdel{background:#f0d8d4;padding:10px 12px;}
+  .pempty{opacity:.75;margin:8px 0;}
   .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.8;pointer-events:none;}
   /* HUD */
   #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
@@ -131,10 +161,11 @@ layout: null
 <div id="title">
   <div class="card">
     <h1><span>Rollercoaster</span>BROS</h1>
-    <p class="sub">Build a whole theme park of coasters. Ride them. Get rich!</p>
+    <p class="sub">Build whole theme parks of coasters. Ride them. Get rich!</p>
+    <p id="t-park"></p>
     <button id="b-play" class="tbtn">Play on this screen</button>
     <button id="b-vr" class="tbtn">Enter VR</button>
-    <button id="b-new" class="tbtn second">Start a new park</button>
+    <button id="b-parks" class="tbtn second">🏞 Your theme parks</button>
     <p id="status">&nbsp;</p>
     <div class="help">
       <b>Build:</b> tap a track piece to add it to the end of your track · get back to the station to finish it<br>
@@ -144,6 +175,28 @@ layout: null
     </div>
   </div>
   <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="parks" class="dlg">
+  <div class="dbox">
+    <h2>🏞 Your theme parks</h2>
+    <p class="dsub">Pick the park to play, or build a brand new one.</p>
+    <div id="parks-list"></div>
+    <div class="dbtns"><button id="parks-new" class="go">＋ Build a new theme park</button><button id="parks-close">Done</button></div>
+  </div>
+</div>
+<div id="newpark" class="dlg">
+  <div class="dbox">
+    <h2>🎉 A new theme park</h2>
+    <label for="np-name" class="dlab">What is your park called?</label>
+    <div class="nprow"><input id="np-name" maxlength="28" autocomplete="off" enterkeyhint="done"><button id="np-dice" title="Make up a name">🎲</button></div>
+    <div class="dlab">How do you want to play?</div>
+    <div class="npmodes">
+      <button id="np-money" class="npmode"><span>💰</span><b>Earn it</b><small>Start with $200. People pay to ride, and you buy new track, trains and coasters with what you earn.</small></button>
+      <button id="np-free" class="npmode"><span>🌈</span><b>Free build</b><small>Everything is free and yours from the start. Build anything you like!</small></button>
+    </div>
+    <p class="dsub">You can't change this later, but you can always make another park.</p>
+    <div class="dbtns"><button id="np-go" class="go">Build it!</button><button id="np-cancel">Cancel</button></div>
+  </div>
 </div>
 <div id="hud">
   <div id="h-stat" class="chip"><div id="h-name"></div><div id="h-money"></div><div id="h-rate"></div></div>

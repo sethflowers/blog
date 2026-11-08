@@ -4,11 +4,12 @@
 //   NODE_PATH=$(npm root -g) node _tools/rollercoaster-bros/test.mjs [outDir]
 //
 // Serves the repo the way Jekyll would publish it (front matter stripped, version filled in). Then, on
-// screen: the title and version, the welcome, building a simple loop by hand and with Finish, the train
+// screen: the title and version, naming your first theme park, the welcome, building a simple loop by hand and with Finish, the train
 // running, visitors queueing, riding and paying, riding it yourself, watching, the speed choices, buying
 // hills / drops / a loop / a barrel roll / a jump and building with them, blocked pieces, undo, new
 // trains and paint, more coasters side by side (a theme park), saving a design and building it again,
-// saving and loading (and loading a park saved by version 1.0). Then in VR: entering a session at giant size, the tablet on the
+// the upside-down piece, saving and loading, a second park in free-build mode (everything free, track up to
+// level 12), switching and deleting parks, and loading a park saved by version 1.0. Then in VR: entering a session at giant size, the tablet on the
 // left hand, pressing a tablet button with the right-hand pointer, and riding in the front seat.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -59,6 +60,7 @@ window.__iwer.installRuntime({ forceInstall: true });
 const pg = await ctx.newPage();
 const errors = [];
 pg.on('pageerror', (e) => errors.push(e.message + ' ' + (e.stack || '').split('\n').slice(1, 4).join(' ')));
+pg.on('dialog', (d) => d.accept());
 pg.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const ev = (s) => pg.evaluate(s);
 const wait = (ms) => pg.waitForTimeout(ms);
@@ -96,11 +98,19 @@ await shot('01-title');
 
 // ---------- on screen ----------
 await ev(`document.getElementById('b-play').click()`);
+await wait(300);
+check(await ev(`document.getElementById('newpark').classList.contains('show')`) && await ev('__rcb.mode') === 'title', 'with no parks yet, Play asks you to make one');
+check(await ev(`document.getElementById('np-go').disabled`), 'you have to give it a name');
+await pg.fill('#np-name', 'Sunny Hills');
+check(!(await ev(`document.getElementById('np-go').disabled`)) && await ev(`document.getElementById('np-money').classList.contains('on')`), 'then you can build it ("earn it" is picked to start with)');
+await shot('02-new-park');
+await pg.click('#np-go');
 await wait(600);
-check(await ev('__rcb.mode') === 'screen', 'Play starts the game on the screen');
+check(await ev('__rcb.mode') === 'screen', 'Build it! starts the game on the screen');
+check(await ev('__rcb.park.state.name') === 'Sunny Hills' && !(await ev('__rcb.park.free')), 'in the park you named, with money');
 check(await ev('__rcb.track.pieces.length') === 1, 'a new park has only the station');
 check(await ev(`!!document.querySelector('#panel.show') && document.querySelector('#panel h2').textContent.includes('Welcome')`), 'a welcome explains what to do');
-await shot('02-welcome');
+await shot('03-welcome');
 await ev('__rcb.closePanels(); __rcb.noRender = true; __rcb.timeScale = 3');
 check(await ev(`document.querySelectorAll('#palette .pb:not(.locked):not(.tool)').length`) === 3, 'at first you can only build straights and turns');
 check(await ev('__rcb.park.state.money') === 200, 'you start with $200');
@@ -114,7 +124,7 @@ check(!(await ev(`__rcb.addPiece('right')`)), 'a right turn straight out of the 
 for (const t of ['straight', 'left', 'left', 'straight', 'straight', 'straight']) await add(t);
 check(!(await ev('__rcb.track.complete')), 'not finished yet');
 await waitGame(0.5);
-await shot('03-building');
+await shot('03b-building');
 for (const t of ['left', 'left']) await add(t);
 check(await ev('__rcb.track.complete'), 'four turns and some straights make a finished loop');
 await ev('__rcb.undo(); __rcb.undo()');
@@ -149,22 +159,22 @@ await ev('__rcb.stopRide()');
 const m0 = await ev('__rcb.park.state.money');
 await ev('__rcb.shop("parts")');
 await shot('08-shop');
-const spent = await ev(`(() => { __rcb.park.state.money = 20000; for (const g of ['wide', 'hills', 'steep', 'loop', 'roll', 'jump']) __rcb.buyGroup(g); return 20000 - __rcb.park.state.money; })()`);
-check(await ev('__rcb.park.state.groups.length') === 7, 'every kind of track can be bought');
-check(spent === 150 + 300 + 800 + 1500 + 2500 + 4000, 'and it costs what it says');
+const spent = await ev(`(() => { __rcb.park.state.money = 20000; for (const g of ['wide', 'hills', 'steep', 'loop', 'roll', 'hang', 'jump']) __rcb.buyGroup(g); return 20000 - __rcb.park.state.money; })()`);
+check(await ev('__rcb.park.state.groups.length') === 8, 'every kind of track can be bought');
+check(spent === 150 + 300 + 800 + 1500 + 2500 + 3200 + 4000, 'and it costs what it says');
 await ev('__rcb.closePanels()');
 void m0;
 
 // a big coaster: clear and build with hills, a drop, a loop, a roll and a jump
 await ev('__rcb.track.reset(); __rcb.addPiece("straight")');
-for (const t of ['up', 'steepUp', 'straight', 'steepDown', 'down', 'loop', 'bigLeft', 'roll', 'left', 'straight', 'jump', 'bigLeft', 'up', 'down', 'loop']) await add(t);
-check(await ev('__rcb.track.types().length') === 16, 'hills, drops, loops, a barrel roll and a jump all fit');
+for (const t of ['up', 'steepUp', 'straight', 'steepDown', 'down', 'loop', 'bigLeft', 'roll', 'left', 'hang', 'jump', 'bigLeft', 'up', 'down', 'loop']) await add(t);
+check(await ev('__rcb.track.types().length') === 16, 'hills, drops, loops, a barrel roll, upside-down track and a jump all fit');
 check(!(await ev(`__rcb.addPiece('steepDown')`)) && await ev('__rcb.track.types().length') === 16, 'track can\'t go under the ground');
 await ev('__rcb.finishTrack()');
 await until('__rcb.track.complete', 10, 'Finish closes the big coaster too');
 const r2 = await ev('__rcb.cur.rating');
 check(r2.excitement > r1.excitement + 3, `the big coaster is much more fun (${r2.excitement})`);
-check(r2.inversions === 3, 'it turns you upside down three times');
+check(r2.inversions === 4, 'it turns you upside down four times');
 await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(-10, 4, -40); __rcb.orbit.dist = 110; __rcb.orbit.yaw = 0.9; __rcb.orbit.pitch = 0.5');
 await shot('09-big-coaster');
 // upside down at the top of a loop, and the train jumping
@@ -174,6 +184,11 @@ check(loopTop.up < -0.95, 'the top of the loop is upside down');
 await ev(`__rcb.startRide(); __rcb.timeScale = 1; __rcb.train.state = 'running'; __rcb.train.dist = ${loopTop.s} - 13 + 1.5; __rcb.train.s = 13 + __rcb.train.dist; __rcb.train.v = 4`);
 await shot('10-ride-loop');
 const jump = await ev(`(() => { const T = __rcb.track; const p = T.path.find((p) => p.piece.type === 'jump' && p.gap); return p.s; })()`);
+// riding along upside down
+const hang = await ev(`(() => { const ps = __rcb.track.path.filter((p) => p.piece.type === 'hang'); const mid = ps[Math.floor(ps.length / 2)]; return { s: mid.s, up: mid.up.y, n: ps.filter((p) => p.up.y < -0.95).length / ps.length }; })()`);
+check(hang.up < -0.95 && hang.n > 0.3, `the upside-down piece keeps you upside down for a good while (${Math.round(hang.n * 100)}% of it)`);
+await ev(`__rcb.train.dist = ${hang.s} - 13 + 2.6; __rcb.train.s = 13 + __rcb.train.dist; __rcb.train.v = 6`);
+await shot('10b-ride-upside-down');
 await ev(`__rcb.train.dist = ${jump} - 13 + 3; __rcb.train.s = 13 + __rcb.train.dist; __rcb.train.v = 15`);
 await shot('11-ride-jump');
 await ev('__rcb.stopRide(); __rcb.timeScale = 3; __rcb.train.reset()');
@@ -236,7 +251,8 @@ await shot('17-theme-park');
 
 // save and load
 await ev('__rcb.park.save()');
-const saved = await ev('JSON.parse(localStorage.getItem("rollercoaster-bros-save"))');
+const saved = await ev('JSON.parse(localStorage.getItem("rollercoaster-bros-park-" + __rcb.park.state.id))');
+check((await ev('__rcb.readParks()')).list.map((p) => p.name).join() === 'Sunny Hills', 'it is in your list of parks');
 check(saved.coasters.length === 3 && saved.coasters[0].track.length === (await ev('__rcb.track.types().length')) && saved.carts.length === 8, 'the park is saved, all three coasters');
 await pg.reload();
 await pg.waitForFunction('window.__rcb', null, { timeout: 90000 });
@@ -250,12 +266,59 @@ await waitGame(20);
 await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(4, 2, 0); __rcb.orbit.dist = 45; __rcb.orbit.yaw = 0.5; __rcb.orbit.pitch = 0.35');
 await shot('18-park');
 
-// a park saved by version 1.0 (one coaster) still loads; designs survive a new park
+// ---------- a second theme park, free build ----------
+await ev('__rcb.toTitle()');
+await ev(`document.getElementById('b-parks').click()`);
+check(await ev(`document.querySelectorAll('#parks-list .prow').length`) === 1, 'Your theme parks lists the park');
+await ev(`document.getElementById('parks-new').click()`);
+await pg.fill('#np-name', 'Free Land');
+await pg.click('#np-free');
+await shot('19-new-free-park');
+await pg.click('#np-go');
+await wait(600);
+check(await ev('__rcb.mode') === 'screen' && await ev('__rcb.park.state.name') === 'Free Land' && await ev('__rcb.park.free'), 'a second park, in free-build mode');
+check(await ev('__rcb.park.coasters.length') === 1 && await ev('__rcb.track.pieces.length') === 1, 'it starts empty');
+check(await ev(`document.querySelectorAll('#palette .pb:not(.locked):not(.tool)').length`) === 13, 'every track piece is yours already');
+check((await ev(`document.getElementById('h-money').textContent`)).includes('Free'), 'the money says Free build');
+await ev('__rcb.closePanels(); __rcb.noRender = true; __rcb.timeScale = 3');
+await ev('__rcb.shop("carts")');
+check(await ev(`[...document.querySelectorAll('#panel .row button')].every((b) => !b.disabled || b.textContent.includes('Riding'))`), 'every train can be had');
+await ev('__rcb.buyCart(__rcb.CARTS.find((x) => x.id === "gold")); __rcb.closePanels()');
+check(await ev('__rcb.train.style') === 'gold' && await ev('__rcb.park.state.money') === 200, 'and costs nothing');
+await ev('__rcb.newCoaster()');
+check(await ev('__rcb.park.coasters.length') === 2 && await ev('__rcb.park.state.money') === 200, 'new coasters are free too');
+// up, up, up: the height limit is level 12 (48 m)
+await add('straight');
+for (let k = 0; k < 6; k++) await add('steepUp');
+check(await ev('__rcb.track.end.level') === 12, `track can climb to level 12 (${Math.round(await ev('__rcb.track.rate(12).maxHeight'))} m up)`);
+check(!(await ev(`__rcb.addPiece('steepUp')`)) && (await ev(`__rcb.track.check('up').why`)) === 'That\'s too high!', 'but no higher');
+for (const t of ['loop', 'right', 'steepDown', 'steepDown', 'steepDown', 'right', 'steepDown', 'steepDown', 'steepDown']) await add(t);
+await ev('__rcb.finishTrack()');
+await until('__rcb.track.complete', 15, 'the giant coaster is finished');
+await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(30, 15, -20); __rcb.orbit.dist = 120; __rcb.orbit.yaw = 0.6; __rcb.orbit.pitch = 0.3; __rcb.noRender = false');
+await shot('20-free-park-tall');
+await ev('__rcb.orbit.target.set(10.9, 4, 44); __rcb.orbit.dist = 22; __rcb.orbit.yaw = 0; __rcb.orbit.pitch = 0.1');
+await shot('21-park-gate');
+// back to the first park, then delete this one
+await ev('__rcb.toTitle()');
+check((await ev(`document.getElementById('t-park').textContent`)).includes('Free Land'), 'the title says which park you\'ll play');
+await ev(`document.getElementById('b-parks').click()`);
+await shot('22-parks');
+await ev(`document.querySelectorAll('#parks-list .pplay')[0].click()`);
+check(await ev('__rcb.park.state.name') === 'Sunny Hills' && await ev('__rcb.park.coasters.length') === 3, 'picking the first park brings back its three coasters');
+await ev(`document.querySelectorAll('#parks-list .pdel')[1].click()`);
+check((await ev('__rcb.readParks()')).list.map((p) => p.name).join() === 'Sunny Hills', 'a park can be deleted');
+await ev(`document.getElementById('parks-close').click()`);
+await ev(`document.getElementById('b-play').click()`); await wait(300);
+check(await ev('__rcb.mode') === 'screen' && await ev('__rcb.park.state.name') === 'Sunny Hills' && await ev('__rcb.park.state.money') > 1000, 'and played again, money and all');
+
+// a park saved by version 1.0 (one coaster) still loads; designs are kept
 await ev('__rcb.park.save = () => {}');   // (so leaving the page doesn't save over it)
-await ev(`localStorage.setItem('rollercoaster-bros-save', JSON.stringify({ money: 999, groups: ['starter'], carts: ['classic'], cart: 'classic', speed: 1, color: 2, track: ['straight', 'left', 'left', 'straight', 'straight', 'straight', 'left', 'left'], riders: 5, earned: 40 }))`);
+await ev(`localStorage.removeItem('rollercoaster-bros-parks'); localStorage.setItem('rollercoaster-bros-save', JSON.stringify({ money: 999, groups: ['starter'], carts: ['classic'], cart: 'classic', speed: 1, color: 2, track: ['straight', 'left', 'left', 'straight', 'straight', 'straight', 'left', 'left'], riders: 5, earned: 40 }))`);
 await pg.reload(); await pg.waitForFunction('window.__rcb', null, { timeout: 90000 }); await wait(400);
 await ev(`document.getElementById('b-play').click()`); await wait(300);
 check(await ev('__rcb.park.coasters.length') === 1 && await ev('__rcb.track.complete') && await ev('__rcb.park.state.money') >= 999 && await ev('__rcb.cur.data.speed') === 1, 'a park saved by version 1.0 still loads');
+check(await ev('__rcb.park.state.name') === 'My Park' && await ev(`localStorage.getItem('rollercoaster-bros-save') === null`), 'it becomes a park called My Park');
 check(await ev('__rcb.park.designs.length') === 1, 'saved designs are kept');
 await ev('__rcb.noRender = true; __rcb.timeScale = 3');
 
@@ -275,7 +338,7 @@ if (IWER){
   check(await ev('__rcb.tablet.mesh.visible && __rcb.tablet.mesh.parent.visible'), 'the tablet is on your left hand');
   await ev('__rcb.noRender = false');
   await wait(800);
-  await pg.screenshot({ path: path.join(OUT, '19-vr-giant.png') });
+  await pg.screenshot({ path: path.join(OUT, '23-vr-giant.png') });
   // aim the right pointer at the tablet's "Giant / Normal" button and pull the trigger
   const aim = await ev(`(() => { const T = __rcb.tablet, h = T.hits.find((x) => /Normal [(]B[)]/.test(x.b.label)); if (!h) return null;
     const u = (h.x + h.w / 2) / T.W, v = 1 - (h.y + h.h / 2) / T.H;
@@ -293,11 +356,11 @@ if (IWER){
     await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`); await wait(400);
     check(await ev('__rcb.rig.scale.x') === 1, 'pointing and pulling the trigger on the tablet works (now normal size)');
   }
-  await pg.screenshot({ path: path.join(OUT, '20-vr-normal.png') });
+  await pg.screenshot({ path: path.join(OUT, '24-vr-normal.png') });
   await ev('__rcb.startRide()');
   await until('__rcb.train.state === "running" && __rcb.train.v > 8', 40, 'riding in VR');
   check(await ev('__rcb.camera.getWorldPosition(new __rcb.rig.position.constructor()).distanceTo(__rcb.train.seatEye()) < 0.3'), 'your head is in the front seat');
-  await pg.screenshot({ path: path.join(OUT, '21-vr-ride.png') });
+  await pg.screenshot({ path: path.join(OUT, '25-vr-ride.png') });
   await ev('__rcb.stopRide()');
 }
 
