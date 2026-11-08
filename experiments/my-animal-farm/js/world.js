@@ -19,13 +19,11 @@ export const PENS = [
   { kind: 'sheep',   x0: 23, x1: 34, z0: -20, z1: -9, gate: 'south' },
   { kind: 'pig',     x0: 10, x1: 21, z0: -33, z1: -22, gate: 'south' },
   { kind: 'chicken', x0: 23, x1: 34, z0: -33, z1: -22, gate: 'south' },
-  { kind: 'cow',     x0: 36, x1: 50, z0: -33, z1: -12, gate: 'south' },   // a grassy pasture
 ];
 export const PLACES = {
   start: V(0, 0, 4), rail: V(6.5, 0, -1.2), board: V(-11.2, 0, 10.6), dropoff: V(-5, 0, 17),
   manureHeap: V(3.5, 0, -27.5), barnDoor: V(0, 0, -4), backDoor: V(0, 0, -22.6),
   tap: V(-5.2, 1.0, -21.4), hayStack: V(-4.3, 0, -20.2), grainBin: V(-2.3, 0, -21.8), shavings: V(-4.4, 0, -22.0), carrots: V(-2.0, 0.9, -19.05),
-  petBowl: V(-3.4, 0, -3.5),
   arenaGate: V(10, 0, 9.75), paddockGate: V(-10, 0, -2.75), showStart: V(50, 0, 38), house: V(-16, 0, 12),
 };
 
@@ -218,7 +216,7 @@ export function buildWorld(scene){
   strip(ARENA.x0, ARENA.x1, ARENA.z0, ARENA.z1, M.sand, 0.03, 0.22);
   strip(SHOW.x0, SHOW.x1, SHOW.z0, SHOW.z1, M.sand, 0.03, 0.22);
   // pens: trampled dirt
-  for (const p of PENS) if (p.kind !== 'cow') strip(p.x0, p.x1, p.z0, p.z1, M.dirt, 0.02, 0.35);
+  for (const p of PENS) strip(p.x0, p.x1, p.z0, p.z1, M.dirt, 0.02, 0.35);
 
   buildBarn(B, F, root, world, M);
   buildPaddock(B, root, world, M);
@@ -542,22 +540,6 @@ function buildBarn(B, F, root, world, M){
     pile.position.set(h.x, 0, h.z - 0.4); pile.castShadow = pile.receiveShadow = true; root.add(pile);
     world.fixtures.manureHeap = { pos: V(h.x, 0.5, h.z - 0.2), pile };
   }
-  // food bowls for the dogs and cats, just outside the barn door, and the cats' favourite spots
-  {
-    const bp = PLACES.petBowl;
-    const bowlM = mat('plain-bowl', { color: 0xa8b0b8, rough: 0.3, metal: 0.6 });
-    const kibble = mat('dirt', { color: 0x8a5a30, rough: 0.8 });
-    const food = [];
-    for (const dx of [-0.25, 0.25]){
-      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.11, 0.08, 18, 1, true), new THREE.MeshStandardMaterial({ color: 0xa8b0b8, roughness: 0.3, metalness: 0.6, side: THREE.DoubleSide }));
-      b.position.set(bp.x + dx, 0.04, bp.z); b.castShadow = true; root.add(b);
-      B.cyl(0.11, 0.11, 0.01, bowlM, bp.x + dx, 0.005, bp.z, 16);
-      const f = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.04, 16), kibble); f.position.set(bp.x + dx, 0.04, bp.z); root.add(f); food.push(f);
-    }
-    const lab = sign('DOGS & CATS', 0.7, 0.2, { font: 'bold 92px Arial' }); lab.position.set(bp.x, 0.9, -3.94); lab.rotation.y = 0; root.add(lab);
-    world.fixtures.petBowl = { pos: bp.clone(), food };
-    world.catSpots = [V(-3.6, 0, -20.2), V(0.7, 0, -9.5), V(-0.7, 0, -15.5), V(2.4, 0, -2.6), V(-11.4, 0, 13.8), V(-15.8, 0, 13.9), V(-19.5, 0, 13.4), V(4.6, 0, -19.8), V(-2.8, 0, -2.6)];
-  }
 }
 
 // ---------- paddock ----------
@@ -780,7 +762,7 @@ function buildPens(B, root, world, M){
     const W = P.x1 - P.x0;
     // side 0 is z = z0 (north) from x0 to x1; side 2 is z = z1 (south) from x1 to x0
     const small = P.kind === 'chicken';
-    fenceRect(B, P, { rails: small ? 0 : 4, h: small ? 1.6 : P.kind === 'cow' ? 1.35 : 1.1, mat: M.oak, spacing: 2.2 }, { side: 2, t0: 0.42, t1: 0.58 });
+    fenceRect(B, P, { rails: small ? 0 : 4, h: small ? 1.6 : 1.1, mat: M.oak, spacing: 2.2 }, { side: 2, t0: 0.42, t1: 0.58 });
     if (small){
       // chicken wire: a see-through mesh on each side
       const wire = mat('plain-wire', { color: 0x9a9a9a, rough: 0.5, metal: 0.6, side: THREE.DoubleSide });
@@ -821,7 +803,7 @@ function buildPens(B, root, world, M){
     if (P.kind === 'pig'){
       wallow = new THREE.Mesh(new THREE.CircleGeometry(1.4, 24), mat('dirt', { color: 0x5a4028, rough: 0.2 })); wallow.rotation.x = -Math.PI / 2; wallow.position.set(P.x1 - 2.4, 0.03, (P.z0 + P.z1) / 2 + 1); root.add(wallow);
     }
-    const lab = sign({ goat: 'GOATS', sheep: 'SHEEP', pig: 'PIGS', chicken: 'HENS', cow: 'COWS' }[P.kind], 1, 0.3);
+    const lab = sign({ goat: 'GOATS', sheep: 'SHEEP', pig: 'PIGS', chicken: 'HENS' }[P.kind], 1, 0.3);
     lab.position.set(P.x0 + W * 0.42 - 0.6, 1.25, P.z1 + 0.06); root.add(lab);
     world.pens.push({ ...P, feedPos, waterPos, feed, water, wallow, droppings: [], center: V(sx, 0, (P.z0 + P.z1) / 2 + 1) });
   }
@@ -1027,7 +1009,7 @@ function buildSurroundings(B, root, world, M, R){
     return !boxes.some((b) => x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1);
   };
   // a row of big shade trees along the drive and by the house, then woods around
-  for (const [x, z] of [[-7, 22], [6, 22], [-25, 18], [-26, 4], [-8, -32], [56, -16], [52, -2], [-24, 22]]) spots.push([x, z, 1.15]);
+  for (const [x, z] of [[-7, 22], [6, 22], [-25, 18], [-26, 4], [-8, -32], [40, -14], [52, -2], [-24, 22]]) spots.push([x, z, 1.15]);
   for (let i = 0; i < 260; i++){
     const a = R() * Math.PI * 2, d = 70 + R() * 140, x = 15 + Math.cos(a) * d, z = 15 + Math.sin(a) * d;
     if (ok(x, z)) spots.push([x, z, 0.8 + R() * 0.6]);
@@ -1086,7 +1068,7 @@ function buildGrass(root, M){
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
   const N = 9000;
   const inst = new THREE.InstancedMesh(geo, m, N);
-  const no = [BARN, ARENA, SHOW, ...PENS.filter((p) => p.kind !== 'cow'), { x0: -8.5, x1: 8.5, z0: -4, z1: 8.5 }, { x0: -3.5, x1: 3.5, z0: 8, z1: 30 }, { x0: -95, x1: 125, z0: 23.5, z1: 30.5 },
+  const no = [BARN, ARENA, SHOW, ...PENS, { x0: -8.5, x1: 8.5, z0: -4, z1: 8.5 }, { x0: -3.5, x1: 3.5, z0: 8, z1: 30 }, { x0: -95, x1: 125, z0: 23.5, z1: 30.5 },
     { x0: -22, x1: -11.5, z0: 7.5, z1: 16.5 }, { x0: -10.5, x1: -2.5, z0: 13.5, z1: 20.5 }, { x0: -15, x1: -7.5, z0: -6.5, z1: 1.5 }, { x0: 3.5, x1: 10.5, z0: -3, z1: 1 }, { x0: -2, x1: 8, z0: -31, z1: -22 }, { x0: 7.5, x1: 10.7, z0: -36, z1: 0 }, { x0: 9.5, x1: 37, z0: -22, z1: -20 }];
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
   let n = 0;

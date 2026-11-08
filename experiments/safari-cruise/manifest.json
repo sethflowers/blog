@@ -1,0 +1,16 @@
+{
+  "name": "Safari Cruise",
+  "short_name": "Safari Cruise",
+  "description": "Run your own drive-through safari park, on an iPad or in VR.",
+  "start_url": "/experiments/safari-cruise/",
+  "scope": "/experiments/safari-cruise/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#5a3a1a",
+  "theme_color": "#5a3a1a",
+  "icons": [
+    { "src": "/experiments/safari-cruise/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/safari-cruise/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/safari-cruise/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

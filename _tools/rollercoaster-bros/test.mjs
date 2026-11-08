@@ -7,8 +7,7 @@
 // screen: the title and version, the welcome, building a simple loop by hand and with Finish, the train
 // running, visitors queueing, riding and paying, riding it yourself, watching, the speed choices, buying
 // hills / drops / a loop / a barrel roll / a jump and building with them, blocked pieces, undo, new
-// trains and paint, more coasters side by side (a theme park), saving a design and building it again,
-// saving and loading (and loading a park saved by version 1.0). Then in VR: entering a session at giant size, the tablet on the
+// trains and paint, saving and loading. Then in VR: entering a session at giant size, the tablet on the
 // left hand, pressing a tablet button with the right-hand pointer, and riding in the front seat.
 import http from 'node:http';
 import fs from 'node:fs';
@@ -127,7 +126,7 @@ await until('__rcb.train.state === "running"', 12, 'the train sets off');
 await until('__rcb.park.visitors.length > 2', 30, 'visitors come to the park');
 await until('__rcb.park.state.riders > 0', 120, 'visitors get on the train');
 await until('__rcb.park.state.money > 200', 5, 'and pay for a ticket');
-const r1 = await ev('__rcb.cur.rating');
+const r1 = await ev('__rcb.park.rating');
 check(r1.excitement > 1 && r1.excitement < 4, `a simple loop is a little bit fun (${r1.excitement})`);
 await ev('__rcb.orbit.target.set(6, 0, 4); __rcb.orbit.follow = false; __rcb.orbit.dist = 30; __rcb.orbit.yaw = 1.2; __rcb.orbit.pitch = 0.4');
 await shot('05-queue');
@@ -162,7 +161,7 @@ check(await ev('__rcb.track.types().length') === 16, 'hills, drops, loops, a bar
 check(!(await ev(`__rcb.addPiece('steepDown')`)) && await ev('__rcb.track.types().length') === 16, 'track can\'t go under the ground');
 await ev('__rcb.finishTrack()');
 await until('__rcb.track.complete', 10, 'Finish closes the big coaster too');
-const r2 = await ev('__rcb.cur.rating');
+const r2 = await ev('__rcb.park.rating');
 check(r2.excitement > r1.excitement + 3, `the big coaster is much more fun (${r2.excitement})`);
 check(r2.inversions === 3, 'it turns you upside down three times');
 await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(-10, 4, -40); __rcb.orbit.dist = 110; __rcb.orbit.yaw = 0.9; __rcb.orbit.pitch = 0.5');
@@ -182,7 +181,7 @@ await ev('__rcb.stopRide(); __rcb.timeScale = 3; __rcb.train.reset()');
 await ev('__rcb.speedPanel()');
 await shot('12-speed');
 await ev('__rcb.setSpeed(4)');
-const r3 = await ev('__rcb.cur.rating');
+const r3 = await ev('__rcb.park.rating');
 check(r3.intensity > r2.intensity && r3.excitement > r2.excitement, `turbo is more fun and scarier (fun ${r3.excitement}, scary ${r3.intensity})`);
 await ev('__rcb.closePanels()');
 await until('__rcb.train.state === "running" && __rcb.train.v > 20', 40, 'turbo goes fast (47 mph)');
@@ -202,62 +201,23 @@ for (const [i, c] of ['dragon', 'rocket', 'shark', 'gold'].entries()){
 }
 await ev('__rcb.shop("carts")');
 await shot('14-shop-trains');
-await ev('__rcb.closePanels(); __rcb.train.setStyle("dragon"); __rcb.cur.data.cart = "dragon"');
-
-// ---------- a theme park: more coasters, saved designs ----------
-await ev('__rcb.setSpeed(2)');
-const cost2 = await ev('(() => { const m = __rcb.park.state.money; __rcb.newCoaster(); return m - __rcb.park.state.money; })()');
-check(await ev('__rcb.park.coasters.length') === 2 && await ev('__rcb.cur.oi') === 7, 'a second coaster gets its own station next door');
-check(cost2 === 1000, 'it costs $1,000');
-check(await ev('__rcb.track.pieces.length') === 1 && !(await ev('__rcb.park.scenery.plots[1].visible')), 'it starts with just its station (and the "coaster site" sign goes)');
-check(await ev(`(() => { const c0 = __rcb.park.coasters[0].track; const p = c0.pieces.find((q, i) => i > 0 && q.type === 'straight' && q.level === 0); return __rcb.track.check('straight', { i: p.i, j: p.j, level: 0, d: p.d }, undefined).why; })()`) === 'That would crash into another coaster.', 'track can\'t crash into another coaster');
-for (const t of ['straight', 'straight', 'right', 'up', 'down', 'right', 'loop']) await add(t);
-await ev('__rcb.finishTrack()');
-await until('__rcb.track.complete', 10, 'the second coaster is finished');
-await ev('__rcb.coastersPanel()');
-await shot('15-coasters-panel');
-await ev('__rcb.saveDesign()');
-check(await ev('__rcb.park.designs.length') === 1, 'its design is saved');
-await ev('__rcb.designsPanel()');
-await shot('16-designs');
-// a third coaster on the other side, built from the saved design
-await ev('__rcb.park.state.money += 5000; __rcb.newCoaster()');
-check(await ev('__rcb.cur.oi') === -7, 'a third coaster goes on the other side of the first');
-await ev('__rcb.buildDesign(0)');
-const third = await ev('__rcb.track.types().length'), design = await ev('__rcb.park.designs[0].track.length');
-if (!(await ev('__rcb.track.complete'))){ await ev('__rcb.finishTrack()'); await until('__rcb.track.complete || __rcb.building === 0', 10, 'finish the rest'); }
-check(third > 4 && await ev('__rcb.track.complete'), `the saved design is built on the third coaster (${third} of ${design} pieces fit as they were)`);
-await until('__rcb.park.coasters.every((c) => c.train.state === "running" || c.data.riders > 0)', 60, 'all three trains run');
-await until('__rcb.park.coasters.filter((c) => (c.data.riders || 0) > 0).length >= 2', 240, 'visitors ride more than one coaster');
-await ev('__rcb.select(__rcb.park.coasters[0], true); __rcb.closePanels()');
-check(await ev('__rcb.cur.name') === await ev('__rcb.park.coasters[0].name'), 'you can go back to the first coaster');
-await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(0, 4, -30); __rcb.orbit.dist = 170; __rcb.orbit.yaw = 0.25; __rcb.orbit.pitch = 0.55');
-await shot('17-theme-park');
+await ev('__rcb.closePanels()');
 
 // save and load
 await ev('__rcb.park.save()');
 const saved = await ev('JSON.parse(localStorage.getItem("rollercoaster-bros-save"))');
-check(saved.coasters.length === 3 && saved.coasters[0].track.length === (await ev('__rcb.track.types().length')) && saved.carts.length === 8, 'the park is saved, all three coasters');
+check(saved.track.length === (await ev('__rcb.track.types().length')) && saved.carts.length === 8, 'the park is saved');
 await pg.reload();
 await pg.waitForFunction('window.__rcb', null, { timeout: 90000 });
 await wait(500);
 await ev(`document.getElementById('b-play').click()`);
 await wait(400);
-check(await ev('__rcb.park.coasters.length') === 3 && await ev('__rcb.park.coasters.every((c) => c.track.complete)'), 'and comes back after a reload');
-check(await ev('__rcb.park.coasters[0].train.style') === 'dragon' && await ev('__rcb.park.coasters[0].data.speed') === 2, 'with the same trains and speeds');
+check(await ev('__rcb.track.complete') && await ev('__rcb.track.types().length') === saved.track.length, 'and comes back after a reload');
+check(await ev('__rcb.train.style') === saved.cart && await ev('__rcb.park.state.speed') === 4, 'with the same train and speed');
 await ev('__rcb.noRender = true; __rcb.timeScale = 3');
 await waitGame(20);
 await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(4, 2, 0); __rcb.orbit.dist = 45; __rcb.orbit.yaw = 0.5; __rcb.orbit.pitch = 0.35');
-await shot('18-park');
-
-// a park saved by version 1.0 (one coaster) still loads; designs survive a new park
-await ev('__rcb.park.save = () => {}');   // (so leaving the page doesn't save over it)
-await ev(`localStorage.setItem('rollercoaster-bros-save', JSON.stringify({ money: 999, groups: ['starter'], carts: ['classic'], cart: 'classic', speed: 1, color: 2, track: ['straight', 'left', 'left', 'straight', 'straight', 'straight', 'left', 'left'], riders: 5, earned: 40 }))`);
-await pg.reload(); await pg.waitForFunction('window.__rcb', null, { timeout: 90000 }); await wait(400);
-await ev(`document.getElementById('b-play').click()`); await wait(300);
-check(await ev('__rcb.park.coasters.length') === 1 && await ev('__rcb.track.complete') && await ev('__rcb.park.state.money') >= 999 && await ev('__rcb.cur.data.speed') === 1, 'a park saved by version 1.0 still loads');
-check(await ev('__rcb.park.designs.length') === 1, 'saved designs are kept');
-await ev('__rcb.noRender = true; __rcb.timeScale = 3');
+await shot('15-park');
 
 // ---------- VR ----------
 if (IWER){
@@ -275,9 +235,9 @@ if (IWER){
   check(await ev('__rcb.tablet.mesh.visible && __rcb.tablet.mesh.parent.visible'), 'the tablet is on your left hand');
   await ev('__rcb.noRender = false');
   await wait(800);
-  await pg.screenshot({ path: path.join(OUT, '19-vr-giant.png') });
+  await pg.screenshot({ path: path.join(OUT, '16-vr-giant.png') });
   // aim the right pointer at the tablet's "Giant / Normal" button and pull the trigger
-  const aim = await ev(`(() => { const T = __rcb.tablet, h = T.hits.find((x) => /Normal [(]B[)]/.test(x.b.label)); if (!h) return null;
+  const aim = await ev(`(() => { const T = __rcb.tablet, h = T.hits.find((x) => /Normal/.test(x.b.label)); if (!h) return null;
     const u = (h.x + h.w / 2) / T.W, v = 1 - (h.y + h.h / 2) / T.H;
     const p = T.mesh.localToWorld(new T.mesh.position.constructor((u - 0.5) * 0.3, (v - 0.5) * 0.375, 0));
     return p.toArray(); })()`);
@@ -293,11 +253,11 @@ if (IWER){
     await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`); await wait(400);
     check(await ev('__rcb.rig.scale.x') === 1, 'pointing and pulling the trigger on the tablet works (now normal size)');
   }
-  await pg.screenshot({ path: path.join(OUT, '20-vr-normal.png') });
+  await pg.screenshot({ path: path.join(OUT, '17-vr-normal.png') });
   await ev('__rcb.startRide()');
   await until('__rcb.train.state === "running" && __rcb.train.v > 8', 40, 'riding in VR');
   check(await ev('__rcb.camera.getWorldPosition(new __rcb.rig.position.constructor()).distanceTo(__rcb.train.seatEye()) < 0.3'), 'your head is in the front seat');
-  await pg.screenshot({ path: path.join(OUT, '21-vr-ride.png') });
+  await pg.screenshot({ path: path.join(OUT, '18-vr-ride.png') });
   await ev('__rcb.stopRide()');
 }
 
