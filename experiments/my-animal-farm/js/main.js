@@ -8,11 +8,12 @@ import { V, clamp, lerp, damp, angleDiff, fmtMoney, fmtTime } from './util.js';
 import { setAnisotropy } from './textures.js';
 import { Sky } from './sky.js';
 import { buildWorld, pushOut, colliders, PLACES, BARN, PADDOCK, PENS, ARENA, SHOW, stallAt, inBox, insideBarn, STALL_W, HOUSE } from './world.js';
-import { Farm, Horse, DAY_START, NIGHT, PRICES, SUPPLY_UNITS, SUPPLY_PACK, isShowDay, dayName, horseValue, SAVE_KEY } from './farm.js';
+import { Farm, Horse, DAY_START, NIGHT, PRICES, PRODUCE, SUPPLY_UNITS, SUPPLY_PACK, isShowDay, dayName, horseValue, SAVE_KEY } from './farm.js';
 import { Care, BINS } from './care.js';
 import { Riding, GEARS, CLASSES } from './riding.js';
 import { BREEDS, COATS } from './horse.js';
 import { SPECIES } from './animals.js';
+import { PET_KINDS } from './pets.js';
 import { Person, Hand } from './people.js';
 import { ScreenUI, VRPanel, WristPanel } from './ui.js';
 import { startAudio, setListener, sfx, setNight } from './audio.js';
@@ -95,6 +96,7 @@ hotspot('board', world.fixtures.board.pos, [0.3, 1.2, 1.6]);
 hotspot('rail', V(PLACES.rail.x, 1.0, PLACES.rail.z), [2.8, 0.4, 0.3]);
 hotspot('lights', world.barnLights.switchPos, [0.3, 0.4, 0.2]);
 hotspot('bed', world.fixtures.bed.pos, [2.1, 0.5, 1.6]);
+hotspot('petBowl', V(PLACES.petBowl.x, 0.15, PLACES.petBowl.z), [0.9, 0.35, 0.5]);
 hotspot('paddockTrough', V(-13, 0.4, -7), [1.9, 0.7, 0.8]);
 hotspot('showOffice', V(28, 1.6, 33.4), [3, 2.4, 0.6]);
 farm.pens.forEach((p, i) => {
@@ -108,6 +110,7 @@ function resolve(obj, point){
   for (let o = obj; o; o = o.parent){
     const u = o.userData;
     if (u.itemRef) return { type: 'item', item: u.itemRef, point };
+    if (u.petRef) return { type: 'companion', pet: u.petRef, point };
     if (u.ringHoof != null && u.horse) return { type: 'hoof', horse: u.horse, hoof: u.ringHoof, point: u.horse.model.hoof(u.ringHoof) };
     if (u.hot) return { ...u.hot, point };
     if (u.kind === 'manure' || u.kind === 'wet') return { type: u.kind, stall: u.stall, index: u.index, point };
@@ -142,6 +145,7 @@ function pickables(){
   for (const r of hoofRingMeshes) if (r.visible) list.push(r);
   for (const h of farm.horses) if (h.root.visible && h !== riding.horse) list.push(h.root);
   for (const a of farm.animals) list.push(a.root);
+  for (const p of farm.pets) list.push(p.root);
   for (const s of farm.stalls){ list.push(...s.manureMeshes); if (s.wetMesh && s.wetMesh.visible) list.push(s.wetMesh); }
   for (const p of farm.pens){ list.push(...p.droppingMeshes, ...p.eggMeshes); }
   for (const v of farm.visitors){ list.push(v.person.root); if (v.horse) list.push(v.horse.root); }
@@ -363,14 +367,61 @@ function horsePanel(h){
     { buttons },
   ] });
 }
+// a dog or a cat: pet them; a dog follows you, stays, or fetches a tool
+const FETCHABLE = ['fork', 'bucket', 'scoop', 'curry', 'brush', 'hoofpick', 'shears', 'pad', 'bridle'];
+function petPanel(p){
+  const D = p.data, dog = p.kind === 'dog';
+  const btns = [{ label: `Pet ${D.name}`, kind: 'primary', go: () => { D.happy = Math.min(100, D.happy + 8); sfx.bleat(p.pos, dog ? 'dog' : 'purr'); farm.say(dog ? `${D.name} wags their tail.` : `${D.name} purrs.`, 'good'); closePanel(); } }];
+  if (dog) btns.push(D.mode === 'stay' ? { label: 'Come with me', go: () => { D.mode = 'follow'; sfx.bleat(p.pos, 'dog'); closePanel(); } } : { label: 'Stay here', go: () => { D.mode = 'stay'; closePanel(); } });
+  const secs = [
+    { text: dog ? `${D.name} the ${p.breed} follows you around the farm, fetches the tool you need, and keeps foxes away from the hens at night.` : `${D.name} the ${p.breed} lives in the barn and keeps the mice out of the feed room (no cat, and mice get at the grain).` },
+    { bars: [['Food', D.food, D.food < 40 ? 'fill the bowls by the barn door' : ''], ['Happiness', D.happy]] },
+    { buttons: btns },
+  ];
+  if (dog){
+    const hungry = D.food < 20;
+    secs.push({ heading: hungry ? `${D.name} is too hungry to fetch: fill the bowls by the barn door` : `Fetch (${D.name} brings it to you)`, rows: FETCHABLE.map((k) => care.items[k]).map((it) => ({ title: it.name, sub: it.held ? 'In your hand' : it.onHorse ? 'On a horse' : it.inBarrow ? 'In the wheelbarrow' : it.homeNow ? 'Where it lives' : 'Left somewhere', button: { label: 'Fetch', disabled: hungry || !!it.held || !!it.onHorse || !!it.carried || !!p.job, go: () => { closePanel(); dogFetch(p, it); } } })) });
+  }
+  showPanel({ title: `${D.name} the ${dog ? 'dog' : 'cat'}`, sections: secs });
+}
+function dogFetch(p, it){
+  if (it.inBarrow) care.unstow(it);
+  p.job = { kind: 'fetch', item: it, phase: 'go', t: 0 };
+  p.data.mode = 'follow';
+  sfx.bleat(p.pos, 'dog');
+  farm.say(`${p.data.name} runs off to fetch the ${it.name.toLowerCase()}.`, 'hint');
+}
+farm.on('petGrab', ({ pet, item }) => {
+  if (item.inBarrow) care.unstow(item);
+  item.carried = pet; item.homeNow = false; item.onFloor = false;
+  pet.m.mouth.add(item.mesh);
+  const long = item.kind === 'fork' || item.kind === 'shears';
+  item.mesh.position.set(0, 0, 0); item.mesh.rotation.set(0, 0, long ? Math.PI / 2 : 0);
+  if (item.kind === 'fork') item.mesh.position.x = -0.25;
+});
+farm.on('petDeliver', ({ pet, item }) => {
+  item.carried = null;
+  scene.attach(item.mesh);
+  sfx.bleat(pet.pos, 'dog');
+  const free = mode === 'vr' ? [1, 0].find((i) => !player.heldBy[i]) : (!player.heldBy[1] ? 1 : undefined);
+  if (free != null && !riding.horse){ pickUp(item, free); farm.say(`${pet.data.name} brought you the ${item.name.toLowerCase()}. Good dog!`, 'good'); }
+  else {
+    // your hands are full: it's dropped at your feet
+    const fwd = V(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+    item.mesh.position.set(player.pos.x + fwd.x * 0.7, 0.3, player.pos.z + fwd.z * 0.7); item.mesh.rotation.set(0, player.yaw, item.kind === 'fork' ? Math.PI / 2 : 0); item.onFloor = true;
+    farm.say(`${pet.data.name} dropped the ${item.name.toLowerCase()} at your feet.`, 'good');
+  }
+  updateHeldUI();
+});
 function animalPanel(a){
   const D = a.data;
   const btns = [{ label: 'Pet', kind: 'primary', go: () => { D.happy = Math.min(100, D.happy + 5); sfx.bleat(a.pos, a.kind); closePanel(); } }];
+  if (a.kind === 'cow') btns.unshift({ label: `Milk ${D.name}`, kind: 'primary', disabled: (D.milk || 0) < 0.25, go: () => { if (farm.milk(a)){ sfx.pour(a.pos); sfx.bleat(a.pos, 'cow'); } refreshPanel(() => animalPanel(a)); } });
   const pickup = farm.pickupFor(D.id);
   if (pickup) btns.unshift({ label: `Give back to ${pickup.who}`, kind: 'primary', go: () => { closePanel(); handOver(pickup); } });
   showPanel({ title: `${D.name} the ${SPECIES[a.kind].name.toLowerCase()}`, sections: [
     { text: D.owner ? `Boarding for ${D.owner.who} (${D.owner.daysLeft} more days).` : `One of your ${a.kind === 'chicken' ? 'hens' : a.kind + 's'}.` },
-    { bars: [['Food', D.food], ['Water', D.water], ['Happiness', D.happy], ['Health', D.health], ...(a.kind === 'sheep' ? [['Fleece', D.wool * 100]] : [])] },
+    { bars: [['Food', D.food], ['Water', D.water], ['Happiness', D.happy], ['Health', D.health], ...(a.kind === 'sheep' ? [['Fleece', D.wool * 100]] : []), ...(a.kind === 'cow' ? [['Milk in her udder', (D.milk || 0) * 100, (D.milk || 0) > 0.7 ? 'ready to milk' : '']] : [])] },
     { buttons: btns },
   ] });
 }
@@ -407,26 +458,27 @@ function office(tab = officeTab){
   if (tab === 'jobs'){
     const J = farm.jobs();
     secs.push({ heading: 'Still to do', list: J.length ? J.map((j) => j.text) : ['All done! Ride, train for the next show, or go to bed early.'] });
-    secs.push({ heading: 'Supplies', text: `Hay: ${S.supplies.hay} bales${S.supplies.loose ? ` + ${S.supplies.loose} flakes` : ''} · Grain: ${S.supplies.grain} scoops · Shavings: ${S.supplies.shavings} bags · Carrots: ${S.supplies.carrots} · Pig feed: ${S.supplies.pigfeed} · Corn: ${S.supplies.corn} · Eggs: ${S.supplies.eggs} · Fleeces: ${S.supplies.wool || 0}` });
+    secs.push({ heading: 'Supplies', text: `Hay: ${S.supplies.hay} bales${S.supplies.loose ? ` + ${S.supplies.loose} flakes` : ''} · Grain: ${S.supplies.grain} scoops · Shavings: ${S.supplies.shavings} bags · Carrots: ${S.supplies.carrots} · Pig feed: ${S.supplies.pigfeed} · Corn: ${S.supplies.corn} · Pet food: ${S.supplies.petfood || 0} meals · Eggs: ${S.supplies.eggs} · Fleeces: ${S.supplies.wool || 0} · Milk: ${S.supplies.milk || 0} L` });
   }
   if (tab === 'horses'){
     secs.push({ heading: 'Your horses', rows: farm.horses.map((h) => ({ title: h.data.name + (h.data.owner ? ` (boarder)` : ''), sub: `${BREEDS[h.data.breed].name} · food ${pct(h.data.needs.food)} · water ${pct(h.data.needs.water)} · happy ${pct(h.data.needs.happy)} · jump ${Math.round(h.data.skill * 100)}%`, button: h.data.owner ? null : { label: `Sell ${fmtMoney(horseValue(h.data))}`, go: () => { farm.sellHorse(h); refreshPanel(() => office('horses')); } } })) });
     secs.push({ heading: 'Horses for sale (new ones every 3 days)', rows: farm.market().map((d) => ({ title: `${d.name}: ${BREEDS[d.breed].name}`, sub: `${COATS[d.coat].name} ${d.sex}, ${d.age} yrs, jumping ${Math.round(d.skill * 100)}% (breed talent ${Math.round(BREEDS[d.breed].jump * 100)}%)`, button: { label: fmtMoney(d.price), disabled: S.money < d.price, go: () => { farm.buyHorse(d); refreshPanel(() => office('horses')); } } })) });
   }
   if (tab === 'shop'){
-    const names = { hay: 'Hay bale (10 flakes)', grain: 'Bag of grain (30 scoops)', shavings: 'Bag of pine shavings', carrots: 'Carrots (10)', pigfeed: 'Pig feed (30 scoops)', corn: 'Chicken corn (30 scoops)' };
+    const names = { hay: 'Hay bale (10 flakes)', grain: 'Bag of grain (30 scoops)', shavings: 'Bag of pine shavings', carrots: 'Carrots (10)', pigfeed: 'Pig feed (30 scoops)', corn: 'Chicken corn (30 scoops)', petfood: 'Dog & cat food (20 meals)' };
     secs.push({ heading: 'Supplies (delivered to the feed room)', rows: Object.keys(PRICES).filter((k) => names[k]).map((k) => ({ title: names[k], sub: `You have ${S.supplies[k]} ${SUPPLY_UNITS[k]}`, button: { label: fmtMoney(PRICES[k]), disabled: S.money < PRICES[k], go: () => { if (farm.buySupply(k)) sfx.coin(); refreshPanel(() => office('shop')); } } })) });
     secs.push({ heading: 'Services', rows: [
       { title: 'Farrier', sub: 'New shoes and trimmed hooves for every horse that needs them', button: { label: `${fmtMoney(PRICES.farrier)} each`, go: () => { farm.callFarrier(); refreshPanel(() => office('shop')); } } },
       { title: 'Vet', sub: 'Checks and treats every animal on the farm', button: { label: fmtMoney(PRICES.vet), go: () => { farm.callVet(); refreshPanel(() => office('shop')); } } },
     ] });
-    secs.push({ heading: 'Sell produce', rows: [
-      { title: `Eggs: ${S.supplies.eggs}`, sub: '50¢ each', button: { label: 'Sell', disabled: !S.supplies.eggs, go: () => { farm.sellProduce('eggs'); refreshPanel(() => office('shop')); } } },
-      { title: `Fleeces: ${S.supplies.wool || 0}`, sub: '$18 each', button: { label: 'Sell', disabled: !S.supplies.wool, go: () => { farm.sellProduce('wool'); refreshPanel(() => office('shop')); } } },
-    ] });
+    secs.push({ heading: 'Sell produce', rows: Object.entries(PRODUCE).map(([k, P]) => ({ title: `${P.unit[0].toUpperCase() + P.unit.slice(1)}: ${S.supplies[k] || 0}`, sub: P.each, button: { label: S.supplies[k] ? `Sell ${fmtMoney(Math.round(S.supplies[k] * P.price))}` : 'Sell', disabled: !S.supplies[k], go: () => { farm.sellProduce(k); sfx.coin(); refreshPanel(() => office('shop')); } } })) });
   }
   if (tab === 'animals'){
     secs.push({ heading: 'Buy animals', rows: Object.entries(SPECIES).map(([k, sp]) => { const pen = farm.pens.find((p) => p.kind === k); return { title: sp.name, sub: `${pen.list.length}/${farm.penCapacity(k)} in the pen · eats ${sp.food}`, button: { label: fmtMoney(sp.price), disabled: S.money < sp.price || pen.list.length >= farm.penCapacity(k), go: () => { farm.buyAnimal(k); refreshPanel(() => office('animals')); } } }; }) });
+    secs.push({ heading: 'Dogs and cats', rows: [
+      ...farm.pets.map((p) => ({ title: `${p.data.name} the ${p.breed}`, sub: `food ${pct(p.data.food)} · happy ${pct(p.data.happy)}${p.kind === 'dog' ? (p.data.mode === 'stay' ? ' · staying put' : ' · following you') : ''}`, button: { label: 'Call', go: () => { refreshPanel(() => petPanel(p)); } } })),
+      ...Object.entries(PET_KINDS).map(([k, K]) => { const n = farm.pets.filter((p) => p.kind === k).length; return { title: `Get a ${k}`, sub: k === 'dog' ? `Fetches tools, keeps foxes off the hens (${n}/${K.max})` : `Keeps mice out of the grain (${n}/${K.max})`, button: { label: fmtMoney(K.price), disabled: S.money < K.price || n >= K.max, go: () => { if (farm.buyPet(k)) sfx.coin(); refreshPanel(() => office('animals')); } } }; }),
+    ] });
     if (farm.offers.length) secs.push({ heading: 'Waiting by the house', rows: farm.offers.map((o) => { const c = o.pickup ? farm.creatureById(o.pickup) : null; return { title: o.who, sub: c ? `Here to collect ${c.data.name}` : `Would like you to look after their ${o.kind === 'horse' ? 'horse' : o.kind === 'chicken' ? 'hens' : o.kind + (o.n > 1 ? 's' : '')}`, button: { label: c ? `Give back ${c.data.name}` : 'Talk', go: () => { if (c){ closePanel(); handOver(o); } else refreshPanel(() => visitorPanel(o)); } } }; }) });
     else secs.push({ heading: 'Boarders', text: 'Customers come by in the morning to ask if you can look after their animals. Good care means more pay and tips.' });
   }
@@ -471,6 +523,8 @@ function activate(t, handIdx = 1){
   if (t.type === 'board'){ office('jobs'); return true; }
   if (t.type === 'lights'){ toggleLights(); return true; }
   if (t.type === 'bed'){ goToBed(); return true; }
+  if (t.type === 'companion'){ petPanel(t.pet); return true; }
+  if (t.type === 'petBowl'){ if (farm.fillBowl()) sfx.grain(PLACES.petBowl); return true; }
   if (t.type === 'showOffice'){ office('shows'); return true; }
   if (t.type === 'visitor'){ visitorPanel(t.offer); return true; }
   if (!it){
@@ -810,7 +864,7 @@ function vrPointing(){
     }
     if (player.heldBy[h.i] || h.lead || riding.horse) continue;
     const t = castFrom(h.rayPos, dir, 12);
-    const can = t && ['horse', 'head', 'hoof', 'pet', 'visitor', 'board', 'showOffice', 'lights', 'bed'].includes(t.type);
+    const can = t && ['horse', 'head', 'hoof', 'pet', 'visitor', 'board', 'showOffice', 'lights', 'bed', 'companion', 'petBowl'].includes(t.type);
     laser.visible = h.trigger > 0.1 || can; laser.position.copy(h.rayPos); laser.quaternion.setFromUnitVectors(V(0, 0, 1), dir); laser.scale.set(1, 1, t ? Math.min(t.dist, 12) : 3);
     laser.material.color.set(can ? 0xffe060 : 0xffffff);
     if (h.triggerDown && can){ activate(t, h.i); h.haptic(0.2, 30); }
@@ -1191,6 +1245,7 @@ function refreshTitle(){
 }
 function ensureGame(fresh){
   if (fresh || !farm.state){ if (fresh || !farm.load()) farm.newGame(); care.syncTack(); }
+  if (farm.welcomePets){ farm.welcomePets = false; setTimeout(() => farm.say('New on the farm: Scout the dog and Whiskers the cat! Tap Scout to have tools fetched. There\'s a cow pasture too: buy cows in the Farm Office (Animals) and milk them.', 'good'), 1500); }
   world.barnLights.set(!!farm.state.lights);
 }
 function startScreen(fresh){
@@ -1219,7 +1274,7 @@ async function startVR(fresh){
 }
 function welcome(){
   showPanel({ title: 'Welcome to your farm!', sections: [
-    { text: 'This is Hazel, your warmblood mare. She\'s in the first stall on the left in the big red barn, and she\'s hungry, thirsty and muddy. You also have two goats and four hens.' },
+    { text: 'This is Hazel, your warmblood mare. She\'s in the first stall on the left in the big red barn, and she\'s hungry, thirsty and muddy. You also have two goats, four hens, Scout the farm dog (Scout follows you and fetches tools: tap Scout) and Whiskers the barn cat.' },
     { list: [
       'Feed room (back left of the barn): hay, grain bins, the water tap, carrots, shavings.',
       'Tack room (back right): saddle, saddle pad, bridle, and the grooming box with curry comb, brush and hoof pick.',
@@ -1261,7 +1316,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) farm.
 window.__farm = {
   get mode(){ return mode; }, farm, care, riding, world, player, renderer, camera, scene, settings, vr, vrPanel, screenUI, rig, sky, classes: CLASSES,
   timeScale: 1, noRender: false, input: null,
-  startScreen, startVR, office, horsePanel, animalPanel, closePanel, handOver, touch, tap, handleTap, pickUp, putBack, startLead, letGo, tieAtRail, activate, castFrom, resolve, takeFrom, collectEggs,
+  startScreen, startVR, office, horsePanel, animalPanel, petPanel, dogFetch, closePanel, handOver, touch, tap, handleTap, pickUp, putBack, startLead, letGo, tieAtRail, activate, castFrom, resolve, takeFrom, collectEggs,
   get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
   look(yaw, pitch){ player.yaw = yaw; player.pitch = pitch; },
   // tap whatever is at a world point (projects it to the screen first)

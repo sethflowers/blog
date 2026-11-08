@@ -6,14 +6,17 @@ import { V, clamp, lerp, damp, rng, angleDiff, ellipsoid, fmtMoney, vnoise } fro
 import { HorseModel, BREEDS, COATS } from './horse.js';
 import { Animal, SPECIES } from './animals.js';
 import { Person } from './people.js';
+import { Pet, PET_KINDS, defaultPets } from './pets.js';
 import { BARN, STALL_W, PADDOCK, PENS, PLACES, ARENA, SHOW, pushOut, stallAt, inBox, colliders, worldMaterials } from './world.js';
 import { mat } from './textures.js';
 
 export const SAVE_KEY = 'my-animal-farm-save';
 export const DAY_START = 6 * 60, NIGHT = 21 * 60;
-export const PRICES = { hay: 9, grain: 28, shavings: 8, carrots: 4, pigfeed: 16, corn: 12, farrier: 90, vet: 120 };
-export const SUPPLY_UNITS = { hay: 'bales', grain: 'scoops', shavings: 'bags', carrots: 'carrots', pigfeed: 'scoops', corn: 'scoops' };
-export const SUPPLY_PACK = { hay: 1, grain: 30, shavings: 1, carrots: 10, pigfeed: 30, corn: 30 };
+export const PRICES = { hay: 9, grain: 28, shavings: 8, carrots: 4, pigfeed: 16, corn: 12, petfood: 14, farrier: 90, vet: 120 };
+// what the dairy, the egg buyer and the wool merchant pay
+export const PRODUCE = { eggs: { price: 0.75, unit: 'eggs', each: '75¢ each' }, wool: { price: 24, unit: 'fleeces', each: '$24 each' }, milk: { price: 1.5, unit: 'litres of milk', each: '$1.50 a litre' } };
+export const SUPPLY_UNITS = { hay: 'bales', grain: 'scoops', shavings: 'bags', carrots: 'carrots', pigfeed: 'scoops', corn: 'scoops', petfood: 'meals' };
+export const SUPPLY_PACK = { hay: 1, grain: 30, shavings: 1, carrots: 10, pigfeed: 30, corn: 30, petfood: 20 };
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const isShowDay = (d) => d % 3 === 0;
 export const dayName = (d) => WEEKDAYS[(d - 1) % 7];
@@ -249,13 +252,13 @@ export class Farm {
   newGame(){
     const R = rng(Date.now() % 100000);
     this.state = {
-      v: 1, day: 1, minutes: 7 * 60, money: 3000, earned: 0,
-      supplies: { hay: 10, grain: 40, shavings: 5, carrots: 12, pigfeed: 0, corn: 30, eggs: 0, wool: 0 },
+      v: 1, day: 1, minutes: 7 * 60, money: 4000, earned: 0,
+      supplies: { hay: 10, grain: 40, shavings: 5, carrots: 12, pigfeed: 0, corn: 30, eggs: 0, wool: 0, milk: 0, petfood: 20 },
       horses: [randomHorse(rng(11), { name: 'Hazel', breed: 'warmblood', coat: 'bay', socks: [0, 0, 1, 0], face: 'star', skill: 0.3, sex: 'mare', age: 8 })],
       stalls: this.stalls.map(() => ({ hay: 0, grain: 0, water: 6, manure: [], wet: 0.3, bedding: 0.7 })),
       animals: [], pens: this.pens.map((p) => ({ feed: 0.3, water: 0.4, droppings: [], eggs: 0 })),
       offers: [], ribbons: [], market: null, marketDay: 0, nextOfferDay: 1, log: [], shows: {}, farrierDay: 0,
-      tutorial: 0,
+      tutorial: 0, pets: defaultPets(), petBowl: 2,
     };
     const h = this.state.horses[0]; h.stall = 0; h.needs = { food: 45, water: 40, energy: 90, happy: 65, health: 100 }; h.dirt = 0.5; h.hooves = [0.7, 0.7, 0.6, 0.6];
     this.state.stalls[0].manure = [[0.6, 0.8], [-0.4, -0.9], [0.9, -0.3]];
@@ -264,11 +267,21 @@ export class Farm {
     this.build();
   }
   load(){
-    try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s && s.v === 1){ this.state = s; this.build(); return true; } } catch (e) {}
+    try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (s && s.v === 1){ this.state = s; this.upgrade(); this.build(); return true; } } catch (e) {}
     return false;
+  }
+  // a save from an older version: add what's new (the cow pasture, the dog and cat, milk, pet food)
+  upgrade(){
+    const S = this.state;
+    while (S.pens.length < this.pens.length) S.pens.push({ feed: 0.3, water: 0.4, droppings: [], eggs: 0 });
+    S.supplies.milk = S.supplies.milk || 0;
+    if (S.supplies.petfood == null) S.supplies.petfood = 20;
+    if (!S.pets){ S.pets = defaultPets(); S.petBowl = 2; this.welcomePets = true; }
+    if (S.petBowl == null) S.petBowl = 2;
   }
   save(){
     if (!this.state) return;
+    for (const p of this.pets){ p.data.x = +p.pos.x.toFixed(2); p.data.z = +p.pos.z.toFixed(2); }
     for (const h of this.horses){ h.data.dirt = clamp(h.model.dirtiness() * 1.4); }
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.state)); } catch (e) {}
   }
@@ -276,12 +289,15 @@ export class Farm {
   build(){
     for (const h of this.horses) this.scene.remove(h.root);
     for (const a of this.animals) this.scene.remove(a.root);
-    this.horses = []; this.animals = [];
+    for (const p of this.pets || []) this.scene.remove(p.root);
+    this.horses = []; this.animals = []; this.pets = [];
     for (const p of this.pens){ p.list = []; }
     this.stalls.forEach((s, i) => { s.state = this.state.stalls[i]; s.horse = null; });
     this.pens.forEach((p, i) => { const ps = this.state.pens[i]; p.saved = ps; p.feedAmt = ps.feed; p.waterAmt = ps.water; });
     for (const d of this.state.horses) this.addHorse(d);
     for (const d of this.state.animals) this.addAnimal(d);
+    for (const d of this.state.pets) this.addPet(d);
+    this.refreshBowl();
     this.stalls.forEach((s, i) => this.refreshStall(i));
     this.pens.forEach((p, i) => this.refreshPen(i));
     this.refreshSupplies();
@@ -313,9 +329,58 @@ export class Farm {
     this.scene.add(a.root);
     return a;
   }
+  addPet(d){
+    const p = new Pet(d); p.data = Object.assign(d, p.data);
+    if (d.x != null) p.pos.set(d.x, 0, d.z); else p.pos.set(PLACES.petBowl.x + 1 + Math.random() * 2, 0, PLACES.petBowl.z + 1 + Math.random());
+    this.pets.push(p); this.scene.add(p.root);
+    return p;
+  }
+  refreshBowl(){
+    const n = this.state.petBowl || 0, f = this.world.fixtures.petBowl.food;
+    f.forEach((m, k) => { const fill = clamp((n - k * 2) / 2); m.visible = fill > 0.02; m.scale.y = 0.3 + 0.7 * fill; });
+  }
+  // the pet bowls hold up to 4 meals
+  fillBowl(){
+    const S = this.state, want = Math.max(0, 4 - Math.ceil(S.petBowl || 0));
+    if (!want){ this.say('The bowls are full.'); return false; }
+    if (!S.supplies.petfood){ this.say('No pet food left. Buy some in the Farm Office shop.'); return false; }
+    const n = Math.min(want, S.supplies.petfood);
+    S.supplies.petfood -= n; S.petBowl = Math.min(4, (S.petBowl || 0) + n); this.refreshBowl();
+    this.say(`Filled the pet bowls (${S.supplies.petfood} meals of pet food left).`); return true;
+  }
+  petEats(p){
+    const S = this.state; if ((S.petBowl || 0) <= 0) return;
+    S.petBowl = Math.max(0, S.petBowl - 0.5); p.data.food = 100; p.data.happy = Math.min(100, p.data.happy + 5); this.refreshBowl();
+  }
+  petNeeds(h){
+    for (const p of this.pets){
+      const D = p.data;
+      D.food = Math.max(0, D.food - h * (p.kind === 'dog' ? 5 : 4));
+      if (D.food < 35 && (this.state.petBowl || 0) > 0) this.petEats(p);      // they help themselves (overnight too)
+      D.happy = clamp(D.happy + h * (D.food > 30 ? 0.5 : -3), 0, 100);
+    }
+  }
+  dogs(){ return this.pets.filter((p) => p.kind === 'dog'); }
+  cats(){ return this.pets.filter((p) => p.kind === 'cat'); }
+  buyPet(kind){
+    const S = this.state, K = PET_KINDS[kind];
+    if (this.pets.filter((p) => p.kind === kind).length >= K.max){ this.say(`You have as many ${kind}s as the farm needs.`); return null; }
+    if (S.money < K.price){ this.say('Not enough money.'); return null; }
+    S.money -= K.price;
+    const d = { kind, mode: kind === 'dog' ? 'follow' : 'wander' }; const p = this.addPet(d); S.pets.push(p.data);
+    this.say(`${p.data.name} the ${p.breed} has joined the farm!`, 'money'); this.save(); return p;
+  }
+  // milking a cow: twice a day her udder fills
+  milk(a){
+    const D = a.data;
+    if ((D.milk || 0) < 0.25){ this.say(`${D.name} doesn't have much milk yet. Cows are milked morning and evening.`); return 0; }
+    const L = Math.round(D.milk * 14);
+    this.state.supplies.milk = (this.state.supplies.milk || 0) + L; D.milk = 0; D.happy = Math.min(100, D.happy + 6);
+    this.say(`Milked ${D.name}: ${L} litres of milk. Sell it in the Farm Office shop.`, 'good'); return L;
+  }
   freeStall(){ return this.stalls.findIndex((s) => !s.horse); }
   horseById(id){ return this.horses.find((h) => h.data.id === id); }
-  penCapacity(kind){ return kind === 'chicken' ? 12 : 6; }
+  penCapacity(kind){ return kind === 'chicken' ? 12 : kind === 'cow' ? 4 : 6; }
 
   // where in a stall a horse stands to eat hay, grain, drink, look out
   stallSpots(s){
@@ -419,6 +484,7 @@ export class Farm {
     const h = dtMin / 60;
     for (const horse of this.horses) this.horseNeeds(horse, h, dtMin);
     this.pens.forEach((p, i) => this.penNeeds(p, i, h));
+    this.petNeeds(h);
     // events on the hour
     if (Math.floor(prevMin / 60) !== Math.floor(S.minutes / 60)) this.hourly(Math.floor(S.minutes / 60));
     if (S.minutes >= 24 * 60){ this.newDay(); }
@@ -483,6 +549,7 @@ export class Farm {
       let hurt = (D.food < 15 ? 2 : 0) + (D.water < 15 ? 3 : 0) + (p.saved.droppings.length > 12 ? 0.5 : 0);
       D.health = clamp(D.health - hurt * h + (hurt === 0 ? h * 0.6 : 0), 0, 100);
       if (a.kind === 'sheep') D.wool = Math.min(1, D.wool + h * 0.004);
+      if (a.kind === 'cow'){ D.milk = Math.min(1, (D.milk || 0) + h * (D.food > 30 && D.water > 30 ? 0.085 : 0.02)); if (D.milk >= 1) D.happy = Math.max(0, D.happy - h * 2); }
     }
     // droppings now and then
     p.dropT = (p.dropT || 0) - h * p.list.length;
@@ -536,6 +603,7 @@ export class Farm {
         for (const a of p.list){ if (p.feedAmt > 0 && a.data.food < 90){ const e = Math.min(p.feedAmt, 0.01 * m / 30); p.feedAmt -= e; a.data.food = Math.min(100, a.data.food + e * 600); } if (p.waterAmt > 0 && a.data.water < 90){ const e = Math.min(p.waterAmt, 0.012 * m / 30); p.waterAmt -= e; a.data.water = Math.min(100, a.data.water + e * 600); } }
         this.penNeeds(p, i, m / 60);
       });
+      this.petNeeds(m / 60);
       S.minutes += m;
       if (S.minutes >= 24 * 60) this.newDay();
     }
@@ -547,10 +615,25 @@ export class Farm {
       // tack left on overnight
       if (h.data.tack.saddle || h.data.tack.bridle){ for (const k of ['pad', 'saddle', 'girth', 'bridle']) h.setTack(k, false); this.say(`The farmhand took ${h.data.name}'s tack off overnight.`); this.emit('tackHome'); }
     }
+    this.nightVisitors();
     this.spawnVisitors();
     this.save();
     this.emit('morning');
     return true;
+  }
+  // in the night a fox may come for the hens (unless a dog's on the farm) and mice for the grain
+  // (unless there's a cat)
+  nightVisitors(){
+    const S = this.state, hens = this.animals.filter((a) => a.kind === 'chicken' && !a.data.owner);
+    const dog = this.dogs()[0], cat = this.cats()[0];
+    if (hens.length && Math.random() < 0.22){
+      if (dog) this.say(`${dog.data.name} barked a fox away from the hen house in the night. Good dog!`, 'good');
+      else if (hens.length > 1){ const h = hens[Math.floor(Math.random() * hens.length)]; this.removeCreature(h); this.say(`A fox took ${h.data.name} the hen in the night. A farm dog would keep foxes away.`, 'bad'); }
+    }
+    if (Math.random() < 0.3){
+      if (cat) this.say(`${cat.data.name} caught a mouse in the feed room.`, 'good');
+      else if (S.supplies.grain > 4){ S.supplies.grain -= 3; this.say('Mice got into the grain bin in the night (3 scoops gone). A barn cat would keep them out.', 'bad'); }
+    }
   }
   // boarders pay each day for the care they got
   dailyPay(){
@@ -560,7 +643,7 @@ export class Farm {
     for (const h of this.horses){
       const D = h.data; if (!D.owner) continue;
       const score = careScore(D.needs, h.model.dirtiness(), D.hooves, h.stall ? h.stall.state : null);
-      const pay = Math.round(D.owner.rate * (0.4 + 0.6 * score));
+      const pay = Math.round(D.owner.rate * (0.5 + 0.5 * score));
       D.owner.paid = (D.owner.paid || 0) + pay; D.owner.scores = [...(D.owner.scores || []), score]; D.owner.daysLeft--;
       total += pay; lines.push(`${D.name}: ${fmtMoney(pay)} (${Math.round(score * 100)}% care)`);
     }
@@ -568,7 +651,7 @@ export class Farm {
       const D = a.data; if (!D.owner) continue;
       const pen = this.pens.find((p) => p.kind === a.kind);
       const score = clamp((D.food + D.water + D.happy + D.health) / 400 - pen.saved.droppings.length * 0.02);
-      const pay = Math.round(D.owner.rate * (0.4 + 0.6 * score));
+      const pay = Math.round(D.owner.rate * (0.5 + 0.5 * score));
       D.owner.paid = (D.owner.paid || 0) + pay; D.owner.scores = [...(D.owner.scores || []), score]; D.owner.daysLeft--;
       total += pay; lines.push(`${D.name}: ${fmtMoney(pay)}`);
     }
@@ -586,18 +669,18 @@ export class Farm {
     for (const h of this.horses) if (h.data.owner && h.data.owner.daysLeft <= 0 && !this.offers.some((o) => o.pickup === h.data.id)) this.offers.push({ id: 'p' + h.data.id, pickup: h.data.id, who: h.data.owner.who, kind: 'horse' });
     for (const a of this.animals) if (a.data.owner && a.data.owner.daysLeft <= 0 && !this.offers.some((o) => o.pickup === a.data.id)) this.offers.push({ id: 'p' + a.data.id, pickup: a.data.id, who: a.data.owner.who, kind: a.kind });
     // a new customer, sometimes
-    if (S.day >= S.nextOfferDay && Math.random() < 0.8 && !this.offers.some((o) => !o.pickup)){
+    if (S.day >= S.nextOfferDay && Math.random() < 0.9 && !this.offers.some((o) => !o.pickup)){
       const R = rng(S.day * 31 + 7);
       const horse = R() < 0.6 && this.freeStall() >= 0;
-      const kinds = ['goat', 'sheep', 'pig', 'chicken'].filter((k) => this.pens.find((p) => p.kind === k).list.length < this.penCapacity(k));
+      const kinds = ['goat', 'sheep', 'pig', 'chicken', 'cow'].filter((k) => this.pens.find((p) => p.kind === k).list.length < this.penCapacity(k));
       const days = 2 + Math.floor(R() * 4), who = CUSTOMER_NAMES[Math.floor(R() * CUSTOMER_NAMES.length)];
       if (horse){
         const d = randomHorse(R, {}); d.needs = { food: 60, water: 60, energy: 80, happy: 70, health: 100 }; d.dirt = 0.25 + R() * 0.3;
-        const rate = Math.round((45 + R() * 40) / 5) * 5;
+        const rate = Math.round((60 + R() * 45) / 5) * 5;
         this.offers.push({ id: 'o' + S.day, kind: 'horse', who, days, rate, horse: d });
       } else if (kinds.length){
         const kind = kinds[Math.floor(R() * kinds.length)];
-        const n = kind === 'chicken' ? 3 + Math.floor(R() * 3) : 1 + Math.floor(R() * 2);
+        const n = kind === 'chicken' ? 3 + Math.floor(R() * 3) : kind === 'cow' ? 1 : 1 + Math.floor(R() * 2);
         const rate = SPECIES[kind].board * n;
         this.offers.push({ id: 'o' + S.day, kind, n, who, days, rate });
       }
@@ -635,7 +718,7 @@ export class Farm {
       // collecting: they pay a bonus for great care
       const h = this.horseById(o.pickup), a = this.animals.find((x) => x.data.id === o.pickup);
       const D = (h || a).data, scores = D.owner.scores || [1], avg = scores.reduce((x, y) => x + y, 0) / scores.length;
-      const tip = avg > 0.85 ? Math.round(D.owner.rate * 1.5) : avg > 0.7 ? Math.round(D.owner.rate * 0.5) : 0;
+      const tip = avg > 0.8 ? Math.round(D.owner.rate * 2) : avg > 0.6 ? Math.round(D.owner.rate * 0.75) : 0;
       S.money += tip; S.earned += tip;
       // the same owner may have several animals
       const owner = D.owner.who;
@@ -722,9 +805,10 @@ export class Farm {
     this.refreshSupplies(); this.save(); return true;
   }
   sellProduce(k){
-    const S = this.state, price = k === 'eggs' ? 0.5 : 18, n = S.supplies[k];
-    if (!n){ this.say(`No ${k} to sell.`); return; }
-    S.money += n * price; S.earned += n * price; S.supplies[k] = 0; this.say(`Sold ${n} ${k === 'eggs' ? 'eggs' : 'fleeces'} for ${fmtMoney(n * price)}.`, 'money'); this.save();
+    const S = this.state, P = PRODUCE[k], n = S.supplies[k] || 0;
+    if (!n){ this.say(`No ${P.unit} to sell.`); return; }
+    const got = Math.round(n * P.price);
+    S.money += got; S.earned += got; S.supplies[k] = 0; this.say(`Sold ${n} ${P.unit} for ${fmtMoney(got)}.`, 'money'); this.save();
   }
   callFarrier(){
     const S = this.state;
@@ -771,6 +855,7 @@ export class Farm {
       if (p.waterAmt < 0.3) J.push({ text: `Fill the ${name}' water trough`, done: false, where: 'pens' });
       if (p.saved.droppings.length > 3) J.push({ text: `Clean the ${name}' pen`, done: false, where: 'pens' });
       if (p.kind === 'chicken' && p.saved.eggs > 0) J.push({ text: `Collect ${p.saved.eggs} egg${p.saved.eggs > 1 ? 's' : ''} from the coop`, done: false, where: 'pens' });
+      if (p.kind === 'cow' && p.list.some((a) => (a.data.milk || 0) > 0.7)) J.push({ text: 'Milk the cows (tap a cow)', done: false, where: 'pens' });
       if (p.kind === 'sheep' && p.list.some((a) => a.data.wool > 0.8)) J.push({ text: 'Shear the sheep (shears hang on the pen gate)', done: false, where: 'pens' });
     }
     for (const o of [...this.offers].reverse()){
@@ -779,6 +864,7 @@ export class Farm {
         ? { text: `${o.who} wants ${c.data.name} back: tap ${o.who} by the house, or tap ${c.data.name} and choose Give back`, done: false, where: 'house' }
         : { text: `${o.who} is waiting by the house (tap them to talk)`, done: false, where: 'house' });
     }
+    if (this.pets.length && (S.petBowl || 0) < 0.5) J.push({ text: 'Fill the dog and cat bowls by the barn door', done: false, where: 'bowl' });
     if (isShowDay(S.day) && S.minutes < 17 * 60 && !S.shows[S.day]) J.push({ text: 'Show day! Tack up and ride to the show grounds (9am–5pm)', done: false, where: 'show' });
     void morning; void evening;
     return J;
@@ -788,6 +874,7 @@ export class Farm {
     for (const h of this.horses) h.update(dt, ctx);
     const night = this.state.minutes > NIGHT || this.state.minutes < DAY_START;
     for (const p of this.pens) for (const a of p.list) a.update(dt, p, night, ctx.player);
+    for (const p of this.pets) p.update(dt, { player: ctx.player, night, bowl: { pos: PLACES.petBowl, amount: this.state.petBowl || 0 }, catSpots: this.world.catSpots, eat: (pp) => this.petEats(pp), grab: (pp, it) => this.emit('petGrab', { pet: pp, item: it }), deliver: (pp, it) => this.emit('petDeliver', { pet: pp, item: it }) });
     for (const v of this.visitors){
       v.t += dt;
       const near = ctx.player && v.person.root.position.distanceTo(V(ctx.player.x, 0, ctx.player.z)) < 6;
