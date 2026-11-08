@@ -4,7 +4,7 @@
    cached copy is only used when the network fails (or, for the page itself, takes over 4 seconds).
    Scripts are requested with ?v=<version> by the page, and are cached by that full address, so an old
    copy can never stand in for a new version. */
-var CACHE = 'my-animal-farm-v1';
+var CACHE = 'my-animal-farm-v2';
 var BASE = '/experiments/my-animal-farm/';
 var ASSETS = [
   BASE,
@@ -21,6 +21,7 @@ var ASSETS = [
   BASE + 'js/horse.js',
   BASE + 'js/main.js',
   BASE + 'js/people.js',
+  BASE + 'js/pets.js',
   BASE + 'js/riding.js',
   BASE + 'js/sky.js',
   BASE + 'js/textures.js',

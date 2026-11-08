@@ -154,3 +154,26 @@ simulation faster (`__farm.timeScale`).
 - Owners collecting animals: the message and jobs list say who has come for which animal and how to
   give it back; the animal's own panel has "Give back to …"; the office lists everyone waiting by the
   house with a button each. People collecting are shown first by the house.
+
+## v1.6
+- Cows: a grassy pasture east of the pens (up to 4 cows, $950 each; Holstein, Jersey, Hereford,
+  Angus). They eat hay from the feeder and drink from the trough like the goats. Their udder fills
+  through the day (fuller when fed and watered); tap a cow and Milk her for up to 14 litres, sold in
+  the shop at $1.50 a litre. A cow left full too long gets unhappy. Customers sometimes board cows.
+- Dogs and cats (pets.js) roam free and eat from the bowls by the barn door (tap to fill from the pet
+  food in the shop; the bowls hold 4 meals; pets also help themselves overnight). Every farm, new or
+  old, gets Scout the border collie and Whiskers the tabby; more from the Animals tab (dogs $250, up
+  to 3; cats $60, up to 4).
+  - A dog follows you (or stays when told), and fetches tools: tap the dog, pick a tool, and it runs
+    off (through the barn and house doors, slipping under stall doors), picks it up in its mouth and
+    puts it in your hand (or at your feet if your hands are full). A dog keeps the fox off the hens
+    at night; without one, a fox may take a hen.
+  - A cat wanders its favourite spots (feed room, aisle, tack room, porch, house), naps, and comes
+    for a fuss. A cat keeps mice out of the grain; without one, mice may eat 3 scoops in a night.
+- A bit easier to earn money: new farms start with $4,000; horse boarders pay $60–105 a day (was
+  $45–85) and other animals about a quarter more; pay is 50–100% of the rate depending on care (was
+  40–100%); tips are bigger and come sooner; customers come a little more often; show prizes are up
+  about a quarter; eggs 75¢ and fleeces $24.
+- Looks: dogs have long muzzles with a black nose and a tongue, floppy ears, a deep chest and tucked-up
+  belly, long legs and a bushy tail (cats keep short faces and pointed ears). A Holstein's black
+  patches are painted onto the hide with vertex colours (they were blobs that stuck out of the body).
