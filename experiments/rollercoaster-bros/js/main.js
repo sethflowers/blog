@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { V, clamp, lerp, damp, fmtMoney } from './util.js';
 import { PIECES, GROUPS, BUILD_ORDER, COLORS, pieceIcon, TILE, GRID_X, GRID_N, GRID_S } from './track.js';
 import { CARTS, SPEEDS, PARK } from './train.js';
-import { Park, SAVE_KEY, PLOTS, NAMES } from './park.js';
+import { Park, PLOTS, NAMES, PARK_NAMES, readParks, deletePark, chooseParkId } from './park.js';
 import { ScreenPanel, Tablet } from './ui.js';
 import { startAudio, setListener, sfx, trainSound } from './audio.js';
 
@@ -96,6 +96,9 @@ function drawMsgs(){
 }
 
 // ---------- building ----------
+// money: a free-build park has as much as you like, and everything in it is free
+const cash = () => (park.free ? '∞ Free' : fmtMoney(park.state.money));
+const cost = (n) => (park.free ? 'Free' : fmtMoney(n));
 const owned = () => BUILD_ORDER.filter((t) => park.owns(PIECES[t].group));
 function addPiece(type, quiet){
   if (!park.owns(PIECES[type].group)){ shop('parts'); return false; }
@@ -156,7 +159,7 @@ function refreshPalette(){
     const b = document.createElement('button'); b.className = 'pb' + (own ? '' : ' locked');
     const img = new Image(); img.src = icons[t].toDataURL(); b.appendChild(img);
     const l = document.createElement('span'); l.textContent = own ? P0.name : GROUPS[P0.group].name; b.appendChild(l);
-    if (!own){ const pr = document.createElement('span'); pr.className = 'price'; pr.textContent = '🔒 ' + fmtMoney(GROUPS[P0.group].price); b.appendChild(pr); }
+    if (!own){ const pr = document.createElement('span'); pr.className = 'price'; pr.textContent = '🔒 ' + cost(GROUPS[P0.group].price); b.appendChild(pr); }
     b.onclick = () => { startAudio(); addPiece(t); };
     b.onpointerenter = (e) => { if (e.pointerType === 'mouse' && own && !track.complete){ const c = track.check(t); track.preview(t, c.ok, c.s, 999); } };
     b.onpointerleave = () => { if (track.ghostT > 100) track.clearGhost(); };
@@ -171,7 +174,7 @@ function updateHUD(){
   if (mode !== 'screen') return;
   const S = park.state, R = cur.rating;
   $('h-name').textContent = '🎢 ' + cur.name;
-  $('h-money').textContent = fmtMoney(S.money);
+  $('h-money').textContent = park.free ? '🌈 Free build' : fmtMoney(S.money);
   if (track.complete){
     $('h-rate').innerHTML = `⭐ Fun <b>${R.excitement.toFixed(1)}</b> · 😱 Scary <b>${R.intensity.toFixed(1)}</b><br>🎟 Ticket <b>${fmtMoney(cur.ticket(R))}</b> · 👥 Waiting <b>${park.queueLength(cur)}</b><br>🏆 Riders <b>${(cur.data.riders || 0).toLocaleString()}</b>${park.coasters.length > 1 ? ` · park <b>${S.riders.toLocaleString()}</b>` : ''}`;
   } else $('h-rate').innerHTML = `🚧 <b>Build back to the station</b><br>to open your coaster!`;
@@ -215,31 +218,32 @@ function shop(tab = shopTab){
     sections.push({ text: 'New kinds of track. Buy them once and use them as much as you like.' });
     sections.push({ rows: Object.entries(GROUPS).filter(([k]) => k !== 'starter').map(([k, G]) => {
       const own = park.owns(k);
-      return { title: G.name, sub: G.text, icon: icons[G.pieces[0]], on: own, button: own ? { label: '✓ Yours', disabled: true, go(){} } : { label: fmtMoney(G.price), disabled: S.money < G.price, go: () => buyGroup(k) } };
+      return { title: G.name, sub: G.text, icon: icons[G.pieces[0]], on: own, button: own ? { label: '✓ Yours', disabled: true, go(){} } : { label: cost(G.price), disabled: !park.afford(G.price), go: () => buyGroup(k) } };
     }) });
   } else if (tab === 'carts'){
     sections.push({ text: `Cool new trains. Buy one once and use it on any of your coasters (this one is ${cur.name}).` });
     sections.push({ rows: CARTS.map((c) => {
-      const own = S.carts.includes(c.id), using = train.style === c.id;
-      return { title: c.name, sub: c.text, icon: cartIcons[c.id], on: using, button: using ? { label: '✓ Riding', disabled: true, go(){} } : own ? { label: 'Use it', go: () => { D.cart = c.id; train.setStyle(c.id); sfx.click(); park.save(); shop('carts'); } } : { label: fmtMoney(c.price), disabled: S.money < c.price, go: () => buyCart(c) } };
+      const own = park.hasCart(c.id), using = train.style === c.id;
+      return { title: c.name, sub: c.text, icon: cartIcons[c.id], on: using, button: using ? { label: '✓ Riding', disabled: true, go(){} } : own ? { label: 'Use it', go: () => { D.cart = c.id; train.setStyle(c.id); sfx.click(); park.save(); shop('carts'); } } : { label: cost(c.price), disabled: !park.afford(c.price), go: () => buyCart(c) } };
     }) });
   } else {
     sections.push({ text: `Pick a colour for ${cur.name}'s track (free!).` });
     sections.push({ grid: COLORS.map((c, i) => ({ label: c.name, on: track.color === i, icon: swatch(c.rail), go: () => { D.color = i; track.setColor(i); sfx.click(); park.save(); shop('paint'); } })) });
   }
-  showPanel({ title: '🛒 Shop', money: fmtMoney(S.money), tabs, sections, onClose(){} });
+  showPanel({ title: '🛒 Shop', money: cash(), tabs, sections, onClose(){} });
 }
 function swatch(hex){ const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); g.fillStyle = '#' + hex.toString(16).padStart(6, '0'); g.beginPath(); g.arc(32, 32, 26, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 4; g.stroke(); return c; }
 function buyGroup(k){
   const G = GROUPS[k];
   if (!park.spend(G.price)){ say('Not enough money yet!', 'bad'); return; }
-  park.state.groups.push(k); sfx.buy(); park.save();
+  if (!park.state.groups.includes(k)) park.state.groups.push(k); sfx.buy(); park.save();
   say(`You bought ${G.name}! Find ${G.pieces.length > 1 ? 'them' : 'it'} at the bottom.`, 'good');
   refreshPalette(); shop('parts');
 }
 function buyCart(c){
   if (!park.spend(c.price)){ say('Not enough money yet!', 'bad'); return; }
-  park.state.carts.push(c.id); cur.data.cart = c.id; train.setStyle(c.id); sfx.buy(); park.save();
+  if (!park.state.carts.includes(c.id)) park.state.carts.push(c.id);
+  cur.data.cart = c.id; train.setStyle(c.id); sfx.buy(); park.save();
   say(`Your coaster now has the ${c.name} train!`, 'good');
   shop('carts');
 }
@@ -259,17 +263,18 @@ function setSpeed(i, reopen){
 }
 function menu(){
   const S = park.state;
-  showPanel({ title: '☰ Menu', sections: [
-    { text: `Money: ${fmtMoney(S.money)} · Earned so far: ${fmtMoney(S.earned)} · Riders: ${S.riders}` },
+  showPanel({ title: '☰ ' + S.name, sections: [
+    { text: park.free ? `🌈 A free-build park: everything is free! · Riders: ${S.riders}` : `Money: ${fmtMoney(S.money)} · Earned so far: ${fmtMoney(S.earned)} · Riders: ${S.riders}` },
     { heading: 'How to play', list: [
       'Tap the track pieces at the bottom to add them to the end of your track (the yellow arrow).',
       'Get back round to the station (from behind it, at ground level) to finish your coaster. “Finish” does it for you.',
       'People come and ride. Each ride earns you a ticket. A more fun coaster has a dearer ticket and more people.',
-      'Buy hills, big drops, loops, barrel rolls and jumps in the Shop, and new trains and colours.',
+      'Buy hills, big drops, loops, barrel rolls, upside-down track and jumps in the Shop, and new trains and colours.',
+      'Your theme parks: make as many parks as you like from the title screen. Each has its own name, coasters and money.',
       'Coasters: build more coasters side by side to make a theme park, and save designs you like to build again.',
       'Too fast or too wild and some people will be too scared to ride!',
     ] },
-    { buttons: [{ label: 'Back to the game', kind: 'primary', go: closePanels }, { label: 'Title screen', go: () => { closePanels(); toTitle(); } }] },
+    { buttons: [{ label: 'Back to the game', kind: 'primary', go: closePanels }, { label: '🏞 Other parks', go: () => { closePanels(); toTitle(); openParks(); } }, { label: 'Title screen', go: () => { closePanels(); toTitle(); } }] },
   ] });
 }
 // ---------- your coasters, and saved designs ----------
@@ -277,15 +282,15 @@ function coastersPanel(){
   const S = park.state, price = park.newPrice, plot = park.nextPlot();
   const rows = park.coasters.map((c) => {
     const R = c.rating, here = c === cur;
-    return { title: c.name, on: here, icon: icons[c.track.types().find((t) => ['loop', 'roll', 'jump', 'steepDown'].includes(t)) || 'left'],
+    return { title: c.name, on: here, icon: icons[c.track.types().find((t) => ['loop', 'roll', 'hang', 'jump', 'steepDown'].includes(t)) || 'left'],
       sub: c.track.complete ? `Fun ${R.excitement.toFixed(1)} · ${c.data.riders || 0} riders · ${fmtMoney(c.data.earned || 0)} earned` : `Being built (${c.track.types().length} pieces)`,
       button: here ? { label: '✓ Here', disabled: true, go(){} } : { label: 'Go there', go: () => { select(c, true); closePanels(); say(`Now building ${c.name}.`, ''); } } };
   });
-  showPanel({ title: '🎢 Your coasters', money: fmtMoney(S.money), sections: [
+  showPanel({ title: '🎢 Your coasters', money: cash(), sections: [
     { text: 'Build a whole theme park! Every coaster earns money on its own. Tap one to go and build or ride it.' },
     { rows },
     { buttons: [
-      { label: plot < 0 ? 'The park is full' : `＋ New coaster (${fmtMoney(price)})`, kind: 'primary', disabled: plot < 0 || S.money < price, go: newCoaster },
+      { label: plot < 0 ? 'The park is full' : `＋ New coaster (${cost(price)})`, kind: 'primary', disabled: plot < 0 || !park.afford(price), go: newCoaster },
     ] },
     { heading: cur.name, buttons: [
       { label: '✏ Rename', go: renameCoaster },
@@ -329,12 +334,12 @@ function saveDesign(){
 function designsPanel(){
   const rows = park.designs.map((d, i) => {
     const miss = park.missing(d, PIECES);
-    const loops = d.track.filter((t) => t === 'loop' || t === 'roll').length;
-    return { title: d.name, icon: icons[d.track.find((t) => ['loop', 'roll', 'jump', 'steepDown'].includes(t)) || 'left'],
+    const loops = d.track.filter((t) => PIECES[t] && PIECES[t].inversions).length;
+    return { title: d.name, icon: icons[d.track.find((t) => ['loop', 'roll', 'hang', 'jump', 'steepDown'].includes(t)) || 'left'],
       sub: miss.length ? `Needs: ${miss.map((g) => GROUPS[g].name).join(', ')}` : `${d.track.length} pieces${loops ? ` · ${loops} upside down` : ''}`,
       button: { label: 'Build here', disabled: miss.length > 0, go: () => buildDesign(i) } };
   });
-  showPanel({ title: '📂 Saved designs', money: fmtMoney(park.state.money), sections: [
+  showPanel({ title: '📂 Saved designs', money: cash(), sections: [
     { text: rows.length ? `“Build here” puts a design on ${cur.name} (its track now is taken away). Saved designs stay even if you start a new park.` : 'No saved designs yet. Build a coaster you like and press “Save design”.' },
     { rows },
     ...(rows.length ? [{ heading: 'Throw a design away', buttons: park.designs.slice(0, 6).map((d, i) => ({ label: '✕ ' + d.name, go: () => { park.designs.splice(i, 1); park.saveDesigns(); sfx.undo(); designsPanel(); } })) }] : []),
@@ -347,7 +352,7 @@ function buildDesign(i){
   building.length = 0;
   track.load(d.track);
   if (d.color != null){ track.setColor(d.color); cur.data.color = d.color; }
-  if (d.cart && park.state.carts.includes(d.cart)){ train.setStyle(d.cart); cur.data.cart = d.cart; }
+  if (d.cart && park.hasCart(d.cart)){ train.setStyle(d.cart); cur.data.cart = d.cart; }
   if (d.speed != null) cur.data.speed = d.speed;
   changed();
   const got = track.types().length;
@@ -601,7 +606,7 @@ function tabletSpec(){
   const S = park.state, R = cur.rating, D = cur.data;
   if (vrPage) return { ...vrPage, sections: [...(vrPage.sections || []), { buttons: [{ label: '⬅ Back', go: () => { vrPage = null; refreshTablet(); } }] }] };
   if (view === 'ride'){
-    return { title: '🎢 Riding!', money: fmtMoney(S.money), sections: [
+    return { title: '🎢 Riding!', money: cash(), sections: [
       { text: `Speed: ${Math.round(train.v * 2.237)} mph · ${SPEEDS[D.speed].name}` },
       { buttons: [{ label: '⬅ Get off (A)', kind: 'danger', go: stopRide }] },
       { buttons: [{ label: '− Slower', disabled: D.speed === 0, go: () => setSpeed(D.speed - 1) }, { label: '+ Faster', disabled: D.speed === SPEEDS.length - 1, go: () => setSpeed(D.speed + 1) }] },
@@ -611,11 +616,11 @@ function tabletSpec(){
   for (const t of BUILD_ORDER){
     const P0 = PIECES[t], own = park.owns(P0.group);
     if (!own && t !== GROUPS[P0.group].pieces[0]) continue;
-    grid.push(own ? { label: P0.name, icon: icons[t], disabled: track.complete, go: () => addPiece(t) } : { label: '🔒 ' + fmtMoney(GROUPS[P0.group].price), icon: icons[t], go: () => shop('parts') });
+    grid.push(own ? { label: P0.name, icon: icons[t], disabled: track.complete, go: () => addPiece(t) } : { label: '🔒 ' + cost(GROUPS[P0.group].price), icon: icons[t], go: () => shop('parts') });
   }
   const last = msgs.length ? msgs[msgs.length - 1].text : null;
   const status = last || (track.complete ? `Open! ⭐ Fun ${R.excitement.toFixed(1)} · 😱 ${R.intensity.toFixed(1)} · 🎟 ${fmtMoney(cur.ticket(R))} · 👥 ${park.queueLength(cur)}` : 'Build back round to the station!');
-  return { title: cur.name, money: fmtMoney(S.money), sections: [
+  return { title: cur.name, money: cash(), sections: [
     { text: status },
     { grid, cols: 4, cellH: 150 },
     { buttons: [{ label: '↶ Undo', go: undo }, { label: '✓ Finish', disabled: track.complete, go: finishTrack }, { label: '🗑 Clear', go: clearTrack }] },
@@ -697,26 +702,40 @@ function toTitle(){
   refreshTitle();
 }
 function refreshTitle(){
-  const has = !!localStorage.getItem(SAVE_KEY);
-  $('b-new').style.display = has ? '' : 'none';
+  const idx = readParks(), p = idx.list.find((q) => q.id === idx.current);
+  $('t-park').innerHTML = '';
+  if (p){
+    const b = document.createElement('b'); b.textContent = p.name;
+    $('t-park').append('🏞 ', b, ` · ${p.free ? '🌈 free build' : fmtMoney(p.money ?? 200)} · ${p.coasters || 1} coaster${(p.coasters || 1) > 1 ? 's' : ''}`);
+  }
+  $('b-parks').textContent = idx.list.length ? `🏞 Your theme parks (${idx.list.length})` : '🏞 Your theme parks';
 }
-// load the saved park (or start a new one)
-function ensureGame(fresh){
-  if (fresh || !park.load()) park.newGame();
+// behind the title: the park you'll play, or a demo coaster
+function titleScene(){
+  if (park.load() && park.coasters.some((c) => c.track.pieces.length > 1)) select(park.current);
+  else showDemo();
+  refreshPalette();
+}
+// load the park you're playing (there always is one by now)
+function ensureGame(){
+  if (!park.state.id && !park.load()) park.newGame();
   view = 'build';
   select(park.current);
   orbit.target.copy(track.endPoint()).setY(0); orbit.yaw = 0.7; orbit.pitch = 0.6; orbit.dist = 55; orbit.follow = true;
   refreshPalette();
 }
-function startScreen(fresh){
-  startAudio(); ensureGame(fresh);
+// made: the park was only just made (so it's already loaded)
+function startScreen(made){
+  if (!made && !readParks().current){ newParkDialog('screen'); return; }
+  startAudio(); if (!made) park.load(); ensureGame();
   mode = 'screen'; $('title').classList.add('hidden'); document.body.classList.add('playing');
   clock.getDelta();
   updateHUD();
   if (track.pieces.length <= 1 && !park.state.built) welcome();
 }
-async function startVR(fresh){
-  startAudio(); ensureGame(fresh);
+async function startVR(made){
+  if (!made && !readParks().current){ newParkDialog('vr'); return; }
+  startAudio(); if (!made) park.load(); ensureGame();
   try {
     const session = await navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['local-floor'], optionalFeatures: ['bounded-floor'] });
     session.addEventListener('end', () => {
@@ -734,24 +753,78 @@ async function startVR(fresh){
   } catch (e) { $('status').textContent = 'Could not start VR: ' + (e && e.message ? e.message : e); }
 }
 function welcome(){
-  showPanel({ title: 'Welcome, coaster builder!', sections: [
+  showPanel({ title: `Welcome to ${park.state.name}!`, sections: [
     { text: 'This is your station. Build a rollercoaster that goes out of the front of it and comes all the way back round into the back of it.' },
     { list: [
       'Tap a track piece to add it where the yellow arrow is.',
       'To start with you only have straights and turns: enough for a simple loop. “Finish” builds the way back for you.',
       'When it\'s finished, people come to ride it and pay for tickets.',
-      'Spend your money on hills, drops, loops, barrel rolls, jumps and cool new trains!',
+      park.free ? 'This is a free-build park: every track piece and train is yours already, and new coasters are free!' : 'Spend your money on hills, drops, loops, barrel rolls, upside-down track, jumps and cool new trains!',
     ] },
     { buttons: [{ label: 'Let\'s build!', kind: 'primary', go: closePanels }] },
   ] });
 }
 $('b-play').onclick = () => startScreen(false);
 $('b-vr').onclick = () => startVR(false);
-$('b-new').onclick = () => {
-  if (localStorage.getItem(SAVE_KEY) && !confirm('Start a new park? Your saved coaster and money will be lost.')) return;
-  localStorage.removeItem(SAVE_KEY);
-  if (navigator.xr && $('b-vr').dataset.ok === '1' && confirm('Play the new park in VR? (Cancel to play on this screen.)')) startVR(true); else startScreen(true);
+$('b-parks').onclick = () => openParks();
+
+// ---------- your theme parks (on the title screen) ----------
+function openParks(){
+  const idx = readParks(), box = $('parks-list');
+  box.innerHTML = '';
+  if (!idx.list.length){ const d = document.createElement('p'); d.className = 'pempty'; d.textContent = 'No parks yet. Build your first one!'; box.appendChild(d); }
+  for (const p of idx.list){
+    const row = document.createElement('div'); row.className = 'prow' + (p.id === idx.current ? ' on' : '');
+    const t = document.createElement('div'); t.className = 'pt';
+    const n = document.createElement('b'); n.textContent = p.name;
+    const sub = document.createElement('small');
+    sub.textContent = `${p.free ? '🌈 Free build' : '💰 ' + fmtMoney(p.money ?? 200)} · 🎢 ${p.coasters || 1} · 👥 ${(p.riders || 0).toLocaleString()} riders`;
+    t.append(n, sub); row.appendChild(t);
+    const play = document.createElement('button'); play.className = 'pplay'; play.textContent = p.id === idx.current ? '✓ Picked' : 'Pick';
+    play.onclick = () => { chooseParkId(p.id); titleScene(); refreshTitle(); openParks(); };
+    const del = document.createElement('button'); del.className = 'pdel'; del.textContent = '🗑'; del.title = 'Delete this park';
+    del.onclick = () => {
+      if (!confirm(`Delete ${p.name} for good? Its coasters and money will be gone. (Saved designs are kept.)`)) return;
+      deletePark(p.id); titleScene(); refreshTitle(); openParks();
+    };
+    row.append(play, del); box.appendChild(row);
+  }
+  $('parks').classList.add('show');
+}
+function closeParks(){ $('parks').classList.remove('show'); }
+$('parks-close').onclick = closeParks;
+$('parks-new').onclick = () => { closeParks(); newParkDialog(null); };
+
+// making a park: you have to give it a name, and pick money or free building
+let npThen = null, npFree = false;
+function newParkDialog(then){
+  npThen = then; npFree = false;
+  const used = readParks().list.map((p) => p.name), left = PARK_NAMES.filter((n) => !used.includes(n));
+  $('np-name').value = ''; $('np-name').placeholder = 'e.g. ' + (left[0] || PARK_NAMES[0]);
+  npPick(false); npCheck();
+  $('newpark').classList.add('show');
+  setTimeout(() => $('np-name').focus(), 50);
+}
+function npPick(free){ npFree = free; $('np-money').classList.toggle('on', !free); $('np-free').classList.toggle('on', free); }
+function npCheck(){ $('np-go').disabled = !$('np-name').value.trim(); }
+$('np-money').onclick = () => npPick(false);
+$('np-free').onclick = () => npPick(true);
+$('np-name').oninput = npCheck;
+$('np-name').onkeydown = (e) => { if (e.key === 'Enter' && !$('np-go').disabled) $('np-go').click(); };
+$('np-dice').onclick = () => { const used = readParks().list.map((p) => p.name); const left = PARK_NAMES.filter((n) => !used.includes(n)); $('np-name').value = (left.length ? left : PARK_NAMES)[Math.floor(Math.random() * (left.length || PARK_NAMES.length))]; npCheck(); };
+$('np-cancel').onclick = () => { $('newpark').classList.remove('show'); openParksIfAny(); };
+function openParksIfAny(){ if (readParks().list.length && npThen === null) openParks(); }
+$('np-go').onclick = () => {
+  const name = $('np-name').value.trim().slice(0, 28);
+  if (!name) return;
+  $('newpark').classList.remove('show');
+  createPark(name, npFree, npThen === 'vr' ? 'vr' : 'screen');
 };
+function createPark(name, free, then = 'screen'){
+  park.create(name, free);
+  refreshTitle();
+  if (then === 'vr') startVR(true); else if (then === 'screen') startScreen(true); else titleScene();
+}
 refreshTitle();
 if (navigator.xr && navigator.xr.isSessionSupported){
   navigator.xr.isSessionSupported('immersive-vr').then((ok) => {
@@ -759,10 +832,7 @@ if (navigator.xr && navigator.xr.isSessionSupported){
     $('status').textContent = ok ? 'Headset found: press Enter VR.' : 'No VR headset here: play on this screen (or open this page in a headset\'s browser).';
   }).catch(() => { $('b-vr').disabled = true; });
 } else { $('b-vr').disabled = true; $('status').textContent = 'Play on this screen, or open this page in a VR headset\'s browser.'; }
-// behind the title: your park if you have one, or a demo coaster
-if (park.load() && park.coasters.some((c) => c.track.pieces.length > 1)) select(park.current);
-else showDemo();
-refreshPalette();
+titleScene();
 
 addEventListener('resize', () => {
   if (renderer.xr.isPresenting) return;
@@ -776,7 +846,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 window.__rcb = {
   get mode(){ return mode; }, get view(){ return view; }, park, renderer, camera, scene, rig, vr, tablet, orbit, vrs,
   timeScale: 1, noRender: false, version: VERSION, CARTS, get track(){ return track; }, get train(){ return train; },
-  startScreen, startVR, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
+  startScreen, startVR, toTitle, createPark, openParks, readParks, newParkDialog, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
   get building(){ return building.length; }, get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
 };
 void lerp; void PARK;

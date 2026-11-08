@@ -30,7 +30,7 @@ lamps, flower beds, a "QUEUE HERE" sign and a ticket price sign that changes wit
   track is upright and nothing is underneath.
 - Pieces can't overlap: each one marks the half-tile cells it passes over with the heights it uses, and
   a new piece is refused if it comes within 3.4 m (up or down) of track already there, or of the station
-  and the queue. It can't go below the ground, above level 6, or out of the park (20 tiles each way).
+  and the queue. It can't go below the ground, above level 12 (48 m; level 6 before 1.2), or out of the park (20 tiles each way).
 - The track is finished when it comes back to the station's back end at ground level, facing north.
   **Finish** searches (A*, over grid points, with what you own) for the way back and lays it one piece
   at a time. Undo takes the last piece off; Clear starts again.
@@ -88,10 +88,28 @@ they thought, and walk out.
   says so. A design that needs packs you haven't bought says which.
 - Parks saved by 1.0 (one coaster) load as a park with that one coaster.
 
+## Version 1.2: lots of theme parks, free build, upside-down track, taller
+
+- **Theme parks.** "🏞 Your theme parks" on the title screen lists your parks (money or free build,
+  coasters, riders): pick one to play, delete one, or build a new one. Making a park asks for its
+  name (it can't be left empty; 🎲 makes one up) and how to play: **Earn it** (start with $200 and
+  buy things, as before) or **Free build** (every track pack, train and new coaster is free from the
+  start; the money shows as "∞ Free"). That choice is fixed for the park. The first time you press
+  Play with no parks it asks you to make one. The park's name is on the entrance gate and the menu.
+  Menu → "Other parks" goes back to the list.
+- Storage: `rollercoaster-bros-parks` holds `{ current, list: [{ id, name, free, money, coasters,
+  riders }] }` and each park's state is in `rollercoaster-bros-park-<id>`. A 1.0/1.1 save in
+  `rollercoaster-bros-save` moves into a park called "My Park" the first time. Saved designs stay
+  shared by every park. The demo coaster behind the title has no id and is never saved.
+- **Upside down** ($3,200): 3 tiles. The track rolls half over round the riders' heart line, carries
+  them along upside down over a small hump for about half its length, then rolls the rest of the way
+  round. Counts as an inversion.
+- **Height limit** is level 12 (48 m) instead of 6.
+
 ## Testing
 
 `_tools/rollercoaster-bros/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated
-Quest 3, installed with `npm i --prefix _tools/vr-test iwer`) and saves screenshots. About 3 minutes.
+Quest 3, installed with `npm i --prefix _tools/vr-test iwer`) and saves screenshots. About 5 minutes.
 
 ## Ideas for later
 

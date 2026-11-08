@@ -1,18 +1,22 @@
 // The park: flat grass as far as you can see (no trees), a main avenue with an entrance gate, and up to
 // seven coasters side by side along it, each with its own station, queue, train and settings; the
-// visitors who come to ride them; and your money. Coaster designs can be saved to a library that's
-// kept even when you start a new park.
+// visitors who come to ride them; and your money. You can have lots of parks, each with its own name, and
+// each either "earn it" (start with $200 and buy things) or "free build" (everything free from the start).
+// Coaster designs are saved to a library that every park shares.
 import * as THREE from 'three';
 import { V, clamp, lerp, rng, merge, placed, noiseTexture, textCanvas, roundRect } from './util.js';
 import { Track, TILE, reserve } from './track.js';
 import { Train, SPEEDS } from './train.js';
 
-export const SAVE_KEY = 'rollercoaster-bros-save';
+export const SAVE_KEY = 'rollercoaster-bros-save';          // version 1.0 and 1.1 kept one park here
+export const PARKS_KEY = 'rollercoaster-bros-parks';        // { current, list: [{ id, name, free, ... }] }
+const parkKey = (id) => 'rollercoaster-bros-park-' + id;
 export const DESIGNS_KEY = 'rollercoaster-bros-designs';
 export const START_MONEY = 200;
 // where coasters can go (the x of each station, in tiles), in the order they're used
 export const PLOTS = [0, 7, -7, 14, -14, 21, -21];
 export const COASTER_PRICE = [0, 1000, 2500, 4000, 6000, 9000, 12000];
+export const PARK_NAMES = ['Sunny Hills', 'Thrill Town', 'Loopy Land', 'Wild World', 'Coaster Kingdom', 'Funtopia', 'Rainbow Park', 'Adventure Bay', 'Mega Fun Park', 'Screamville'];
 export const NAMES = ['Thunder Run', 'Loop Monster', 'Dragon Flyer', 'Sky Screamer', 'Twister', 'Big Dipper', 'Comet', 'Wild Mouse', 'Cyclone', 'Rocket Rush', 'Viper', 'Tornado', 'Brain Shaker', 'The Beast', 'Zoomer', 'Mega Bro'];
 const AVENUE = 24;          // z of the main avenue
 const GATES = [V(10.9, 0, 46), V(-182, 0, AVENUE), V(196, 0, AVENUE)];
@@ -110,7 +114,7 @@ export function buildPark(scene){
   }
   b.bench(7.6, 32, Math.PI / 2); b.bench(14.4, 32, -Math.PI / 2);
   b.build(scene);
-  sign(scene, 'ROLLERCOASTER BROS', 9.6, 1.25, '#2a6ad8', '#ffe040', V(10.9, 6.6, 44.27));
+  const gate = sign(scene, 'ROLLERCOASTER BROS', 9.6, 1.25, '#2a6ad8', '#ffe040', V(10.9, 6.6, 44.27));
   for (const g of GATES.slice(1)) sign(scene, 'WELCOME', 5.6, 0.8, '#2a6ad8', '#ffe040', V(g.x, 4.6, AVENUE), Math.PI / 2);
   // empty plots: a sign saying a coaster could go here
   const plots = PLOTS.map((i) => {
@@ -119,7 +123,7 @@ export function buildPark(scene){
     sign(g, 'COASTER SITE', 6, 1.2, '#f4c430', '#2a2a2a', V(4, 2.4, 17));
     return g;
   });
-  return { plots };
+  return { plots, gate };
 }
 
 // One coaster's station, queue and signs (removed if the coaster is knocked down).
@@ -263,6 +267,35 @@ class Bubble {
 }
 
 // ---------- the park's state: money, what you own, the coasters, the visitors ----------
+// ---------- the list of parks ----------
+export function readParks(){
+  let idx = null;
+  try { idx = JSON.parse(localStorage.getItem(PARKS_KEY) || 'null'); } catch (e) {}
+  if (!idx || !Array.isArray(idx.list)) idx = { current: null, list: [] };
+  // a park saved before there could be more than one becomes "My Park"
+  try {
+    const old = localStorage.getItem(SAVE_KEY);
+    if (old && !idx.list.length){
+      idx.list.push({ id: 'p1', name: 'My Park', free: false });
+      idx.current = 'p1';
+      localStorage.setItem(parkKey('p1'), old);
+      localStorage.setItem(PARKS_KEY, JSON.stringify(idx));
+      localStorage.removeItem(SAVE_KEY);
+    }
+  } catch (e) {}
+  if (!idx.list.some((p) => p.id === idx.current)) idx.current = idx.list.length ? idx.list[0].id : null;
+  return idx;
+}
+function writeParks(idx){ try { localStorage.setItem(PARKS_KEY, JSON.stringify(idx)); } catch (e) {} }
+export function deletePark(id){
+  const idx = readParks();
+  idx.list = idx.list.filter((p) => p.id !== id);
+  if (idx.current === id) idx.current = idx.list.length ? idx.list[0].id : null;
+  writeParks(idx);
+  try { localStorage.removeItem(parkKey(id)); } catch (e) {}
+}
+export function chooseParkId(id){ const idx = readParks(); idx.current = id; writeParks(idx); }
+
 export class Park {
   constructor(scene){
     this.scene = scene;
@@ -282,8 +315,9 @@ export class Park {
   emit(ev, x){ for (const f of this.listeners[ev] || []) f(x); }
   say(text, kind = ''){ this.emit('say', { text, kind }); }
 
-  newGame(){
-    this.setState({ money: START_MONEY, groups: ['starter'], carts: ['classic'], coasters: [{ name: NAMES[0], plot: 0, track: [], cart: 'classic', speed: 2, color: 0, riders: 0, earned: 0 }], current: 0, riders: 0, earned: 0, built: false });
+  // a fresh park (with no id it's only for looking at, behind the title, and is never saved)
+  newGame(info = {}){
+    this.setState({ id: null, name: 'Rollercoaster Bros', free: false, ...info, money: START_MONEY, groups: ['starter'], carts: ['classic'], coasters: [{ name: NAMES[0], plot: 0, track: [], cart: 'classic', speed: 2, color: 0, riders: 0, earned: 0 }], current: 0, riders: 0, earned: 0, built: false });
   }
   // build every coaster from a saved state
   setState(s){
@@ -294,29 +328,53 @@ export class Park {
     this.coasters = s.coasters.map((d) => new Coaster(this, d));
     this.state.current = clamp(this.state.current || 0, 0, this.coasters.length - 1);
     this.plotSigns();
+    this.scenery.gate.draw((s.name || 'Rollercoaster Bros').toUpperCase());
+  }
+  // make a brand new park, with a name, and money or free building; it becomes the one you play
+  create(name, free){
+    const id = 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+    const idx = readParks();
+    idx.list.push({ id, name, free: !!free }); idx.current = id; writeParks(idx);
+    this.newGame({ id, name, free: !!free });
+    this.save();
+    return id;
   }
   plotSigns(){ this.scenery.plots.forEach((g, i) => { g.visible = !this.coasters.some((c) => c.data.plot === i); }); }
   get current(){ return this.coasters[this.state.current]; }
+  get free(){ return !!this.state.free; }
   save(){
+    const S = this.state;
+    if (!S.id) return;
     for (const c of this.coasters) c.sync();
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.state)); } catch (e) {}
+    try { localStorage.setItem(parkKey(S.id), JSON.stringify(S)); } catch (e) {}
+    // what the parks list shows
+    const idx = readParks(), e = idx.list.find((p) => p.id === S.id);
+    if (e){ Object.assign(e, { name: S.name, free: S.free, money: S.money, coasters: this.coasters.length, riders: S.riders, saved: Date.now() }); writeParks(idx); }
   }
-  load(){
+  // load a park (the one you last played, if no id is given)
+  load(id){
     try {
-      const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-      if (!s) return false;
-      // a park saved before there could be more than one coaster
+      const idx = readParks();
+      id = id || idx.current;
+      const info = idx.list.find((p) => p.id === id);
+      if (!info) return false;
+      const s = JSON.parse(localStorage.getItem(parkKey(id)) || 'null');
+      if (!s){ this.newGame({ id, name: info.name, free: info.free }); return true; }
+      // version 1.0 had one coaster and no list of them
       if (!s.coasters) s.coasters = [{ name: NAMES[0], plot: 0, track: s.track || [], cart: s.cart || 'classic', speed: s.speed ?? 2, color: s.color || 0, riders: s.riders || 0, earned: s.earned || 0 }];
-      this.setState({ money: START_MONEY, groups: ['starter'], carts: ['classic'], current: 0, riders: 0, earned: 0, built: false, ...s });
+      this.setState({ money: START_MONEY, groups: ['starter'], carts: ['classic'], current: 0, riders: 0, earned: 0, built: false, ...s, id, name: info.name, free: !!info.free });
       return true;
     } catch (e) { return false; }
   }
-  owns(group){ return this.state.groups.includes(group); }
-  spend(n){ if (this.state.money < n) return false; this.state.money -= n; return true; }
+  // in a free-build park everything is yours and costs nothing
+  owns(group){ return this.free || this.state.groups.includes(group); }
+  hasCart(id){ return this.free || this.state.carts.includes(id); }
+  afford(n){ return this.free || this.state.money >= n; }
+  spend(n){ if (this.free) return true; if (this.state.money < n) return false; this.state.money -= n; return true; }
 
   // ---------- more coasters ----------
   nextPlot(){ for (let p = 0; p < PLOTS.length; p++) if (!this.coasters.some((c) => c.data.plot === p)) return p; return -1; }
-  get newPrice(){ return COASTER_PRICE[Math.min(this.coasters.length, COASTER_PRICE.length - 1)]; }
+  get newPrice(){ return this.free ? 0 : COASTER_PRICE[Math.min(this.coasters.length, COASTER_PRICE.length - 1)]; }
   addCoaster(){
     const plot = this.nextPlot();
     if (plot < 0 || !this.spend(this.newPrice)) return null;

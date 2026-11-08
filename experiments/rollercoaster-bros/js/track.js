@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { V, clamp, smooth, merge, placed } from './util.js';
 
-export const TILE = 8, LEVEL = 4, BASE_Y = 0.9, MAX_LEVEL = 6;
+export const TILE = 8, LEVEL = 4, BASE_Y = 0.9, MAX_LEVEL = 12;
 // the park: x from -GRID_X to GRID_X tiles, z from -GRID_N (north) to GRID_S (south)
 export const GRID_X = 30, GRID_N = 24, GRID_S = 14;
 const inPark = (i, j) => Math.abs(i) <= GRID_X && j >= -GRID_N && j <= GRID_S;
@@ -58,10 +58,17 @@ export const PIECES = {
     path: (t) => { const a = rollAngle(t), h = 1.1; return [2 * TILE * t, -h * Math.sin(a), h * (1 - Math.cos(a))]; },
     roll: (t) => rollAngle(t),
   },
+  hang: {
+    name: 'Upside down', group: 'hang', fun: 1.5, inversions: 1, f: 3, r: 0, du: 0, dh: 0, samples: 120,
+    // roll over, ride along upside down over a little hump, then roll the rest of the way round
+    path: (t) => { const a = hangAngle(t), h = 1.1; return [3 * TILE * t, -h * Math.sin(a), 2.5 * Math.sin(PI * t) ** 2 + h * (1 - Math.cos(a))]; },
+    roll: (t) => hangAngle(t),
+  },
   station: { name: 'Station', group: 'none', fun: 0, f: 2, r: 0, du: 0, dh: 0, path: (t) => [2 * TILE * t, 0, 0] },
 };
 function rollAngle(t){ return 2 * PI * smooth((t - 0.12) / 0.76); }
-export const BUILD_ORDER = ['straight', 'left', 'right', 'bigLeft', 'bigRight', 'up', 'down', 'steepUp', 'steepDown', 'loop', 'roll', 'jump'];
+function hangAngle(t){ return PI * (smooth((t - 0.05) / 0.2) + smooth((t - 0.75) / 0.2)); }
+export const BUILD_ORDER = ['straight', 'left', 'right', 'bigLeft', 'bigRight', 'up', 'down', 'steepUp', 'steepDown', 'loop', 'roll', 'hang', 'jump'];
 export const GROUPS = {
   starter: { name: 'Starter track', price: 0, pieces: ['straight', 'left', 'right'] },
   wide: { name: 'Wide turns', price: 150, pieces: ['bigLeft', 'bigRight'], text: 'Long sweeping curves.' },
@@ -69,6 +76,7 @@ export const GROUPS = {
   steep: { name: 'Big drops', price: 800, pieces: ['steepUp', 'steepDown'], text: 'Climb high and drop fast!' },
   loop: { name: 'Loop-the-loop', price: 1500, pieces: ['loop'], text: 'Go all the way round, upside down.' },
   roll: { name: 'Barrel roll', price: 2500, pieces: ['roll'], text: 'Spin right round the track.' },
+  hang: { name: 'Upside down', price: 3200, pieces: ['hang'], text: 'Roll over and ride along upside down!' },
   jump: { name: 'Jump', price: 4000, pieces: ['jump'], text: 'Fly off the track and land again!' },
 };
 export const COLORS = [
@@ -439,10 +447,10 @@ export function pieceIcon(type, size = 96, color = '#ffd84a'){
   const c = document.createElement('canvas'); c.width = c.height = size;
   const g = c.getContext('2d'), P = PIECES[type];
   const pts = [];
-  const side = !!(P.du || type === 'loop' || type === 'jump' || type === 'roll');
+  const side = !!(P.du || P.inversions || P.jumps);
   for (let k = 0; k <= 60; k++){
     const [f, r, u] = P.path(k / 60);
-    pts.push(side ? [f, -(u + (type === 'roll' ? r * 0.8 : 0)), P.gap && P.gap(k / 60)] : [r, -f, false]);
+    pts.push(side ? [f, -(u + (P.roll ? r * 0.8 : 0)), P.gap && P.gap(k / 60)] : [r, -f, false]);
   }
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   for (const [x, y] of pts){ x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
