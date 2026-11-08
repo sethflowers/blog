@@ -72,4 +72,4 @@ minutes, because it skips drawing except for screenshots and runs the game clock
 `_tools/my-animal-farm/test.mjs` plays a whole day of My Animal Farm on screen and then in VR (same IWER install; about seven
 minutes): `NODE_PATH=$(npm root -g) node _tools/my-animal-farm/test.mjs out/`.
 `_tools/rollercoaster-bros/test.mjs` builds, rides and shops in Rollercoaster Bros on screen and then in VR (same IWER install;
-about three minutes): `NODE_PATH=$(npm root -g) node _tools/rollercoaster-bros/test.mjs out/`.
+about four minutes): `NODE_PATH=$(npm root -g) node _tools/rollercoaster-bros/test.mjs out/`.
