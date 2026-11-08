@@ -1,119 +1,192 @@
-// The park: flat grass as far as you can see (no trees), the station, the queue, the paths and the
-// entrance gate; the visitors who come to ride; and your money.
+// The park: flat grass as far as you can see (no trees), a main avenue with an entrance gate, and up to
+// seven coasters side by side along it, each with its own station, queue, train and settings; the
+// visitors who come to ride them; and your money. Coaster designs can be saved to a library that's
+// kept even when you start a new park.
 import * as THREE from 'three';
 import { V, clamp, lerp, rng, merge, placed, noiseTexture, textCanvas, roundRect } from './util.js';
-import { CAR_GAP, PARK } from './train.js';
+import { Track, TILE, reserve } from './track.js';
+import { Train, SPEEDS } from './train.js';
 
 export const SAVE_KEY = 'rollercoaster-bros-save';
+export const DESIGNS_KEY = 'rollercoaster-bros-designs';
 export const START_MONEY = 200;
+// where coasters can go (the x of each station, in tiles), in the order they're used
+export const PLOTS = [0, 7, -7, 14, -14, 21, -21];
+export const COASTER_PRICE = [0, 1000, 2500, 4000, 6000, 9000, 12000];
+export const NAMES = ['Thunder Run', 'Loop Monster', 'Dragon Flyer', 'Sky Screamer', 'Twister', 'Big Dipper', 'Comet', 'Wild Mouse', 'Cyclone', 'Rocket Rush', 'Viper', 'Tornado', 'Brain Shaker', 'The Beast', 'Zoomer', 'Mega Bro'];
+const AVENUE = 24;          // z of the main avenue
+const GATES = [V(10.9, 0, 46), V(-182, 0, AVENUE), V(196, 0, AVENUE)];
 
-// ---------- the places ----------
+// ---------- the places, relative to a coaster's station ----------
 const QUEUE = [[10.8, 0, 12], [10.8, 0, 8.6], [9.6, 0, 8.6], [9.6, 0, -2], [8.2, 0, -2], [8.2, 0, 8.6], [6.8, 0, 8.6], [6.8, 0, -2], [5.4, 0, -2], [5.4, 0, 5], [4.4, 0.55, 5], [3.0, 0.55, 3.5]];
-const ENTRY = [[9.4, 0, 31], [10.8, 0, 22], [10.8, 0, 12]];
-const EXIT = [[3.0, 0.55, -8.2], [4.6, 0.55, -10.2], [8, 0, -12], [14, 0, -12], [14, 0, 20], [12.4, 0, 31], [12.4, 0, 40]];
-const SPAWN = V(9.4, 0, 40);
-
-// queue positions measured along the queue line from its front
+const EXIT = [[3.0, 0.55, -8.2], [4.6, 0.55, -10.2], [8, 0, -12], [14, 0, -12], [14, 0, AVENUE]];
 const qPts = QUEUE.map((p) => V(...p)).reverse();
 const qLen = [0]; for (let i = 1; i < qPts.length; i++) qLen.push(qLen[i - 1] + qPts[i].distanceTo(qPts[i - 1]));
-function queueSpot(d, out = V()){
-  for (let i = 1; i < qPts.length; i++) if (d <= qLen[i] || i === qPts.length - 1){ const f = clamp((d - qLen[i - 1]) / (qLen[i] - qLen[i - 1])); return out.copy(qPts[i - 1]).lerp(qPts[i], f); }
-  return out.copy(qPts[0]);
+function queueSpot(d, ox, out = V()){
+  for (let i = 1; i < qPts.length; i++) if (d <= qLen[i] || i === qPts.length - 1){ const f = clamp((d - qLen[i - 1]) / (qLen[i] - qLen[i - 1])); return out.copy(qPts[i - 1]).lerp(qPts[i], f).setX(out.x + ox); }
+  return out.copy(qPts[0]).setX(qPts[0].x + ox);
 }
 const QUEUE_GAP = 0.8, QUEUE_MAX = Math.floor(qLen[qLen.length - 1] / QUEUE_GAP);
+const nearestGate = (x) => GATES.reduce((a, g) => (Math.abs(g.x - x) < Math.abs(a.x - x) ? g : a));
+// walking from a gate along the avenue (and back)
+function routeIn(gate, ox){
+  const r = [];
+  if (gate.z !== AVENUE) r.push(V(gate.x - 1.5, 0, AVENUE));
+  r.push(V(ox + 10.8, 0, AVENUE), V(ox + 10.8, 0, 12));
+  return r;
+}
+function routeOut(ox){
+  const g = nearestGate(ox + 14), r = EXIT.map((p) => V(p[0] + ox, p[1], p[2]));
+  if (g.z !== AVENUE) r.push(V(g.x + 1.5, 0, AVENUE), V(g.x + 1.5, 0, g.z + 2)); else r.push(V(g.x, 0, AVENUE));
+  return r;
+}
 
 // ---------- scenery ----------
-export function buildPark(scene){
-  const grassTex = noiseTexture(256, 0x5a9a3a, 0.12, 3, 160);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.95 }));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
-
-  const groups = new Map();
-  const add = (mat, g) => { if (!groups.has(mat)) groups.set(mat, []); groups.get(mat).push(g); };
-  const M = (c, r = 0.8, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
-  const paving = new THREE.MeshStandardMaterial({ map: noiseTexture(128, 0xc8b89a, 0.08, 5, 1), roughness: 0.9 });
-  paving.map.repeat.set(1, 1);
-  const concrete = M(0xb8b4ac, 0.85), wood = M(0x8a5a32, 0.8), white = M(0xf4f2ec, 0.6), red = M(0xd83a2a, 0.6), yellow = M(0xf4c430, 0.6), blue = M(0x2a6ad8, 0.6), dark = M(0x2a2a30, 0.5, 0.5), metal = M(0xc8ccd4, 0.35, 0.8);
-  const B = new THREE.BoxGeometry(1, 1, 1);
-  const box = (mat, x, y, z, sx, sy, sz, ry = 0) => add(mat, placed(B, x, y, z, 0, ry, 0, sx, sy, sz));
-  const C = new THREE.CylinderGeometry(1, 1, 1, 10);
-  const cyl = (mat, x, y, z, r, h) => add(mat, placed(C, x, y, z, 0, 0, 0, r, h, r));
-
-  // paths: a strip under every leg of the walking routes
-  const strip = (pts, w) => { for (let i = 1; i < pts.length; i++){ const a = V(...pts[i - 1]), b = V(...pts[i]); const len = a.distanceTo(b) + w; const m = a.clone().add(b).multiplyScalar(0.5); box(paving, m.x, 0.02, m.z, w, 0.04, len, Math.atan2(b.x - a.x, b.z - a.z)); } };
-  strip([[9.4, 0, 46], ...ENTRY], 2.6);
-  strip(EXIT.slice(2), 2.6);
-  box(paving, 8.6, 0.02, 3.3, 7.4, 0.04, 14.2);     // under the queue
-  box(paving, 11, 0.02, 38, 9, 0.04, 10);           // the plaza by the gate
-
-  // the station platform and its roof
-  box(concrete, 2.55, 0.275, 0, 2.9, 0.55, 18.4);
-  box(yellow, 1.16, 0.56, 0, 0.12, 0.02, 18.4);     // the yellow line at the edge
-  box(concrete, 4.6, 0.275, -10.4, 2.2, 0.55, 3);   // steps down to the exit
-  for (const z of [-9, -3, 3, 9]) for (const x of [-1.5, 4.2]) cyl(white, x, 2.3, z, 0.14, 4.6);
-  box(red, 1.35, 4.75, 0, 6.8, 0.3, 19.2);
-  for (let k = 0; k < 8; k++) box(k % 2 ? white : red, 1.35, 5.0, -8.4 + k * 2.4, 6.4, 0.22, 2.4);
-  // queue rails
-  for (const x of [6.1, 7.5, 8.9, 10.3]) { box(metal, x, 0.9, 3.1 + (x === 6.1 || x === 8.9 ? 0.7 : -0.7), 0.06, 0.06, 9.2); for (let z = -1.4; z <= 8; z += 2.4) cyl(metal, x, 0.45, z + (x === 6.1 || x === 8.9 ? 0.7 : -0.7), 0.05, 0.9); }
-  box(metal, 8.2, 0.9, 9.3, 5.6, 0.06, 0.06); box(metal, 8.2, 0.9, -2.7, 6, 0.06, 0.06);
-  // the entrance gate (an arch) and a few benches, lamps and flower beds
-  for (const x of [6.2, 15.6]){ box(red, x, 3, 44, 0.8, 6, 0.8); box(yellow, x, 6.2, 44, 1.1, 0.4, 1.1); }
-  box(blue, 10.9, 6.6, 44, 10.6, 1.4, 0.5);
-  for (const [x, z, ry] of [[7.6, 18, Math.PI / 2], [7.6, 26, Math.PI / 2], [16.2, 8, -Math.PI / 2], [16.2, 0, -Math.PI / 2]]){
-    box(wood, x, 0.45, z, 1.8, 0.08, 0.5, ry); box(wood, x + Math.sin(ry) * -0.22, 0.75, z, 1.8, 0.5, 0.08, ry);
-    for (const s of [-0.75, 0.75]) box(dark, x + Math.cos(ry) * s, 0.22, z - Math.sin(ry) * s, 0.08, 0.44, 0.5, ry);
-  }
-  const lamps = [[12.4, 16], [12.4, 28], [16, -6], [16, 12], [5, 14]];
-  for (const [x, z] of lamps){ cyl(dark, x, 1.8, z, 0.07, 3.6); }
-  const flowers = [];
-  const fr = rng(11);
-  for (const [cx, cz, w, d] of [[5.5, 24, 3, 5], [16.5, 24, 3, 6], [3.5, 38, 4, 3], [19, 36, 3, 4]]){
-    box(M(0x5a3a22, 1), cx, 0.08, cz, w, 0.16, d);
-    for (let k = 0; k < w * d * 3; k++) flowers.push([cx + (fr() - 0.5) * (w - 0.3), cz + (fr() - 0.5) * (d - 0.3), [0xe83a5a, 0xf4d030, 0xf4f4f4, 0x9a4ae8, 0xf08a2a][Math.floor(fr() * 5)]]);
-  }
-  const fmats = new Map();
-  for (const [x, z, c] of flowers){ if (!fmats.has(c)) fmats.set(c, M(c, 0.7)); add(fmats.get(c), placed(new THREE.SphereGeometry(0.09, 6, 4), x, 0.25, z)); }
-
-  for (const [mat, list] of groups){ const m = new THREE.Mesh(merge(list), mat); m.castShadow = true; m.receiveShadow = true; scene.add(m); }
-
-  // glowing lamp heads
-  const lampMat = new THREE.MeshStandardMaterial({ color: 0xfff4c0, emissive: 0xfff0b0, emissiveIntensity: 0.6 });
-  for (const [x, z] of lamps){ const s = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 8), lampMat); s.position.set(x, 3.7, z); scene.add(s); }
-
-  // signs
-  const sign = (text, w, h, colour, fg, pos, ry, size = 0.5) => {
-    const tc = textCanvas(1024, Math.round(1024 * h / w));
-    const g = tc.ctx; g.fillStyle = colour; roundRect(g, 0, 0, 1024, tc.canvas.height, 40); g.fill();
-    g.strokeStyle = '#ffffff'; g.lineWidth = 16; roundRect(g, 12, 12, 1000, tc.canvas.height - 24, 32); g.stroke();
+const M = (c, r = 0.8, m = 0) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
+const MATS = {};
+function mats(){
+  if (MATS.paving) return MATS;
+  Object.assign(MATS, {
+    paving: new THREE.MeshStandardMaterial({ map: noiseTexture(128, 0xc8b89a, 0.08, 5, 1), roughness: 0.9 }),
+    concrete: M(0xb8b4ac, 0.85), wood: M(0x8a5a32, 0.8), white: M(0xf4f2ec, 0.6), red: M(0xd83a2a, 0.6), yellow: M(0xf4c430, 0.6),
+    blue: M(0x2a6ad8, 0.6), dark: M(0x2a2a30, 0.5, 0.5), metal: M(0xc8ccd4, 0.35, 0.8), soil: M(0x5a3a22, 1),
+    lamp: new THREE.MeshStandardMaterial({ color: 0xfff4c0, emissive: 0xfff0b0, emissiveIntensity: 0.6 }),
+  });
+  return MATS;
+}
+// collects boxes and cylinders by material, then makes one mesh per material
+class Builder {
+  constructor(){ this.groups = new Map(); this.B = new THREE.BoxGeometry(1, 1, 1); this.C = new THREE.CylinderGeometry(1, 1, 1, 10); }
+  add(mat, g){ if (!this.groups.has(mat)) this.groups.set(mat, []); this.groups.get(mat).push(g); }
+  box(mat, x, y, z, sx, sy, sz, ry = 0){ this.add(mat, placed(this.B, x, y, z, 0, ry, 0, sx, sy, sz)); }
+  cyl(mat, x, y, z, r, h){ this.add(mat, placed(this.C, x, y, z, 0, 0, 0, r, h, r)); }
+  strip(pts, w){ for (let i = 1; i < pts.length; i++){ const a = pts[i - 1], b = pts[i]; const len = a.distanceTo(b) + w; const m = a.clone().add(b).multiplyScalar(0.5); this.box(MATS.paving, m.x, 0.02, m.z, w, 0.04, len, Math.atan2(b.x - a.x, b.z - a.z)); } }
+  bench(x, z, ry){ const K = MATS; this.box(K.wood, x, 0.45, z, 1.8, 0.08, 0.5, ry); this.box(K.wood, x + Math.sin(ry) * -0.22, 0.75, z, 1.8, 0.5, 0.08, ry); for (const s of [-0.75, 0.75]) this.box(K.dark, x + Math.cos(ry) * s, 0.22, z - Math.sin(ry) * s, 0.08, 0.44, 0.5, ry); }
+  build(parent){ for (const [mat, list] of this.groups){ const m = new THREE.Mesh(merge(list), mat); m.castShadow = true; m.receiveShadow = true; parent.add(m); } }
+}
+function sign(parent, text, w, h, colour, fg, pos, ry = 0, size = 0.5){
+  const tc = textCanvas(1024, Math.round(1024 * h / w));
+  const s = { tc, w, h, colour, fg, size };
+  s.draw = (t) => {
+    const g = tc.ctx, H = tc.canvas.height; g.clearRect(0, 0, 1024, H);
+    g.fillStyle = colour; roundRect(g, 0, 0, 1024, H, 40); g.fill();
+    g.strokeStyle = fg === '#ffffff' ? '#ffe040' : '#ffffff'; g.lineWidth = 16; roundRect(g, 12, 12, 1000, H - 24, 32); g.stroke();
     g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
-    let fs = tc.canvas.height * size; g.font = `bold ${fs}px "Arial Black", Arial, sans-serif`;
-    while (g.measureText(text).width > 940 && fs > 10){ fs -= 4; g.font = `bold ${fs}px "Arial Black", Arial, sans-serif`; }
-    g.fillText(text, 512, tc.canvas.height / 2 + fs * 0.05);
-    // two faces back to back, so the words read the right way round from both sides
-    const m = new THREE.Group();
-    for (const flip of [0, Math.PI]){ const f = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tc.tex })); f.rotation.y = flip; f.position.z = flip ? -0.01 : 0.01; m.add(f); }
-    m.position.copy(pos); m.rotation.y = ry; scene.add(m);
-    return { mesh: m, tc };
+    let fs = H * size; g.font = `bold ${fs}px "Arial Black", Arial, sans-serif`;
+    while (g.measureText(t).width > 940 && fs > 10){ fs -= 4; g.font = `bold ${fs}px "Arial Black", Arial, sans-serif`; }
+    g.fillText(t, 512, H / 2 + fs * 0.05);
+    tc.tex.needsUpdate = true;
   };
-  sign('ROLLERCOASTER BROS', 9.6, 1.25, '#2a6ad8', '#ffe040', V(10.9, 6.6, 44.27), 0);
-  sign('ROLLERCOASTER BROS', 12, 1.4, '#d83a2a', '#ffffff', V(4.86, 4.2, 0), Math.PI / 2);
-  sign('QUEUE HERE', 3, 0.7, '#f4c430', '#2a2a2a', V(10.8, 2.4, 12.6), 0).mesh.position.y = 2.2;
-  box; // (signposts are drawn above)
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 8), dark); post.position.set(10.8, 1.1, 12.5); scene.add(post);
-  const price = sign('TICKET $5', 2.4, 0.8, '#ffffff', '#d83a2a', V(12.1, 2.2, 12.6), 0);
-  const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 8), dark); p2.position.set(12.1, 1.1, 12.5); scene.add(p2);
-  return {
-    setPrice(n){
-      if (price.n === n) return; price.n = n;
-      const g = price.tc.ctx, c = price.tc.canvas;
-      g.clearRect(0, 0, c.width, c.height);
-      g.fillStyle = '#ffffff'; roundRect(g, 0, 0, c.width, c.height, 40); g.fill();
-      g.strokeStyle = '#d83a2a'; g.lineWidth = 20; roundRect(g, 14, 14, c.width - 28, c.height - 28, 30); g.stroke();
-      g.fillStyle = '#d83a2a'; g.font = `bold ${c.height * 0.55}px "Arial Black", Arial`; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(n ? 'TICKET $' + n : 'CLOSED', c.width / 2, c.height / 2);
-      price.tc.tex.needsUpdate = true;
-    },
-  };
+  s.draw(text);
+  // two faces back to back, so the words read the right way round from both sides
+  const m = new THREE.Group();
+  for (const flip of [0, Math.PI]){ const f = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tc.tex })); f.rotation.y = flip; f.position.z = flip ? -0.01 : 0.01; m.add(f); }
+  m.position.copy(pos); m.rotation.y = ry; parent.add(m);
+  s.mesh = m;
+  return s;
+}
+function post(parent, x, z, h = 2.2){ const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, h, 8), MATS.dark); p.position.set(x, h / 2, z); parent.add(p); }
+
+// The parts of the park every coaster shares: grass, the avenue, the gates, flowers.
+export function buildPark(scene){
+  const K = mats(), b = new Builder();
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ map: noiseTexture(256, 0x5a9a3a, 0.12, 3, 200), roughness: 0.95 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  b.box(K.paving, 7, 0.02, AVENUE, 380, 0.04, 4);                 // the avenue
+  b.strip([V(9.4, 0, 48), V(9.4, 0, AVENUE)], 2.6); b.strip([V(12.4, 0, AVENUE), V(12.4, 0, 48)], 2.6);
+  b.box(K.paving, 11, 0.02, 40, 9, 0.04, 12);                      // the plaza by the main gate
+  // the main gate and a smaller one at each end of the avenue
+  for (const x of [6.2, 15.6]){ b.box(K.red, x, 3, 44, 0.8, 6, 0.8); b.box(K.yellow, x, 6.2, 44, 1.1, 0.4, 1.1); }
+  b.box(K.blue, 10.9, 6.6, 44, 10.6, 1.4, 0.5);
+  for (const g of GATES.slice(1)) for (const dz of [-2.6, 2.6]){ b.box(K.red, g.x, 2.2, AVENUE + dz, 0.6, 4.4, 0.6); b.box(K.blue, g.x, 4.6, AVENUE, 0.5, 0.9, 6.4); }
+  const fr = rng(11);
+  for (const [cx, cz, w, d] of [[3.5, 38, 4, 3], [19, 36, 3, 4], [4, 30, 4, 3], [18, 30, 4, 3]]){
+    b.box(K.soil, cx, 0.08, cz, w, 0.16, d);
+    for (let k = 0; k < w * d * 3; k++){
+      const c = [0xe83a5a, 0xf4d030, 0xf4f4f4, 0x9a4ae8, 0xf08a2a][Math.floor(fr() * 5)];
+      if (!K['f' + c]) K['f' + c] = M(c, 0.7);
+      b.add(K['f' + c], placed(new THREE.SphereGeometry(0.09, 6, 4), cx + (fr() - 0.5) * (w - 0.3), 0.25, cz + (fr() - 0.5) * (d - 0.3)));
+    }
+  }
+  b.bench(7.6, 32, Math.PI / 2); b.bench(14.4, 32, -Math.PI / 2);
+  b.build(scene);
+  sign(scene, 'ROLLERCOASTER BROS', 9.6, 1.25, '#2a6ad8', '#ffe040', V(10.9, 6.6, 44.27));
+  for (const g of GATES.slice(1)) sign(scene, 'WELCOME', 5.6, 0.8, '#2a6ad8', '#ffe040', V(g.x, 4.6, AVENUE), Math.PI / 2);
+  // empty plots: a sign saying a coaster could go here
+  const plots = PLOTS.map((i) => {
+    const g = new THREE.Group(); g.position.x = i * TILE; scene.add(g);
+    post(g, 1.4, 17, 2.6); post(g, 6.6, 17, 2.6);
+    sign(g, 'COASTER SITE', 6, 1.2, '#f4c430', '#2a2a2a', V(4, 2.4, 17));
+    return g;
+  });
+  return { plots };
+}
+
+// One coaster's station, queue and signs (removed if the coaster is knocked down).
+function buildStation(scene, ox, name){
+  const K = mats(), b = new Builder(), g = new THREE.Group(); g.position.x = ox; scene.add(g);
+  b.strip([V(10.8, 0, AVENUE), V(10.8, 0, 12)], 2.6);
+  b.strip(EXIT.slice(2).map((p) => V(...p)), 2.6);
+  b.box(K.paving, 8.6, 0.02, 3.3, 7.4, 0.04, 14.2);     // under the queue
+  b.box(K.concrete, 2.55, 0.275, 0, 2.9, 0.55, 18.4);
+  b.box(K.yellow, 1.16, 0.56, 0, 0.12, 0.02, 18.4);     // the yellow line at the edge
+  b.box(K.concrete, 4.6, 0.275, -10.4, 2.2, 0.55, 3);   // steps down to the exit
+  for (const z of [-9, -3, 3, 9]) for (const x of [-1.5, 4.2]) b.cyl(K.white, x, 2.3, z, 0.14, 4.6);
+  b.box(K.red, 1.35, 4.75, 0, 6.8, 0.3, 19.2);
+  for (let k = 0; k < 8; k++) b.box(k % 2 ? K.white : K.red, 1.35, 5.0, -8.4 + k * 2.4, 6.4, 0.22, 2.4);
+  for (const x of [6.1, 7.5, 8.9, 10.3]){ const o = x === 6.1 || x === 8.9 ? 0.7 : -0.7; b.box(K.metal, x, 0.9, 3.1 + o, 0.06, 0.06, 9.2); for (let z = -1.4; z <= 8; z += 2.4) b.cyl(K.metal, x, 0.45, z + o, 0.05, 0.9); }
+  b.box(K.metal, 8.2, 0.9, 9.3, 5.6, 0.06, 0.06); b.box(K.metal, 8.2, 0.9, -2.7, 6, 0.06, 0.06);
+  b.bench(16.2, 8, -Math.PI / 2); b.bench(16.2, 0, -Math.PI / 2);
+  const lamps = [[16, -6], [16, 12], [5, 14], [12.4, 18]];
+  for (const [x, z] of lamps){ b.cyl(K.dark, x, 1.8, z, 0.07, 3.6); }
+  b.build(g);
+  for (const [x, z] of lamps){ const s = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 8), K.lamp); s.position.set(x, 3.7, z); g.add(s); }
+  const title = sign(g, name.toUpperCase(), 12, 1.4, '#d83a2a', '#ffffff', V(4.86, 4.2, 0), Math.PI / 2);
+  sign(g, 'QUEUE HERE', 3, 0.7, '#f4c430', '#2a2a2a', V(10.8, 2.2, 12.6)); post(g, 10.8, 12.5);
+  const price = sign(g, 'CLOSED', 2.4, 0.8, '#ffffff', '#d83a2a', V(12.1, 2.2, 12.6), 0, 0.55); post(g, 12.1, 12.5);
+  return { group: g, setName(n){ title.draw(n.toUpperCase()); }, setPrice(n){ if (price.n === n) return; price.n = n; price.draw(n ? 'TICKET $' + n : 'CLOSED'); } };
+}
+// the ground each plot keeps free of track: platform, roof, queue, exit steps
+export function reservePlots(){
+  for (const i of PLOTS){
+    const ox = i * TILE;
+    reserve(ox + 2.6, ox + 4.6, -10, 10, 0, 5.2);
+    reserve(ox - 1.6, ox + 0.5, -9.6, 9.6, 0, 5.2);
+    reserve(ox + 4.8, ox + 12, -3, 13, 0, 3);
+    reserve(ox + 2.6, ox + 6, -13, -9, 0, 3);
+  }
+}
+
+// ---------- one coaster ----------
+export class Coaster {
+  constructor(park, data){
+    this.park = park; this.data = data;
+    this.oi = PLOTS[data.plot]; this.ox = this.oi * TILE;
+    this.track = new Track(park.scene, this.oi);
+    this.track.setColor(data.color || 0);
+    this.track.load(data.track || []);
+    this.train = new Train(park.scene, this.track);
+    this.train.setStyle(data.cart || 'classic');
+    this.train.reset();
+    this.station = buildStation(park.scene, this.ox, data.name);
+    this.train.on('arrive', () => { park.unload(this); park.emit('arrive', this); });
+    this.train.on('dispatch', () => park.emit('dispatch', this));
+    this.rerate();
+  }
+  get name(){ return this.data.name; }
+  get speedV(){ return SPEEDS[this.data.speed] ? SPEEDS[this.data.speed].v : 12; }
+  get rating(){ return this.cached || this.rerate(); }
+  rerate(){ this.cached = this.track.rate(this.speedV); return this.cached; }
+  ticket(r = this.rating){ return this.track.complete ? Math.round(2 + r.excitement * 2) : 0; }
+  // how many people a minute this coaster draws (0 while it's shut)
+  appeal(){ return this.track.complete ? 1 / clamp(6.5 - this.rating.excitement * 0.55, 1.1, 6.5) : 0; }
+  queueSpot(d, out){ return queueSpot(d, this.ox, out); }
+  sync(){ this.data.track = this.track.types(); this.data.cart = this.train.style; this.data.color = this.track.color; }
+  dispose(){
+    this.track.dispose();
+    this.park.scene.remove(this.train.group);
+    this.park.scene.remove(this.station.group);
+  }
 }
 
 // ---------- people ----------
@@ -189,134 +262,192 @@ class Bubble {
   }
 }
 
-// ---------- the park's state: money, what you own, the visitors ----------
+// ---------- the park's state: money, what you own, the coasters, the visitors ----------
 export class Park {
-  constructor(scene, track, train){
-    this.scene = scene; this.track = track; this.train = train;
+  constructor(scene){
+    this.scene = scene;
     this.scenery = buildPark(scene);
+    reservePlots();
+    this.coasters = [];
     this.visitors = [];
     this.rand = rng(1234);
-    this.spawnT = 2; this.boardT = 0;
+    this.spawnT = 2;
     this.listeners = {};
     this.bubbles = [new Bubble(scene), new Bubble(scene), new Bubble(scene), new Bubble(scene)];
+    this.designs = [];
+    try { this.designs = JSON.parse(localStorage.getItem(DESIGNS_KEY) || '[]'); } catch (e) {}
     this.newGame();
-    train.on('arrive', () => this.unload());
-    this.track.reserve(2.6, 4.6, -10, 10, 0, 5.2);   // platform and roof
-    this.track.reserve(-1.6, 0.5, -9.6, 9.6, 0, 5.2); // under the roof
-    this.track.reserve(4.8, 12, -3, 13, 0, 3);        // queue
-    this.track.reserve(2.6, 6, -13, -9, 0, 3);        // the steps down from the platform
   }
   on(ev, fn){ (this.listeners[ev] || (this.listeners[ev] = [])).push(fn); }
   emit(ev, x){ for (const f of this.listeners[ev] || []) f(x); }
   say(text, kind = ''){ this.emit('say', { text, kind }); }
 
   newGame(){
-    this.state = { money: START_MONEY, groups: ['starter'], carts: ['classic'], cart: 'classic', speed: 2, color: 0, track: [], riders: 0, earned: 0, built: false };
+    this.setState({ money: START_MONEY, groups: ['starter'], carts: ['classic'], coasters: [{ name: NAMES[0], plot: 0, track: [], cart: 'classic', speed: 2, color: 0, riders: 0, earned: 0 }], current: 0, riders: 0, earned: 0, built: false });
   }
+  // build every coaster from a saved state
+  setState(s){
+    for (const c of this.coasters) c.dispose();
+    for (const v of this.visitors) this.scene.remove(v.root);
+    this.visitors = [];
+    this.state = s;
+    this.coasters = s.coasters.map((d) => new Coaster(this, d));
+    this.state.current = clamp(this.state.current || 0, 0, this.coasters.length - 1);
+    this.plotSigns();
+  }
+  plotSigns(){ this.scenery.plots.forEach((g, i) => { g.visible = !this.coasters.some((c) => c.data.plot === i); }); }
+  get current(){ return this.coasters[this.state.current]; }
   save(){
-    this.state.track = this.track.types();
+    for (const c of this.coasters) c.sync();
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.state)); } catch (e) {}
   }
   load(){
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
       if (!s) return false;
-      this.newGame(); Object.assign(this.state, s);
+      // a park saved before there could be more than one coaster
+      if (!s.coasters) s.coasters = [{ name: NAMES[0], plot: 0, track: s.track || [], cart: s.cart || 'classic', speed: s.speed ?? 2, color: s.color || 0, riders: s.riders || 0, earned: s.earned || 0 }];
+      this.setState({ money: START_MONEY, groups: ['starter'], carts: ['classic'], current: 0, riders: 0, earned: 0, built: false, ...s });
       return true;
     } catch (e) { return false; }
   }
   owns(group){ return this.state.groups.includes(group); }
   spend(n){ if (this.state.money < n) return false; this.state.money -= n; return true; }
 
-  get rating(){ return this.cached || this.rerate(); }
-  rerate(){ this.cached = this.track.rate(this.speedV); return this.cached; }
-  get speedV(){ return [6, 9, 12, 16, 21][this.state.speed] || 12; }
-  ticket(r = this.rating){ return this.track.complete ? Math.round(2 + r.excitement * 2) : 0; }
+  // ---------- more coasters ----------
+  nextPlot(){ for (let p = 0; p < PLOTS.length; p++) if (!this.coasters.some((c) => c.data.plot === p)) return p; return -1; }
+  get newPrice(){ return COASTER_PRICE[Math.min(this.coasters.length, COASTER_PRICE.length - 1)]; }
+  addCoaster(){
+    const plot = this.nextPlot();
+    if (plot < 0 || !this.spend(this.newPrice)) return null;
+    const used = this.coasters.map((c) => c.name);
+    const name = NAMES.find((n) => !used.includes(n)) || 'Coaster ' + (this.coasters.length + 1);
+    const data = { name, plot, track: [], cart: 'classic', speed: 2, color: (this.coasters.length * 3) % 8, riders: 0, earned: 0 };
+    this.state.coasters.push(data);
+    const c = new Coaster(this, data);
+    this.coasters.push(c);
+    this.state.current = this.coasters.length - 1;
+    this.plotSigns();
+    return c;
+  }
+  removeCoaster(c){
+    if (this.coasters.length <= 1) return false;
+    this.clearRiders(c);
+    for (const v of this.visitors) if (v.coaster === c && (v.state === 'in' || v.state === 'queue')) this.sendHome(v);
+    const i = this.coasters.indexOf(c);
+    c.dispose();
+    this.coasters.splice(i, 1); this.state.coasters.splice(i, 1);
+    this.state.current = clamp(this.state.current >= i ? this.state.current - 1 : this.state.current, 0, this.coasters.length - 1);
+    this.plotSigns();
+    return true;
+  }
+  rename(c, name){ c.data.name = name; c.station.setName(name); }
+
+  // ---------- saved designs (kept even when you start a new park) ----------
+  saveDesign(c){
+    c.sync();
+    let name = c.name, n = 2;
+    while (this.designs.some((d) => d.name === name)) name = c.name + ' ' + n++;
+    this.designs.push({ name, track: c.data.track.slice(), color: c.data.color, cart: c.data.cart, speed: c.data.speed, saved: Date.now() });
+    this.saveDesigns();
+    return name;
+  }
+  saveDesigns(){ try { localStorage.setItem(DESIGNS_KEY, JSON.stringify(this.designs)); } catch (e) {} }
+  // the track packs a design needs that you haven't bought
+  missing(design, PIECES){ return [...new Set(design.track.map((t) => PIECES[t] && PIECES[t].group).filter((g) => g && !this.owns(g)))]; }
 
   // the train is back: riders get off (and say what they thought)
-  unload(){
+  unload(c){
     let said = 0;
-    for (let i = 0; i < this.train.seats.length; i++){
-      const v = this.train.seats[i];
+    const T = c.train;
+    for (let i = 0; i < T.seats.length; i++){
+      const v = T.seats[i];
       if (!v || v === 'player') continue;
-      this.train.seatRider(i, null);
-      v.state = 'out'; v.path = EXIT.map((p) => V(...p)); v.pi = 0;
-      v.root.position.set(lerp(2.2, 3.6, this.rand()), 0.55, -8 + this.rand() * 3);
+      T.seatRider(i, null);
+      v.state = 'out'; v.path = routeOut(c.ox); v.pi = 0;
+      v.root.position.set(c.ox + lerp(2.2, 3.6, this.rand()), 0.55, -8 + this.rand() * 3);
       v.root.visible = true;
       if (said < 2 && this.rand() < 0.5){ this.bubble(v, SAYINGS_HAPPY[Math.floor(this.rand() * SAYINGS_HAPPY.length)]); said++; v.wave = 2; }
     }
-    this.boardT = 0.6;
+    c.boardT = 0.6;
   }
   bubble(v, text){ const b = this.bubbles.find((x) => x.t <= 0) || this.bubbles[0]; b.show(text, v); }
 
-  update(dt, playerRiding){
-    const T = this.track, R = this.rating, open = T.complete;
-    this.scenery.setPrice(this.ticket(R));
-    // new visitors arrive while the coaster is open
-    if (open){
+  update(dt){
+    for (const c of this.coasters) c.station.setPrice(c.ticket());
+    // new visitors arrive, more for more (and more fun) coasters
+    const appeal = this.coasters.map((c) => c.appeal()), total = appeal.reduce((a, b) => a + b, 0);
+    if (total > 0){
       this.spawnT -= dt;
-      const queued = this.visitors.filter((v) => v.state === 'in' || v.state === 'queue').length;
       if (this.spawnT <= 0){
-        this.spawnT = clamp(6.5 - R.excitement * 0.55, 1.1, 6.5) * (0.6 + this.rand() * 0.8);
-        if (queued < QUEUE_MAX - 3 && this.visitors.length < 70){
+        this.spawnT = (0.6 + this.rand() * 0.8) * 2 / total;
+        let r = this.rand() * total, c = this.coasters[0];
+        for (let i = 0; i < appeal.length; i++){ r -= appeal[i]; if (r <= 0 && appeal[i] > 0){ c = this.coasters[i]; break; } }
+        const queued = this.visitors.filter((v) => v.coaster === c && (v.state === 'in' || v.state === 'queue')).length;
+        const cap = Math.min(150, 50 + 20 * this.coasters.length);
+        if (c.track.complete && queued < QUEUE_MAX - 3 && this.visitors.length < cap){
           const n = 1 + Math.floor(this.rand() * 3);
-          for (let k = 0; k < n; k++) this.spawn(k);
+          for (let k = 0; k < n; k++) this.spawn(c, k);
         }
       }
     }
-    // the queue: everyone shuffles up
-    const queue = this.visitors.filter((v) => v.state === 'queue').sort((a, b) => a.joined - b.joined);
-    queue.forEach((v, i) => { v.slot = i; });
-    // boarding while the train waits in the station
-    if (this.train.state === 'loading'){
-      this.boardT -= dt;
-      if (this.boardT <= 0 && queue.length && queue[0].root.position.distanceTo(queueSpot(0)) < 1.2){
-        const empty = this.train.emptySeats();
-        if (empty.length && this.train.dwell > 0.6){
-          const v = queue[0], seat = empty[0];
-          v.state = 'riding'; v.root.visible = false;
-          this.train.seatRider(seat, v);
-          const t = this.ticket(R);
-          this.state.money += t; this.state.earned += t; this.state.riders++;
-          this.emit('pay', { amount: t, pos: v.root.position.clone() });
-          this.boardT = 0.35;
-          // hold the train a moment longer while people are still getting on
-          if (this.train.dwell < 1.6 && queue.length > 1 && empty.length > 1) this.train.dwell = 1.6;
-        }
-      }
-    }
-    for (const v of this.visitors) this.move(v, dt, R);
+    for (const c of this.coasters) this.board(c, dt);
+    for (const v of this.visitors) this.move(v, dt);
     this.visitors = this.visitors.filter((v) => { if (v.gone){ this.scene.remove(v.root); return false; } return true; });
     for (const b of this.bubbles) b.update(dt);
-    void playerRiding;
   }
-  spawn(k){
+  // everyone in a coaster's queue shuffles up; people get on while the train waits
+  board(c, dt){
+    const queue = this.visitors.filter((v) => v.coaster === c && v.state === 'queue').sort((a, b) => a.joined - b.joined);
+    queue.forEach((v, i) => { v.slot = i; });
+    const T = c.train;
+    if (T.state !== 'loading') return;
+    c.boardT = (c.boardT || 0) - dt;
+    if (c.boardT > 0 || !queue.length || queue[0].root.position.distanceTo(c.queueSpot(0)) > 1.2) return;
+    const empty = T.emptySeats();
+    if (!empty.length || T.dwell <= 0.6) return;
+    const v = queue[0];
+    v.state = 'riding'; v.root.visible = false;
+    T.seatRider(empty[0], v);
+    const t = c.ticket();
+    this.state.money += t; this.state.earned += t; this.state.riders++;
+    c.data.riders = (c.data.riders || 0) + 1; c.data.earned = (c.data.earned || 0) + t;
+    this.emit('pay', { amount: t, coaster: c });
+    c.boardT = 0.35;
+    if (T.dwell < 1.6 && queue.length > 1 && empty.length > 1) T.dwell = 1.6;
+  }
+  spawn(c, k){
     const look = randomLook(this.rand), kid = this.rand() < 0.4;
     const p = new Person(look, kid);
-    const v = { person: p, root: p.root, look, state: 'in', path: ENTRY.map((q) => V(...q)), pi: 0, speed: 1.3 + this.rand() * 0.5, joined: 0, wave: 0 };
-    v.root.position.copy(SPAWN).add(V((this.rand() - 0.5) * 2, 0, k * 1.2));
+    const gate = nearestGate(c.ox + 10.8);
+    const v = { person: p, root: p.root, look, coaster: c, state: 'in', path: routeIn(gate, c.ox), pi: 0, speed: 1.4 + this.rand() * 0.6, joined: 0, wave: 0 };
+    v.root.position.copy(gate).add(gate.z === AVENUE ? V(0, 0, (this.rand() - 0.5) * 2 + k * 0.4) : V((this.rand() - 0.5) * 2 - 1.5, 0, k * 1.2));
     this.scene.add(v.root);
     this.visitors.push(v);
   }
-  move(v, dt, R){
+  sendHome(v){ v.state = 'leave'; v.path = routeOut(v.coaster.ox).slice(4); v.pi = 0; }
+  move(v, dt){
     if (v.state === 'riding') return;
+    const c = v.coaster;
     let target = null;
     if (v.state === 'in' || v.state === 'out' || v.state === 'leave'){
       target = v.path[v.pi];
       if (!target){
         if (v.state === 'in'){
-          // at the queue: is it too scary?
+          // at the queue: is it too scary? (or was it knocked down / is it shut?)
+          const R = c.rating;
+          if (!this.coasters.includes(c)){ this.sendHome(v); return; }
           if (R.intensity > 7 && this.rand() < (R.intensity - 7) / 4){
-            v.state = 'leave'; v.path = [V(12.6, 0, 20), V(12.4, 0, 31), V(12.4, 0, 42)]; v.pi = 0;
+            v.state = 'leave'; v.path = [V(c.ox + 12.6, 0, AVENUE - 1), ...routeOut(c.ox).slice(5)]; v.pi = 0;
             this.bubble(v, SAYINGS_SCARED[Math.floor(this.rand() * SAYINGS_SCARED.length)]);
-            this.emit('scared');
+            this.emit('scared', c);
           } else { v.state = 'queue'; v.joined = performance.now() + this.rand(); }
           return;
         }
         v.gone = true; return;
       }
     } else if (v.state === 'queue'){
-      target = queueSpot((v.slot || 0) * QUEUE_GAP, v.qt || (v.qt = V()));
+      target = c.queueSpot((v.slot || 0) * QUEUE_GAP, v.qt || (v.qt = V()));
     }
     const p = v.root.position, d = V(target.x - p.x, 0, target.z - p.z), dist = d.length();
     let speed = 0;
@@ -328,20 +459,20 @@ export class Park {
     } else if (v.state !== 'queue') v.pi++;
     if ((v.state === 'in' || v.state === 'out' || v.state === 'leave') && dist < 0.6) v.pi++;
     // up and down the platform step
-    const onPlatform = p.x > 1.1 && p.x < 5.8 && p.z > -11.9 && p.z < 9.2 && !(p.x > 4.0 && p.z > -9);
+    const x = p.x - c.ox;
+    const onPlatform = x > 1.1 && x < 5.8 && p.z > -11.9 && p.z < 9.2 && !(x > 4.0 && p.z > -9);
     p.y = lerp(p.y, onPlatform ? 0.55 : 0, Math.min(1, dt * 10));
-    if (v.state === 'queue' && dist < 0.1){ // face the train
-      v.root.rotation.y = lerp(v.root.rotation.y, Math.PI / 2, dt * 2);
-    }
+    if (v.state === 'queue' && dist < 0.1) v.root.rotation.y = lerp(v.root.rotation.y, Math.PI / 2, dt * 2);
     v.wave = Math.max(0, v.wave - dt);
     v.person.animate(dt, speed, v.wave > 0 ? 1 : 0);
   }
-  clearRiders(){
-    for (let i = 0; i < this.train.seats.length; i++){
-      const v = this.train.seats[i];
-      if (v && v !== 'player'){ this.train.seatRider(i, null); v.state = 'out'; v.path = EXIT.map((p) => V(...p)); v.pi = 0; v.root.position.set(3, 0.55, -8); v.root.visible = true; }
+  // the track changed: everyone gets off this coaster's train
+  clearRiders(c){
+    const T = c.train;
+    for (let i = 0; i < T.seats.length; i++){
+      const v = T.seats[i];
+      if (v && v !== 'player'){ T.seatRider(i, null); v.state = 'out'; v.path = routeOut(c.ox); v.pi = 0; v.root.position.set(c.ox + 3, 0.55, -8); v.root.visible = true; }
     }
   }
-  queueLength(){ return this.visitors.filter((v) => v.state === 'queue').length; }
+  queueLength(c){ return this.visitors.filter((v) => v.coaster === c && v.state === 'queue').length; }
 }
-void CAR_GAP; void PARK;
