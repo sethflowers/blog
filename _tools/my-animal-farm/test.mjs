@@ -395,46 +395,6 @@ console.log('       (placed: ' + (rib ? 'in the ribbons' : 'out of the ribbons')
 check(await ev('(__farm.farm.state.shows[3] || []).includes("novice")'), 'you can\'t enter the same class twice in a day');
 await ev('__farm.riding.dismount()');
 
-// ---------- cows, dogs and cats ----------
-await ev('__farm.farm.state.money += 5000');
-const nc = await ev(`__farm.farm.pens.find((p) => p.kind === 'cow').list.length`);
-await ev(`__farm.farm.buyAnimal('cow'); __farm.farm.buyAnimal('cow')`);
-check(await ev(`__farm.farm.pens.find((p) => p.kind === 'cow').list.length`) === nc + 2, 'cows can be bought and live in the cow pasture');
-const cow = `__farm.farm.animals.find((a) => a.kind === 'cow')`;
-await ev(`${cow}.data.milk = 0.9`);
-const milk0 = await ev('__farm.farm.state.supplies.milk');
-await ev(`__farm.animalPanel(${cow})`);
-await ev(`[...document.querySelectorAll('#panel button')].find((x) => /^Milk /.test(x.textContent)).click()`);
-check(await ev('__farm.farm.state.supplies.milk') > milk0 + 10 && await ev(`${cow}.data.milk`) === 0, 'milking a cow from her panel gives milk');
-await ev('__farm.closePanel()');
-const mm = await ev('__farm.farm.state.money');
-await ev(`__farm.farm.sellProduce('milk')`);
-check(await ev('__farm.farm.state.money') > mm + 15, 'milk sells in the shop');
-check(await ev(`__farm.farm.pets.length >= 2 && __farm.farm.pets.some((p) => p.kind === 'dog') && __farm.farm.pets.some((p) => p.kind === 'cat')`), 'every farm has a dog and a cat');
-await ev(`__farm.farm.state.petBowl = 0; __farm.farm.refreshBowl(); __farm.activate({ type: 'petBowl' })`);
-check(await ev('__farm.farm.state.petBowl') > 3, 'tapping the bowls by the barn door fills them with pet food');
-// Scout fetches the water bucket from the feed room and puts it in your hand
-await ev(`__farm.player.heldBy[1] && __farm.putBack(__farm.player.heldBy[1]); __farm.player.barrow = null; __farm.player.pos.set(1.5, 0, 2); __farm.look(Math.PI, -0.2); __farm.care.home(${I('bucket')})`);
-const scout = `__farm.farm.pets.find((p) => p.kind === 'dog')`;
-await ev(`${scout}.pos.set(2.5, 0, 2.5); ${scout}.data.food = 90; __farm.dogFetch(${scout}, ${I('bucket')})`);
-await ev('__farm.timeScale = 3');
-for (let k = 0; k < 60 && !(await ev(`__farm.player.heldBy[1] === ${I('bucket')}`)); k++) await waitGame(1);
-await ev('__farm.timeScale = 1');
-check(await ev(`__farm.player.heldBy[1] === ${I('bucket')}`), 'the dog fetches a tool you ask for and brings it to you');
-await ev(`__farm.putBack(${I('bucket')})`);
-// at night the dog keeps the fox off the hens, and the cat keeps mice out of the grain
-const hens0 = await ev(`__farm.farm.animals.filter((a) => a.kind === 'chicken').length`), grain0 = await ev('__farm.farm.state.supplies.grain');
-await ev('const r0 = Math.random; Math.random = () => 0.01; __farm.farm.nightVisitors(); Math.random = r0');
-check(await ev(`__farm.farm.animals.filter((a) => a.kind === 'chicken').length`) === hens0 && await ev('__farm.farm.state.supplies.grain') === grain0, 'with a dog and a cat, foxes and mice stay away at night');
-// cows and pets on screen
-await ev(`__farm.farm.state.minutes = 11 * 60; ${scout}.pos.set(1.0, 0, 4.2); ${scout}.data.mode = 'stay'; __farm.player.pos.set(43, 0, -9.5); __farm.look(0.1, -0.12)`);
-await waitGame(2);
-await shot('12c-cows');
-await ev(`(() => { const c = __farm.farm.pets.find((p) => p.kind === 'cat'); c.pos.set(1.0, 0, 3.4); c.target = null; c.wait = 30; })(); __farm.player.pos.set(0.3, 0, 6.0); __farm.look(-0.15, -0.4)`);
-await waitGame(1.5);
-await shot('12d-dog-and-cat');
-await ev(`${scout}.data.mode = 'follow'`);
-
 // ---------- the end of the day ----------
 await ev('__farm.letGo(); __farm.farm.state.minutes = 21 * 60 + 10');
 await ev(`__farm.office('day')`);

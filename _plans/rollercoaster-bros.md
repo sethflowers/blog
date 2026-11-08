@@ -71,23 +71,6 @@ they thought, and walk out.
   trigger. Left stick walks (strides when you're a giant), right stick snap-turns, A rides (the play
   space rides in the front seat, loops and all), X/Y hides the tablet.
 
-## Version 1.1: a theme park, and saved designs
-
-- **More coasters.** The park has seven plots side by side along a main avenue (station x = 0, ±56,
-  ±112, ±168 m; empty ones have a "COASTER SITE" sign). The 🎢 Coasters panel lists them (fun,
-  riders, money earned) and lets you go to one, build a new one ($1,000, then $2,500, $4,000, ...),
-  rename it, or knock it down. Each coaster has its own track, train, speed, colour and name (on its
-  station roof); unlocked track packs and trains are shared, so are the money and visitors. Track
-  can't run into another coaster or another plot's station. Every train runs all the time; the HUD,
-  palette, shop, speed and ride buttons work on the coaster you're at.
-- Visitors pick a coaster (more fun ones get more people), come in through the main gate or the
-  side gates at the ends of the avenue, queue at that coaster and go home again afterwards.
-- **Saved designs.** "Save design" keeps a copy of a coaster's track (with its colour, train and
-  speed) in a library in its own localStorage key, so it survives "Start a new park". "Build here"
-  puts a design on the current coaster; if something is in the way it builds as far as it can and
-  says so. A design that needs packs you haven't bought says which.
-- Parks saved by 1.0 (one coaster) load as a park with that one coaster.
-
 ## Testing
 
 `_tools/rollercoaster-bros/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated
@@ -98,4 +81,3 @@ Quest 3, installed with `npm i --prefix _tools/vr-test iwer`) and saves screensh
 - More rides (a second coaster, a log flume), food stalls, a bigger park to buy.
 - Chain lift hills and launch boosters, a helix, a corkscrew, tunnels.
 - Two players: brothers building one coaster together.
-- Sharing designs between devices (a code to type in).

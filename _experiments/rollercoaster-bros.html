@@ -2,7 +2,7 @@
 title: Rollercoaster Bros
 description: Build your own rollercoaster on a big flat field, ride it (on an iPad or in VR), and earn money from the people who come to ride it. Buy hills, big drops, loops, barrel rolls and jumps, cool new trains, and set how fast it goes.
 date: 2026-11-07
-version: "1.1"
+version: "1.0"
 layout: null
 ---
 {% raw %}
@@ -49,7 +49,6 @@ layout: null
   body.playing #hud{display:block;}
   .chip{position:absolute;background:rgba(14,24,56,.74);border-radius:16px;padding:9px 14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
   #h-stat{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));min-width:190px;}
-  #h-name{font-weight:800;font-size:14px;opacity:.95;margin-bottom:1px;}
   #h-money{font-weight:900;font-size:26px;color:#ffe040;position:relative;}
   #h-rate{font-size:14px;margin-top:3px;line-height:1.45;}
   #h-rate b{color:#ffe040;}
@@ -131,7 +130,7 @@ layout: null
 <div id="title">
   <div class="card">
     <h1><span>Rollercoaster</span>BROS</h1>
-    <p class="sub">Build a whole theme park of coasters. Ride them. Get rich!</p>
+    <p class="sub">Build it. Ride it. Get rich!</p>
     <button id="b-play" class="tbtn">Play on this screen</button>
     <button id="b-vr" class="tbtn">Enter VR</button>
     <button id="b-new" class="tbtn second">Start a new park</button>
@@ -146,13 +145,12 @@ layout: null
   <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 <div id="hud">
-  <div id="h-stat" class="chip"><div id="h-name"></div><div id="h-money"></div><div id="h-rate"></div></div>
+  <div id="h-stat" class="chip"><div id="h-money"></div><div id="h-rate"></div></div>
   <div id="h-msg"></div>
   <div id="topbtns">
     <button id="b-ride" class="hbtn big">🎢 Ride it!</button>
     <button id="b-watch" class="hbtn">🎥 Watch</button>
     <button id="b-speed" class="hbtn">⚡ Speed</button>
-    <button id="b-coasters" class="hbtn">🎢 Coasters</button>
     <button id="b-shop" class="hbtn">🛒 Shop</button>
     <button id="b-menu" class="hbtn">☰ Menu</button>
   </div>

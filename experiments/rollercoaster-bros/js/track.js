@@ -8,16 +8,7 @@
 import * as THREE from 'three';
 import { V, clamp, smooth, merge, placed } from './util.js';
 
-export const TILE = 8, LEVEL = 4, BASE_Y = 0.9, MAX_LEVEL = 6;
-// the park: x from -GRID_X to GRID_X tiles, z from -GRID_N (north) to GRID_S (south)
-export const GRID_X = 30, GRID_N = 24, GRID_S = 14;
-const inPark = (i, j) => Math.abs(i) <= GRID_X && j >= -GRID_N && j <= GRID_S;
-const inParkXZ = (x, z) => Math.abs(x) <= (GRID_X + 0.4) * TILE && z >= -(GRID_N + 0.4) * TILE && z <= (GRID_S + 0.4) * TILE;
-// every coaster in the park, and the ground kept free for stations and queues
-export const WORLD = { tracks: [], reserved: new Map() };
-export function reserve(x0, x1, z0, z1, lo, hi){
-  for (let x = x0; x <= x1; x += TILE / 4) for (let z = z0; z <= z1; z += TILE / 4) WORLD.reserved.set(key(x, z), { lo, hi });
-}
+export const TILE = 8, LEVEL = 4, BASE_Y = 0.9, GRID = 20, MAX_LEVEL = 6;
 export const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];          // north, east, south, west (x, z)
 const PI = Math.PI;
 
@@ -138,10 +129,8 @@ const clash = (a, b) => a.lo - CLEAR < b.hi && b.lo - CLEAR < a.hi;
 
 // ---------- the track ----------
 export class Track {
-  // oi: which tile column (x) this coaster's station is in; it always faces north
-  constructor(scene, oi = 0){
-    this.scene = scene; this.oi = oi;
-    WORLD.tracks.push(this);
+  constructor(scene){
+    this.scene = scene;
     this.group = new THREE.Group(); scene.add(this.group);
     this.color = 0;
     this.mats = {
@@ -153,6 +142,7 @@ export class Track {
       bad: new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.5, depthWrite: false }),
     };
     this.supports = null;
+    this.reserved = new Map();        // cells kept free (the station platform and the queue)
     this.pieces = [];
     this.reset();
     // a pulsing arrow at the end of the track, pointing where the next piece goes
@@ -161,23 +151,18 @@ export class Track {
     scene.add(this.arrow);
     this.ghost = new THREE.Group(); scene.add(this.ghost); this.ghostT = 0;
   }
-  // take it all away (the coaster is knocked down)
-  dispose(){
-    for (const p of this.pieces) if (p.mesh){ this.group.remove(p.mesh); p.mesh.geometry.dispose(); }
-    this.clearGhost();
-    for (const o of [this.group, this.arrow, this.ghost, this.supports]) this.scene.remove(o);
-    if (this.supports) this.supports.geometry.dispose();
-    WORLD.tracks.splice(WORLD.tracks.indexOf(this), 1);
+  reserve(x0, x1, z0, z1, lo, hi){
+    for (let x = x0; x <= x1; x += TILE / 4) for (let z = z0; z <= z1; z += TILE / 4) this.reserved.set(key(x, z), { lo, hi });
   }
   setColor(c){ this.color = c; this.mats.rail.color.setHex(COLORS[c].rail); this.mats.spine.color.setHex(COLORS[c].spine); }
   reset(){
     for (const p of this.pieces) if (p.mesh){ this.group.remove(p.mesh); p.mesh.geometry.dispose(); }
     this.pieces = [];
-    this.place('station', this.oi, 1, 0, 0);
+    this.place('station', 0, 1, 0, 0);
     this.changed();
   }
   get end(){ return this.pieces[this.pieces.length - 1].end; }
-  get start(){ return { i: this.oi, j: 1, level: 0, d: 0 }; }
+  get start(){ return { i: 0, j: 1, level: 0, d: 0 }; }
   get complete(){ const e = this.end, s = this.start; return this.pieces.length > 1 && e.i === s.i && e.j === s.j && e.level === s.level && e.d === s.d; }
   types(){ return this.pieces.slice(1).map((p) => p.type); }
 
@@ -193,24 +178,21 @@ export class Track {
     const s = (this.memo && this.memo.get(mk)) || samplePiece(type, i, j, level, d);
     if (this.memo) this.memo.set(mk, s);
     const e = s.end;
-    if (!inPark(e.i, e.j)) return { ok: false, why: 'That would leave the park.', s };
-    for (const p of s.pts) if (!inParkXZ(p.pos.x, p.pos.z)) return { ok: false, why: 'That would leave the park.', s };
+    if (Math.abs(e.i) > GRID || Math.abs(e.j) > GRID) return { ok: false, why: 'That would leave the park.', s };
+    for (const p of s.pts) if (Math.abs(p.pos.x) > (GRID + 0.4) * TILE || Math.abs(p.pos.z) > (GRID + 0.4) * TILE) return { ok: false, why: 'That would leave the park.', s };
     const sk = key(i * TILE, j * TILE), ek = key(e.i * TILE, e.j * TILE);
     const cells = s.cells || (s.cells = cellsOf(s.pts, sk, ek));
     const endY = BASE_Y + e.level * LEVEL, endCell = { lo: endY, hi: endY };
     const closing = e.i === this.start.i && e.j === this.start.j && e.level === 0 && e.d === 0;
     const hit = (k, c, isEnd) => {
       for (const o of this.occ.get(k) || []){ if (clash(c, o) && !(isEnd && o.end && closing && o.station)) return true; }
-      for (const t of WORLD.tracks){ if (t === this || !t.occ) continue; for (const o of t.occ.get(k) || []) if (clash(c, o)) return 'other'; }
       for (let q = extra; q; q = q.prev){ const o = q.cells.get(k) || q.ends.get(k); if (o && clash(c, o)) return true; }
       return false;
     };
-    const crash = (h) => ({ ok: false, why: h === 'other' ? 'That would crash into another coaster.' : 'That would crash into the track.', s });
-    for (const [k, c] of cells){ const h = hit(k, c, false); if (h) return crash(h); }
-    if (ek !== sk){ const h = hit(ek, endCell, true); if (h) return crash(h); }
-    const R = WORLD.reserved;
-    for (const [k, c] of cells){ const o = R.get(k); if (o && clash(c, o)) return { ok: false, why: 'A station is in the way.', s }; }
-    const o = R.get(ek); if (o && clash(endCell, o) && !closing) return { ok: false, why: 'A station is in the way.', s };
+    for (const [k, c] of cells) if (hit(k, c, false)) return { ok: false, why: 'That would crash into the track.', s };
+    if (ek !== sk && hit(ek, endCell, true)) return { ok: false, why: 'That would crash into the track.', s };
+    for (const [k, c] of cells){ const o = this.reserved.get(k); if (o && clash(c, o)) return { ok: false, why: 'The station is in the way.', s }; }
+    const o = this.reserved.get(ek); if (o && clash(endCell, o) && !closing) return { ok: false, why: 'The station is in the way.', s };
     return { ok: true, s, cells, sk, ek, closing };
   }
   place(type, i, j, level, d, pre){

@@ -1,20 +1,16 @@
-// Cows, goats, sheep, pigs and hens. Each lives in its pen, wanders, eats from the trough, drinks, rests in
-// the shelter at night and makes droppings you have to clean up. Hens lay eggs, sheep grow wool and
-// cows fill with milk twice a day.
+// Goats, sheep, pigs and hens. Each lives in its pen, wanders, eats from the trough, drinks, rests in
+// the shelter at night and makes droppings you have to clean up. Hens lay eggs; sheep grow wool.
 import * as THREE from 'three';
 import { V, loft, limb, ellipsoid, clamp, lerp, damp, rng, angleDiff } from './util.js';
 import { mat, tex } from './textures.js';
 
 export const SPECIES = {
-  cow:     { name: 'Cow', price: 950, board: 36, food: 'hay', speed: 0.6, size: 1.6 },
-  goat:    { name: 'Goat', price: 180, board: 18, food: 'hay', speed: 0.9, size: 1 },
-  sheep:   { name: 'Sheep', price: 220, board: 18, food: 'hay', speed: 0.7, size: 1 },
-  pig:     { name: 'Pig', price: 260, board: 20, food: 'pig feed', speed: 0.6, size: 1 },
-  chicken: { name: 'Hen', price: 25, board: 5, food: 'corn', speed: 0.8, size: 1 },
+  goat:    { name: 'Goat', price: 180, board: 14, food: 'hay', speed: 0.9, size: 1 },
+  sheep:   { name: 'Sheep', price: 220, board: 14, food: 'hay', speed: 0.7, size: 1 },
+  pig:     { name: 'Pig', price: 260, board: 16, food: 'pig feed', speed: 0.6, size: 1 },
+  chicken: { name: 'Hen', price: 25, board: 4, food: 'corn', speed: 0.8, size: 1 },
 };
 const VARIANTS = {
-  // Holstein, Jersey, Hereford, Angus
-  cow: [{ body: 0xf4f2ee, face: 0xf4f2ee, spots: 0x161414, nose: 0xe8a8a0 }, { body: 0xb07a48, face: 0x8a5a34, nose: 0x2a2020 }, { body: 0x8a3a20, face: 0xf2ede4, nose: 0xe0a090, horns: true }, { body: 0x1a1816, face: 0x1a1816, nose: 0x2a2424 }],
   goat: [{ body: 0xf0ece4, face: 0xf0ece4 }, { body: 0x8a5a3a, face: 0x2a1a10 }, { body: 0x2a2420, face: 0xe8e0d0 }, { body: 0xc89a6a, face: 0xc89a6a }],
   sheep: [{ body: 0xeee8da, face: 0x1a1612 }, { body: 0xf2ecde, face: 0xf0e8dc }, { body: 0x5a4a40, face: 0x2a2220 }],
   pig: [{ body: 0xf0b8a8, spots: null }, { body: 0xf0c0b0, spots: 0x2a2020 }, { body: 0x3a2a28, spots: null }],
@@ -28,46 +24,27 @@ function quadruped(kind, v, R){
     goat:  { len: 0.85, h: 0.72, r: 0.2, ry: 0.24, legL: 0.48, neckLen: 0.3, headL: 0.24, legR: 0.03 },
     sheep: { len: 0.95, h: 0.72, r: 0.27, ry: 0.28, legL: 0.42, neckLen: 0.2, headL: 0.22, legR: 0.028 },
     pig:   { len: 1.05, h: 0.62, r: 0.3, ry: 0.3, legL: 0.28, neckLen: 0.05, headL: 0.26, legR: 0.045 },
-    cow:   { len: 1.75, h: 1.35, r: 0.37, ry: 0.42, legL: 0.72, neckLen: 0.28, headL: 0.24, legR: 0.055 },
   }[kind];
-  const spotted = kind === 'cow' && v.spots;
-  const bodyMat = spotted ? mat('coat', { color: 0xffffff, rough: 0.7, vc: true }) : kind === 'sheep' ? mat('wool', { color: v.body, rough: 1, normal: 2 }) : kind === 'pig' ? mat('skin', { color: v.body, rough: 0.55 }) : mat('coat', { color: v.body, rough: 0.7 });
-  const plainBody = spotted ? mat('coat', { color: v.body, rough: 0.7 }) : null;
+  const bodyMat = kind === 'sheep' ? mat('wool', { color: v.body, rough: 1, normal: 2 }) : kind === 'pig' ? mat('skin', { color: v.body, rough: 0.55 }) : mat('coat', { color: v.body, rough: 0.7 });
   const faceMat = kind === 'sheep' ? mat('skin', { color: v.face, rough: 0.7 }) : kind === 'pig' ? bodyMat : mat('coat', { color: v.face, rough: 0.7 });
   const cy = P.legL + P.ry * 0.9, L = P.len;
   const sec = (z, rx, ry, dy = 0) => ({ p: [0, cy + dy, z], rx, ry });
-  const bodyG = loft([sec(-L / 2, P.r * 0.4, P.ry * 0.4), sec(-L / 2 + 0.08, P.r * 0.85, P.ry * 0.85), sec(-L * 0.15, P.r, P.ry), sec(L * 0.15, P.r * 0.98, P.ry * 0.98), sec(L / 2 - 0.1, P.r * 0.8, P.ry * 0.85, 0.02), sec(L / 2, P.r * 0.4, P.ry * 0.5, 0.03)], { ring: kind === 'cow' ? 36 : 18, steps: kind === 'cow' ? 12 : 5, uvScale: 2 });
+  const bodyG = loft([sec(-L / 2, P.r * 0.4, P.ry * 0.4), sec(-L / 2 + 0.08, P.r * 0.85, P.ry * 0.85), sec(-L * 0.15, P.r, P.ry), sec(L * 0.15, P.r * 0.98, P.ry * 0.98), sec(L / 2 - 0.1, P.r * 0.8, P.ry * 0.85, 0.02), sec(L / 2, P.r * 0.4, P.ry * 0.5, 0.03)], { ring: 18, steps: 5, uvScale: 2 });
   if (kind === 'sheep'){
     // lumpy fleece
     const p = bodyG.attributes.position;
     for (let i = 0; i < p.count; i++){ const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 1 + (Math.sin(x * 40) * Math.sin(y * 37) * Math.sin(z * 41)) * 0.03; p.setXYZ(i, x * k, cy + (y - cy) * k, z); }
     bodyG.computeVertexNormals();
   }
-  // a Holstein's black patches are painted on the hide (they used to be blobs that stuck out)
-  const blots = spotted ? Array.from({ length: 10 }, () => ({ c: V((R() - 0.5) * 2 * P.r, cy + (R() - 0.3) * P.ry * 1.6, (R() - 0.5) * L * 0.95), r: 0.13 + R() * 0.14 })) : null;
-  const paint = (geo, off = V()) => {
-    if (!spotted) return;
-    const p = geo.attributes.position, col = new Float32Array(p.count * 3), w = new THREE.Color(v.body), b = new THREE.Color(v.spots), q = V();
-    for (let i = 0; i < p.count; i++){
-      q.set(p.getX(i), p.getY(i), p.getZ(i)).add(off);
-      const wob = Math.sin(q.x * 23 + q.z * 17) * 0.025 + Math.sin(q.y * 31 - q.z * 13) * 0.02;
-      const c = blots.some((s) => q.distanceTo(s.c) < s.r + wob) ? b : w;
-      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
-    }
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  };
-  paint(bodyG);
   const bm = new THREE.Mesh(bodyG, bodyMat); body.add(bm);
-  if (v.spots && !spotted){
-    const big = kind === 'cow' ? 1.9 : 1;
-    for (let i = 0; i < (kind === 'cow' ? 11 : 5); i++){ const s = new THREE.Mesh(ellipsoid(0.12 * big, 0.1 * big, 0.14 * big), kind === 'cow' ? mat('coat', { color: v.spots, rough: 0.7 }) : mat('skin', { color: v.spots, rough: 0.55 })); const a = R() * Math.PI; s.position.set(Math.cos(a) * P.r * 0.88, cy + Math.sin(a) * P.ry * 0.85, (R() - 0.5) * L * 0.7); s.scale.set(0.35, 1, 1); s.lookAt(0, cy, s.position.z); body.add(s); }
+  if (v.spots){
+    for (let i = 0; i < 5; i++){ const s = new THREE.Mesh(ellipsoid(0.12, 0.1, 0.14), mat('skin', { color: v.spots, rough: 0.55 })); const a = R() * Math.PI; s.position.set(Math.cos(a) * P.r * 0.88, cy + Math.sin(a) * P.ry * 0.85, (R() - 0.5) * L * 0.7); s.scale.set(0.35, 1, 1); s.lookAt(0, cy, s.position.z); body.add(s); }
   }
   // neck and head
   const neck = new THREE.Group(); neck.position.set(0, cy + P.ry * 0.4, L / 2 - 0.08); body.add(neck);
   if (P.neckLen > 0.1){
     const ng = loft([{ p: [0, -0.05, -0.05], rx: P.r * 0.5, ry: P.r * 0.55 }, { p: [0, P.neckLen * 0.6, P.neckLen * 0.4], rx: P.r * 0.38, ry: P.r * 0.4 }, { p: [0, P.neckLen, P.neckLen * 0.55], rx: P.r * 0.33, ry: P.r * 0.35 }], { ring: 12, steps: 4 });
-    if (spotted){ const col = new Float32Array(ng.attributes.position.count * 3).fill(1); const w = new THREE.Color(v.body); for (let i = 0; i < col.length; i += 3){ col[i] = w.r; col[i + 1] = w.g; col[i + 2] = w.b; } ng.setAttribute('color', new THREE.BufferAttribute(col, 3)); }
-    neck.add(new THREE.Mesh(ng, bodyMat));
+    neck.add(new THREE.Mesh(ng, kind === 'sheep' ? bodyMat : bodyMat));
   }
   const head = new THREE.Group(); head.position.set(0, P.neckLen, P.neckLen * 0.6); neck.add(head);
   if (kind === 'pig'){
@@ -85,14 +62,6 @@ function quadruped(kind, v, R){
       const ear = new THREE.Mesh(ellipsoid(0.02, 0.05, 0.012), faceMat); ear.position.set(sx * 0.075, 0.02, -0.02); ear.rotation.z = sx * (kind === 'sheep' ? 1.3 : 1.1); head.add(ear);
       if (kind === 'goat'){ const horn = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.13, 8), mat('plain-horn', { color: 0x8a7a60, rough: 0.5 })); horn.position.set(sx * 0.03, 0.08, -0.06); horn.rotation.x = -0.6; head.add(horn); }
     }
-    if (kind === 'cow'){
-      head.scale.setScalar(2.15); head.position.y -= 0.05;
-      const nose = new THREE.Mesh(ellipsoid(0.05, 0.035, 0.03, 12, 8), mat('skin', { color: v.nose, rough: 0.4 })); nose.position.set(0, -0.125, hl * 0.86); head.add(nose);
-      for (const sx of [-1, 1]){
-        const ear = head.children.find((c) => c.position.x === sx * 0.075); if (ear){ ear.rotation.z = sx * 1.55; ear.position.x = sx * 0.085; ear.scale.set(1.2, 1, 1.2); }
-        if (v.horns){ const horn = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.07, 8), mat('plain-horn', { color: 0xe8dcc0, rough: 0.5 })); horn.position.set(sx * 0.06, 0.05, -0.04); horn.rotation.set(-0.3, 0, -sx * 1.1); head.add(horn); }
-      }
-    }
     if (kind === 'goat'){ const beard = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.08, 6), faceMat); beard.position.set(0, -0.17, hl * 0.6); beard.rotation.x = Math.PI; head.add(beard); }
   }
   const eyeM = mat('plain-eye2', { color: 0x1a1208, rough: 0.15 });
@@ -100,14 +69,9 @@ function quadruped(kind, v, R){
   // tail
   const tail = new THREE.Group(); tail.position.set(0, cy + P.ry * 0.5, -L / 2 + 0.02); body.add(tail);
   if (kind === 'pig'){ const t = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 6, 12, Math.PI * 1.6), bodyMat); t.rotation.y = Math.PI / 2; t.position.z = -0.03; tail.add(t); }
-  else if (kind === 'cow'){
-    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 0.75, 6), plainBody || bodyMat); t.position.y = -0.38; tail.add(t);
-    const tuft = new THREE.Mesh(ellipsoid(0.045, 0.1, 0.045), mat('hair', { color: v.spots ? 0xeeeae2 : v.body, rough: 0.9 })); tuft.position.y = -0.78; tail.add(tuft);
-    tail.rotation.x = -0.12;
-  }
   else { const t = new THREE.Mesh(ellipsoid(0.03, kind === 'sheep' ? 0.1 : 0.06, 0.03), kind === 'sheep' ? bodyMat : bodyMat); t.position.y = kind === 'goat' ? 0.04 : -0.07; t.rotation.x = kind === 'goat' ? -0.6 : 0.2; tail.add(t); }
   // legs: swing from the hip and shoulder
-  const legMat = kind === 'sheep' ? faceMat : plainBody || bodyMat;
+  const legMat = kind === 'sheep' ? faceMat : bodyMat;
   const hoofMat = mat('plain-hoof', { color: kind === 'pig' ? 0x6a5040 : 0x2a2420, rough: 0.6 });
   for (const [x, z] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]){
     const top = new THREE.Group(); top.position.set(x * P.r * 0.55, P.legL + 0.05, z * (L / 2 - 0.16)); body.add(top);
@@ -115,16 +79,8 @@ function quadruped(kind, v, R){
     const h = new THREE.Mesh(new THREE.CylinderGeometry(P.legR, P.legR * 1.1, 0.04, 8), hoofMat); h.position.y = -P.legL - 0.03; top.add(h);
     legs.push(top);
   }
-  // a cow's udder, between the hind legs
-  let udder = null;
-  if (kind === 'cow'){
-    udder = new THREE.Group(); udder.position.set(0, P.legL + 0.02, -L * 0.24); body.add(udder);
-    const um = mat('skin', { color: 0xe8b0a8, rough: 0.55 });
-    udder.add(new THREE.Mesh(ellipsoid(0.15, 0.11, 0.17, 14, 10), um));
-    for (const [x, z] of [[-0.06, 0.07], [0.06, 0.07], [-0.06, -0.07], [0.06, -0.07]]){ const t = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.012, 0.07, 6), um); t.position.set(x, -0.12, z); udder.add(t); }
-  }
   g.traverse((m) => { if (m.isMesh){ m.castShadow = true; m.receiveShadow = true; } });
-  return { g, body, neck, head, tail, legs, P, udder };
+  return { g, body, neck, head, tail, legs, P };
 }
 
 function hen(v){
@@ -160,7 +116,7 @@ export class Animal {
     const vs = VARIANTS[kind];
     this.data = {
       id: data.id || ('a' + Date.now().toString(36) + (nextId++)), kind, name: data.name || randomName(kind, R), variant: data.variant ?? Math.floor(R() * vs.length),
-      seed: data.seed || Math.floor(R() * 1e6), food: 80, water: 80, happy: 75, health: 100, wool: 0.3, milk: 0.5, owner: null, ...data,
+      seed: data.seed || Math.floor(R() * 1e6), food: 80, water: 80, happy: 75, health: 100, wool: 0.3, owner: null, ...data,
     };
     const v = vs[this.data.variant % vs.length];
     this.m = kind === 'chicken' ? hen(v) : quadruped(kind, v, R);
@@ -224,14 +180,12 @@ export class Animal {
       const look = clamp(angleDiff(this.yaw, Math.atan2(dx, dz)), -0.8, 0.8);
       m.head.rotation.y = damp(m.head.rotation.y, Math.hypot(dx, dz) < 5 && !headDown ? look : 0, 3, dt);
     }
-    if (m.tail) m.tail.rotation.z = Math.sin(this.t * (this.kind === 'pig' ? 6 : this.kind === 'cow' ? 1.6 : 3)) * (this.kind === 'cow' ? 0.3 : 0.2);
-    if (m.udder){ const k = 0.75 + (D.milk || 0) * 0.45; m.udder.scale.set(k, k, k); }
+    if (m.tail) m.tail.rotation.z = Math.sin(this.t * (this.kind === 'pig' ? 6 : 3)) * 0.2;
     this.moving = moving;
   }
 }
 
 const NAMES = {
-  cow: ['Daisy', 'Buttercup', 'Bluebell', 'Clementine', 'Moo-Moo', 'Bella', 'Dolly', 'Rosie', 'Mabel', 'Primrose'],
   goat: ['Billy', 'Nanny', 'Pepper', 'Clover', 'Biscuit', 'Gruff', 'Daisy', 'Juniper', 'Maple', 'Nutmeg'],
   sheep: ['Woolly', 'Dolly', 'Fluffy', 'Lamb Chop', 'Cotton', 'Shaun', 'Snowball', 'Bramble', 'Puff', 'Marshmallow'],
   pig: ['Wilbur', 'Hamlet', 'Truffle', 'Peanut', 'Rosie', 'Pickles', 'Porkchop', 'Penny', 'Bacon Bit', 'Hazel'],

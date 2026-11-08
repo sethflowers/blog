@@ -94,10 +94,6 @@ export const sfx = {
   pickup(){ if (!ctx) return; const t = ctx.currentTime, o = out(null, 0.15); tone(o, t, 0.06, 'sine', 500, 800, 0.5); },
   bad(){ if (!ctx) return; const t = ctx.currentTime, o = out(null, 0.2); tone(o, t, 0.25, 'triangle', 300, 180, 0.4); },
   bleat(pos, kind){ if (!ctx) return; const t = ctx.currentTime, o = out(pos, 0.35);
-    if (kind === 'cow'){ voice(o, t, 1.3, 150, 115, 5, 0.55); return; }
-    if (kind === 'dog'){ for (let i = 0; i < 2; i++){ voice(o, t + i * 0.22, 0.09, 560, 380, 30, 0.6); noise(o, t + i * 0.22, 0.07, 'bandpass', 900, 500, 2, 0.5); } return; }
-    if (kind === 'cat'){ voice(o, t, 0.55, 620, 900, 8, 0.3); voice(o, t + 0.25, 0.35, 900, 560, 6, 0.25); return; }
-    if (kind === 'purr'){ for (let i = 0; i < 6; i++) noise(o, t + i * 0.18, 0.14, 'lowpass', 180, 120, 2, 0.5); return; }
     if (kind === 'pig'){ for (let i = 0; i < 3; i++) noise(o, t + i * 0.12, 0.1, 'bandpass', 400, 250, 4, 0.8); }
     else if (kind === 'chicken'){ for (let i = 0; i < 4; i++) voice(o, t + i * 0.1, 0.07, 900, 700, 40, 0.3); voice(o, t + 0.45, 0.3, 1000, 1300, 30, 0.3); }
     else voice(o, t, 0.6, kind === 'sheep' ? 420 : 520, kind === 'sheep' ? 380 : 450, kind === 'sheep' ? 9 : 14, 0.4); },

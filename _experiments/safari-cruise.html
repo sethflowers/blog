@@ -1,0 +1,196 @@
+---
+title: Safari Cruise
+description: Run your own drive-through safari park, on an iPad or in VR. Tour trucks carry visitors through big enclosures of zebras, giraffes, rhinos, elephants, hippos, lions, cheetahs, tigers and bears. Look after poorly and muddy animals, clean up, keep the feeders full, fix broken-down trucks, hire staff, and drive round in your own jeep.
+date: 2026-11-08
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#5a3a1a">
+<meta name="apple-mobile-web-app-title" content="Safari Cruise">
+<link rel="manifest" href="/experiments/safari-cruise/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/safari-cruise/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/safari-cruise/icon-192.png">
+<title>Safari Cruise</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#d8b878;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;
+    font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  button{font-family:inherit;cursor:pointer;}
+  /* title */
+  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;
+    background:linear-gradient(180deg,rgba(40,20,0,.0) 0%,rgba(40,20,0,.62) 72%);}
+  #title.hidden{display:none;}
+  .card{max-width:640px;width:100%;text-align:center;}
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(46px,10vw,100px);line-height:.95;letter-spacing:.02em;font-weight:900;
+    color:#ffd27a;text-shadow:0 4px 0 #8a4a14,0 8px 0 #4a2408,0 14px 30px rgba(0,0,0,.55);}
+  h1 span{display:block;color:#fff;font-size:.5em;letter-spacing:.3em;text-shadow:0 3px 0 #3a5a2a,0 6px 0 #1a3010,0 12px 26px rgba(0,0,0,.5);}
+  .sub{margin:20px 0 22px;font-size:19px;font-weight:600;text-shadow:0 2px 6px rgba(0,0,0,.7);}
+  .tbtn{display:block;width:100%;max-width:360px;margin:12px auto;padding:17px 20px;font-size:23px;font-weight:bold;line-height:1;color:#2a1a08;
+    background:#ffd27a;border:0;border-radius:16px;box-shadow:0 6px 0 #a8701e;}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 3px 0 #a8701e;}
+  .tbtn:disabled{background:#9a9080;box-shadow:0 6px 0 #6a6050;color:#3a3228;cursor:default;}
+  .tbtn.second{background:#f4ecd8;box-shadow:0 6px 0 #a8987a;font-size:18px;padding:14px;}
+  #status{margin-top:10px;font-size:15px;opacity:.95;min-height:20px;text-shadow:0 1px 4px #000;}
+  .help{margin-top:14px;font-size:13.5px;opacity:.95;line-height:1.6;text-shadow:0 1px 4px #000;}
+  .help b{color:#ffd27a;}
+  .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.85;pointer-events:none;text-shadow:0 1px 3px #000;}
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
+  body.playing #hud{display:block;}
+  .chip{position:absolute;background:rgba(42,26,10,.74);border-radius:16px;padding:9px 14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  #h-stat{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));min-width:200px;}
+  #h-money{font-weight:900;font-size:26px;color:#ffd27a;position:relative;}
+  #h-money.debt{color:#ff8a7a;}
+  #h-rate{font-size:14px;margin-top:3px;line-height:1.45;}
+  #h-rate b{color:#ffd27a;}
+  .pop{position:absolute;left:100%;top:0;margin-left:10px;font-weight:900;font-size:20px;animation:up 1.4s ease-out forwards;white-space:nowrap;text-shadow:0 2px 4px #000;color:#8aff8a;}
+  .pop.neg{color:#ff9a8a;}
+  @keyframes up{from{transform:translateY(8px);opacity:0}20%{opacity:1}to{transform:translateY(-26px);opacity:0}}
+  #jobs{position:absolute;left:calc(10px + env(safe-area-inset-left));top:calc(120px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:6px;max-width:300px;}
+  .job{pointer-events:auto;display:flex;align-items:center;gap:8px;border:0;text-align:left;background:rgba(150,36,24,.86);color:#fff;border-radius:12px;padding:7px 10px;font-size:13.5px;font-weight:700;line-height:1.25;}
+  .job .ji{font-size:22px;}
+  .job small{display:block;font-weight:600;opacity:.88;font-size:12px;}
+  .job.busy{background:rgba(160,110,20,.9);}
+  .job.more{background:rgba(42,26,10,.8);justify-content:center;}
+  #h-msg{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));width:min(540px,50vw);display:flex;flex-direction:column;gap:6px;}
+  .msg{background:rgba(42,26,10,.86);border-radius:12px;padding:9px 14px;font-size:16px;font-weight:600;text-align:center;animation:pop .25s ease-out;}
+  .msg.good{background:rgba(40,120,50,.92);} .msg.bad{background:rgba(170,40,30,.92);} .msg.money{background:rgba(170,110,10,.94);}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+  #topbtns{position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:7px;align-items:flex-end;}
+  .hbtn{pointer-events:auto;border:0;border-radius:14px;background:rgba(42,26,10,.8);color:#fff;font-weight:800;font-size:16.5px;padding:10px 14px;min-width:124px;text-align:left;}
+  .hbtn:active,.hbtn.on{background:#ffd27a;color:#2a1a08;}
+  .hbtn.big{background:#3a7a2a;font-size:18px;}
+  .hbtn.red{background:#b83a24;}
+  .hbtn:disabled{opacity:.45;}
+  body.driving #topbtns .mapOnly,body.riding #topbtns .mapOnly{display:none;}
+  /* driving controls */
+  #drivebar{position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:none;gap:10px;pointer-events:auto;align-items:flex-end;}
+  body.driving #drivebar,body.riding #drivebar{display:flex;}
+  body.riding #drivebar .driveOnly{display:none;}
+  body.driving #drivebar .rideOnly{display:none;}
+  #drivebar .hbtn{text-align:center;min-width:0;}
+  #b-fix{background:#d8302a;font-size:19px;display:none;max-width:280px;}
+  #b-fix.show{display:block;}
+  #speedo{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));font-size:20px;font-weight:900;text-align:center;display:none;}
+  body.driving #speedo,body.riding #speedo{display:block;}
+  #fixbar{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:260px;height:26px;border-radius:13px;background:rgba(0,0,0,.5);overflow:hidden;display:none;}
+  #fixbar div{height:100%;width:0;background:#ffd27a;}
+  #fixbar span{position:absolute;inset:0;text-align:center;font-weight:800;line-height:26px;color:#2a1a08;}
+  #stick{position:fixed;left:calc(26px + env(safe-area-inset-left));bottom:calc(26px + env(safe-area-inset-bottom));width:150px;height:150px;border-radius:75px;border:3px solid rgba(255,240,210,.55);background:rgba(42,26,10,.32);display:none;z-index:6;pointer-events:auto;touch-action:none;}
+  body.driving #stick{display:block;}
+  #knob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px 0 0 -31px;border-radius:31px;background:rgba(255,220,150,.9);box-shadow:0 3px 8px rgba(0,0,0,.4);}
+  #stick small{position:absolute;left:0;right:0;bottom:-22px;text-align:center;font-size:12px;font-weight:700;text-shadow:0 1px 3px #000;}
+  @media (hover:hover) and (pointer:fine){ #stick small{display:none;} }
+  /* panels */
+  #panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(20,10,0,.35);padding:14px;}
+  #panel.show{display:flex;}
+  .card-panel{width:min(680px,100%);max-height:min(90vh,920px);display:flex;flex-direction:column;background:#f8f2e4;color:#2a2010;border-radius:22px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .phead{display:flex;align-items:center;gap:12px;background:#5a3a1a;color:#fff;padding:13px 16px;}
+  .phead h2{font-family:Georgia,serif;font-size:23px;flex:1;}
+  .pmoney{font-weight:900;color:#ffd27a;font-size:20px;}
+  .phead .x{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:10px;width:42px;height:42px;font-size:18px;}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0;background:#e8dcc0;}
+  .tabs button{border:0;border-radius:12px 12px 0 0;padding:11px 14px;font-weight:800;font-size:15px;background:#d4c4a0;color:#4a3a1a;}
+  .tabs button.on{background:#f8f2e4;color:#2a2010;}
+  .pbody{overflow-y:auto;padding:6px 16px 18px;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  .psec{margin-top:12px;}
+  .psec h3{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#8a5a1a;margin-bottom:6px;}
+  .psec p{font-size:16px;line-height:1.45;}
+  .psec ul{padding-left:20px;font-size:15.5px;line-height:1.55;}
+  .row{display:flex;align-items:center;gap:12px;padding:9px 12px;margin:6px 0;background:#ece2cc;border-radius:14px;}
+  .row.on{background:#fff0b8;}
+  .ricon{width:58px;height:58px;flex:0 0 58px;border-radius:10px;}
+  .rl{flex:1;}
+  .row b{display:block;font-size:16px;} .row small{display:block;font-size:13px;color:#5a4a30;margin-top:2px;}
+  .row button,.btns button,.grid button{border:0;border-radius:12px;padding:11px 15px;font-weight:800;font-size:15px;background:#5a3a1a;color:#fff;white-space:nowrap;}
+  .row button:disabled,.btns button:disabled,.grid button:disabled{background:#c0b8a8;color:#f4f4f4;}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .btns button.primary{background:#3a7a2a;font-size:18px;padding:13px 22px;} .btns button.danger{background:#b83a24;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;}
+  .grid button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px;white-space:normal;}
+  .grid button.on{background:#ffd27a;color:#2a1a08;}
+  .grid button small{font-weight:600;font-size:12px;opacity:.9;}
+  .bicon{width:44px;height:44px;}
+</style>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "three": "/experiments/safari-cruise/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/lib/three.core.min.js": "/experiments/safari-cruise/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/animals.js": "/experiments/safari-cruise/js/animals.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/audio.js": "/experiments/safari-cruise/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/people.js": "/experiments/safari-cruise/js/people.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/sim.js": "/experiments/safari-cruise/js/sim.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/textures.js": "/experiments/safari-cruise/js/textures.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/ui.js": "/experiments/safari-cruise/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/util.js": "/experiments/safari-cruise/js/util.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/vehicles.js": "/experiments/safari-cruise/js/vehicles.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/safari-cruise/js/world.js": "/experiments/safari-cruise/js/world.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<div id="title">
+  <div class="card">
+    <h1>SAFARI<span>CRUISE</span></h1>
+    <p class="sub">Run your own drive-through safari park!</p>
+    <button id="b-play" class="tbtn">Play on this screen</button>
+    <button id="b-vr" class="tbtn">Enter VR</button>
+    <button id="b-new" class="tbtn second">Start a new safari</button>
+    <p id="status">Getting the animals ready...</p>
+    <div class="help">
+      <b>Manage:</b> tap an animal, a truck or a red job marker to see what it needs · staff go out to jobs by themselves<br>
+      <b>iPad:</b> drag to look around · pinch to zoom · two fingers to move · 🚙 Drive and 🚌 Ride to go round yourself<br>
+      <b>Computer:</b> drag · scroll · WASD to move (and to drive) · F fixes a job · H horn<br>
+      <b>VR:</b> the tablet is in your left hand · point and pull the trigger · left stick walks (or drives) · right stick turns (or steers) · B giant size
+    </div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="hud">
+  <div id="h-stat" class="chip"><div id="h-money"><span id="h-mval"></span></div><div id="h-rate"></div></div>
+  <div id="jobs"></div>
+  <div id="h-msg"></div>
+  <div id="topbtns">
+    <button id="b-drive" class="hbtn big">🚙 Drive</button>
+    <button id="b-ride" class="hbtn">🚌 Ride a truck</button>
+    <button id="b-animals" class="hbtn mapOnly">🦒 Animals</button>
+    <button id="b-trucks" class="hbtn mapOnly">🚚 Trucks</button>
+    <button id="b-staff" class="hbtn mapOnly">👷 Staff</button>
+    <button id="b-shop" class="hbtn mapOnly">🛒 Shop</button>
+    <button id="b-office" class="hbtn mapOnly">📋 Office</button>
+    <button id="b-menu" class="hbtn">☰ Menu</button>
+  </div>
+  <div id="speedo" class="chip"></div>
+  <div id="fixbar"><div></div><span>Fixing...</span></div>
+  <div id="drivebar">
+    <button id="b-fix" class="hbtn driveOnly">🔧 Fix it</button>
+    <button id="b-horn" class="hbtn driveOnly">📯 Horn</button>
+    <button id="b-cam" class="hbtn">🎥 View</button>
+    <button id="b-next" class="hbtn rideOnly">⏭ Next truck</button>
+    <button id="b-out" class="hbtn red">⬅ Get out</button>
+  </div>
+</div>
+<div id="stick"><div id="knob"></div><small>drive</small></div>
+<div id="panel"></div>
+<script type="module" src="/experiments/safari-cruise/js/main.js?v={% endraw %}{{ page.version }}{% raw %}"></script>
+<script>
+if ('serviceWorker' in navigator){
+  addEventListener('load', function(){
+    navigator.serviceWorker.register('/experiments/safari-cruise/sw.js', { updateViaCache: 'none' }).catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
+{% endraw %}

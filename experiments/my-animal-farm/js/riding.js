@@ -19,9 +19,9 @@ import { sfx } from './audio.js';
 export const GEARS = ['Halt', 'Walk', 'Trot', 'Canter', 'Gallop'];
 const GEAR_SPEED = [0, 1.6, 3.6, 6.2, 9.6];
 export const CLASSES = [
-  { id: 'novice', name: 'Novice 70 cm', height: 0.7, fee: 40, prizes: [500, 280, 150, 80], time: 72 },
-  { id: 'inter', name: 'Intermediate 90 cm', height: 0.9, fee: 75, prizes: [1100, 620, 320, 150], time: 66 },
-  { id: 'adv', name: 'Advanced 1.10 m', height: 1.1, fee: 150, prizes: [2500, 1400, 700, 320], time: 62 },
+  { id: 'novice', name: 'Novice 70 cm', height: 0.7, fee: 40, prizes: [400, 220, 120, 60], time: 72 },
+  { id: 'inter', name: 'Intermediate 90 cm', height: 0.9, fee: 75, prizes: [900, 500, 250, 120], time: 66 },
+  { id: 'adv', name: 'Advanced 1.10 m', height: 1.1, fee: 150, prizes: [2000, 1100, 550, 250], time: 62 },
 ];
 const RIVALS = ['Emma & Starlight', 'Leo & Thunder', 'Mia & Pickle', 'Oliver & Jazz', 'Ava & Rocket', 'Noah & Biscuit', 'Zoe & Midnight', 'Sam & Clover', 'Lily & Duke', 'Max & Bonnie'];
 
