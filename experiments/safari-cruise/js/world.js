@@ -1,6 +1,6 @@
-// The safari: rolling savanna, a gravel road that loops all the way round, and the enclosures it runs
+// The safari: jungle clearings, a dirt road that loops all the way round, and the enclosures it runs
 // through (each fenced, with a gate where the road goes in and out). The Safari Lodge (station, ticket
-// office, garage, car park) sits on the loop too. A rocky kopje rises in the middle.
+// office, garage, car park) sits on the loop too. Thick jungle grows all round the outside and over the hill in the middle.
 //
 // Layout: the road is a wobbly circle round the origin, r = roadR(θ), with x = r·cos θ, z = r·sin θ.
 // φ is the angle along the loop from the start of the Lodge. Each zone is a slice of φ; an enclosure
@@ -20,14 +20,14 @@ export const wrapPhi = (p) => ((p % TAU) + TAU) % TAU;
 // The zones along the loop, in driving order. Prices are what it costs to open them.
 export const ZONES = [
   { id: 'lodge', name: 'Safari Lodge', icon: '🏕', lodge: true },
-  { id: 'plains', name: 'Savanna Plains', icon: '🦓', species: ['zebra', 'wildebeest', 'ostrich'], start: [3, 3, 2], price: 0, biome: 'savanna', pond: { lat: -30, r: 9, at: 0.6 } },
-  { id: 'giraffe', name: 'Giraffe Grove', icon: '🦒', species: ['giraffe', 'impala'], start: [3, 4], price: 0, biome: 'acacia', pond: { lat: 28, r: 7, at: 0.3 } },
+  { id: 'plains', name: 'River Meadows', icon: '🦓', species: ['zebra', 'wildebeest', 'ostrich'], start: [3, 3, 2], price: 0, biome: 'clearing', pond: { lat: -30, r: 9, at: 0.6 } },
+  { id: 'giraffe', name: 'Giraffe Glade', icon: '🦒', species: ['giraffe', 'impala'], start: [3, 4], price: 0, biome: 'glade', pond: { lat: 28, r: 7, at: 0.3 } },
   { id: 'rhino', name: 'Rhino Ridge', icon: '🦏', species: ['rhino', 'warthog'], start: [2, 3], price: 3500, biome: 'rocky', pond: { lat: 26, r: 7, at: 0.65, mud: true } },
-  { id: 'elephant', name: 'Elephant Valley', icon: '🐘', species: ['elephant'], start: [3], price: 7000, biome: 'savanna', pond: { lat: 30, r: 13, at: 0.5 } },
-  { id: 'hippo', name: 'Hippo Lake', icon: '🦛', species: ['hippo', 'crocodile'], start: [3, 2], price: 11000, biome: 'wet', pond: { lat: -27, r: 19, at: 0.5 } },
-  { id: 'lion', name: 'Lion Pride', icon: '🦁', species: ['lion'], start: [4], price: 15000, biome: 'savanna', carnivore: true, pond: { lat: -28, r: 6, at: 0.3 } },
-  { id: 'cheetah', name: 'Cheetah Run', icon: '🐆', species: ['cheetah'], start: [3], price: 20000, biome: 'plain', carnivore: true, pond: { lat: 30, r: 5, at: 0.7 } },
-  { id: 'tiger', name: 'Tiger Forest', icon: '🐅', species: ['tiger'], start: [3], price: 27000, biome: 'forest', carnivore: true, pond: { lat: 24, r: 8, at: 0.5 } },
+  { id: 'elephant', name: 'Elephant Valley', icon: '🐘', species: ['elephant'], start: [3], price: 7000, biome: 'clearing', pond: { lat: 30, r: 13, at: 0.5 } },
+  { id: 'hippo', name: 'Hippo Lagoon', icon: '🦛', species: ['hippo', 'crocodile'], start: [3, 2], price: 11000, biome: 'wet', pond: { lat: -27, r: 19, at: 0.5 } },
+  { id: 'lion', name: 'Lion Pride', icon: '🦁', species: ['lion'], start: [4], price: 15000, biome: 'clearing', carnivore: true, pond: { lat: -28, r: 6, at: 0.3 } },
+  { id: 'cheetah', name: 'Cheetah Clearing', icon: '🐆', species: ['cheetah'], start: [3], price: 20000, biome: 'plain', carnivore: true, pond: { lat: 30, r: 5, at: 0.7 } },
+  { id: 'tiger', name: 'Tiger Jungle', icon: '🐅', species: ['tiger'], start: [3], price: 27000, biome: 'forest', carnivore: true, pond: { lat: 24, r: 8, at: 0.5 } },
   { id: 'bear', name: 'Bear Woods', icon: '🐻', species: ['bear'], start: [3], price: 35000, biome: 'pine', carnivore: true, pond: { lat: -24, r: 8, at: 0.55 } },
 ];
 const E = (TAU - LODGE) / (ZONES.length - 1);
@@ -55,6 +55,7 @@ export class World {
     this.buildGates();
     this.buildLodge();
     this.buildPlants();
+    this.buildCanopy();
     this.buildFeeders();
     this.buildSigns();
   }
@@ -171,27 +172,28 @@ export class World {
     const { phi, lat, zone } = this.polar(x, z);
     const Z = ZONES[zone], inside = lat > -IN && lat < OUT;
     const n = fbm(x / 40, z / 40, 3, 21), m = fbm(x / 9, z / 9, 2, 22);
-    // dry golden grass with greener patches
-    let c = [lerp(0.66, 0.5, n), lerp(0.56, 0.52, n), lerp(0.3, 0.24, n)];
-    if (m > 0.62) c = [c[0] * 0.85, c[1] * 0.88, c[2] * 0.8];
-    if (inside && Z.biome === 'forest'){ c = [lerp(0.32, 0.4, n), lerp(0.38, 0.42, n), lerp(0.18, 0.2, n)]; }
-    if (inside && Z.biome === 'pine'){ c = [lerp(0.36, 0.42, n), lerp(0.36, 0.38, n), lerp(0.22, 0.24, n)]; }
-    if (inside && Z.biome === 'wet'){ c = [lerp(0.44, 0.52, n), lerp(0.5, 0.54, n), lerp(0.24, 0.26, n)]; }
-    if (inside && (Z.biome === 'rocky' || Z.biome === 'plain')){ c = [c[0] * 1.04, c[1] * 0.96, c[2] * 0.9]; }
+    // lush jungle green, with darker damp patches and lighter sunny ones
+    let c = [lerp(0.3, 0.42, n), lerp(0.44, 0.52, n), lerp(0.16, 0.2, n)];
+    if (m > 0.6) c = [c[0] * 0.82, c[1] * 0.86, c[2] * 0.8];
+    if (m < 0.32) c = [c[0] * 1.08, c[1] * 1.04, c[2] * 0.95];
+    if (!inside || Z.lodge){ c = [c[0] * 0.8, c[1] * 0.84, c[2] * 0.82]; }       // the jungle floor, under the trees
+    if (inside && (Z.biome === 'forest' || Z.biome === 'pine')){ c = [lerp(0.26, 0.34, n), lerp(0.32, 0.38, n), lerp(0.14, 0.17, n)]; }
+    if (inside && Z.biome === 'wet'){ c = [lerp(0.3, 0.38, n), lerp(0.46, 0.5, n), lerp(0.2, 0.22, n)]; }
+    if (inside && (Z.biome === 'rocky' || Z.biome === 'plain')){ c = [c[0] * 1.1, c[1] * 1.02, c[2] * 0.95]; }
     // near water: lush, then mud at the edge
     for (const p of this.ponds){
       const d = Math.hypot(x - p.x, z - p.z) - p.r;
-      if (d < 10){ const k = smooth(1 - d / 10); c = [lerp(c[0], 0.36, k), lerp(c[1], 0.46, k), lerp(c[2], 0.2, k)]; }
+      if (d < 10){ const k = smooth(1 - d / 10); c = [lerp(c[0], 0.24, k), lerp(c[1], 0.42, k), lerp(c[2], 0.16, k)]; }
       if (d < 2.5){ const k = smooth(1 - (d + 0.5) / 3); c = [lerp(c[0], 0.42, k), lerp(c[1], 0.34, k), lerp(c[2], 0.24, k)]; }
     }
     // red-brown earth along the road's verges and under the Lodge
     const al = Math.abs(lat);
-    if (al < 9){ const k = smooth((9 - al) / 4) * 0.8; c = [lerp(c[0], 0.62, k), lerp(c[1], 0.44, k), lerp(c[2], 0.3, k)]; }
+    if (al < 9){ const k = smooth((9 - al) / 4) * 0.85; c = [lerp(c[0], 0.6, k), lerp(c[1], 0.36, k), lerp(c[2], 0.22, k)]; }
     const dphi = Math.abs(wrapPhi(phi - LODGE / 2 + Math.PI) - Math.PI);
-    if (dphi < LODGE * 0.5 && lat > 4 && lat < 95){ c = [lerp(c[0], 0.5, 0.35), lerp(c[1], 0.56, 0.35), lerp(c[2], 0.28, 0.35)]; }
+    if (dphi < LODGE * 0.5 && lat > 4 && lat < 95){ c = [lerp(c[0], 0.4, 0.4), lerp(c[1], 0.56, 0.4), lerp(c[2], 0.22, 0.4)]; }
     // rock showing through on steep bits and on the kopje
     const r = Math.hypot(x, z);
-    if (r < 40 && h > 8){ const k = smooth((h - 8) / 5) * smooth(m * 2 - 0.3); c = [lerp(c[0], 0.56, k), lerp(c[1], 0.5, k), lerp(c[2], 0.44, k)]; }
+    if (r < 40 && h > 8){ const k = smooth((h - 8) / 5) * smooth(m * 2 - 0.3); c = [lerp(c[0], 0.42, k), lerp(c[1], 0.44, k), lerp(c[2], 0.34, k)]; }
     return c;
   }
   buildTerrain(){
@@ -222,7 +224,7 @@ export class World {
       const h = this.height(x, z) - (k === 0 ? 0.05 : 0);
       pos.push(x, h, z);
       const c = this.groundColour(x, z, h), f = smooth(k / rings);
-      cols.push(lerp(c[0], 0.62, f), lerp(c[1], 0.6, f), lerp(c[2], 0.42, f));
+      const fn = 0.8 + vnoise(x / 60, z / 60, 4) * 0.35; cols.push(lerp(c[0], 0.2 * fn, f), lerp(c[1], 0.32 * fn, f), lerp(c[2], 0.14 * fn, f));
     }
     const R = segs + 1;
     for (let k = 0; k < rings; k++) for (let i = 0; i < segs; i++){ const a = k * R + i, b = a + 1, c = a + R, d = c + 1; idx.push(a, c, b, b, c, d); }
@@ -254,7 +256,7 @@ export class World {
     const mesh = new THREE.Mesh(g, m); mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; this.root.add(mesh);
   }
   buildWater(){
-    const wm = new THREE.MeshStandardMaterial({ color: 0xa8c4c0, map: water(), roughness: 0.12, metalness: 0.0, transparent: true, opacity: 0.85, envMapIntensity: 1 });
+    const wm = new THREE.MeshStandardMaterial({ color: 0x8aa890, map: water(), roughness: 0.12, metalness: 0.0, transparent: true, opacity: 0.85, envMapIntensity: 1 });
     const mm = new THREE.MeshStandardMaterial({ color: 0x6a5038, roughness: 0.35, metalness: 0 });
     this.waterMeshes = [];
     for (const p of this.ponds){
@@ -476,7 +478,7 @@ export class World {
       c.fillStyle = '#3a2414'; roundRect(c, 0, 0, 1024, 256, 30); c.fill();
       c.strokeStyle = '#f0c060'; c.lineWidth = 10; roundRect(c, 8, 8, 1008, 240, 24); c.stroke();
       c.fillStyle = '#ffd890'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = 'bold 120px Georgia, serif'; c.fillText('SAFARI CRUISE', 512, 112);
-      c.font = 'bold 44px Georgia, serif'; c.fillStyle = '#ffffff'; c.fillText('Drive-through wildlife park', 512, 200);
+      c.font = 'bold 44px Georgia, serif'; c.fillStyle = '#ffffff'; c.fillText('Drive-through jungle safari', 512, 200);
       const s = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), new THREE.MeshStandardMaterial({ map: tc.tex, roughness: 0.8, side: THREE.DoubleSide }));
       s.position.set(p.x, this.lodgeH + 5, p.z); s.rotation.y = yaw + Math.PI / 2; this.root.add(s);
       this.lodgeSign = s;
@@ -528,31 +530,35 @@ export class World {
     for (const Z of ZONES){
       if (Z.lodge) continue;
       const k = Z.k;
-      if (Z.biome === 'acacia'){ scatter(trees.acacia, 16, k, -IN + 4, OUT - 4, 9); scatter(trees.bush, 14, k, -IN, OUT, 8); }
-      else if (Z.biome === 'savanna'){ scatter(trees.acacia, 6, k, -IN + 4, OUT - 4, 12); scatter(trees.bush, 14, k, -IN, OUT, 8); if (k === 4) scatter(trees.baobab, 2, k, 20, OUT - 8, 16); scatter(trees.rock, 4, k, -IN, OUT, 8); }
-      else if (Z.biome === 'rocky'){ scatter(trees.rock, 26, k, -IN + 2, OUT - 2, 7); scatter(trees.acacia, 4, k, -IN + 4, OUT - 4, 12); scatter(trees.bush, 12, k, -IN, OUT, 8); }
-      else if (Z.biome === 'plain'){ scatter(trees.acacia, 3, k, -IN + 6, OUT - 6, 14); scatter(trees.bush, 6, k, -IN, OUT, 8); scatter(trees.rock, 6, k, -IN, OUT, 10); }
-      else if (Z.biome === 'wet'){ scatter(trees.palm, 9, k, -IN + 3, OUT - 3, 9); scatter(trees.acacia, 4, k, 10, OUT - 4, 10); scatter(trees.bush, 14, k, -IN, OUT, 7); }
-      else if (Z.biome === 'forest'){ scatter(trees.broad, 46, k, -IN + 2, OUT - 2, 8); scatter(trees.bush, 22, k, -IN, OUT, 6); scatter(trees.rock, 8, k, -IN, OUT, 8); }
+      if (Z.biome === 'glade'){ scatter(trees.acacia, 14, k, -IN + 4, OUT - 4, 9); scatter(trees.palm, 6, k, -IN + 3, OUT - 3, 9); scatter(trees.baobab, 2, k, -IN + 8, OUT - 8, 14); scatter(trees.bush, 18, k, -IN, OUT, 8); }
+      else if (Z.biome === 'clearing'){ scatter(trees.acacia, 9, k, -IN + 4, OUT - 4, 12); scatter(trees.palm, 5, k, -IN + 3, OUT - 3, 10); scatter(trees.baobab, 1, k, 20, OUT - 8, 16); scatter(trees.bush, 20, k, -IN, OUT, 8); scatter(trees.rock, 4, k, -IN, OUT, 8); }
+      else if (Z.biome === 'rocky'){ scatter(trees.rock, 26, k, -IN + 2, OUT - 2, 7); scatter(trees.acacia, 6, k, -IN + 4, OUT - 4, 12); scatter(trees.palm, 3, k, -IN + 4, OUT - 4, 10); scatter(trees.bush, 16, k, -IN, OUT, 8); }
+      else if (Z.biome === 'plain'){ scatter(trees.acacia, 4, k, -IN + 6, OUT - 6, 14); scatter(trees.palm, 3, k, -IN + 6, OUT - 6, 12); scatter(trees.bush, 10, k, -IN, OUT, 8); scatter(trees.rock, 6, k, -IN, OUT, 10); }
+      else if (Z.biome === 'wet'){ scatter(trees.palm, 16, k, -IN + 3, OUT - 3, 9); scatter(trees.acacia, 5, k, 10, OUT - 4, 10); scatter(trees.bush, 20, k, -IN, OUT, 7); }
+      else if (Z.biome === 'forest'){ scatter(trees.broad, 40, k, -IN + 2, OUT - 2, 8); scatter(trees.palm, 8, k, -IN + 2, OUT - 2, 8); scatter(trees.baobab, 3, k, -IN + 8, OUT - 8, 12); scatter(trees.bush, 30, k, -IN, OUT, 6); scatter(trees.rock, 6, k, -IN, OUT, 8); }
       else if (Z.biome === 'pine'){ scatter(trees.pine, 52, k, -IN + 2, OUT - 2, 8); scatter(trees.broad, 8, k, -IN + 2, OUT - 2, 8); scatter(trees.rock, 12, k, -IN, OUT, 7); }
     }
     // reeds round the ponds
     for (const p of this.ponds){ if (p.mud) continue; const n = Math.round(p.r * 2.4); for (let i = 0; i < n; i++){ const a = R() * TAU, d = p.r * (0.92 + R() * 0.2); trees.reed.push({ x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d, s: 0.7 + R() * 0.6, r: R() * TAU }); } }
     // the kopje in the middle: a heap of big boulders and a few trees
     for (let i = 0; i < 40; i++){ const a = R() * TAU, d = Math.sqrt(R()) * 34; trees.rock.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, s: 2 + R() * 3.5 * (1 - d / 40), r: R() * TAU, big: true }); }
-    for (let i = 0; i < 18; i++){ const a = R() * TAU, d = 10 + R() * 40; trees.acacia.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, s: 0.7 + R() * 0.4, r: R() * TAU }); }
+    for (let i = 0; i < 70; i++){ const a = R() * TAU, d = 8 + Math.sqrt(R()) * 52; const o = { x: Math.cos(a) * d, z: Math.sin(a) * d, s: 0.8 + R() * 0.5, r: R() * TAU }; (i % 9 === 0 ? trees.baobab : i % 3 === 0 ? trees.palm : trees.acacia).push(o); }
     for (let i = 0; i < 24; i++){ const a = R() * TAU, d = 20 + R() * 40; trees.bush.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, s: 0.8 + R() * 0.6, r: R() * TAU }); }
     // the wild land outside the fences
-    for (let i = 0, t = 0; i < 160 && t < 4000; t++){
-      const a = R() * TAU, d = 225 + R() * 160, x = Math.cos(a) * d, z = Math.sin(a) * d;
-      if (!okSpot(x, z, 12) || this.polar(x, z).lat < OUT + 4) continue;
-      (R() < 0.08 ? trees.baobab : R() < 0.35 ? trees.bush : trees.acacia).push({ x, z, s: 0.7 + R() * 0.6, r: R() * TAU }); i++;
+    // (the jungle outside the fences: thick, right up to the wire)
+    for (let i = 0, t = 0; i < 520 && t < 9000; t++){
+      const a = R() * TAU, d = 205 + Math.sqrt(R()) * 160, x = Math.cos(a) * d, z = Math.sin(a) * d;
+      if (!okSpot(x, z, 12) || this.polar(x, z).lat < OUT + 3) continue;
+      const q = R(), o = { x, z, s: 0.8 + R() * 0.6, r: R() * TAU, far: true };
+      (q < 0.07 ? trees.baobab : q < 0.3 ? trees.palm : q < 0.5 ? trees.bush : trees.acacia).push(o); i++;
     }
     // around the Lodge: a few shade trees
     for (const [a, lat] of [[30, 12], [-30, 40], [32, 44], [18, 44], [-20, 44]]){ const p = this.lodgePoint(a, lat).p; trees.acacia.push({ x: p.x, z: p.z, s: 0.8, r: R() * TAU }); }
 
     const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = V(), P = V(), C = new THREE.Color();
-    const inst = (geo, mat, list, { y = 0, scale = (o) => o.s, color, shadow = true, collide } = {}) => {
+    const inst = (geo, mat, list, opts = {}) => {
+      if (opts.split){ const near = list.filter((o) => !o.far), far = list.filter((o) => o.far); inst(geo, mat, near, { ...opts, split: false }); return inst(geo, mat, far, { ...opts, split: false, shadow: false }); }
+      const { y = 0, scale = (o) => o.s, color, shadow = true, collide } = opts;
       if (!list.length) return null;
       const m = new THREE.InstancedMesh(geo, mat, list.length);
       list.forEach((o, i) => {
@@ -569,36 +575,37 @@ export class World {
     const barkM = new THREE.MeshStandardMaterial({ map: bark(), roughness: 0.95 });
     const leafM = new THREE.MeshStandardMaterial({ map: leaves(), roughness: 0.9, color: 0xffffff });
     const leafCol = (base) => (o) => { const c = new THREE.Color(base); c.offsetHSL((hash2(o.x * 10, o.z * 10) - 0.5) * 0.05, 0, (hash2(o.z * 7, o.x * 3) - 0.5) * 0.12); return c.getHex(); };
-    // acacia: a leaning trunk that forks into branches, under a flat umbrella of leaves
+    // jungle tree: a tall straight trunk under a big lumpy dome of leaves
     {
       const parts = [];
-      const tr = new THREE.CylinderGeometry(0.22, 0.38, 4.2, 7); tr.translate(0, 2.1, 0); tr.rotateZ(0.08); parts.push(tr);
-      for (const [a, l, tilt] of [[0, 3.2, 0.7], [2.1, 2.8, 0.75], [4.2, 3, 0.6]]){ const br = new THREE.CylinderGeometry(0.08, 0.18, l, 5); br.translate(0, l / 2, 0); br.rotateZ(tilt); br.rotateY(a); br.translate(-0.3, 3.9, 0); parts.push(br); }
+      const tr = new THREE.CylinderGeometry(0.28, 0.5, 8, 7); tr.translate(0, 4, 0); parts.push(tr);
+      for (const [a, l, tilt] of [[0, 3, 0.6], [2.1, 2.6, 0.7], [4.2, 2.8, 0.55]]){ const br = new THREE.CylinderGeometry(0.1, 0.2, l, 5); br.translate(0, l / 2, 0); br.rotateZ(tilt); br.rotateY(a); br.translate(0, 7, 0); parts.push(br); }
       const trunk = mergeGeometries(parts.map((g) => { g.deleteAttribute('uv'); return g; }));
-      const cn = ellipsoid(5, 1, 5, 14, 7); const p = cn.attributes.position;
-      for (let i = 0; i < p.count; i++){ const x = p.getX(i), y = p.getY(i), z = p.getZ(i); const k = 1 + (vnoise(x * 0.7 + 3, z * 0.7, 4) - 0.5) * 0.45; p.setXYZ(i, x * k, y < 0 ? y * 0.45 : y * (0.8 + k * 0.3), z * k); }
-      cn.translate(0, 6.2, 0); cn.computeVertexNormals();
-      // a few smaller clumps round the edge so it isn't one smooth disc
-      const clumps = [cn]; for (const [a, d, s] of [[0.5, 3.6, 1.8], [2.4, 3.8, 2], [4.4, 3.4, 1.7], [3.4, 1.5, 2.2]]){ const c = ellipsoid(s, 0.7, s, 10, 6); c.translate(Math.cos(a) * d, 5.9 + (a % 1) * 0.6, Math.sin(a) * d); clumps.push(c); }
-      inst(trunk, barkM, trees.acacia, { collide: (o) => 0.45 * o.s });
-      inst(mergeGeometries(clumps.map((g) => g.index ? g.toNonIndexed() : g)), leafM, trees.acacia, { color: leafCol(0x6a7a3a) });
+      const clumps = [];
+      for (const [x, y, z, r] of [[0, 10.2, 0, 3.8], [2.6, 9.2, 0.6, 2.8], [-2.4, 9.4, -0.8, 2.9], [0.6, 9, -2.6, 2.7], [-0.8, 9.1, 2.5, 2.6], [0.3, 12, 0.2, 2.4]]){
+        const c = ellipsoid(r, r * 0.75, r, 9, 6); const p = c.attributes.position;
+        for (let i = 0; i < p.count; i++){ const k = 1 + (vnoise(p.getX(i) * 0.9 + x * 3, p.getZ(i) * 0.9 + y, 6) - 0.5) * 0.4; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k); }
+        c.translate(x, y, z); c.computeVertexNormals(); clumps.push(c.toNonIndexed());
+      }
+      inst(trunk, barkM, trees.acacia, { collide: (o) => 0.55 * o.s, split: true });
+      inst(mergeGeometries(clumps), leafM, trees.acacia, { color: leafCol(0x3a6a22), split: true });
     }
-    // baobab: a huge bottle-shaped trunk with stubby branches
+    // kapok: a giant that towers over the rest, with buttress roots and a wide umbrella crown
     {
-      const t = new THREE.CylinderGeometry(1.4, 2.4, 9, 12, 4); const p = t.attributes.position;
-      for (let i = 0; i < p.count; i++){ const y = p.getY(i), k = 1 + 0.25 * Math.sin((y + 4.5) / 9 * Math.PI); p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * k); }
-      t.translate(0, 4.5, 0);
-      const parts = [t]; for (let i = 0; i < 6; i++){ const br = new THREE.CylinderGeometry(0.2, 0.5, 3.5, 5); br.translate(0, 1.75, 0); br.rotateZ(0.6 + (i % 2) * 0.3); br.rotateY(i * 1.05); br.translate(0, 8.6, 0); parts.push(br); }
-      inst(mergeGeometries(parts.map((g) => { g.deleteAttribute('uv'); return g.index ? g.toNonIndexed() : g; })), new THREE.MeshStandardMaterial({ map: bark(), color: 0xc8b8a8, roughness: 0.95 }), trees.baobab, { collide: (o) => 2.4 * o.s });
-      const cl = []; for (let i = 0; i < 6; i++){ const c = ellipsoid(1.8, 1.1, 1.8, 8, 6); const a = i * 1.05; c.translate(Math.cos(a) * 3.2, 11.3 + (i % 2), Math.sin(a) * 3.2); cl.push(c.toNonIndexed()); }
-      inst(mergeGeometries(cl), leafM, trees.baobab, { color: leafCol(0x5a6a2e) });
+      const t = new THREE.CylinderGeometry(0.6, 1.1, 20, 10); t.translate(0, 10, 0);
+      const parts = [t];
+      for (let i = 0; i < 5; i++){ const f = new THREE.BoxGeometry(0.25, 3.2, 2.4); const p = f.attributes.position; for (let k = 0; k < p.count; k++){ if (p.getY(k) > 0) p.setZ(k, p.getZ(k) * 0.15); } f.translate(0, 1.6, 1.2); f.rotateY(i / 5 * TAU); parts.push(f); }
+      for (let i = 0; i < 5; i++){ const br = new THREE.CylinderGeometry(0.15, 0.35, 5, 5); br.translate(0, 2.5, 0); br.rotateZ(1.0); br.rotateY(i * 1.26); br.translate(0, 19, 0); parts.push(br); }
+      inst(mergeGeometries(parts.map((g) => { g.deleteAttribute('uv'); return g.index ? g.toNonIndexed() : g; })), new THREE.MeshStandardMaterial({ map: bark(), color: 0xd0c8b8, roughness: 0.95 }), trees.baobab, { collide: (o) => 1.4 * o.s, split: true });
+      const cl = []; for (let i = 0; i < 7; i++){ const c = ellipsoid(3.4, 1.4, 3.4, 9, 6); const a = i * 0.9; const d = i ? 4.6 : 0; c.translate(Math.cos(a) * d, 22 + (i % 2) * 0.8, Math.sin(a) * d); cl.push(c.toNonIndexed()); }
+      inst(mergeGeometries(cl), leafM, trees.baobab, { color: leafCol(0x48722a), split: true });
     }
     // broadleaf forest trees
     {
       const t = new THREE.CylinderGeometry(0.25, 0.45, 7, 7); t.translate(0, 3.5, 0); t.deleteAttribute('uv');
       inst(t, barkM, trees.broad, { collide: (o) => 0.5 * o.s, scale: (o) => V(o.s, o.s * 1.15, o.s) });
       const cl = []; for (const [x, y, z, r] of [[0, 8.5, 0, 3.4], [1.8, 7.2, 0.8, 2.6], [-1.6, 7.4, -0.9, 2.7], [0.4, 7, -2, 2.4], [-0.6, 10.2, 0.6, 2.2]]){ const c = ellipsoid(r, r * 0.85, r, 10, 7); const p = c.attributes.position; for (let i = 0; i < p.count; i++){ const k = 1 + (vnoise(p.getX(i) + x * 3, p.getZ(i) + y, 6) - 0.5) * 0.35; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k); } c.translate(x, y, z); c.computeVertexNormals(); cl.push(c.toNonIndexed()); }
-      inst(mergeGeometries(cl), leafM, trees.broad, { color: leafCol(0x3e6a2a), scale: (o) => V(o.s, o.s * 1.15, o.s) });
+      inst(mergeGeometries(cl), leafM, trees.broad, { color: leafCol(0x2e5e22), scale: (o) => V(o.s, o.s * 1.15, o.s) });
     }
     // pines
     {
@@ -611,14 +618,14 @@ export class World {
     {
       const parts = []; for (let i = 0; i < 6; i++){ const c = new THREE.CylinderGeometry(0.2, 0.24, 1.4, 6); c.translate(0.08 * i * i * 0.1, 0.7 + i * 1.35, 0); c.rotateZ(-0.02 * i); parts.push(c.toNonIndexed()); }
       parts.forEach((g) => g.deleteAttribute('uv'));
-      inst(mergeGeometries(parts), barkM, trees.palm, { collide: () => 0.3 });
+      inst(mergeGeometries(parts), barkM, trees.palm, { collide: () => 0.3, split: true });
       const fr = []; for (let i = 0; i < 9; i++){ const f = new THREE.ConeGeometry(0.5, 4.2, 3); f.rotateZ(Math.PI / 2 + 0.35); f.translate(2, 0, 0); f.scale(1, 0.25, 1); f.rotateY(i / 9 * TAU); f.translate(0.4, 8.2, 0); fr.push(f.toNonIndexed()); }
-      inst(mergeGeometries(fr), leafM, trees.palm, { color: leafCol(0x4a7a2a) });
+      inst(mergeGeometries(fr), leafM, trees.palm, { color: leafCol(0x4a8a26), split: true });
     }
     // bushes
     {
       const cl = []; for (const [x, y, z, r] of [[0, 0.7, 0, 1.2], [0.9, 0.5, 0.3, 0.9], [-0.8, 0.55, -0.2, 0.9], [0.2, 0.5, -0.9, 0.8]]){ const c = ellipsoid(r, r * 0.8, r, 8, 6); c.translate(x, y, z); cl.push(c.toNonIndexed()); }
-      inst(mergeGeometries(cl), leafM, trees.bush, { color: leafCol(0x5a6a32), shadow: true });
+      inst(mergeGeometries(cl), leafM, trees.bush, { color: leafCol(0x3a7224), split: true });
     }
     // reeds
     {
@@ -654,12 +661,62 @@ export class World {
       const dphi = Math.abs(wrapPhi(phi - LODGE / 2 + Math.PI) - Math.PI);
       if (dphi < LODGE * 0.55 && lat > 4 && lat < 96) continue;
       if (this.nearWater(x, z, 0.5)) continue;
-      if (fbm(x / 14, z / 14, 2, 77) < 0.42) continue;
+      if (fbm(x / 14, z / 14, 2, 77) < 0.36) continue;
       const Z = ZONES[zone]; if ((Z.biome === 'forest' || Z.biome === 'pine') && lat > -IN && lat < OUT && R() < 0.6) continue;
       spots.push({ x, z, s: 0.7 + R() * 0.9, r: R() * TAU }); i++;
     }
     const gm = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide });
-    this.grass = inst(tuft, gm, spots, { shadow: false, scale: (o) => V(o.s, o.s * (0.8 + hash2(o.x, o.z) * 0.6), o.s), color: (o) => { const c = new THREE.Color(0xd8c890); c.offsetHSL((hash2(o.x * 3, o.z) - 0.5) * 0.06, 0, (hash2(o.z, o.x * 5) - 0.5) * 0.2); return c.getHex(); } });
+    this.grass = inst(tuft, gm, spots, { shadow: false, scale: (o) => V(o.s, o.s * (0.8 + hash2(o.x, o.z) * 0.6), o.s), color: (o) => { const c = new THREE.Color(0x7aa848); c.offsetHSL((hash2(o.x * 3, o.z) - 0.5) * 0.06, 0, (hash2(o.z, o.x * 5) - 0.5) * 0.16); return c.getHex(); } });
+  }
+
+  // ---------- the jungle canopy ----------
+  // A solid roof of treetops all round the outside of the fences and over the hill in the middle,
+  // so the safari feels like a set of clearings cut into the jungle. One mesh: a grid laid over the
+  // land, lifted 14-24 m where there's jungle and tucked under the ground where there isn't.
+  canopyHeight(x, z){
+    const { phi, lat } = this.polar(x, z), r = Math.hypot(x, z);
+    const out = smooth((lat - OUT - 6) / 16), core = smooth((-IN - 8 - lat) / 14) * smooth((r - 14) / 10);
+    let k = Math.max(out, core);
+    // gaps for the Lodge and the drive in
+    const dphi = Math.abs(wrapPhi(phi - LODGE / 2 + Math.PI) - Math.PI);
+    k *= smooth((dphi - LODGE * 0.58) / (LODGE * 0.25));
+    if (lat > 0){ const across = dphi * Math.hypot(x, z); k *= Math.max(smooth((across - 9) / 6), smooth((dphi - LODGE * 0.58) / (LODGE * 0.25))); }
+    if (k <= 0.01) return 0;
+    return k * (12 + fbm(x / 30, z / 30, 2, 61) * 7 + this.crown(x, z).h * 7);
+  }
+  // round treetops: a dome for every tree, one tree in each 8 m cell
+  crown(x, z){
+    const C = 8, ci = Math.floor(x / C), cj = Math.floor(z / C);
+    let best = 0, id = 0;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++){
+      const a = ci + i, b = cj + j, cx = (a + 0.2 + hash2(a, b, 71) * 0.6) * C, cz = (b + 0.2 + hash2(a, b, 72) * 0.6) * C;
+      const r = 4.5 + hash2(a, b, 73) * 3, d = Math.hypot(x - cx, z - cz) / r;
+      if (d < 1){ const h = Math.sqrt(1 - d * d) * (0.7 + hash2(a, b, 74) * 0.5); if (h > best){ best = h; id = hash2(a, b, 75); } }
+    }
+    return { h: best, id };
+  }
+  buildCanopy(){
+    const seg = 260, size = HALF * 2;
+    const g = new THREE.PlaneGeometry(size, size, seg, seg); g.rotateX(-Math.PI / 2);
+    const p = g.attributes.position, col = new Float32Array(p.count * 3), uv = g.attributes.uv, up = new Uint8Array(p.count);
+    for (let i = 0; i < p.count; i++){
+      const x = p.getX(i), z = p.getZ(i), ground = this.height(x, z), c = this.canopyHeight(x, z);
+      p.setY(i, c > 0.5 ? ground + c : ground - 3); if (c > 0.5) up[i] = 1;
+      // each crown its own green, darker down in the gaps between them
+      const cr = this.crown(x, z), m = fbm(x / 40, z / 40, 2, 34), lit = 0.45 + cr.h * 0.7;
+      const hue = cr.id;
+      col[i * 3] = lerp(0.12, 0.3, hue) * lit * (0.85 + m * 0.3); col[i * 3 + 1] = lerp(0.28, 0.44, hue * 0.7 + 0.15) * lit * (0.85 + m * 0.3); col[i * 3 + 2] = lerp(0.08, 0.16, hue) * lit;
+      uv.setXY(i, x / 9, z / 9);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // keep only the triangles that are up in the trees (the rest would be hidden under the ground)
+    const ix = g.index.array, keep = [];
+    for (let t = 0; t < ix.length; t += 3) if (up[ix[t]] || up[ix[t + 1]] || up[ix[t + 2]]) keep.push(ix[t], ix[t + 1], ix[t + 2]);
+    g.setIndex(keep);
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: leaves(), vertexColors: true, roughness: 0.95 }));
+    m.matrixAutoUpdate = false; m.receiveShadow = true; this.root.add(m);
+    this.canopy = m;
   }
 
   // ---------- feeding stations ----------

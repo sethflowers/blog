@@ -1,4 +1,4 @@
-// Synthesised sound: the savanna (insects, birds, wind), engines (the nearest truck, and your jeep),
+// Synthesised sound: the jungle (insects, birds, parrots, distant monkeys), engines (the nearest truck, and your jeep),
 // animal calls placed in 3D (lions roar, elephants trumpet, zebras bark, hippos grunt), and the game's
 // own noises (coins, alerts, a horn, spanners, splashes).
 let ctx = null, master = null, noiseBuf = null;
@@ -95,8 +95,9 @@ function birds(){
   const kind = Math.random();
   if (kind < 0.5){ const n = 2 + Math.floor(Math.random() * 4), f = 2200 + Math.random() * 1800; for (let i = 0; i < n; i++) tone(o, t + i * 0.13, 0.09, 'sine', f, f * (0.7 + Math.random() * 0.6), 0.6); }
   else if (kind < 0.8){ for (let i = 0; i < 3; i++) tone(o, t + i * 0.4, 0.3, 'sine', 900, 700, 0.5, 0.05); }   // a dove
-  else { for (let i = 0; i < 6; i++) tone(o, t + i * 0.08, 0.06, 'square', 3000 + i * 100, 2600, 0.2); }
-  setTimeout(birds, 2500 + Math.random() * 6000);
+  else if (kind < 0.9){ for (let i = 0; i < 2; i++) noise(o, t + i * 0.25, 0.18, 'bandpass', 1800, 2600, 0.9, 4, 0.01); tone(o, t, 0.2, 'sawtooth', 1400, 900, 0.25); }   // a parrot
+  else { const m = out(null, 0.025); for (let i = 0; i < 5; i++){ tone(m, t + i * 0.45, 0.5, 'sawtooth', 160, 120, 0.6, 0.15); noise(m, t + i * 0.45, 0.5, 'lowpass', 600, 300, 0.5, 2, 0.15); } }   // howler monkeys, far off
+  setTimeout(birds, 2000 + Math.random() * 5000);
 }
 
 // animal calls, at the animal

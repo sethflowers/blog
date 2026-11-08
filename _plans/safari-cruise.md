@@ -1,7 +1,8 @@
 # Safari Cruise
 
-You're the manager of a drive-through safari park. Tour trucks carry paying visitors round a loop road
-through big fenced enclosures full of animals; you keep the animals healthy and clean, the feeders
+You're the manager of a drive-through safari cut into the jungle, and you walk round it yourself in
+first person (like My Animal Farm). Tour trucks carry paying visitors round a loop road through big
+fenced enclosures full of animals; you keep the animals healthy and clean, the feeders
 full, the trucks running, and spend the money on more enclosures, animals, trucks, staff and upgrades.
 Plays on an iPad (or any screen) and in VR (WebXR in a headset's browser, e.g. a Quest) from the same
 page, like My Animal Farm and Rollercoaster Bros.
@@ -15,17 +16,21 @@ address carries the version (`?v=`).
 
 - The road is a wobbly circle (r ≈ 150 m, about 950 m round). Everything is placed by φ (angle along
   the loop from the start of the Lodge) and "lateral" (metres outside the road, negative inside).
-- Zones are slices of φ: the Safari Lodge, then nine enclosures in driving order: Savanna Plains
-  (zebra, wildebeest, ostrich), Giraffe Grove (giraffe, impala), Rhino Ridge (white rhino, warthog,
-  mud wallow), Elephant Valley, Hippo Lake (hippos, crocodiles), Lion Pride, Cheetah Run, Tiger Forest,
-  Bear Woods. Each reaches 52 m inside the road and 62 m outside it, fenced (taller fences for the
+- Zones are slices of φ: the Safari Lodge, then nine enclosures in driving order: River Meadows
+  (zebra, wildebeest, ostrich), Giraffe Glade (giraffe, impala), Rhino Ridge (white rhino, warthog,
+  mud wallow), Elephant Valley, Hippo Lagoon (hippos, crocodiles), Lion Pride, Cheetah Clearing, Tiger
+  Jungle, Bear Woods. Each reaches 52 m inside the road and 62 m outside it, fenced (taller fences for the
   big cats and bears), with a gate and cattle grid where the road crosses into the next one; the gates
   swing open for anything driving up. Each has a feeder (a hay rack, or a meat platform), a pond or
-  wallow, a sign board by the road and its own plants (acacias, baobabs, rocks, palms and reeds, a
-  broadleaf forest, pines).
+  wallow, a sign board by the road and its own plants (jungle trees, giant kapoks with buttress roots,
+  palms, ferns, rocks, reeds; a thick forest for the tigers, pines for the bears).
+- The jungle: a solid canopy of treetops (one mesh laid over the land, lifted 15-27 m) all round the
+  outside of the fences and over the hill in the middle, with gaps for the Lodge and the drive in;
+  hundreds more trees in front of it (the ones outside the fences don't cast shadows, to keep it
+  quick). Green ground, forested hills, humid green haze, parrots and distant howler monkeys.
 - Terrain: a 2 m height grid (±400 m) from noise, with a rocky kopje in the middle, hills on the
   horizon, ponds carved in, the road smoothed along its length and the Lodge on a flat terrace.
-  Ground colour per vertex (dry grass, lush by water, red earth by the road) under a detail texture;
+  Ground colour per vertex (jungle greens, lush by water, red earth by the road) under a detail texture;
   14,000 instanced grass tufts; every tree, bush and rock instanced.
 - The Lodge: the station platform under a thatched roof, rondavels, a covered walkway to the car park
   (which fills with cars on busy days), the big sign, and the garage where trucks are serviced and the
@@ -67,20 +72,28 @@ coat; a sick animal lies down more, moves slowly and has a red cross over it.
 
 ## Playing it two ways (main.js, ui.js)
 
-- **Screen**: a camera that flies over the safari (drag, pinch / scroll, two fingers or WASD). Tap an
-  animal, truck, staff jeep or job marker for a panel. Jobs are listed down the left. 🚙 Drive: your
-  jeep, with a thumb stick (or WASD), chase or cockpit view, a horn, Fix it near a job. 🚌 Ride: a seat
-  on a tour truck (drag to look round, next truck).
-- **VR**: you start at giant size over the safari; B switches to normal size. The tablet in your left
-  hand has the same panels; point with the right controller and pull the trigger (on the tablet, or on
-  an animal, truck or marker in the world). Left stick walks; right stick snap-turns. Riding and
+- **Screen**: first person on foot, like My Animal Farm: a thumb stick appears under your left thumb
+  (or WASD; Shift or a full push runs), drag anywhere else to look, tap an animal, truck, staff jeep or
+  job marker for a panel. Fences, trees, buildings, trucks and the big animals are solid; you step up
+  onto the station platform. Jobs are listed down the left; walk up to one and press Fix it. 🚙 Jeep
+  (E): your jeep (brought round to you if it's far away), cockpit view (or chase), a horn, Fix it.
+  🚌 Ride: a seat on a tour truck (drag to look round, next truck). 🗺 Go to: jump to the gate of any
+  enclosure, since the loop is nearly a kilometre.
+- **VR**: you stand at the Lodge at normal size. The tablet in your left hand has the same panels;
+  point with the right controller and pull the trigger (on the tablet, or on an animal, truck or marker
+  in the world; next to a job it does the job). Left stick walks (with the same solid things); right
+  stick snap-turns; A rides, B takes the jeep. Riding and
   driving move the whole play space with the vehicle (turning only, the horizon stays level); when
   driving, the left stick is go / stop and the right stick steers, the trigger fixes a job.
 
 ## Testing
 
 `_tools/safari-cruise/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated Quest 3,
-installed with `npm i --prefix _tools/vr-test iwer`) and saves screenshots.
+installed with `npm i --prefix _tools/vr-test iwer`) and saves screenshots. About five minutes. It doesn't wait for the game clock in
+real time: `__sc.advance(seconds, until)` steps the simulation in a loop inside the page, and
+`__sc.renderNow()` draws one frame for each screenshot (nothing else is drawn). In VR the controllers
+only change on a headset frame, so after moving a stick it waits for a real frame, drawn at 30% of the
+headset's resolution (`__sc.xrScale`), then fast-forwards the same way.
 
 ## Ideas for later
 
