@@ -389,7 +389,7 @@ export class Care {
         if (target.type === 'feeder'){
           const p = F.pens[target.pen];
           const want = p.kind === 'pig' ? 'pigfeed' : p.kind === 'chicken' ? 'corn' : null;
-          if (!want){ this.hint('Goats and sheep eat hay. Bring a flake from the hay stack.'); return false; }
+          if (!want){ this.hint('Goats, sheep and cows eat hay. Bring a flake from the hay stack.'); return false; }
           if (it.content !== want){ this.hint(p.kind === 'pig' ? 'Pigs need pig feed.' : 'Hens need corn.'); return false; }
           p.feedAmt = Math.min(1, p.feedAmt + 0.5); it.amount = 0; this.refreshItem(it); F.refreshPen(target.pen); sfx.grain(target.point);
           return true;
@@ -495,7 +495,7 @@ export class Care {
     }
     // things left on the floor settle on it
     for (const it of this.pickables()){
-      if (it.held || it.homeNow || it.inBarrow || it.kind === 'barrow') continue;
+      if (it.held || it.homeNow || it.inBarrow || it.carried || it.kind === 'barrow') continue;
       if (it.mesh.position.y > 0.08){ it.fallV = (it.fallV || 0) + 9.8 * dt; it.mesh.position.y = Math.max(0.08, it.mesh.position.y - it.fallV * dt); }
       else it.fallV = 0;
       // lost? (dropped far away) send it home
