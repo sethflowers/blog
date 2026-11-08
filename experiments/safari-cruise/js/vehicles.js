@@ -53,8 +53,8 @@ export function buildTruck(colour, number){
   // chassis and cab (the cab is at the front, +z)
   k.box(2.3, 0.35, 7.0, dark, 0, 0.75, 0);
   k.box(2.5, 1.1, 2.0, paint, 0, 1.5, 2.6);                 // engine and cab lower
-  k.box(2.4, 0.45, 1.3, paint, 0, 2.27, 2.25);               // cab upper (low, so riders can see over it)
-  k.box(2.3, 0.4, 0.05, glass, 0, 2.3, 2.92, -0.2);         // windscreen
+  k.box(2.3, 0.4, 0.05, glass, 0, 2.25, 2.95, -0.2);        // a low windscreen (an open cab, so riders can see ahead)
+  k.box(2.4, 0.08, 0.08, M(0x9a9a98, 0.35, 0.7), 0, 2.45, 2.9);
   k.box(2.52, 0.18, 0.15, metal, 0, 0.9, 3.62);             // bumper
   k.box(1.6, 0.6, 0.06, M(0x2a2a2a, 0.5, 0.5), 0, 1.5, 3.62); // grille
   for (const sx of [-0.85, 0.85]){ k.cyl(0.14, 0.14, 0.06, M(0xfff8e0, 0.2, 0.1, { emissive: 0x332a10 }), sx, 1.55, 3.64, Math.PI / 2); }
@@ -65,9 +65,9 @@ export function buildTruck(colour, number){
   for (const sx of [-1, 1]){ k.box(0.08, 0.55, 4.8, paint, sx * 1.22, 1.45, -1.0); k.box(0.1, 0.06, 4.8, trim, sx * 1.22, 1.75, -1.0); k.box(0.06, 0.06, 4.8, metal, sx * 1.22, 2.25, -1.0); }
   k.box(2.5, 0.55, 0.08, paint, 0, 1.45, -3.38);
   for (let r = 0; r < 4; r++){ const z = 0.6 - r * 1.15; k.box(2.2, 0.12, 0.5, seat, 0, 1.62, z); k.box(2.2, 0.55, 0.08, seat, 0, 1.92, z - 0.26); }
-  for (const z of [1.25, -1.0, -3.3]) for (const sx of [-1, 1]) k.cyl(0.04, 0.04, 1.85, metal, sx * 1.2, 2.17, z);
-  k.add(boxUV(2.7, 0.08, 5.0, 0.5), M(0xffffff, 0.95, 0, { map: canvasCloth() }), 0, 3.12, -1.0);
-  k.box(2.75, 0.12, 0.08, trim, 0, 3.08, 1.5); k.box(2.75, 0.12, 0.08, trim, 0, 3.08, -3.5);
+  for (const z of [1.25, -1.0, -3.3]) for (const sx of [-1, 1]) k.cyl(0.04, 0.04, 2.3, metal, sx * 1.2, 2.4, z);
+  k.add(boxUV(2.7, 0.08, 5.0, 0.5), M(0xffffff, 0.95, 0, { map: canvasCloth() }), 0, 3.56, -1.0);
+  k.box(2.75, 0.12, 0.08, trim, 0, 3.52, 1.5); k.box(2.75, 0.12, 0.08, trim, 0, 3.52, -3.5);
   // spare wheel on the back, a ladder, stripes
   k.cyl(0.5, 0.5, 0.3, dark, 0, 1.45, -3.6, Math.PI / 2);
   for (const sx of [-1, 1]) k.box(0.04, 0.12, 6.9, trim, sx * 1.26, 1.05, 0.1);
@@ -113,7 +113,6 @@ export function buildJeep(kind){
   if (kind === 'vet'){ k.box(0.7, 0.45, 0.5, M(0xf4f4f4, 0.5), 0, 1.5, -1.7); k.box(0.5, 0.12, 0.04, M(0xd82020, 0.5), 0, 1.5, -1.95); k.box(0.12, 0.4, 0.04, M(0xd82020, 0.5), 0, 1.5, -1.95); }
   if (kind === 'keeper'){ k.box(1.2, 0.5, 0.8, M(0xd8c890, 1), 0, 1.5, -1.6); k.cyl(0.25, 0.25, 0.6, M(0x2a5aa8, 0.5), 0.55, 1.6, -1.7); }
   if (kind === 'mechanic'){ k.box(0.9, 0.4, 0.5, M(0xc82a2a, 0.4, 0.3), 0, 1.45, -1.7); k.cyl(0.35, 0.35, 0.22, dark, 0.5, 1.6, -1.3, 0, 0, Math.PI / 2); }
-  if (kind === 'manager'){ k.box(1.9, 0.08, 1.4, M(0xd8c8a0, 0.95, 0, { map: canvasCloth() }), 0, 2.42, -0.2); }
   k.build(body);
   if (kind === 'vet'){
     const tc = textCanvas(64, 64), c = tc.ctx; c.fillStyle = '#fff'; c.fillRect(0, 0, 64, 64); c.fillStyle = '#d02020'; c.fillRect(24, 8, 16, 48); c.fillRect(8, 24, 48, 16);

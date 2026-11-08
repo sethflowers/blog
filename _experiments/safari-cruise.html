@@ -1,8 +1,8 @@
 ---
 title: Safari Cruise
-description: Run your own drive-through safari park, on an iPad or in VR. Tour trucks carry visitors through big enclosures of zebras, giraffes, rhinos, elephants, hippos, lions, cheetahs, tigers and bears. Look after poorly and muddy animals, clean up, keep the feeders full, fix broken-down trucks, hire staff, and drive round in your own jeep.
+description: Run your own drive-through jungle safari park, on an iPad or in VR. Walk round it, drive your jeep or ride a tour truck. Trucks carry visitors through big jungle enclosures of zebras, giraffes, rhinos, elephants, hippos, lions, cheetahs, tigers and bears. Look after poorly and muddy animals, clean up, keep the feeders full, fix broken-down trucks, hire staff, and drive round in your own jeep.
 date: 2026-11-08
-version: "1.0"
+version: "2.0"
 layout: null
 ---
 {% raw %}
@@ -79,18 +79,20 @@ layout: null
   body.riding #drivebar .driveOnly{display:none;}
   body.driving #drivebar .rideOnly{display:none;}
   #drivebar .hbtn{text-align:center;min-width:0;}
-  #b-fix{background:#d8302a;font-size:19px;display:none;max-width:280px;}
+  #b-fix{position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(80px + env(safe-area-inset-bottom));background:#d8302a;font-size:19px;display:none;max-width:300px;text-align:center;}
   #b-fix.show{display:block;}
   #speedo{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));font-size:20px;font-weight:900;text-align:center;display:none;}
   body.driving #speedo,body.riding #speedo{display:block;}
   #fixbar{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:260px;height:26px;border-radius:13px;background:rgba(0,0,0,.5);overflow:hidden;display:none;}
   #fixbar div{height:100%;width:0;background:#ffd27a;}
   #fixbar span{position:absolute;inset:0;text-align:center;font-weight:800;line-height:26px;color:#2a1a08;}
-  #stick{position:fixed;left:calc(26px + env(safe-area-inset-left));bottom:calc(26px + env(safe-area-inset-bottom));width:150px;height:150px;border-radius:75px;border:3px solid rgba(255,240,210,.55);background:rgba(42,26,10,.32);display:none;z-index:6;pointer-events:auto;touch-action:none;}
-  body.driving #stick{display:block;}
-  #knob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px 0 0 -31px;border-radius:31px;background:rgba(255,220,150,.9);box-shadow:0 3px 8px rgba(0,0,0,.4);}
-  #stick small{position:absolute;left:0;right:0;bottom:-22px;text-align:center;font-size:12px;font-weight:700;text-shadow:0 1px 3px #000;}
-  @media (hover:hover) and (pointer:fine){ #stick small{display:none;} }
+  /* the thumb stick appears wherever your left thumb goes down */
+  #stick{position:fixed;width:120px;height:120px;border-radius:60px;border:3px solid rgba(255,240,210,.55);background:rgba(20,40,20,.28);display:none;pointer-events:none;z-index:6;}
+  #stick.on{display:block;}
+  #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:27px;background:rgba(255,230,170,.9);box-shadow:0 3px 8px rgba(0,0,0,.4);}
+  #stick-hint{position:absolute;left:calc(26px + env(safe-area-inset-left));bottom:calc(26px + env(safe-area-inset-bottom));width:110px;height:110px;border-radius:55px;border:2px dashed rgba(255,246,220,.4);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;text-align:center;opacity:.85;text-shadow:0 1px 3px #000;}
+  @media (hover:hover) and (pointer:fine){ #stick-hint{display:none;} }
+  body.riding #stick-hint{display:none;}
   /* panels */
   #panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(20,10,0,.35);padding:14px;}
   #panel.show{display:flex;}
@@ -143,16 +145,16 @@ layout: null
 <div id="title">
   <div class="card">
     <h1>SAFARI<span>CRUISE</span></h1>
-    <p class="sub">Run your own drive-through safari park!</p>
+    <p class="sub">Run your own drive-through jungle safari!</p>
     <button id="b-play" class="tbtn">Play on this screen</button>
     <button id="b-vr" class="tbtn">Enter VR</button>
     <button id="b-new" class="tbtn second">Start a new safari</button>
     <p id="status">Getting the animals ready...</p>
     <div class="help">
       <b>Manage:</b> tap an animal, a truck or a red job marker to see what it needs · staff go out to jobs by themselves<br>
-      <b>iPad:</b> drag to look around · pinch to zoom · two fingers to move · 🚙 Drive and 🚌 Ride to go round yourself<br>
-      <b>Computer:</b> drag · scroll · WASD to move (and to drive) · F fixes a job · H horn<br>
-      <b>VR:</b> the tablet is in your left hand · point and pull the trigger · left stick walks (or drives) · right stick turns (or steers) · B giant size
+      <b>iPad:</b> left thumb walks (or drives) · drag to look around · tap things · 🚙 Jeep and 🚌 Ride to go round the loop<br>
+      <b>Computer:</b> WASD to walk (and drive) · drag to look · click things · E jeep · F fixes a job · H horn<br>
+      <b>VR:</b> left stick walks (or drives) · right stick turns (or steers) · the tablet is in your left hand: point and pull the trigger · A ride · B jeep
     </div>
   </div>
   <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
@@ -162,8 +164,9 @@ layout: null
   <div id="jobs"></div>
   <div id="h-msg"></div>
   <div id="topbtns">
-    <button id="b-drive" class="hbtn big">🚙 Drive</button>
+    <button id="b-drive" class="hbtn big">🚙 Jeep</button>
     <button id="b-ride" class="hbtn">🚌 Ride a truck</button>
+    <button id="b-go" class="hbtn mapOnly">🗺 Go to...</button>
     <button id="b-animals" class="hbtn mapOnly">🦒 Animals</button>
     <button id="b-trucks" class="hbtn mapOnly">🚚 Trucks</button>
     <button id="b-staff" class="hbtn mapOnly">👷 Staff</button>
@@ -173,15 +176,16 @@ layout: null
   </div>
   <div id="speedo" class="chip"></div>
   <div id="fixbar"><div></div><span>Fixing...</span></div>
+  <button id="b-fix" class="hbtn">🔧 Fix it</button>
+  <div id="stick-hint">walk<br>here</div>
   <div id="drivebar">
-    <button id="b-fix" class="hbtn driveOnly">🔧 Fix it</button>
     <button id="b-horn" class="hbtn driveOnly">📯 Horn</button>
     <button id="b-cam" class="hbtn">🎥 View</button>
     <button id="b-next" class="hbtn rideOnly">⏭ Next truck</button>
     <button id="b-out" class="hbtn red">⬅ Get out</button>
   </div>
 </div>
-<div id="stick"><div id="knob"></div><small>drive</small></div>
+<div id="stick"><div id="knob"></div></div>
 <div id="panel"></div>
 <script type="module" src="/experiments/safari-cruise/js/main.js?v={% endraw %}{{ page.version }}{% raw %}"></script>
 <script>

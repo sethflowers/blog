@@ -397,7 +397,7 @@ export class Safari {
           if (d2 > 625) continue;
           near = true;
           const ahead = dx * f.x + dz * f.z, side = Math.abs(dx * f.z - dz * f.x);
-          if (ahead > 2 && ahead < 14 && side < 3.2) blocking = true;
+          if (ahead > 2 && ahead < 14 && side < 3.2){ blocking = true; if (!a.target && !a.held){ a.state = 'idle'; a.lie = Math.min(a.lie, 0.5); if (a.wait > 3) a.wait = 3; } }   // (it soon wanders off the road)
         }
         return { near, blocking };
       },

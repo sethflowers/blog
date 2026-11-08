@@ -482,6 +482,8 @@ export class Animal {
   choose(ctx){
     const D = this.data, S = this.S, W = this.world, r = Math.random();
     this.timeout = 0;
+    // never settle down on the road
+    if (Math.abs(W.polar(this.pos.x, this.pos.z).lat) < 6){ this.target = W.randomSpot(this.zone); this.state = 'walk'; return; }
     const restChance = D.sick ? 0.65 : S.lazy ? 0.4 : S.swim ? 0.1 : 0.14;
     if (D.hunger > 45 && ctx.feeder && ctx.feeder.food > 0.02 && r < 0.75){
       const a = Math.random() * TAU, d = this.kind === 'giraffe' ? 1.6 : 2.0 + (this.m.P.L || 1) * 0.6;
