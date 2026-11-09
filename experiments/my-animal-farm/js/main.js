@@ -1313,6 +1313,18 @@ $('b-new').onclick = () => {
   if (navigator.xr && $('b-vr').dataset.ok === '1' && confirm('Play the new farm in VR? (Cancel to play on this screen.)')) startVR(true); else startScreen(true);
 };
 refreshTitle();
+// say on the title screen once everything is saved on this device for offline play (the offline
+// helper, sw.js, puts a marker in its cache when every file of this version is in)
+(async function offlineReady(){
+  if (!('caches' in window) || !navigator.serviceWorker) return;
+  const name = 'my-animal-farm-' + VERSION;
+  for (let i = 0; i < 120; i++){
+    try {
+      if (await caches.has(name) && await (await caches.open(name)).match('/experiments/my-animal-farm/__offline-ready__')){ $('offline').textContent = '✓ Saved on this device: plays offline'; return; }
+    } catch (e) { return; }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+})();
 if (navigator.xr && navigator.xr.isSessionSupported){
   navigator.xr.isSessionSupported('immersive-vr').then((ok) => {
     $('b-vr').disabled = !ok; $('b-vr').dataset.ok = ok ? '1' : '0';

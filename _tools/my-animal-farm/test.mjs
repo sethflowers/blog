@@ -359,12 +359,14 @@ check(gave && await ev(`!__farm.farm.creatureById(${JSON.stringify(bid)})`), 'Gi
 await ev('__farm.noRender = false');
 const fakeOffer = `{ id: 'mem', kind: 'horse', who: 'Test', days: 2, rate: 60, horse: { ...__farm.farm.market()[0] } }`;
 const cycle = async (n) => { for (let k = 0; k < n; k++){ await ev(`__farm.farm.offers.push(${fakeOffer}); __farm.farm.spawnVisitors(); __farm.farm.state.supplies.loose = 5; const f = __farm.care.takeFlake(); __farm.care.dropTemp(f); __farm.farm.offers = __farm.farm.offers.filter((o) => o.id !== 'mem'); __farm.farm.spawnVisitors()`); await wait(120); } };
+// (the farm keeps going meanwhile, and things seen for the first time get uploaded once, so compare
+// with an idle stretch of the same length)
+const geoNow = () => ev('__farm.renderer.info.memory.geometries');
+const idle = async (n) => { for (let k = 0; k < n; k++) await wait(120); };
 await cycle(2);
-const geo0 = await ev('__farm.renderer.info.memory.geometries');
-await cycle(10);
-const geo1 = await ev('__farm.renderer.info.memory.geometries');
-console.log(`       (GPU shapes: ${geo0} -> ${geo1} after 10 visitors and 10 flakes)`);
-check(geo1 - geo0 < 20, 'visitors and flakes of hay free their memory when they go');
+const geoA = await geoNow(); await idle(10); const geoB = await geoNow(); await cycle(10); const geoC = await geoNow();
+console.log(`       (GPU shapes: ${geoA} -> ${geoB} idle, -> ${geoC} after 10 visitors and 10 flakes)`);
+check((geoC - geoB) - Math.max(0, geoB - geoA) < 10, 'visitors and flakes of hay free their memory when they go');
 await ev('__farm.noRender = true');
 
 // ---------- the shop and the horse market ----------

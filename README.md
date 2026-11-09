@@ -69,6 +69,9 @@ Chromium with a fake controller and saves screenshots (`NODE_PATH=$(npm root -g)
 `_tools/vr-test/test.mjs` plays VR Test inside a real WebXR session with an emulated headset and controllers
 (`npm i --prefix _tools/vr-test iwer` once, then `NODE_PATH=$(npm root -g) node _tools/vr-test/test.mjs out/`; about two
 minutes, because it skips drawing except for screenshots and runs the game clock 4x faster).
+`_tools/offline-check.mjs` checks that games start with the network off: it opens each one online for 8 seconds,
+closes it, then starts it offline, and reports anything that didn't load
+(`NODE_PATH=$(npm root -g) node _tools/offline-check.mjs [name ...]`; every game with a service worker if no names).
 `_tools/my-animal-farm/test.mjs` plays a whole day of My Animal Farm on screen and then in VR (same IWER install; about seven
 minutes): `NODE_PATH=$(npm root -g) node _tools/my-animal-farm/test.mjs out/`.
 `_tools/rollercoaster-bros/test.mjs` builds, rides and shops in Rollercoaster Bros on screen and then in VR (same IWER install;

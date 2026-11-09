@@ -192,3 +192,16 @@ simulation faster (`__farm.timeScale`).
 - Hands backwards: the fingers curled away from the controller handle (bending backwards; fully when
   holding something). The glove is rebuilt for WebXR grip space: palm on the outside of the handle,
   fingers curling in under it, thumb over the top, a cuff at the wrist, and lighter leather.
+
+## v1.8: offline, properly
+- On the iPad, starting with no network could show Safari's "not connected to the internet" page. The
+  service worker was only registered once the page had fully loaded, which for a big 3D game on an
+  iPad takes a while; close the game before that and nothing was saved for offline.
+- Now it's registered at the very top of the page as `sw.js?v=<version>`. Each version's worker saves
+  the page and every file of that version under the exact `?v=` addresses the page asks for (in a
+  cache named after the version), then a ready marker. Scripts, three.js and icons come from the saved
+  copy first (faster start; a weak connection can't hang it); the page from the network first, with
+  the saved copy after 3 seconds or when offline. From the home screen it asks iOS to keep the copy
+  (`navigator.storage.persist()`). The title screen says "✓ Saved on this device: plays offline" once
+  everything is in.
+- `_tools/offline-check.mjs` opens a game online for 8 seconds, closes it, and starts it offline.

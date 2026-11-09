@@ -37,7 +37,22 @@ Copy the shape of `my-animal-farm`, `rollercoaster-bros` or `safari-cruise`:
 - `experiments/<name>/`: `manifest.json` (standalone, landscape), `icon-192.png`, `icon-512.png`,
   `apple-touch-icon.png` (rendered from the game itself), `sw.js`, `js/` (ES modules), `lib/` (a local
   copy of three.js; no CDN, so it works offline).
-- "Play in VR" only enables when `navigator.xr.isSessionSupported('immersive-vr')` says yes. Use the
+- **It must work offline** (an iPad from the home screen, a headset with no Wi-Fi) once it has been
+  opened online, and never show a "needs the network" message. Copy `my-animal-farm`'s `sw.js` and its
+  registration:
+  - register the service worker at the very top of the page as `sw.js?v=<version>`, not on `load`
+    (a big 3D game takes a while to load on an iPad, and closing it before `load` left nothing saved,
+    so the next offline start showed Safari's "not connected to the internet" page);
+  - on install save the page and every file of that version under exactly the addresses the page asks
+    for (`?v=<version>`), into a cache named after the version, then a "ready" marker;
+  - serve versioned files from the cache first (fast, and a bad connection can't hang the start) and
+    the page from the network first with a 3-second fallback to the saved copy;
+  - no CDN fonts, scripts or images: everything is in the game's folder or generated;
+  - when running from the home screen, call `navigator.storage.persist()` so iOS keeps the copy;
+  - show "✓ Saved on this device: plays offline" on the title screen once the marker is there.
+  - Check it with `NODE_PATH=$(npm root -g) node _tools/offline-check.mjs <name>` (opens the game
+    online for 8 seconds, closes it, then starts it with the network off).
+ `navigator.xr.isSessionSupported('immersive-vr')` says yes. Use the
   `local-floor` reference space; ask for 72 Hz on a Quest.
 - One description of each menu or panel, drawn two ways: HTML on screen, a canvas texture in VR (point
   and pull the trigger). Never write a feature that only works on one of them.

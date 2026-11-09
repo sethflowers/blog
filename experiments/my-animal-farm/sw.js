@@ -1,43 +1,35 @@
-/* Service worker for My Animal Farm.
-   Caches everything the game needs so it runs offline once it has been opened.
-   Everything comes from the network first (so an update arrives the next time you open it); the
-   cached copy is only used when the network fails (or, for the page itself, takes over 4 seconds).
-   Scripts are requested with ?v=<version> by the page, and are cached by that full address, so an old
-   copy can never stand in for a new version. */
-var CACHE = 'my-animal-farm-v2';
+/* Service worker for My Animal Farm: the game works offline (on an iPad from the home screen, in a
+   headset with no Wi-Fi) once it has been opened online.
+
+   - It is registered as sw.js?v=<version> as soon as the page starts (not after it has finished
+     loading: a big 3D game takes a while to load on an iPad, and closing it before then used to leave
+     nothing saved, so the next offline start showed Safari's "not connected to the internet" page).
+     A new version means a new worker, which saves that version's files in its own cache.
+   - On install it saves the page and every file of this version, under exactly the addresses the page
+     asks for (scripts carry ?v=<version>), plus a marker the title screen checks to say it's ready.
+   - Scripts, three.js, icons: from the saved copy first (instant, and a bad connection can't hang the
+     start), the network only if missing. They can't be stale: the address includes the version.
+   - The page: from the network first so an update arrives, falling back to the saved copy when
+     offline or after 3 seconds. */
+var V = new URL(self.location.href).searchParams.get('v') || '0';
+var CACHE = 'my-animal-farm-' + V;
 var BASE = '/experiments/my-animal-farm/';
-var ASSETS = [
-  BASE,
-  BASE + 'manifest.json',
-  BASE + 'icon-192.png',
-  BASE + 'icon-512.png',
-  BASE + 'apple-touch-icon.png',
-  BASE + 'lib/three.core.min.js',
-  BASE + 'lib/three.module.min.js',
-  BASE + 'js/animals.js',
-  BASE + 'js/audio.js',
-  BASE + 'js/care.js',
-  BASE + 'js/farm.js',
-  BASE + 'js/horse.js',
-  BASE + 'js/main.js',
-  BASE + 'js/people.js',
-  BASE + 'js/pets.js',
-  BASE + 'js/riding.js',
-  BASE + 'js/sky.js',
-  BASE + 'js/textures.js',
-  BASE + 'js/ui.js',
-  BASE + 'js/util.js',
-  BASE + 'js/world.js'
-];
+var READY = BASE + '__offline-ready__';
+var VERSIONED = ['lib/three.core.min.js', 'lib/three.module.min.js',
+  'js/animals.js', 'js/audio.js', 'js/care.js', 'js/farm.js', 'js/horse.js', 'js/main.js', 'js/people.js',
+  'js/pets.js', 'js/riding.js', 'js/sky.js', 'js/textures.js', 'js/ui.js', 'js/util.js', 'js/world.js'];
+var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+var ASSETS = [BASE].concat(VERSIONED.map(function (f) { return BASE + f + '?v=' + V; }), STATIC.map(function (f) { return BASE + f; }));
 
 self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(CACHE).then(function (c) {
-      // add one by one so a single failure doesn't lose the rest; skip the browser's own HTTP cache
+      // every file, past the browser's HTTP cache; the marker only goes in if all of them made it
       return Promise.all(ASSETS.map(function (a) {
-        return fetch(a, { cache: 'reload' }).then(function (res) { if (res.ok) return c.put(a, res); }).catch(function () {});
-      }));
-    }).then(function () { return self.skipWaiting(); })
+        return fetch(a, { cache: 'reload' }).then(function (res) { if (!res.ok) throw new Error(a); return c.put(a, res); });
+      })).then(function () { return c.put(READY, new Response(V)); });
+    }).catch(function () { /* partly saved: the fetch handler fills in the rest as the page loads */ })
+      .then(function () { return self.skipWaiting(); })
   );
 });
 
@@ -50,28 +42,33 @@ self.addEventListener('activate', function (e) {
   );
 });
 
+function fromNetwork(c, req, key){
+  return fetch(req, { cache: 'no-store' }).then(function (res) {
+    if (res && res.ok) c.put(key, res.clone());
+    return res;
+  });
+}
+
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
   var url = new URL(req.url);
   if (url.origin !== self.location.origin || url.pathname.indexOf(BASE) !== 0) return;
   var page = req.mode === 'navigate' || url.pathname === BASE || url.pathname === BASE + 'index.html';
-  // the page by its path; everything else by its full address (including ?v=)
-  var key = page ? BASE : url.pathname + url.search;
-  e.respondWith(
-    caches.open(CACHE).then(function (c) {
-      var network = fetch(page ? BASE : req.url, { cache: 'no-store' }).then(function (res) {
-        if (res && res.ok) c.put(key, res.clone());
-        return res;
+  e.respondWith(caches.open(CACHE).then(function (c) {
+    if (page){
+      // network first (3 seconds at most), then the saved page
+      var net = fromNetwork(c, BASE, BASE);
+      var slow = new Promise(function (resolve) { setTimeout(resolve, 3000); });
+      return Promise.race([net.catch(function () {}), slow]).then(function (res) {
+        if (res && res.ok) return res;
+        return c.match(BASE).then(function (hit) { return hit || net; });
       });
-      var fallback = function () {
-        return c.match(key).then(function (hit) { return hit || c.match(url.pathname); }).then(function (hit) { return hit || network; });
-      };
-      if (!page) return network.catch(fallback);
-      var slow = new Promise(function (resolve) { setTimeout(resolve, 4000); });
-      return Promise.race([network.catch(function () {}), slow]).then(function (res) {
-        return (res && res.ok) ? res : fallback();
-      });
-    })
-  );
+    }
+    // everything else: the saved copy of exactly this address first, then the network
+    var key = url.pathname + url.search;
+    return c.match(key).then(function (hit) {
+      return hit || fromNetwork(c, req, key).catch(function () { return c.match(url.pathname); });
+    });
+  }));
 });
