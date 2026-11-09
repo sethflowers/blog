@@ -84,13 +84,16 @@ export class VRPanel {
   }
   show(spec, headPos, headQuat){
     this.spec = spec; this.scroll = 0;
-    if (headPos){
-      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(headQuat); fwd.y = 0; fwd.normalize();
-      this.mesh.position.copy(headPos).addScaledVector(fwd, 0.85); this.mesh.position.y = headPos.y - 0.12;
-      this.mesh.lookAt(headPos.x, this.mesh.position.y, headPos.z);
-    }
+    if (headPos) this.place(headPos, headQuat);
     this.mesh.visible = true;
     this.draw();
+  }
+  // in front of your eyes, a little below, facing you
+  place(headPos, headQuat){
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(headQuat); fwd.y = 0;
+    if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1); fwd.normalize();
+    this.mesh.position.copy(headPos).addScaledVector(fwd, 0.85); this.mesh.position.y = headPos.y - 0.12;
+    this.mesh.lookAt(headPos.x, this.mesh.position.y, headPos.z);
   }
   close(){ const o = this.spec; this.mesh.visible = false; this.spec = null; if (o && o.onClose) o.onClose(); }
   get open(){ return this.mesh.visible; }

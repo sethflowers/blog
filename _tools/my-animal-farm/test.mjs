@@ -355,6 +355,18 @@ await ev(`(() => { const id = ${JSON.stringify(bid)}, h = __farm.farm.horseById(
 const gave = await ev(`(() => { const b = [...document.querySelectorAll('#panel button')].find((x) => /back/.test(x.textContent)); if (!b) return false; b.click(); return true; })()`);
 check(gave && await ev(`!__farm.farm.creatureById(${JSON.stringify(bid)})`), 'Give back on the animal\'s own panel hands it over to the owner');
 
+// ---------- memory: visitors coming and going and hay being eaten mustn't pile up (a headset runs out) ----------
+await ev('__farm.noRender = false');
+const fakeOffer = `{ id: 'mem', kind: 'horse', who: 'Test', days: 2, rate: 60, horse: { ...__farm.farm.market()[0] } }`;
+const cycle = async (n) => { for (let k = 0; k < n; k++){ await ev(`__farm.farm.offers.push(${fakeOffer}); __farm.farm.spawnVisitors(); __farm.farm.state.supplies.loose = 5; const f = __farm.care.takeFlake(); __farm.care.dropTemp(f); __farm.farm.offers = __farm.farm.offers.filter((o) => o.id !== 'mem'); __farm.farm.spawnVisitors()`); await wait(120); } };
+await cycle(2);
+const geo0 = await ev('__farm.renderer.info.memory.geometries');
+await cycle(10);
+const geo1 = await ev('__farm.renderer.info.memory.geometries');
+console.log(`       (GPU shapes: ${geo0} -> ${geo1} after 10 visitors and 10 flakes)`);
+check(geo1 - geo0 < 20, 'visitors and flakes of hay free their memory when they go');
+await ev('__farm.noRender = true');
+
 // ---------- the shop and the horse market ----------
 const m1 = await ev('__farm.farm.state.money');
 await ev(`__farm.farm.buySupply('hay')`);
@@ -498,6 +510,30 @@ if (IWER){
   }
   check(await ev('__farm.vrPanel.open'), 'pointing at her and pulling the trigger shows her card in VR');
   await shot('20-vr-panel');
+  // turn away from a panel and it comes back in front of you; B closes it
+  await ev('__farm.noRender = false');      // the head pose only updates when frames are drawn
+  const inFront = `(() => { const T = __farm, P = T.vrPanel.mesh.position, h = new P.constructor(...T.head), q = T.camera.quaternion; const xr = T.renderer.xr.getCamera(); const f = new P.constructor(0, 0, -1).applyQuaternion(xr.getWorldQuaternion(q.clone())); const to = P.clone().sub(h); return to.length() < 1.6 && to.normalize().dot(f) > 0.5; })()`;
+  const hd = await ev('__farm.head');
+  await ev(`__t.head([${hd[0]}, 1.6, ${hd[2]}], 2.6, 0)`); await wait(300); await waitGame(2);
+  check(await ev(inFront), 'a VR panel you turn away from comes back in front of you');
+  let closed = false;
+  try { await ev(`__t.btn('right', 'b-button', 1)`); await wait(300); await waitGame(0.2); await ev(`__t.btn('right', 'b-button', 0)`); closed = await ev('!__farm.vrPanel.open'); } catch (e) { console.log('       (b-button: ' + e.message.split('\n')[0] + ')'); }
+  check(closed, 'the B button closes a VR panel');
+  // a new farm started in VR: the welcome panel is in front of you, not under the floor
+  await ev('__farm.renderer.xr.getSession().end()'); await wait(1500);
+  await ev(`__t.head([0, 1.6, 0], 1.1, 0)`);
+  await ev('__farm.startVR(true)'); await wait(1500); await waitGame(1);
+  for (let k = 0; k < 20 && !(await ev(inFront)); k++) await waitGame(0.25);    // the headless headset draws a few frames a second
+  check(await ev('__farm.vrPanel.open') && await ev(inFront), 'starting a new farm in VR shows the welcome panel in front of you');
+  await shot('21-vr-welcome');
+  await ev('__farm.noRender = false; __farm.closePanel()');
+  const p0 = await ev('__farm.player.pos.toArray()');
+  await ev(`__farm.vr[0].stick.y = -1`);
+  await ev(`window.__iwer.controllers.left.updateAxes('thumbstick', 0, -1)`).catch(() => {});
+  await wait(600); await waitGame(1.5);
+  await ev(`window.__iwer.controllers.left.updateAxes('thumbstick', 0, 0)`).catch(() => {});
+  const p1 = await ev('__farm.player.pos.toArray()');
+  check(Math.hypot(p1[0] - p0[0], p1[2] - p0[2]) > 0.5, 'after closing it you can walk');
 }
 
 check(errors.length === 0, 'no errors' + (errors.length ? ': ' + errors.slice(0, 5).join(' | ') : ''));

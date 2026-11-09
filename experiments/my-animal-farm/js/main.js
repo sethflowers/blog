@@ -331,10 +331,24 @@ riding.on('results', (r) => {
 function showPanel(spec){
   paused = true;
   const s = { ...spec, onClose: () => { paused = false; if (spec.onClose) spec.onClose(); } };
-  if (mode === 'vr') vrPanel.show(s, panelAnchor ? null : headPos, headQuat); else screenUI.show(s);
+  // in VR the panel goes in front of you once the headset has told us where your head is (a panel opened
+  // as VR starts used to land under the floor or behind you, and the game sat paused waiting for it)
+  if (mode === 'vr'){ vrPanel.show(s, null); vrPanel.needsPlace = !panelAnchor; } else screenUI.show(s);
   sfx.ui();
 }
 let panelAnchor = null;
+let panelAwayT = 0;
+function keepPanelInView(dt){
+  if (!vrPanel.open){ panelAwayT = 0; return; }
+  if (headPos.y < 0.3) return;                                   // no head pose yet
+  const to = vrPanel.mesh.position.clone().sub(headPos), fwd = V(0, 0, -1).applyQuaternion(headQuat);
+  const away = to.length() > 2.2 || to.normalize().dot(fwd) < 0.35;
+  panelAwayT = away ? panelAwayT + dt : 0;
+  // placed for the first time, or you've turned away from it for a moment: bring it in front of you
+  if (vrPanel.needsPlace || panelAwayT > 1.2){ vrPanel.place(headPos, headQuat); vrPanel.needsPlace = false; panelAwayT = 0; }
+  // B or Y closes it
+  if (vr.some((h) => h.bDown)){ closePanel(); for (const h of vr){ h.bDown = false; h.aDown = false; } }
+}
 function closePanel(){ if (mode === 'vr') vrPanel.close(); else screenUI.close(); }
 function refreshPanel(fn){ closePanel(); fn(); }
 const pct = (v) => Math.round(clamp(v, 0, 100));
@@ -702,7 +716,7 @@ laser.geometry.translate(0, 0.5, 0); laser.geometry.rotateX(-Math.PI / 2); laser
 const leadRope = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1, 6), new THREE.MeshStandardMaterial({ color: 0x2a4ab0, roughness: 0.6 }));
 leadRope.geometry.translate(0, 0.5, 0); leadRope.geometry.rotateX(Math.PI / 2); leadRope.visible = false; scene.add(leadRope);
 // the screen sits on the back of the left wrist, facing out of the back of the hand, text toward the fingers
-handsVR[0].group.add(wrist.mesh); wrist.mesh.position.set(-0.045, 0.07, 0.0);
+handsVR[0].group.add(wrist.mesh); wrist.mesh.position.set(-0.035, 0.075, 0.09); wrist.mesh.rotation.x = -0.55;
 wrist.mesh.quaternion.setFromEuler(new THREE.Euler(0, -Math.PI / 2, 0)).multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 0, 1), Math.PI));
 
 const q1 = new THREE.Quaternion(), v1 = V(), v2 = V(), m4 = new THREE.Matrix4();
@@ -863,7 +877,11 @@ function vrPointing(){
       continue;
     }
     if (player.heldBy[h.i] || h.lead || riding.horse) continue;
-    const t = castFrom(h.rayPos, dir, 12);
+    // what you're pointing at: checked 20 times a second (and on every trigger pull), not every frame,
+    // which saves a lot of work on a headset
+    const now = performance.now();
+    if (h.triggerDown || !h.castAt || now - h.castAt > 50){ h.cast = castFrom(h.rayPos, dir, 12); h.castAt = now; }
+    const t = h.cast;
     const can = t && ['horse', 'head', 'hoof', 'pet', 'visitor', 'board', 'showOffice', 'lights', 'bed', 'companion', 'petBowl'].includes(t.type);
     laser.visible = h.trigger > 0.1 || can; laser.position.copy(h.rayPos); laser.quaternion.setFromUnitVectors(V(0, 0, 1), dir); laser.scale.set(1, 1, t ? Math.min(t.dist, 12) : 3);
     laser.material.color.set(can ? 0xffe060 : 0xffffff);
@@ -1061,6 +1079,7 @@ function simulate(dt, first){
     const xrCam = renderer.xr.getCamera();
     xrCam.matrixWorld.decompose(headPos, headQuat, v1);
     readVR();
+    keepPanelInView(dt);
   } else if (mode === 'screen'){
     headPos.set(player.pos.x, EYE, player.pos.z);
     headQuat.setFromEuler(new THREE.Euler(player.pitch, player.yaw, 0, 'YXZ'));
@@ -1316,7 +1335,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) farm.
 window.__farm = {
   get mode(){ return mode; }, farm, care, riding, world, player, renderer, camera, scene, settings, vr, vrPanel, screenUI, rig, sky, classes: CLASSES,
   timeScale: 1, noRender: false, input: null,
-  startScreen, startVR, office, horsePanel, animalPanel, petPanel, dogFetch, closePanel, handOver, touch, tap, handleTap, pickUp, putBack, startLead, letGo, tieAtRail, activate, castFrom, resolve, takeFrom, collectEggs,
+  startScreen, startVR, office, horsePanel, animalPanel, petPanel, dogFetch, closePanel, handsVR, handOver, touch, tap, handleTap, pickUp, putBack, startLead, letGo, tieAtRail, activate, castFrom, resolve, takeFrom, collectEggs,
   get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
   look(yaw, pitch){ player.yaw = yaw; player.pitch = pitch; },
   // tap whatever is at a world point (projects it to the screen first)

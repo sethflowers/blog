@@ -177,3 +177,18 @@ simulation faster (`__farm.timeScale`).
 - Looks: dogs have long muzzles with a black nose and a tongue, floppy ears, a deep chest and tucked-up
   belly, long legs and a bushy tail (cats keep short faces and pointed ears). A Holstein's black
   patches are painted onto the hide with vertex colours (they were blobs that stuck out of the body).
+
+## v1.7 (first try on a real headset)
+- Stuck at the start in VR: the welcome panel (and any panel) was placed as the session started,
+  before the headset had reported a head pose, so it landed under the floor or behind you while the
+  game sat paused. Panels are now placed on the first frame with a real head pose, come back in front
+  of you if you turn away from one for over a second, and B or Y closes them.
+- The crash after a while: nothing was ever freed. Visitors (person, truck and trailer, horse) were
+  rebuilt every time they changed, and flakes, carrots and bags, eggs, rosettes and sold or collected
+  animals all left their 3D shapes in GPU memory. On a headset that grows until the browser kills the
+  page. Now everything thrown away is disposed (util.disposeTree), eggs and rosettes share one shape,
+  and a test checks that ten visitors and ten flakes leave GPU memory flat. Pointing in VR raycasts 20
+  times a second instead of every frame.
+- Hands backwards: the fingers curled away from the controller handle (bending backwards; fully when
+  holding something). The glove is rebuilt for WebXR grip space: palm on the outside of the handle,
+  fingers curling in under it, thumb over the top, a cuff at the wrist, and lighter leather.
