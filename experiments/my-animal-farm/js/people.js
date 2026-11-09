@@ -104,22 +104,29 @@ export class Person {
 export class Hand {
   constructor(side){
     this.side = side;
-    const g = mat('leather', { color: 0x3a2a20, rough: 0.6 });
+    const g = mat('leather', { color: 0xb08a62, rough: 0.6 });
     this.group = new THREE.Group();
     const sx = side === 'left' ? -1 : 1;
-    // grip space: -Z toward the thumb, +Y up the arm, palm wrapped round the controller handle
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.095, 0.085), g); palm.position.set(sx * 0.012, 0.0, 0.0); this.group.add(palm);
+    // WebXR grip space: the controller handle runs along Z through the origin (-Z is the index/thumb
+    // end), +X is to the right. The palm sits against the outer side of the handle (right of it for the
+    // right hand), the fingers come out of its lower edge and curl in under the handle, and the thumb
+    // rests on top. (The fingers used to curl the wrong way: away from the handle, bending backwards.)
+    const skin = g;
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.08, 0.088), skin); palm.position.set(sx * 0.034, 0.002, 0.008); this.group.add(palm);
+    const back = new THREE.Mesh(ellipsoid(0.016, 0.042, 0.046, 10, 8), skin); back.position.set(sx * 0.042, 0.004, 0.008); this.group.add(back);
+    // the cuff of the glove, at the wrist behind and above the handle
+    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.029, 0.035, 12), mat('leather', { color: 0x6a4a30, rough: 0.6 }));
+    cuff.position.set(sx * 0.03, 0.03, 0.075); cuff.rotation.x = Math.PI / 2 - 0.5; this.group.add(cuff);
     this.fingers = [];
     for (let i = 0; i < 4; i++){
-      const f = new THREE.Group(); f.position.set(sx * 0.0, -0.05, -0.03 + i * 0.022); this.group.add(f);
-      const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.009, 0.035, 3, 6), g); a.position.y = -0.022; f.add(a);
-      const b = new THREE.Group(); b.position.y = -0.045; f.add(b);
-      const c = new THREE.Mesh(new THREE.CapsuleGeometry(0.008, 0.025, 3, 6), g); c.position.y = -0.016; b.add(c);
+      const f = new THREE.Group(); f.position.set(sx * 0.03, -0.04, -0.03 + i * 0.021); this.group.add(f);
+      const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.0095 - i * 0.0005, 0.03, 3, 6), skin); a.position.y = -0.02; f.add(a);
+      const b = new THREE.Group(); b.position.y = -0.04; f.add(b);
+      const c = new THREE.Mesh(new THREE.CapsuleGeometry(0.0085 - i * 0.0005, 0.022 - i * 0.002, 3, 6), skin); c.position.y = -0.014; b.add(c);
       this.fingers.push({ f, b });
     }
-    const th = new THREE.Group(); th.position.set(sx * -0.01, 0.0, -0.045); this.group.add(th);
-    const tm = new THREE.Mesh(new THREE.CapsuleGeometry(0.01, 0.04, 3, 6), g); tm.position.set(0, -0.025, 0); th.add(tm);
-    th.rotation.x = 0.8;
+    const th = new THREE.Group(); th.position.set(sx * 0.03, 0.03, -0.04); this.group.add(th);
+    const tm = new THREE.Mesh(new THREE.CapsuleGeometry(0.0105, 0.038, 3, 6), skin); tm.position.set(0, -0.024, 0); th.add(tm);
     this.thumb = th;
     this.group.traverse((m) => { if (m.isMesh) m.castShadow = true; });
     this.curl = 0;
@@ -127,10 +134,12 @@ export class Hand {
   // grip 0 open .. 1 closed fist; index separately
   pose(grip, index){
     const sx = this.side === 'left' ? -1 : 1;
+    // curl in toward the handle (to the left for the right hand), wrapping round under it
     for (let i = 0; i < 4; i++){
       const c = i === 0 ? index : grip, F = this.fingers[i];
-      F.f.rotation.set(0, 0, sx * c * 1.3); F.b.rotation.set(0, 0, sx * c * 1.4);
+      F.f.rotation.set(0, 0, -sx * (0.25 + c * 1.25)); F.b.rotation.set(0, 0, -sx * (0.2 + c * 1.35));
     }
-    this.thumb.rotation.z = sx * grip * 0.6;
+    // the thumb lies over the top of the handle, pressing down a little more as you grip
+    this.thumb.rotation.set(0.2, 0, -sx * (1.05 + grip * 0.35));
   }
 }

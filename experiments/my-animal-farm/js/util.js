@@ -267,3 +267,11 @@ export function fmtTime(mins){
   const ap = h < 12 ? 'am' : 'pm', hh = h % 12 === 0 ? 12 : h % 12;
   return `${hh}:${String(m).padStart(2, '0')} ${ap}`;
 }
+
+// Free the GPU memory of everything under `obj` once it's gone for good (visitors driving off, a horse
+// sold, a flake of hay eaten). Only the shapes are freed: materials and textures are shared and cached.
+// Without this a long session on a headset slowly runs out of memory and the browser kills the page.
+export function disposeTree(obj){
+  if (!obj) return;
+  obj.traverse((o) => { if (o.geometry && !o.geometry.userData.keep) o.geometry.dispose(); });
+}

@@ -8,7 +8,7 @@
 // fork the droppings and the wet bedding into the wheelbarrow, tip it on the muck heap, spread fresh
 // shavings. The pens need feed, water and cleaning too; hens lay eggs and sheep need shearing.
 import * as THREE from 'three';
-import { V, clamp, lerp, damp, ellipsoid, boxUV, fmtMoney } from './util.js';
+import { V, clamp, lerp, damp, ellipsoid, boxUV, fmtMoney, disposeTree } from './util.js';
 import { mat, tex } from './textures.js';
 import { PLACES, BARN, PADDOCK, PENS, stallAt, inBox, worldMaterials, sign } from './world.js';
 import { bodySurface } from './horse.js';
@@ -265,7 +265,7 @@ export class Care {
     this.scene.add(mesh); this.temp.push(it);
     return it;
   }
-  dropTemp(it){ this.release(it); it.inBarrow = false; it.mesh.removeFromParent(); this.temp = this.temp.filter((x) => x !== it); this.onDropTemp && this.onDropTemp(it); }
+  dropTemp(it){ this.release(it); it.inBarrow = false; it.mesh.removeFromParent(); disposeTree(it.mesh); this.temp = this.temp.filter((x) => x !== it); this.onDropTemp && this.onDropTemp(it); }
 
   // ---------- sources: where things come from ----------
   takeFlake(){

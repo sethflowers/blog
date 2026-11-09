@@ -2,7 +2,7 @@
 // they need, stalls (hay, grain, water, manure, bedding), pens, customers who board animals with you,
 // and saving. Also how each horse behaves: in its stall, out in the paddock, tied at the rail, on a lead.
 import * as THREE from 'three';
-import { V, clamp, lerp, damp, rng, angleDiff, ellipsoid, fmtMoney, vnoise } from './util.js';
+import { V, clamp, lerp, damp, rng, angleDiff, ellipsoid, fmtMoney, vnoise, disposeTree } from './util.js';
 import { HorseModel, BREEDS, COATS } from './horse.js';
 import { Animal, SPECIES } from './animals.js';
 import { Person } from './people.js';
@@ -287,9 +287,9 @@ export class Farm {
   }
   // make the 3D world match the saved state
   build(){
-    for (const h of this.horses) this.scene.remove(h.root);
-    for (const a of this.animals) this.scene.remove(a.root);
-    for (const p of this.pets || []) this.scene.remove(p.root);
+    for (const h of this.horses){ this.scene.remove(h.root); disposeTree(h.root); }
+    for (const a of this.animals){ this.scene.remove(a.root); disposeTree(a.root); }
+    for (const p of this.pets || []){ this.scene.remove(p.root); disposeTree(p.root); }
     this.horses = []; this.animals = []; this.pets = [];
     for (const p of this.pens){ p.list = []; }
     this.stalls.forEach((s, i) => { s.state = this.state.stalls[i]; s.horse = null; });
@@ -445,7 +445,8 @@ export class Farm {
     if (p.kind === 'chicken'){
       const em = mat('plain-egg', { color: 0xf2e6d0, rough: 0.4 });
       for (let k = 0; k < p.saved.eggs; k++){
-        const e = new THREE.Mesh(ellipsoid(0.022, 0.03, 0.022, 10, 8), em);
+        if (!this.eggG){ this.eggG = ellipsoid(0.022, 0.03, 0.022, 10, 8); this.eggG.userData.keep = true; }
+        const e = new THREE.Mesh(this.eggG, em);
         e.position.set((p.x0 + p.x1) / 2 - 1.95 + (k % 4) * 0.08 - 0.12, 1.33, p.z0 + 1.6 + Math.floor(k / 4) * 0.08 - 0.08);
         e.userData = { kind: 'eggs', pen: i }; this.scene.add(e); p.eggMeshes.push(e);
       }
@@ -466,9 +467,10 @@ export class Farm {
       const c = cols[(r.place - 1) % 4];
       const rosette = new THREE.Group();
       const m = mat('plain-ribbon' + r.place, { color: c, rough: 0.6, side: THREE.DoubleSide });
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.01, 18), m); disc.rotation.x = Math.PI / 2; rosette.add(disc);
-      const mid = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.015, 12), mat('plain-gold', { color: 0xf0c040, rough: 0.3, metal: 0.6 })); mid.rotation.x = Math.PI / 2; mid.position.z = 0.01; rosette.add(mid);
-      for (const sx of [-1, 1]){ const tail = new THREE.Mesh(new THREE.PlaneGeometry(0.035, 0.14), m); tail.position.set(sx * 0.025, -0.1, 0); tail.rotation.z = sx * 0.2; rosette.add(tail); }
+      if (!this.rosetteG){ this.rosetteG = [new THREE.CylinderGeometry(0.07, 0.07, 0.01, 18), new THREE.CylinderGeometry(0.035, 0.035, 0.015, 12)]; for (const gg of this.rosetteG) gg.userData.keep = true; }
+      const disc = new THREE.Mesh(this.rosetteG[0], m); disc.rotation.x = Math.PI / 2; rosette.add(disc);
+      const mid = new THREE.Mesh(this.rosetteG[1], mat('plain-gold', { color: 0xf0c040, rough: 0.3, metal: 0.6 })); mid.rotation.x = Math.PI / 2; mid.position.z = 0.01; rosette.add(mid);
+      for (const sx of [-1, 1]){ const tail = new THREE.Mesh(this.rosetteG[2] || (this.rosetteG[2] = Object.assign(new THREE.PlaneGeometry(0.035, 0.14), { userData: { keep: true } })), m); tail.position.set(sx * 0.025, -0.1, 0); tail.rotation.z = sx * 0.2; rosette.add(tail); }
       const bp = this.world.fixtures.ribbonBoard.pos;
       rosette.position.set(bp.x - 0.7 + (k % 5) * 0.35, bp.y + 0.3 - Math.floor(k / 5) * 0.35, bp.z + 0.03);
       g.add(rosette);
@@ -695,7 +697,11 @@ export class Farm {
   }
   // people (and their trailer) waiting by the house
   spawnVisitors(){
-    for (const v of this.visitors){ this.scene.remove(v.person.root); if (v.trailer) this.scene.remove(v.trailer); if (v.horse) this.scene.remove(v.horse.root); }
+    for (const v of this.visitors){
+      this.scene.remove(v.person.root); disposeTree(v.person.root);
+      if (v.trailer){ this.scene.remove(v.trailer); disposeTree(v.trailer); }
+      if (v.horse){ this.scene.remove(v.horse.root); disposeTree(v.horse.root); }
+    }
     this.visitors = [];
     // people collecting their animals first: they're the ones you mustn't keep waiting
     this.offers.sort((a, b) => (b.pickup ? 1 : 0) - (a.pickup ? 1 : 0));
@@ -753,11 +759,11 @@ export class Farm {
     const S = this.state;
     if (x instanceof Horse){
       if (x.stall && x.stall.horse === x.data.id){ x.stall.horse = null; this.refreshStall(x.data.stall); }
-      this.scene.remove(x.root); this.horses = this.horses.filter((h) => h !== x); S.horses = S.horses.filter((d) => d !== x.data);
+      this.scene.remove(x.root); disposeTree(x.root); this.horses = this.horses.filter((h) => h !== x); S.horses = S.horses.filter((d) => d !== x.data);
       this.emit('horseGone', x);
     } else {
       const pen = this.pens.find((p) => p.kind === x.kind); pen.list = pen.list.filter((a) => a !== x);
-      this.scene.remove(x.root); this.animals = this.animals.filter((a) => a !== x); S.animals = S.animals.filter((d) => d !== x.data);
+      this.scene.remove(x.root); disposeTree(x.root); this.animals = this.animals.filter((a) => a !== x); S.animals = S.animals.filter((d) => d !== x.data);
     }
   }
 
