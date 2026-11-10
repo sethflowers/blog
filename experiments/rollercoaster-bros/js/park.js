@@ -166,7 +166,7 @@ export class Coaster {
   constructor(park, data){
     this.park = park; this.data = data;
     this.oi = PLOTS[data.plot]; this.ox = this.oi * TILE;
-    this.track = new Track(park.scene, this.oi);
+    this.track = new Track(park.scene, this.oi, data.hang);
     this.track.setColor(data.color || 0);
     this.track.load(data.track || []);
     this.train = new Train(park.scene, this.track);
@@ -185,7 +185,18 @@ export class Coaster {
   // how many people a minute this coaster draws (0 while it's shut)
   appeal(){ return this.track.complete ? 1 / clamp(6.5 - this.rating.excitement * 0.55, 1.1, 6.5) : 0; }
   queueSpot(d, out){ return queueSpot(d, this.ox, out); }
-  sync(){ this.data.track = this.track.types(); this.data.cart = this.train.style; this.data.color = this.track.color; }
+  // switch between sitting on top of the track and hanging under it (the track is built again higher or
+  // lower, as far as it fits); returns how many pieces were kept
+  setHang(h){
+    this.park.clearRiders(this);
+    const types = this.track.types();
+    this.data.hang = !!h; this.track.hang = !!h;
+    this.track.load(types);
+    this.train.setStyle(this.train.style); this.train.reset();
+    this.rerate();
+    return { kept: this.track.types().length, of: types.length };
+  }
+  sync(){ this.data.track = this.track.types(); this.data.cart = this.train.style; this.data.color = this.track.color; this.data.hang = this.track.hang; }
   dispose(){
     this.track.dispose();
     this.park.scene.remove(this.train.group);
@@ -406,7 +417,7 @@ export class Park {
     c.sync();
     let name = c.name, n = 2;
     while (this.designs.some((d) => d.name === name)) name = c.name + ' ' + n++;
-    this.designs.push({ name, track: c.data.track.slice(), color: c.data.color, cart: c.data.cart, speed: c.data.speed, saved: Date.now() });
+    this.designs.push({ name, track: c.data.track.slice(), color: c.data.color, cart: c.data.cart, speed: c.data.speed, hang: !!c.data.hang, saved: Date.now() });
     this.saveDesigns();
     return name;
   }

@@ -28,7 +28,7 @@ const turn = (R, s) => ({
   roll: (t) => s * (R === 1 ? 0.55 : 0.4) * Math.sin(PI * t),
 });
 const slope = (L, H) => ({
-  f: L, r: 0, du: H, dh: 0,
+  f: L, r: 0, du: H, dh: 0, slope: true,
   path: (t) => [L * TILE * t, 0, H * LEVEL * (1 - Math.cos(PI * t)) / 2],
 });
 const LOOP_R = 6.5;
@@ -87,16 +87,33 @@ export const COLORS = [
 ];
 
 // ---------- frames ----------
-const node = (i, j, level) => V(i * TILE, BASE_Y + level * LEVEL, j * TILE);
+// a hanging coaster's track is this much higher, with the train hanging under it
+export const HANG = 2.5;
+const node = (i, j, level, lift = 0) => V(i * TILE, BASE_Y + level * LEVEL + lift, j * TILE);
+// How steep the track is where two pieces join: one climb (or drop) straight after another joins into
+// one long smooth slope; anything else is flat at the join.
+function jointGrade(a, b){
+  const A = PIECES[a], B = PIECES[b];
+  if (!A || !B || !A.slope || !B.slope || Math.sign(A.du) !== Math.sign(B.du)) return 0;
+  return (A.du + B.du) * LEVEL / ((A.f + B.f) * TILE);
+}
 const key = (x, z) => Math.round(2 * x / TILE) + ',' + Math.round(2 * z / TILE);
 
 // Sample a piece placed at grid point (i, j, level) facing d. Returns points with position, tangent,
 // up, and whether the rails are drawn there.
-export function samplePiece(type, i, j, level, d){
+// opts: m0, m1 (how steep a slope starts and ends, to join up with the pieces either side), lift.
+export function samplePiece(type, i, j, level, d, opts = {}){
   const P = PIECES[type];
   const F = V(DIRS[d][0], 0, DIRS[d][1]), R = V(DIRS[(d + 1) % 4][0], 0, DIRS[(d + 1) % 4][1]), Y = V(0, 1, 0);
-  const O = node(i, j, level);
-  const at = (t) => { const [f, r, u] = P.path(t); return O.clone().addScaledVector(F, f).addScaledVector(R, r).addScaledVector(Y, u); };
+  const O = node(i, j, level, opts.lift || 0);
+  const m0 = opts.m0 || 0, m1 = opts.m1 || 0;
+  let path = P.path;
+  if (P.slope && (m0 || m1)){
+    // a Hermite curve: right height at each end, and the steepness the neighbouring pieces want
+    const Lm = P.f * TILE, H = P.du * LEVEL;
+    path = (t) => [Lm * t, 0, H * (3 * t * t - 2 * t * t * t) + Lm * (m0 * (t * t * t - 2 * t * t + t) + m1 * (t * t * t - t * t))];
+  }
+  const at = (t) => { const [f, r, u] = path(t); return O.clone().addScaledVector(F, f).addScaledVector(R, r).addScaledVector(Y, u); };
   const n = P.samples || Math.max(12, Math.round(P.f * 14));
   const pts = [];
   for (let k = 0; k <= n; k++){
@@ -126,18 +143,18 @@ export function samplePiece(type, i, j, level, d){
     p.side = p.tan.clone().cross(p.up).normalize();
   }
   const ni = i + DIRS[d][0] * P.f + DIRS[(d + 1) % 4][0] * P.r, nj = j + DIRS[d][1] * P.f + DIRS[(d + 1) % 4][1] * P.r;
-  return { pts, end: { i: ni, j: nj, level: level + P.du, d: (d + P.dh + 4) % 4 } };
+  return { pts, m0, m1, end: { i: ni, j: nj, level: level + P.du, d: (d + P.dh + 4) % 4 } };
 }
 
 // Which ground cells (half a tile across) a piece passes over, and at what heights.
-function cellsOf(pts, startKey, endKey){
+function cellsOf(pts, startKey, endKey, below = 0){
   const cells = new Map();
   for (const p of pts){
     if (p.t < 0.02 || p.t > 0.98) continue;
     const k = key(p.pos.x, p.pos.z);
     if (k === startKey || k === endKey) continue;
     const c = cells.get(k) || { lo: 1e9, hi: -1e9 };
-    c.lo = Math.min(c.lo, p.pos.y); c.hi = Math.max(c.hi, p.pos.y); cells.set(k, c);
+    c.lo = Math.min(c.lo, p.pos.y - below); c.hi = Math.max(c.hi, p.pos.y); cells.set(k, c);
   }
   return cells;
 }
@@ -147,8 +164,9 @@ const clash = (a, b) => a.lo - CLEAR < b.hi && b.lo - CLEAR < a.hi;
 // ---------- the track ----------
 export class Track {
   // oi: which tile column (x) this coaster's station is in; it always faces north
-  constructor(scene, oi = 0){
-    this.scene = scene; this.oi = oi;
+  // hang: a hanging coaster (the track above, the train under it)
+  constructor(scene, oi = 0, hang = false){
+    this.scene = scene; this.oi = oi; this.hang = !!hang;
     WORLD.tracks.push(this);
     this.group = new THREE.Group(); scene.add(this.group);
     this.color = 0;
@@ -184,6 +202,7 @@ export class Track {
     this.place('station', this.oi, 1, 0, 0);
     this.changed();
   }
+  get lift(){ return this.hang ? HANG : 0; }
   get end(){ return this.pieces[this.pieces.length - 1].end; }
   get start(){ return { i: this.oi, j: 1, level: 0, d: 0 }; }
   get complete(){ const e = this.end, s = this.start; return this.pieces.length > 1 && e.i === s.i && e.j === s.j && e.level === s.level && e.d === s.d; }
@@ -197,15 +216,18 @@ export class Track {
     const P = PIECES[type];
     if (level + P.du < 0) return { ok: false, why: 'That would go under the ground.' };
     if (level + P.du > MAX_LEVEL) return { ok: false, why: 'That\'s too high!' };
-    const mk = type + i + ',' + j + ',' + level + ',' + d;
-    const s = (this.memo && this.memo.get(mk)) || samplePiece(type, i, j, level, d);
+    // the piece before (to join slopes up smoothly)
+    const prev = extra ? extra.type : (from === this.end ? this.pieces[this.pieces.length - 1].type : null);
+    const m0 = jointGrade(prev, type);
+    const mk = type + i + ',' + j + ',' + level + ',' + d + ',' + m0;
+    const s = (this.memo && this.memo.get(mk)) || samplePiece(type, i, j, level, d, { m0, lift: this.lift });
     if (this.memo) this.memo.set(mk, s);
     const e = s.end;
     if (!inPark(e.i, e.j)) return { ok: false, why: 'That would leave the park.', s };
     for (const p of s.pts) if (!inParkXZ(p.pos.x, p.pos.z)) return { ok: false, why: 'That would leave the park.', s };
     const sk = key(i * TILE, j * TILE), ek = key(e.i * TILE, e.j * TILE);
-    const cells = s.cells || (s.cells = cellsOf(s.pts, sk, ek));
-    const endY = BASE_Y + e.level * LEVEL, endCell = { lo: endY, hi: endY };
+    const cells = s.cells || (s.cells = cellsOf(s.pts, sk, ek, this.lift));
+    const endY = BASE_Y + e.level * LEVEL, endCell = { lo: endY, hi: endY + this.lift };
     const closing = e.i === this.start.i && e.j === this.start.j && e.level === 0 && e.d === 0;
     const hit = (k, c, isEnd) => {
       for (const o of this.occ.get(k) || []){ if (clash(c, o) && !(isEnd && o.end && closing && o.station)) return true; }
@@ -222,11 +244,11 @@ export class Track {
     return { ok: true, s, cells, sk, ek, closing };
   }
   place(type, i, j, level, d, pre){
-    const s = pre ? pre.s : samplePiece(type, i, j, level, d);
+    const s = pre ? pre.s : samplePiece(type, i, j, level, d, { lift: this.lift });
     const sk = key(i * TILE, j * TILE), ek = key(s.end.i * TILE, s.end.j * TILE);
-    const y0 = BASE_Y + level * LEVEL, y1 = BASE_Y + s.end.level * LEVEL;
-    const piece = { type, i, j, level, d, pts: s.pts, end: s.end, cells: pre ? pre.cells : cellsOf(s.pts, sk, ek),
-      ends: new Map([[sk, { lo: y0, hi: y0 }], [ek, { lo: y1, hi: y1 }]]) };
+    const y0 = BASE_Y + level * LEVEL, y1 = BASE_Y + s.end.level * LEVEL, L = this.lift;
+    const piece = { type, i, j, level, d, pts: s.pts, end: s.end, m0: s.m0, m1: s.m1, cells: pre ? pre.cells : cellsOf(s.pts, sk, ek, L),
+      ends: new Map([[sk, { lo: y0, hi: y0 + L }], [ek, { lo: y1, hi: y1 + L }]]) };
     piece.mesh = this.meshFor(piece.pts, false);
     this.group.add(piece.mesh);
     this.pieces.push(piece);
@@ -278,8 +300,8 @@ export class Track {
           const e = r.s.end, k = id(e), nc = item.cost + COST[m];
           if (best.has(k) && best.get(k) <= nc) continue;
           best.set(k, nc);
-          const y0 = BASE_Y + item.st.level * LEVEL, y1 = BASE_Y + e.level * LEVEL;
-          const link = { type: m, prev: item.chain, cells: r.cells, ends: new Map([[r.sk, { lo: y0, hi: y0 }], [r.ek, { lo: y1, hi: y1 }]]) };
+          const y0 = BASE_Y + item.st.level * LEVEL, y1 = BASE_Y + e.level * LEVEL, L = this.lift;
+          const link = { type: m, prev: item.chain, cells: r.cells, ends: new Map([[r.sk, { lo: y0, hi: y0 + L }], [r.ek, { lo: y1, hi: y1 + L }]]) };
           if (e.i === goal.i && e.j === goal.j && e.level === goal.level && e.d === goal.d){
             const out = []; for (let q = link; q; q = q.prev) out.unshift(q.type); return out;
           }
@@ -293,6 +315,18 @@ export class Track {
 
   // ---------- after a change: the whole ride as one list of points ----------
   changed(){
+    // slopes next to slopes join up into one smooth climb or drop
+    const P = this.pieces;
+    for (let k = 1; k < P.length; k++){
+      const p = P[k], m0 = jointGrade(P[k - 1].type, p.type), m1 = k + 1 < P.length ? jointGrade(p.type, P[k + 1].type) : 0;
+      if ((p.m0 || 0) === m0 && (p.m1 || 0) === m1) continue;
+      const s = samplePiece(p.type, p.i, p.j, p.level, p.d, { m0, m1, lift: this.lift });
+      p.pts = s.pts; p.m0 = m0; p.m1 = m1;
+      p.cells = cellsOf(s.pts, key(p.i * TILE, p.j * TILE), key(s.end.i * TILE, s.end.j * TILE), this.lift);
+      this.group.remove(p.mesh); p.mesh.geometry.dispose();
+      p.mesh = this.meshFor(p.pts, false); this.group.add(p.mesh);
+    }
+    this.speedCache = new Map();
     this.occ = new Map();
     const put = (k, c) => { if (!this.occ.has(k)) this.occ.set(k, []); this.occ.get(k).push(c); };
     for (const p of this.pieces){
@@ -336,13 +370,14 @@ export class Track {
     for (const run of runs){
       if (run.length < 2) continue;
       for (const side of [-0.55, 0.55]) rails.push(tube(run, (p) => p.pos.clone().addScaledVector(p.side, side), 0.075, 6));
-      spines.push(tube(run, (p) => p.pos.clone().addScaledVector(p.up, -0.42), 0.17, 6));
+      const sp = this.hang ? 0.42 : -0.42, ty = this.hang ? 0.18 : -0.18;
+      spines.push(tube(run, (p) => p.pos.clone().addScaledVector(p.up, sp), 0.17, 6));
       // cross ties every metre or so
       let acc = 1;
       for (let k = 1; k < run.length; k++){
         acc += run[k].pos.distanceTo(run[k - 1].pos);
         if (acc < 1.1) continue; acc = 0;
-        const p = run[k], m = new THREE.Matrix4().makeBasis(p.side, p.up, p.tan.clone().negate()).setPosition(p.pos.clone().addScaledVector(p.up, -0.18));
+        const p = run[k], m = new THREE.Matrix4().makeBasis(p.side, p.up, p.tan.clone().negate()).setPosition(p.pos.clone().addScaledVector(p.up, ty));
         const g = TIE.clone(); g.applyMatrix4(m); ties.push(g);
       }
     }
@@ -363,15 +398,21 @@ export class Track {
       acc += all[k].pos.distanceTo(all[k - 1].pos);
       const p = all[k];
       if (acc < 5.5 || p.gap || p.up.y < 0.75) continue;
-      const top = p.pos.clone().addScaledVector(p.up, -0.55);
+      // a hanging coaster's supports stand beside it and reach over the top, clear of the train
+      const top = this.hang ? p.pos.clone().addScaledVector(p.side, 2.1).add(V(0, 0.75, 0)) : p.pos.clone().addScaledVector(p.up, -0.55);
       if (top.y < 0.25) { acc = 0; continue; }
       // not through another bit of track below
       let blocked = false;
-      for (const q of all){ if (q.pos.y < top.y - 1.2 && Math.abs(q.pos.x - top.x) < 1.4 && Math.abs(q.pos.z - top.z) < 1.4){ blocked = true; break; } }
+      for (const q of all){ if (q !== p && q.pos.y < top.y - 1.2 && Math.abs(q.pos.x - top.x) < 1.4 && Math.abs(q.pos.z - top.z) < 1.4){ blocked = true; break; } }
       if (blocked) continue;
       acc = 0;
       const g = col.clone(); g.applyMatrix4(new THREE.Matrix4().compose(V(top.x, top.y / 2, top.z), new THREE.Quaternion(), V(1, top.y, 1))); geos.push(g);
       geos.push(placed(foot, top.x, 0.12, top.z));
+      if (this.hang){
+        const over = p.pos.clone().addScaledVector(p.up, 0.6), mid = top.clone().add(over).multiplyScalar(0.5), len = top.distanceTo(over);
+        const q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), over.clone().sub(top).normalize());
+        const arm = col.clone(); arm.applyMatrix4(new THREE.Matrix4().compose(mid, q, V(0.8, len, 0.8))); geos.push(arm);
+      }
     }
     this.supports = new THREE.Mesh(geos.length ? merge(geos) : new THREE.BufferGeometry(), this.mats.support);
     this.supports.castShadow = true; this.supports.receiveShadow = true;
@@ -381,7 +422,7 @@ export class Track {
     if (!this.arrow) return;
     const e = this.end;
     this.arrow.visible = !this.complete;
-    this.arrow.position.copy(node(e.i, e.j, e.level)).add(V(DIRS[e.d][0] * 2.5, 2.2, DIRS[e.d][1] * 2.5));
+    this.arrow.position.copy(node(e.i, e.j, e.level, this.lift)).add(V(DIRS[e.d][0] * 2.5, 2.2, DIRS[e.d][1] * 2.5));
     this.arrow.rotation.set(0, Math.atan2(-DIRS[e.d][0], -DIRS[e.d][1]), 0);
   }
   // show what a piece would look like for a moment (green if it fits, red if not)
@@ -397,22 +438,53 @@ export class Track {
     this.arrow.visible = showArrow && !this.complete;
     this.arrow.material.opacity = 0.55 + 0.35 * Math.sin(time * 5);
   }
-  endPoint(){ const e = this.end; return node(e.i, e.j, e.level); }
+  endPoint(){ const e = this.end; return node(e.i, e.j, e.level, this.lift); }
 
   // ---------- how good is it? ----------
-  // Speeds come from a launch speed at the station plus what height turns into (and back).
-  speedAt(y, v0){ return Math.sqrt(Math.max(9, v0 * v0 + 2 * 9.8 * 0.75 * (BASE_Y - y))); }
+  // Speeds: the station launches the train at the speed you pick. After that it's real(ish) physics:
+  // going down makes it faster and going up slower, with a little drag. If it slows right down on a
+  // climb, a chain lift pulls it up slowly (so a tall climb then a big drop is how to go really fast). It
+  // never quite stops, so it always gets round a loop.
+  speeds(v0){
+    if (!this.speedCache) this.speedCache = new Map();
+    if (this.speedCache.has(v0)) return this.speedCache.get(v0);
+    const P = this.path, out = new Float32Array(P.length);
+    const g = 9.8, DRAG = 0.0007, LIFT = 4.5, PARK_S = 13;
+    let v2 = v0 * v0;
+    for (let k = 0; k < P.length; k++){
+      const p = P[k];
+      if (p.s <= PARK_S || p.piece.type === 'station'){ out[k] = v0; v2 = v0 * v0; continue; }
+      const q = P[k - 1], ds = p.s - q.s, dy = p.pos.y - q.pos.y;
+      v2 = v2 - 2 * g * dy - 2 * DRAG * v2 * ds;
+      if (dy > 0 && p.tan.y > 0.12 && v2 < LIFT * LIFT) v2 = LIFT * LIFT;        // the chain lift
+      v2 = clamp(v2, 9, 48 * 48);
+      out[k] = Math.sqrt(v2);
+    }
+    this.speedCache.set(v0, out);
+    return out;
+  }
+  // how fast the train wants to go at a distance along the ride
+  speedAt(s, v0){
+    const P = this.path, sp = this.speeds(v0);
+    if (!P.length) return v0;
+    s = clamp(s, 0, this.length);
+    let lo = 0, hi = P.length - 1;
+    while (hi - lo > 1){ const m = (lo + hi) >> 1; if (P[m].s <= s) lo = m; else hi = m; }
+    const a = P[lo], b = P[hi], f = b.s > a.s ? (s - a.s) / (b.s - a.s) : 0;
+    return sp[lo] + (sp[hi] - sp[lo]) * f;
+  }
   rate(v0){
     const types = this.types();
     let fun = 0, inv = 0, jumps = 0, drops = 0;
     const kinds = new Set();
     for (const t of types){ const P = PIECES[t]; fun += P.fun; inv += P.inversions || 0; jumps += P.jumps || 0; kinds.add(t); if (t === 'steepDown') drops++; }
     let maxY = BASE_Y, maxV = v0;
-    for (const p of this.path){ maxY = Math.max(maxY, p.pos.y); maxV = Math.max(maxV, this.speedAt(p.pos.y, v0)); }
+    const sp = this.speeds(v0);
+    this.path.forEach((p, k) => { maxY = Math.max(maxY, p.pos.y - this.lift); maxV = Math.max(maxV, sp[k]); });
     const tight = types.filter((t) => t === 'left' || t === 'right').length;
-    const raw = fun + kinds.size * 0.15 + (maxY - BASE_Y) / 10 + (v0 - 6) / 6 + this.length / 300;
+    const raw = fun + kinds.size * 0.15 + (maxY - BASE_Y) / 10 + (v0 - 6) / 6 + (maxV - v0) / 8 + this.length / 300 + (this.hang ? 0.8 : 0);
     const excitement = this.complete ? Math.round(100 * (1 - Math.exp(-raw / 7))) / 10 : 0;
-    const intensity = Math.round(clamp(0.5 + v0 * 0.22 + inv * 0.7 + jumps * 0.9 + drops * 0.4 + (maxV - v0) / 6 + Math.min(1.5, tight * (v0 / 16) ** 2 * 0.15), 0, 10) * 10) / 10;
+    const intensity = Math.round(clamp(0.5 + v0 * 0.22 + inv * 0.7 + jumps * 0.9 + drops * 0.4 + (maxV - v0) / 9 + (this.hang ? 0.4 : 0) + Math.min(1.5, tight * (v0 / 16) ** 2 * 0.15), 0, 10) * 10) / 10;
     return { excitement, intensity, maxSpeed: maxV, maxHeight: maxY - BASE_Y, length: this.length, inversions: inv, jumps, pieces: types.length };
   }
 }

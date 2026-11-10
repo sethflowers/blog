@@ -1,10 +1,10 @@
 // The train: three cars of four seats, in one of several styles, running round the track.
-// Speed: the station launches it at the speed you pick; after that, going down makes it faster and
-// going up slower (it never quite stops, so it always gets round a loop), then it brakes back into the
-// station, lets riders off and on, and goes again.
+// Speed: the station launches it at the speed you pick; after that the track says how fast it goes
+// (faster going down, slower going up, a chain lift on big climbs), then it brakes back into the
+// station, lets riders off and on, and goes again. On a hanging coaster the cars hang under the track.
 import * as THREE from 'three';
 import { V, clamp, damp, rng } from './util.js';
-import { BASE_Y } from './track.js';
+import { BASE_Y, HANG } from './track.js';
 
 export const CARTS = [
   { id: 'classic', name: 'Classic Red', price: 0, text: 'A shiny red train.' },
@@ -42,9 +42,21 @@ function ball(parent, r, m, x, y, z, sx = 1, sy = 1, sz = 1){
 }
 
 const RAINBOW = [0xe83a3a, 0xf0a020, 0x3ab84a, 0x3a7ae8, 0x9a4ad8];
-// Build one car. Local frame: -Z is forward, +Y up, the rails at y = 0.
-function buildCar(style, index, count){
-  const g = new THREE.Group();
+// Build one car. Local frame: -Z is forward, +Y up, the rails at y = 0. A hanging car is the same car
+// HANG lower, held from a bogie on the rails above (and with no floor: your feet dangle).
+function buildCar(style, index, count, hang){
+  const outer = new THREE.Group();
+  const g = new THREE.Group(); outer.add(g); outer.userData = g.userData;
+  g.userData.body = g;
+  if (hang){
+    g.position.y = -HANG;
+    const dark = mat(0x2a2a2e, 0.4, 0.5), steel = mat(0x8a8e98, 0.6, 0.35);
+    box(outer, 1.25, 0.2, 1.7, dark, 0, -0.28, 0);                  // the bogie under the rails
+    for (const x of [-0.55, 0.55]) for (const z of [-0.6, 0.6]) cyl(outer, 0.13, 0.13, 0.12, dark, x, -0.13, z, 0, 0, Math.PI / 2, 10);
+    // the arms down to the car, behind each row of seats
+    for (const z of [0.0, 1.0]) for (const x of [-0.62, 0.62]) box(outer, 0.1, HANG - 1.2, 0.1, steel, x * 0.55, -0.3 - (HANG - 1.2) / 2, z, 0, 0, x > 0 ? -0.22 : 0.22);
+    box(outer, 0.9, 0.1, 1.2, steel, 0, -0.42, 0.5);
+  }
   const front = index === 0, back = index === count - 1;
   const S = {
     classic: { body: 0xd8282a, trim: 0xf0f0f0, seat: 0x2a2a2a, metal: 0.35 },
@@ -59,15 +71,15 @@ function buildCar(style, index, count){
   const body = mat(S.body, S.metal, style === 'gold' ? 0.25 : 0.4), trim = mat(S.trim, 0.3, 0.4), seat = mat(S.seat, 0.05, 0.8);
   const dark = mat(0x2a2a2e, 0.4, 0.5), chrome = mat(0xd8dce4, 0.5, 0.3);
   // under-frame and wheels round the rails
-  box(g, 1.25, 0.16, 2.1, dark, 0, 0.2, 0);
+  if (!hang) box(g, 1.25, 0.16, 2.1, dark, 0, 0.2, 0);
   g.userData.wheels = [];
-  for (const x of [-0.55, 0.55]) for (const z of [-0.75, 0.75]){
+  if (!hang) for (const x of [-0.55, 0.55]) for (const z of [-0.75, 0.75]){
     const w = cyl(g, 0.13, 0.13, 0.12, dark, x, 0.13, z, 0, 0, Math.PI / 2, 10);
     g.userData.wheels.push(w);
     box(g, 0.08, 0.32, 0.1, dark, x * 1.12, 0.05, z);
   }
   // tub
-  box(g, 1.5, 0.16, 2.2, body, 0, 0.32, 0);
+  if (!hang) box(g, 1.5, 0.16, 2.2, body, 0, 0.32, 0);
   for (const s of [-1, 1]) box(g, 0.12, 0.55, 2.2, body, s * 0.72, 0.62, 0);
   box(g, 1.5, 0.6, 0.12, body, 0, 0.62, 1.08);
   for (const sx of [-1, 1]) box(g, 0.16, 0.08, 2.28, trim, sx * 0.72, 0.92, 0);     // the rim round the top
@@ -148,7 +160,7 @@ function buildCar(style, index, count){
       for (let k = 0; k < 6; k++){ const a = k / 6 * Math.PI * 2; cyl(crown, 0.07, 0.0, 0.25, body, Math.sin(a) * 0.33, 0.2, Math.cos(a) * 0.33, 0, 0, 0, 5); ball(crown, 0.035, mat(0xe82a4a, 0.1, 0.2, 0.4), Math.sin(a) * 0.33, 0.34, Math.cos(a) * 0.33); }
     }
   }
-  return g;
+  return outer;
 }
 
 // A person sitting in a seat (shirt, skin and hair to match the visitor).
@@ -191,7 +203,8 @@ export class Train {
     this.style = id;
     for (const c of this.cars || []) this.group.remove(c);
     this.cars = [];
-    for (let k = 0; k < this.count; k++){ const c = buildCar(id, k, this.count); this.cars.push(c); this.group.add(c); }
+    this.hang = this.track.hang;
+    for (let k = 0; k < this.count; k++){ const c = buildCar(id, k, this.count, this.hang); this.cars.push(c); this.group.add(c); }
     for (let i = 0; i < this.seats.length; i++){ const r = this.riderMeshes[i]; this.riderMeshes[i] = null; if (r) this.seatRider(i, this.seats[i]); }
     this.pose(0);
   }
@@ -204,7 +217,7 @@ export class Train {
     const r = buildRider(who.look);
     const [x, z] = SEATS[i % 4];
     r.position.set(x, SEAT_Y, z);
-    this.cars[Math.floor(i / 4)].add(r);
+    this.cars[Math.floor(i / 4)].userData.body.add(r);
     this.riderMeshes[i] = r;
   }
   emptySeats(){ const out = []; for (let i = 0; i < this.seats.length; i++) if (!this.seats[i]) out.push(i); return out; }
@@ -225,8 +238,7 @@ export class Train {
       this.dwell -= dt;
       if (this.dwell <= 0){ this.state = 'running'; this.emit('dispatch'); }
     } else {
-      const mid = T.at(this.s - CAR_GAP, this.tmp);
-      const want = T.speedAt(mid.pos.y, v0);
+      const want = T.speedAt(this.s - CAR_GAP, v0);
       const left = T.length - this.dist;
       let v = Math.min(want, this.v + 6 * dt);                     // launch
       v = Math.min(v, Math.sqrt(2 * 5 * Math.max(0, left)) + 0.4);  // brakes coming into the station
@@ -273,6 +285,6 @@ export class Train {
     }
   }
   // where your eyes are when you ride in the front seat
-  seatEye(out = V()){ return this.cars[0].localToWorld(out.set(-0.32, SEAT_Y + 0.8, -0.3)); }
+  seatEye(out = V()){ return this.cars[0].localToWorld(out.set(-0.32, SEAT_Y + 0.8 - (this.hang ? HANG : 0), -0.3)); }
 }
 void BASE_Y;

@@ -295,6 +295,25 @@ check(!(await ev(`__rcb.addPiece('steepUp')`)) && (await ev(`__rcb.track.check('
 for (const t of ['loop', 'right', 'steepDown', 'steepDown', 'steepDown', 'right', 'steepDown', 'steepDown', 'steepDown']) await add(t);
 await ev('__rcb.finishTrack()');
 await until('__rcb.track.complete', 15, 'the giant coaster is finished');
+// climbs one after another join into one smooth slope (no flat bits at the joins)
+const climb = await ev(`(() => { const ps = __rcb.track.path.filter((p) => p.piece.type === 'steepUp'); let minTan = 1, down = 0;
+  for (let k = 1; k < ps.length; k++){ if (ps[k].pos.y < ps[k - 1].pos.y - 1e-3) down++; }
+  for (const p of __rcb.track.pieces.slice(3, 8)) minTan = Math.min(minTan, p.pts[0].tan.y);
+  return { minTan, down }; })()`);
+check(climb.down === 0 && climb.minTan > 0.3, `six steep climbs in a row make one smooth climb (steepness at the joins ${climb.minTan.toFixed(2)})`);
+const fast = await ev('__rcb.track.rate(12).maxSpeed');
+check(fast > 25, `a tall climb then a big drop is really fast at Normal speed (${Math.round(fast * 2.237)} mph)`);
+await until('__rcb.train.state === "running" && __rcb.train.v > 25', 200, 'the train really goes that fast');
+// a hanging coaster: the track above you
+await ev('__rcb.toggleHang()');
+check(await ev('__rcb.track.hang && __rcb.track.complete') && await ev('__rcb.cur.data.hang'), 'it can be made a hanging coaster (and the track still fits)');
+check(await ev(`(() => { const T = __rcb.train; T.reset(); const eye = T.seatEye(); const p = __rcb.track.at(T.s); return p.pos.y - eye.y > 1; })()`), 'the track is above your head');
+await ev('__rcb.closePanels(); __rcb.orbit.follow = false; __rcb.orbit.target.set(57, 3, -4); __rcb.orbit.dist = 16; __rcb.orbit.yaw = 0.8; __rcb.orbit.pitch = 0.2; __rcb.noRender = false');
+await shot('20a-hanging-station');
+await ev('__rcb.startRide(); __rcb.timeScale = 1');
+await until('__rcb.train.state === "running" && __rcb.train.v > 4.4 && __rcb.train.dist > 30', 60, 'riding the hanging coaster');
+await shot('20b-ride-hanging');
+await ev('__rcb.stopRide(); __rcb.timeScale = 3; __rcb.noRender = true');
 await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(30, 15, -20); __rcb.orbit.dist = 120; __rcb.orbit.yaw = 0.6; __rcb.orbit.pitch = 0.3; __rcb.noRender = false');
 await shot('20-free-park-tall');
 await ev('__rcb.orbit.target.set(10.9, 4, 44); __rcb.orbit.dist = 22; __rcb.orbit.yaw = 0; __rcb.orbit.pitch = 0.1');
