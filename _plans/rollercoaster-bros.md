@@ -106,6 +106,24 @@ they thought, and walk out.
   round. Counts as an inversion.
 - **Height limit** is level 12 (48 m) instead of 6.
 
+## Version 1.3: smooth slopes, real speed, hanging coasters
+
+- **Smooth slopes.** Each hill or drop piece used to start and end flat, so several in a row made a
+  staircase of bumps. Now a climb (or drop) straight after another is joined into one smooth slope:
+  each slope piece is a Hermite curve whose steepness at a join is the average of the two pieces'
+  (`jointGrade`); next to anything else it's flat as before. Heights at the joins are still whole
+  levels, so pieces still fit on the grid. `changed()` re-shapes a piece when its neighbours change.
+- **Real speed.** Speed used to be `sqrt(v0² + 2g·0.75·(station height − y))`, so a drop only gave
+  back what a climb took and the train never beat its launch speed. Now `Track.speeds(v0)` runs the
+  energy along the whole ride: launch at the chosen speed, gravity, a little drag, and a chain lift
+  (4.5 m/s) that pulls the train up any climb it would crawl up. Climb high and drop for speed: a
+  48 m drop gets to about 74 mph even at Normal. Big top speeds count for more fun (and a bit more
+  scary).
+- **Hanging coasters.** Coasters panel → "🦇 Make it a hanging coaster" (and back). The track is
+  HANG = 2.5 m higher, with its spine on top; the cars hang under it from a bogie, with no floor.
+  Supports stand beside the track and reach over the top. Occupancy counts the space under the track
+  as the train's. Saved designs remember it. Switching rebuilds the track as far as it fits.
+
 ## Testing
 
 `_tools/rollercoaster-bros/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated
