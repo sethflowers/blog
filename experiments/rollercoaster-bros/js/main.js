@@ -291,7 +291,8 @@ function coastersPanel(){
     { text: 'Build a whole theme park! Every coaster earns money on its own. Tap one to go and build or ride it.' },
     { rows },
     { buttons: [
-      { label: plot < 0 ? 'The park is full' : `＋ New coaster (${cost(price)})`, kind: 'primary', disabled: plot < 0 || !park.afford(price), go: newCoaster },
+      { label: plot < 0 ? 'The park is full' : `＋ New coaster (${cost(price)})`, kind: 'primary', disabled: plot < 0 || !park.afford(price), go: () => newCoaster(false) },
+      ...(plot < 0 ? [] : [{ label: `🦇 New hanging coaster (${cost(price)})`, kind: 'primary', disabled: !park.afford(price), go: () => newCoaster(true) }]),
     ] },
     { heading: cur.name + (cur.track.hang ? ' (hanging coaster)' : ''), buttons: [
       { label: cur.track.hang ? '⬆ Make it sit on top' : '🦇 Make it a hanging coaster', go: toggleHang },
@@ -312,12 +313,13 @@ function toggleHang(){
   say(r.kept < r.of ? `${what} (only ${r.kept} of ${r.of} pieces fit: finish it off yourself)` : what, r.kept < r.of ? 'bad' : 'good');
   coastersPanel();
 }
-function newCoaster(){
-  const c = park.addCoaster();
+// hang: a hanging coaster (the track above you, your feet dangling)
+function newCoaster(hang = false){
+  const c = park.addCoaster(hang);
   if (!c){ say('Not enough money yet!', 'bad'); return; }
   sfx.buy(); park.save();
   select(c, true); closePanels();
-  say(`${c.name} has a brand new station! Build its track.`, 'good');
+  say(hang ? `${c.name} is a hanging coaster: the track is above you and your feet dangle! Build its track.` : `${c.name} has a brand new station! Build its track.`, 'good');
 }
 function renameCoaster(){
   let name;
@@ -859,7 +861,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 window.__rcb = {
   get mode(){ return mode; }, get view(){ return view; }, park, renderer, camera, scene, rig, vr, tablet, orbit, vrs,
   timeScale: 1, noRender: false, version: VERSION, CARTS, get track(){ return track; }, get train(){ return train; },
-  startScreen, startVR, toTitle, toggleHang, createPark, openParks, readParks, newParkDialog, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
+  look, startScreen, startVR, toTitle, toggleHang, createPark, openParks, readParks, newParkDialog, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
   get building(){ return building.length; }, get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
 };
 void lerp; void PARK;
