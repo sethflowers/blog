@@ -83,6 +83,8 @@ window.__t = {
   btn(side, id, v){ window.__iwer.controllers[side].updateButtonValue(id, v); },
 };
 ` });
+// the game logs its scenery boxes, so we can look for surfaces that would flicker
+await ctx.addInitScript({ content: 'globalThis.__boxLog = [];' });
 const pg = await ctx.newPage();
 const errors = [];
 pg.on('pageerror', (e) => errors.push(e.message));
@@ -112,6 +114,14 @@ await pg.waitForFunction('window.__farm', null, { timeout: 90000 });
 await ev('localStorage.clear()');
 await wait(500);
 check((await pg.textContent('.build-version')).includes(VERSION), 'title shows version ' + VERSION);
+// no two surfaces in the same place (they flicker, worst in a headset: stall walls built twice, the porch
+// level with the foundation, ground layers 1 mm apart...)
+{
+  const { findCoplanar } = await import('../coplanar.mjs');
+  const flicker = findCoplanar(JSON.parse(await ev('JSON.stringify(globalThis.__boxLog)'))).filter((h) => h.area >= 0.005);
+  for (const h of flicker.slice(0, 8)) console.log(`       flicker: ${h.axis} ${h.at}, ${h.area} m²: ${h.a} | ${h.b}`);
+  check(flicker.length === 0, `no flickering surfaces (two in the same place)${flicker.length ? `: ${flicker.length} found` : ''}`);
+}
 if (IWER) check(await ev(`!document.getElementById('b-vr').disabled`), 'Enter VR is offered when there is a headset');
 await shot('01-title');
 
@@ -521,6 +531,15 @@ if (IWER){
   let closed = false;
   try { await ev(`__t.btn('right', 'b-button', 1)`); await wait(300); await waitGame(0.2); await ev(`__t.btn('right', 'b-button', 0)`); closed = await ev('!__farm.vrPanel.open'); } catch (e) { console.log('       (b-button: ' + e.message.split('\n')[0] + ')'); }
   check(closed, 'the B button closes a VR panel');
+  // riding lifts you to the saddle; getting off puts you back on the ground (you used to stay up there)
+  await ev(`(() => { const h = ${H}; for (const k of ['pad', 'saddle', 'girth', 'bridle']) h.setTack(k, true); h.mode = 'loose'; h.pos.set(__farm.player.pos.x + 1.2, 0, __farm.player.pos.z); __farm.riding.mount(h); })()`);
+  await waitGame(1.5);
+  const ridingY = await ev('__farm.rig.position.y');
+  await ev('__farm.riding.dismount()'); await waitGame(1.5);
+  const afterY = await ev('__farm.rig.position.y'), headY = (await ev('__farm.head'))[1];
+  console.log(`       (play space ${ridingY.toFixed(2)} m up while riding, ${afterY.toFixed(2)} m after; head at ${headY.toFixed(2)} m)`);
+  check(ridingY > 0.4 && Math.abs(afterY) < 0.01 && headY < 2.0, 'after getting off a horse in VR you are back at your own height');
+  await ev('__farm.letGo()');
   // a new farm started in VR: the welcome panel is in front of you, not under the floor
   await ev('__farm.renderer.xr.getSession().end()'); await wait(1500);
   await ev(`__t.head([0, 1.6, 0], 1.1, 0)`);

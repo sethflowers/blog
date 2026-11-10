@@ -60,7 +60,7 @@ export function bakedGeometry(mesh, root){
 
 // Builds static scenery: add geometry per material, then one mesh per material at the end.
 export class Batch {
-  constructor(){ this.groups = new Map(); }
+  constructor(){ this.groups = new Map(); this.id = Batch.n = (Batch.n || 0) + 1; }
   add(geo, mat, matrix){
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
     if (matrix) g.applyMatrix4(matrix);
@@ -70,6 +70,8 @@ export class Batch {
     return this;
   }
   box(sx, sy, sz, mat, x, y, z, ry = 0, uvScale = 1, rx = 0, rz = 0){
+    // a test can ask for every box (to find faces that sit on top of each other and flicker)
+    if (globalThis.__boxLog) globalThis.__boxLog.push({ batch: this.id, s: [sx, sy, sz], p: [x, y, z], r: [rx, ry, rz], m: mat.name || mat.uuid.slice(0, 6), at: new Error().stack.split('\n')[2].trim() });
     const g = boxUV(sx, sy, sz, uvScale);
     return this.add(g, mat, new THREE.Matrix4().compose(V(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), V(1, 1, 1)));
   }

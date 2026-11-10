@@ -111,13 +111,17 @@ export function worldMaterials(){ return materials(); }
 
 // ---------- building blocks ----------
 // A post-and-rail fence from a to b with `rails` rails; gaps is a list of [t0, t1] (0..1) left open.
+// (posts are only built once where two fences meet: two identical posts in the same place flicker)
+const fencePosts = new Set();
 function fence(B, a, b, { rails = 3, h = 1.3, mat: fm, postMat, spacing = 2.6, gaps = [], collide = true, postR = 0.065, railT = 0.05, railH = 0.14 } = {}){
   const len = Math.hypot(b.x - a.x, b.z - a.z), dir = V((b.x - a.x) / len, 0, (b.z - a.z) / len), yaw = Math.atan2(dir.x, dir.z);
   const n = Math.max(1, Math.round(len / spacing));
   const open = (t) => gaps.some(([g0, g1]) => t > g0 + 1e-3 && t < g1 - 1e-3);
   for (let i = 0; i <= n; i++){
     const t = i / n; if (open(t)) continue;
-    B.box(postR * 2, h + 0.1, postR * 2, postMat || fm, a.x + dir.x * len * t, (h + 0.1) / 2, a.z + dir.z * len * t, yaw);
+    const px = a.x + dir.x * len * t, pz = a.z + dir.z * len * t, key = `${px.toFixed(2)},${pz.toFixed(2)}`;
+    if (fencePosts.has(key)) continue; fencePosts.add(key);
+    B.box(postR * 2, h + 0.1, postR * 2, postMat || fm, px, (h + 0.1) / 2, pz, yaw);
   }
   for (let i = 0; i < n; i++){
     const t0 = i / n, t1 = (i + 1) / n, tm = (t0 + t1) / 2;
@@ -195,7 +199,13 @@ export function buildWorld(scene){
     world.ground = ground;
   }
   // a flat strip of ground cover (path, sand) just above the grass
-  const strip = (x0, x1, z0, z1, m, y = 0.012, uvs = 0.3) => {
+  const strips = [];
+  const strip = (x0, x1, z0, z1, m, y0 = 0.012, uvs = 0.3) => {
+    let y = 0.012;
+    for (const o of strips) if (x0 < o.x1 && x1 > o.x0 && z0 < o.z1 && z1 > o.z0) y = Math.max(y, o.y + 0.01);
+    if (y0 >= 0.03) y = Math.max(y, y0);     // the sand arenas are a deeper layer
+    strips.push({ x0, x1, z0, z1, y });
+    if (globalThis.__boxLog) globalThis.__boxLog.push({ batch: F.id, s: [x1 - x0, 0, z1 - z0], p: [(x0 + x1) / 2, y, (z0 + z1) / 2], r: [0, 0, 0], m: 'strip:' + (m.name || ''), at: 'strip', flat: true });
     const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0); g.rotateX(-Math.PI / 2);
     const uv = g.attributes.uv, p = g.attributes.position;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (p.getX(i) + (x0 + x1) / 2) * uvs, (p.getZ(i) + (z0 + z1) / 2) * uvs);
@@ -263,25 +273,26 @@ function buildBarn(B, F, root, world, M){
     if (z === z1) back.multiply(new THREE.Matrix4().makeRotationY(Math.PI));
     B.add(gg, M.barnRed, back);
     // trim round the door and the corners, and the classic white X on the sliding doors
-    B.box(0.16, 3.5, 0.16, M.trim, -1.78, 1.75, z + (z === z1 ? 0.08 : -0.08));
-    B.box(0.16, 3.5, 0.16, M.trim, 1.78, 1.75, z + (z === z1 ? 0.08 : -0.08));
-    B.box(3.72, 0.16, 0.16, M.trim, 0, 3.48, z + (z === z1 ? 0.08 : -0.08));
+    // (the frame stands 1 cm into the doorway: flush with its edges, the two surfaces flickered)
+    B.box(0.16, 3.5, 0.16, M.trim, -1.77, 1.75, z + (z === z1 ? 0.08 : -0.08));
+    B.box(0.16, 3.5, 0.16, M.trim, 1.77, 1.75, z + (z === z1 ? 0.08 : -0.08));
+    B.box(3.72, 0.16, 0.16, M.trim, 0, 3.47, z + (z === z1 ? 0.08 : -0.08));
     const out = z === z1 ? 1 : -1;
     for (const sx of [-1, 1]){
       // the sliding door, pushed open along the wall
       const dx = sx * 3.45, dz = z + out * 0.2;
-      B.box(1.8, 3.3, 0.08, M.barnRed, dx, 1.7, dz, 0, 0.25);
-      B.box(1.8, 0.12, 0.1, M.trim, dx, 0.1, dz + out * 0.01); B.box(1.8, 0.12, 0.1, M.trim, dx, 3.3, dz + out * 0.01);
-      B.box(0.12, 3.3, 0.1, M.trim, dx - 0.84, 1.7, dz + out * 0.01); B.box(0.12, 3.3, 0.1, M.trim, dx + 0.84, 1.7, dz + out * 0.01);
+      B.box(1.82, 3.3, 0.08, M.barnRed, dx, 1.7, dz, 0, 0.25);
+      B.box(1.78, 0.12, 0.09, M.trim, dx, 0.1, dz + out * 0.01); B.box(1.78, 0.12, 0.09, M.trim, dx, 3.3, dz + out * 0.01);
+      B.box(0.12, 3.28, 0.09, M.trim, dx - 0.84, 1.7, dz + out * 0.01); B.box(0.12, 3.28, 0.09, M.trim, dx + 0.84, 1.7, dz + out * 0.01);
       B.box(0.12, 3.5, 0.1, M.trim, dx, 1.7, dz + out * 0.015, 0, 1, 0, 0.5); B.box(0.12, 3.5, 0.1, M.trim, dx, 1.7, dz + out * 0.015, 0, 1, 0, -0.5);
       B.box(4.2, 0.1, 0.1, M.metal, sx * 2.6, 3.62, z + out * 0.22);
     }
     // gable window and a lamp over the door
-    B.box(1.1, 1.1, 0.06, M.glass, 0, 5.3, z + out * 0.08); B.box(1.3, 0.1, 0.1, M.trim, 0, 4.75, z + out * 0.1); B.box(1.3, 0.1, 0.1, M.trim, 0, 5.85, z + out * 0.1);
+    B.box(1.1, 1.1, 0.06, M.glass, 0, 5.3, z + out * 0.09); B.box(1.3, 0.1, 0.1, M.trim, 0, 4.75, z + out * 0.1); B.box(1.3, 0.1, 0.1, M.trim, 0, 5.85, z + out * 0.1);
     B.box(0.1, 1.2, 0.1, M.trim, -0.6, 5.3, z + out * 0.1); B.box(0.1, 1.2, 0.1, M.trim, 0.6, 5.3, z + out * 0.1);
     B.box(0.1, 1.2, 0.1, M.trim, 0, 5.3, z + out * 0.1); B.box(1.2, 0.1, 0.1, M.trim, 0, 5.3, z + out * 0.1);
   }
-  for (const x of [x0, x1]) for (const z of [z0, z1]) B.box(0.2, wallH, 0.2, M.trim, x, wallH / 2, z);
+  for (const x of [x0, x1]) for (const z of [z0, z1]) B.box(0.2, wallH - 0.02, 0.2, M.trim, x, wallH / 2 - 0.01, z);
   // windows along the sides, one per stall
   for (let k = 0; k < 4; k++){
     const z = z1 - 0.4 - STALL_W * (k + 0.5);
@@ -303,7 +314,7 @@ function buildBarn(B, F, root, world, M){
   }
   B.box(0.3, 0.12, D + 1.2, M.roof, 0, peak + 0.06, cz);
   // cupola
-  B.box(1.4, 1.2, 1.4, M.barnRed, 0, peak + 0.6, cz, 0, 0.5);
+  B.box(1.4, 1.2, 1.4, M.barnRed, 0, peak + 0.61, cz, 0, 0.5);
   B.box(1.5, 0.1, 1.5, M.trim, 0, peak + 1.2, cz);
   for (const s of [-1, 1]){
     B.box(1.2, 0.08, 1.9, M.roof, s * 0.42, peak + 1.5, cz, 0, 1, 0, -s * 0.7);
@@ -324,9 +335,9 @@ function buildBarn(B, F, root, world, M){
   for (let k = 0; k <= 4; k++){
     const z = z1 - 0.4 - STALL_W * k;
     for (const x of [-aisle, aisle]) B.box(0.2, wallH, 0.2, M.oak, x, wallH / 2, z);
-    B.box(W, 0.25, 0.2, M.oak, 0, wallH - 0.12, z);
+    B.box(W - 0.02, 0.25, 0.18, M.oak, 0, wallH - 0.12, z);
   }
-  B.box(0.2, 0.25, D, M.oak, -aisle, wallH - 0.12, cz); B.box(0.2, 0.25, D, M.oak, aisle, wallH - 0.12, cz);
+  B.box(0.18, 0.28, D - 0.02, M.oak, -aisle, wallH - 0.13, cz); B.box(0.18, 0.28, D - 0.02, M.oak, aisle, wallH - 0.13, cz);
   // ceiling boards (the hay loft floor)
   B.box(W, 0.06, D, M.pine, 0, wallH + 0.03, cz, 0, 0.5);
   // hanging lamps down the aisle
@@ -364,6 +375,7 @@ function buildBarn(B, F, root, world, M){
   for (const z of [z0, z1]){ addBox(x0, -1.75, z - 0.1, z + 0.1, 4); addBox(1.75, x1, z - 0.1, z + 0.1, 4); }
 
   // ----- stalls -----
+  const dividers = new Set();   // walls already built between stalls
   for (let k = 0; k < 4; k++){
     const za = z1 - 0.4 - STALL_W * k, zb = za - STALL_W, zc = (za + zb) / 2;
     for (const s of [-1, 1]){
@@ -372,6 +384,7 @@ function buildBarn(B, F, root, world, M){
       F.box(Math.abs(xb - xa), 0.04, STALL_W, M.rubber, xc, 0.02, zc, 0, 0.5);
       // dividing walls: 1.4 m of boards with bars above
       for (const z of [za, zb]){
+        const wk = `${s},${z.toFixed(2)}`; if (dividers.has(wk)) continue; dividers.add(wk);
         B.box(Math.abs(xb - xa), 1.4, 0.06, M.pine, xc, 0.7, z, 0, 0.5);
         B.box(Math.abs(xb - xa), 0.08, 0.1, M.metal, xc, 1.42, z);
         B.box(Math.abs(xb - xa), 0.06, 0.08, M.metal, xc, 2.3, z);
@@ -388,7 +401,7 @@ function buildBarn(B, F, root, world, M){
         for (let i = 1; i < n; i++) B.box(0.022, 0.96, 0.022, M.metal, front, 1.82, z0s + (z1s - z0s) * i / n);
         addBox(front - 0.06, front + 0.06, Math.min(z0s, z1s), Math.max(z0s, z1s), 2.3, 'stall');
       }
-      B.box(0.08, 0.06, 4.2, M.metal, front + s * 0.05, 2.42, zc - 0.9);  // door track
+      B.box(0.08, 0.06, 2.5, M.metal, front + s * 0.05, 2.42, zc - 0.58);  // door track (within its own stall)
       const door = new THREE.Group();
       {
         const DB = new Batch();
@@ -837,8 +850,9 @@ function buildHouse(B, root, world, M){
   const plaster = mat('plain-plaster', { color: 0xe6dccb, rough: 0.85 });
   const wallH = top - base, wy = base + wallH / 2;
   B.box(T, wallH, D, M.clap, x0 + T / 2, wy, hz, 0, 0.35);                 // west
-  B.box(W, wallH, T, M.clap, hx, wy, z0 + T / 2, 0, 0.35);                 // north
-  B.box(W, wallH, T, M.clap, hx, wy, z1 - T / 2, 0, 0.35);                 // south
+  // (north and south fit between the west and east walls: overlapping at the corners, they flickered)
+  B.box(W - 2 * T, wallH, T, M.clap, hx, wy, z0 + T / 2, 0, 0.35);         // north
+  B.box(W - 2 * T, wallH, T, M.clap, hx, wy, z1 - T / 2, 0, 0.35);         // south
   const segN = (hz - DOOR) - z0, segS = z1 - (hz + DOOR);
   B.box(T, wallH, segN, M.clap, x1 - T / 2, wy, z0 + segN / 2, 0, 0.35);  // east, either side of the door
   B.box(T, wallH, segS, M.clap, x1 - T / 2, wy, z1 - segS / 2, 0, 0.35);
@@ -912,8 +926,8 @@ function buildHouse(B, root, world, M){
   B.box(kx1 - kx0 + 0.04, 0.04, 0.64, worktop, (kx0 + kx1) / 2, fy + 0.88, iz0 + 0.33);
   for (let x = kx0 + 0.3; x < kx1; x += 0.6) B.box(0.02, 0.7, 0.01, M.trim, x, fy + 0.43, iz0 + 0.63);
   B.box(0.55, 0.06, 0.4, M.steel, kx0 + 1.4, fy + 0.89, iz0 + 0.32); B.cyl(0.015, 0.015, 0.3, M.steel, kx0 + 1.4, fy + 1.05, iz0 + 0.1, 6);
-  B.box(0.62, 0.9, 0.62, M.black, kx1 - 0.6, fy + 0.45, iz0 + 0.33);
-  for (const dx of [-0.14, 0.14]) for (const dz of [-0.12, 0.12]) B.cyl(0.09, 0.09, 0.01, M.metal, kx1 - 0.6 + dx, fy + 0.905, iz0 + 0.33 + dz, 12);
+  B.box(0.62, 0.92, 0.6, M.black, kx1 - 0.6, fy + 0.46, iz0 + 0.33);
+  for (const dx of [-0.14, 0.14]) for (const dz of [-0.12, 0.12]) B.cyl(0.09, 0.09, 0.01, M.metal, kx1 - 0.6 + dx, fy + 0.925, iz0 + 0.33 + dz, 12);
   B.box(kx1 - kx0 - 1.2, 0.04, 0.26, M.oak, (kx0 + kx1) / 2 - 0.4, fy + 1.75, iz0 + 0.14);
   for (let k = 0; k < 6; k++) B.cyl(0.05, 0.04, 0.12, k % 2 ? M.blue : M.trim, kx0 + 0.3 + k * 0.32, fy + 1.83, iz0 + 0.14, 10);
   addBox(kx0, kx1, iz0, iz0 + 0.65, 1);
@@ -933,7 +947,7 @@ function buildHouse(B, root, world, M){
   // a sofa, a rug, a low table and a bookcase in the living room (the south side)
   const sofa = mat('wool', { color: 0x5a6f8a, rough: 0.95 });
   const sx = (PX + ix1) / 2 - 0.3, sz = iz1 - 0.5;
-  B.box(2.0, 0.42, 0.8, sofa, sx, fy + 0.21, sz); B.box(2.0, 0.5, 0.18, sofa, sx, fy + 0.62, sz + 0.32);
+  B.box(1.96, 0.42, 0.78, sofa, sx, fy + 0.21, sz); B.box(1.98, 0.5, 0.18, sofa, sx, fy + 0.62, sz + 0.31);
   for (const s of [-1, 1]) B.box(0.18, 0.6, 0.8, sofa, sx + s * 0.95, fy + 0.3, sz);
   for (const k of [-0.5, 0.5]) B.box(0.88, 0.1, 0.62, sofa, sx + k * 0.95, fy + 0.47, sz - 0.06);
   addBox(sx - 1.05, sx + 1.05, sz - 0.42, iz1, 1);
@@ -941,7 +955,7 @@ function buildHouse(B, root, world, M){
   B.box(0.9, 0.04, 0.5, M.oak, sx, fy + 0.4, sz - 1.15); for (const [dx, dz] of [[-0.4, -0.2], [0.4, -0.2], [-0.4, 0.2], [0.4, 0.2]]) B.box(0.04, 0.38, 0.04, M.oak, sx + dx, fy + 0.19, sz - 1.15 + dz);
   addBox(sx - 0.47, sx + 0.47, sz - 1.42, sz - 0.88, 0.5);
   const bk = PX + 0.22;
-  B.box(0.03, 1.9, 1.1, M.oak, bk - 0.145, fy + 0.95, iz1 - 1.6);
+  B.box(0.03, 1.88, 1.04, M.oak, bk - 0.145, fy + 0.95, iz1 - 1.6);
   for (const s of [-1, 1]) B.box(0.32, 1.9, 0.03, M.oak, bk, fy + 0.95, iz1 - 1.6 + s * 0.535);
   B.box(0.32, 0.03, 1.1, M.oak, bk, fy + 1.885, iz1 - 1.6); B.box(0.32, 0.1, 1.1, M.oak, bk, fy + 0.05, iz1 - 1.6);
   for (let k = 0; k < 4; k++){
@@ -979,7 +993,7 @@ function buildHouse(B, root, world, M){
   world.fixtures.bed = { pos: V(bedX, fy + 0.5, bz) };
   // porch with posts and a roof, and a step down to the yard
   const ex = x1;
-  B.box(2.6, 0.12, W - 0.6, M.oak, ex + 1.3, 0.09, hz, 0, 0.5);
+  B.box(2.6, 0.12, W - 0.7, M.oak, ex + 1.3, 0.11, hz, 0, 0.5);
   for (const z of [hz - 4, hz - 1.3, hz + 1.3, hz + 4]) B.box(0.14, 3.35, 0.14, M.trim, ex + 2.45, 1.75, z);
   B.box(2.9, 0.12, W, M.shingles, ex + 1.35, 3.45, hz, 0, 0.5, -0.2);
   // the farm office notice board on the porch: where you buy, sell and enter shows
