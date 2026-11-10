@@ -128,3 +128,11 @@ comments as anchors.
   pick up coins, open the trader and buy, enter a tower, clear floors with cheats, beat a boss,
   see the next region open, die and respawn, reload and continue from the save. Zero console
   errors, and look at the screenshots.
+
+## v1.7: plays offline, properly
+- Starting with no network could show Safari's "not connected to the internet" page: the service
+  worker was only registered once the page had finished loading, which the big island script delays
+  a long time on an iPad, so a game closed early had saved nothing. It's now registered at the very
+  top of the page as `sw.js?v=<version>`, each version gets its own cache plus a ready marker, iOS is
+  asked to keep it when running from the home screen, and the title screen says "✓ Saved on this
+  device: plays offline". Checked with `_tools/offline-check.mjs henrys-nightfall-2`.

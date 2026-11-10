@@ -18,11 +18,12 @@ particular game.
   `build-version` tag. **Bump it on every change to a game** (1.4 → 1.5 for an update, 1.x → 2.0 for a
   big one) so the user can tell when an update has reached their device. New experiments start at 1.0
   and must show the version somewhere on their title screen (and somewhere visible in VR).
-- If a game has a service worker, also bump its `CACHE` name when its asset list changes (a new file,
-  a file removed).
 - Every script URL carries the version (`main.js?v=1.5`), and the import map gives every module and
-  three.js the same `?v=`, so a new page can never run old cached code. The service worker serves the
-  network first and only falls back to its store when the network fails.
+  three.js the same `?v=`, so a new page can never run old cached code.
+- The service worker is registered as `sw.js?v=<version>` and names its cache after the version (see
+  "It must work offline" below), so each version gets a fresh, complete offline copy. Add any new file
+  to the worker's file list. (Older games still name their cache by hand: bump it when their file list
+  changes.)
 
 ## Every new game: one page, iPad and VR
 
@@ -52,7 +53,7 @@ Copy the shape of `my-animal-farm`, `rollercoaster-bros` or `safari-cruise`:
   - show "✓ Saved on this device: plays offline" on the title screen once the marker is there.
   - Check it with `NODE_PATH=$(npm root -g) node _tools/offline-check.mjs <name>` (opens the game
     online for 8 seconds, closes it, then starts it with the network off).
- `navigator.xr.isSessionSupported('immersive-vr')` says yes. Use the
+- "Play in VR" only enables when `navigator.xr.isSessionSupported('immersive-vr')` says yes. Use the
   `local-floor` reference space; ask for 72 Hz on a Quest.
 - One description of each menu or panel, drawn two ways: HTML on screen, a canvas texture in VR (point
   and pull the trigger). Never write a feature that only works on one of them.

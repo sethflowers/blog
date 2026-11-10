@@ -3,8 +3,14 @@
    has been opened once. The page is fetched from the network first so an update shows up
    straight away; scripts and icons are served from the cache and refreshed
    in the background. */
+// Registered as sw.js?v=<version> right at the top of the page (it used to wait for the page to finish
+// loading, which a big game on an iPad may not reach before it's closed, so nothing was saved for
+// offline). Each version gets its own cache, and a marker once everything is in it, which the title
+// screen checks to say it plays offline.
 // Not prefixed 'henrys-nightfall-': the first game's worker clears caches with that prefix.
-var CACHE = 'nightfall-two-v4';
+var V = new URL(self.location.href).searchParams.get('v') || '0';
+var CACHE = 'nightfall-two-' + V;
+var READY = '/experiments/henrys-nightfall-2/__offline-ready__';
 var BASE = '/experiments/henrys-nightfall-2/';
 var ASSETS = [
   BASE,
@@ -17,7 +23,9 @@ var ASSETS = [
 
 self.addEventListener('install', function (e) {
   e.waitUntil(
-    caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); })
+    caches.open(CACHE).then(function (c) {
+      return c.addAll(ASSETS.map(function (a) { return new Request(a, { cache: 'reload' }); })).then(function () { return c.put(READY, new Response(V)); });
+    }).catch(function () {}).then(function () { return self.skipWaiting(); })
   );
 });
 

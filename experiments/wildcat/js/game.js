@@ -975,6 +975,15 @@ async function boot(){
 }
 requestAnimationFrame(frame);
 boot().catch((e) => { $('loading').textContent = 'SOMETHING WENT WRONG: ' + e.message; console.error(e); });
-if ('serviceWorker' in navigator && !TEST && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
-  navigator.serviceWorker.register('/experiments/wildcat/sw.js', { scope: '/experiments/wildcat/' }).catch(() => {});
-}
+// (the offline copy is registered at the top of the page.) Say on the title screen once every file of
+// this version is saved on this device; sw.js puts a marker in its cache when they're all in.
+(async function offlineReady(){
+  if (TEST || !('caches' in window) || !navigator.serviceWorker) return;
+  const v = (new URL(import.meta.url)).searchParams.get('v') || '0', name = 'wildcat-' + v;
+  for (let i = 0; i < 120; i++){
+    try {
+      if (await caches.has(name) && await (await caches.open(name)).match('/experiments/wildcat/__offline-ready__')){ $('offline').textContent = '✓ Saved on this device: plays offline'; return; }
+    } catch (e) { return; }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+})();

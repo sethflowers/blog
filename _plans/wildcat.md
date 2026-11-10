@@ -105,3 +105,13 @@ The pounce steers in the air toward whatever it was aimed at, so a well-timed on
 - Photoscanned textures once Poly Haven / ambientCG are allowed in the environment's network settings.
 - Night falling, and eyes that shine in the dark.
 - More animals: a lynx, an eagle that dives, foxes.
+
+## v1.3: plays offline, properly
+- The service worker was only registered at the end of the game's main script, and never on a test
+  machine, so a game closed while it was still building the woods saved nothing for offline, and the
+  offline path couldn't be tested. It's now registered at the very top of the page as
+  `sw.js?v=<version>` (skipped only for `?test`), each version saves every file under the exact
+  versioned addresses into its own cache with a ready marker, scripts come from the saved copy first,
+  iOS is asked to keep it from the home screen, and the title screen says "✓ Saved on this device:
+  plays offline". Every script address now carries the version (the import map covers every module
+  and three.js), so an update can't run old cached code. Checked with `_tools/offline-check.mjs wildcat`.
