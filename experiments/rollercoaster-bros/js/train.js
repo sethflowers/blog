@@ -41,24 +41,8 @@ function ball(parent, r, m, x, y, z, sx = 1, sy = 1, sz = 1){
   const b = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), m); b.position.set(x, y, z); b.scale.set(sx, sy, sz); b.castShadow = true; parent.add(b); return b;
 }
 
-const RAINBOW = [0xe83a3a, 0xf0a020, 0x3ab84a, 0x3a7ae8, 0x9a4ad8];
-// Build one car. Local frame: -Z is forward, +Y up, the rails at y = 0. A hanging car is the same car
-// HANG lower, held from a bogie on the rails above (and with no floor: your feet dangle).
-function buildCar(style, index, count, hang){
-  const outer = new THREE.Group();
-  const g = new THREE.Group(); outer.add(g); outer.userData = g.userData;
-  g.userData.body = g;
-  if (hang){
-    g.position.y = -HANG;
-    const dark = mat(0x2a2a2e, 0.4, 0.5), steel = mat(0x8a8e98, 0.6, 0.35);
-    box(outer, 1.25, 0.2, 1.7, dark, 0, -0.28, 0);                  // the bogie under the rails
-    for (const x of [-0.55, 0.55]) for (const z of [-0.6, 0.6]) cyl(outer, 0.13, 0.13, 0.12, dark, x, -0.13, z, 0, 0, Math.PI / 2, 10);
-    // the arms down to the car, behind each row of seats
-    for (const z of [0.0, 1.0]) for (const x of [-0.62, 0.62]) box(outer, 0.1, HANG - 1.2, 0.1, steel, x * 0.55, -0.3 - (HANG - 1.2) / 2, z, 0, 0, x > 0 ? -0.22 : 0.22);
-    box(outer, 0.9, 0.1, 1.2, steel, 0, -0.42, 0.5);
-  }
-  const front = index === 0, back = index === count - 1;
-  const S = {
+function colours(style, index){
+  return {
     classic: { body: 0xd8282a, trim: 0xf0f0f0, seat: 0x2a2a2a, metal: 0.35 },
     ocean: { body: 0x1e6ad8, trim: 0xffffff, seat: 0x0e2a5a, metal: 0.3 },
     lightning: { body: 0xf6cc1a, trim: 0x1a1a1a, seat: 0x1a1a1a, metal: 0.3 },
@@ -68,18 +52,79 @@ function buildCar(style, index, count, hang){
     rainbow: { body: RAINBOW[index % RAINBOW.length], trim: 0xffffff, seat: 0x3a2a5a, metal: 0.3 },
     gold: { body: 0xf4c430, trim: 0x7a2ab0, seat: 0x6a1a8a, metal: 0.45 },
   }[style];
+}
+// A hanging car: a bogie on the rails, a beam under it, and open seats hanging from the beam: no floor
+// and no sides, so riders' legs dangle. The seats are HANG below the rails (in the same place a sitting
+// car's seats are above them, so the station platform still fits).
+function buildHangCar(style, index, count){
+  const outer = new THREE.Group();
+  const g = new THREE.Group(); g.position.y = -HANG; outer.add(g);
+  outer.userData = g.userData; g.userData.body = g; g.userData.wheels = [];
+  const C = colours(style, index);
+  const body = mat(C.body, C.metal, 0.4), trim = mat(C.trim, 0.3, 0.4), seat = mat(C.seat, 0.05, 0.8);
+  const dark = mat(0x2a2a2e, 0.4, 0.5), steel = mat(0x8a8e98, 0.6, 0.35), bar = mat(0xf0c020, 0.3, 0.4);
+  // bogie and wheels round the rails
+  box(outer, 1.25, 0.2, 1.7, dark, 0, -0.28, 0);
+  for (const x of [-0.55, 0.55]) for (const z of [-0.6, 0.6]) g.userData.wheels.push(cyl(outer, 0.13, 0.13, 0.12, dark, x, -0.13, z, 0, 0, Math.PI / 2, 10));
+  // the hanger down to the beam
+  for (const z of [-0.45, 0.75]) box(outer, 0.14, 0.3, 0.14, steel, 0, -0.5, z);
+  // the beam high over the riders' heads (out of the way of your view)
+  const top = SEAT_Y + 1.36;
+  box(g, 0.24, 0.22, 2.3, body, 0, top, 0.1);
+  box(g, 0.28, 0.05, 2.34, trim, 0, top - 0.12, 0.1);
+  for (const z of [-0.35, 0.55]){
+    for (const x of [-0.32, 0.32]){
+      // a bucket seat hanging from the beam, and an over-the-shoulder bar
+      box(g, 0.5, 0.1, 0.46, seat, x, SEAT_Y - 0.06, z);
+      box(g, 0.52, 0.8, 0.1, body, x, SEAT_Y + 0.36, z + 0.27);
+      for (const sx of [-1, 1]) box(g, 0.06, 0.34, 0.4, body, x + sx * 0.25, SEAT_Y + 0.1, z + 0.05);
+      box(g, 0.3, 0.3, 0.1, seat, x, SEAT_Y + 0.95, z + 0.24);                       // headrest
+      box(g, Math.abs(x) + 0.1, 0.07, 0.08, steel, x / 2, top - 0.1, z + 0.29);        // the arm to the beam
+      box(g, 0.06, 0.22, 0.06, steel, x, top - 0.22, z + 0.29);
+      for (const sx of [-1, 1]){
+        box(g, 0.045, 0.36, 0.045, bar, x + sx * 0.16, SEAT_Y + 0.33, z - 0.14, 0.12);
+        box(g, 0.05, 0.045, 0.34, bar, x + sx * 0.16, SEAT_Y + 0.53, z + 0.06);
+      }
+    }
+  }
+  // the front car gets a pointed nose with lights; style touches on the beam
+  if (index === 0){
+    box(g, 0.24, 0.2, 0.4, body, 0, top, -1.2, 0.3);
+    for (const sx of [-1, 1]) ball(g, 0.06, mat(0xfff6c0, 0, 0.3, 1.2), sx * 0.08, top, -1.36);
+    if (style === 'gold'){ const crown = new THREE.Group(); crown.position.set(0, top + 0.16, -0.9); crown.scale.setScalar(0.45); g.add(crown); cyl(crown, 0.35, 0.35, 0.18, body, 0, 0, 0, 0, 0, 0, 16); }
+    if (style === 'dragon') for (const sx of [-1, 1]) ball(g, 0.06, mat(0xffe040, 0, 0.3, 0.8), sx * 0.16, top + 0.02, -1.38);
+  }
+  if (style === 'shark' || style === 'ocean') box(g, 0.06, 0.45, 0.5, trim, 0, top + 0.3, 0.6, -0.5);
+  if (style === 'dragon') for (let k = 0; k < 3; k++) cyl(g, 0.1, 0.0, 0.25, trim, 0, top + 0.24, -0.7 + k * 0.7, 0, 0, 0, 4);
+  if (style === 'rocket' && index === count - 1){
+    const flame = cyl(g, 0.16, 0.0, 0.9, new THREE.MeshBasicMaterial({ color: 0xffa020, transparent: true, opacity: 0.85 }), 0, top, 1.7, Math.PI / 2, 0, 0, 10);
+    flame.castShadow = false; g.userData.flame = flame;
+  }
+  return outer;
+}
+
+const RAINBOW = [0xe83a3a, 0xf0a020, 0x3ab84a, 0x3a7ae8, 0x9a4ad8];
+// Build one car. Local frame: -Z is forward, +Y up, the rails at y = 0. (A hanging coaster's cars are
+// different: see buildHangCar.)
+function buildCar(style, index, count, hang){
+  if (hang) return buildHangCar(style, index, count);
+  const outer = new THREE.Group();
+  const g = new THREE.Group(); outer.add(g); outer.userData = g.userData;
+  g.userData.body = g;
+  const front = index === 0, back = index === count - 1;
+  const S = colours(style, index);
   const body = mat(S.body, S.metal, style === 'gold' ? 0.25 : 0.4), trim = mat(S.trim, 0.3, 0.4), seat = mat(S.seat, 0.05, 0.8);
   const dark = mat(0x2a2a2e, 0.4, 0.5), chrome = mat(0xd8dce4, 0.5, 0.3);
   // under-frame and wheels round the rails
-  if (!hang) box(g, 1.25, 0.16, 2.1, dark, 0, 0.2, 0);
+  box(g, 1.25, 0.16, 2.1, dark, 0, 0.2, 0);
   g.userData.wheels = [];
-  if (!hang) for (const x of [-0.55, 0.55]) for (const z of [-0.75, 0.75]){
+  for (const x of [-0.55, 0.55]) for (const z of [-0.75, 0.75]){
     const w = cyl(g, 0.13, 0.13, 0.12, dark, x, 0.13, z, 0, 0, Math.PI / 2, 10);
     g.userData.wheels.push(w);
     box(g, 0.08, 0.32, 0.1, dark, x * 1.12, 0.05, z);
   }
   // tub
-  if (!hang) box(g, 1.5, 0.16, 2.2, body, 0, 0.32, 0);
+  box(g, 1.5, 0.16, 2.2, body, 0, 0.32, 0);
   for (const s of [-1, 1]) box(g, 0.12, 0.55, 2.2, body, s * 0.72, 0.62, 0);
   box(g, 1.5, 0.6, 0.12, body, 0, 0.62, 1.08);
   for (const sx of [-1, 1]) box(g, 0.16, 0.08, 2.28, trim, sx * 0.72, 0.92, 0);     // the rim round the top
@@ -164,11 +209,23 @@ function buildCar(style, index, count, hang){
 }
 
 // A person sitting in a seat (shirt, skin and hair to match the visitor).
-export function buildRider(look){
+// dangle: on a hanging coaster, with lower legs and shoes hanging down under the seat (they swing).
+// legsOnly: just the legs (you, when you ride one: look down and see your feet dangling).
+export function buildRider(look, dangle = false, legsOnly = false){
   const g = new THREE.Group();
   const shirt = mat(look.shirt, 0, 0.8), skin = mat(look.skin, 0, 0.7), hair = mat(look.hair, 0, 0.9), pants = mat(look.pants, 0, 0.8);
+  if (dangle){
+    g.userData.legs = [];
+    for (const sx of [-1, 1]){
+      box(g, 0.14, 0.14, 0.42, pants, sx * 0.09, 0.04, -0.12);
+      const knee = new THREE.Group(); knee.position.set(sx * 0.09, 0.02, -0.32); g.add(knee);
+      box(knee, 0.12, 0.44, 0.13, pants, 0, -0.22, 0);
+      box(knee, 0.13, 0.09, 0.25, mat(0x2a2a2a, 0, 0.7), 0, -0.46, -0.05);
+      g.userData.legs.push(knee);
+    }
+    if (legsOnly){ g.userData.raise = 0; g.userData.want = 0; g.userData.arms = []; return g; }
+  } else box(g, 0.32, 0.14, 0.42, pants, 0, 0.04, -0.12);
   box(g, 0.34, 0.45, 0.22, shirt, 0, 0.27, 0.02);
-  box(g, 0.32, 0.14, 0.42, pants, 0, 0.04, -0.12);
   const head = ball(g, 0.12, skin, 0, 0.64, 0.0);
   ball(g, 0.125, hair, 0, 0.69, 0.03, 1, 0.75, 1);
   for (const s of [-1, 1]) ball(head.parent, 0.022, mat(0x1a1a1a, 0, 0.5), s * 0.045, 0.66, -0.11);
@@ -213,8 +270,10 @@ export class Train {
     if (old && old.parent) old.parent.remove(old);
     this.riderMeshes[i] = null;
     this.seats[i] = who;
-    if (!who || who === 'player') return;
-    const r = buildRider(who.look);
+    if (!who) return;
+    // riding a hanging coaster yourself: your own legs, dangling
+    if (who === 'player' && !this.hang) return;
+    const r = who === 'player' ? buildRider({ shirt: 0x3a7ae8, skin: 0xe0b090, hair: 0x5a3a1a, pants: 0x2a3a6a }, true, true) : buildRider(who.look, this.hang);
     const [x, z] = SEATS[i % 4];
     r.position.set(x, SEAT_Y, z);
     this.cars[Math.floor(i / 4)].userData.body.add(r);
@@ -281,6 +340,8 @@ export class Train {
       const u = r.userData;
       if (this.rand() < dt * 2) u.want = this.thrill > 0.6 + (i % 3) * 0.25 ? 1 : 0;
       u.raise = damp(u.raise, u.want, 5, dt);
+      // dangling legs swing back when the train speeds up, and kick about on the wild bits
+      if (u.legs){ const sw = clamp(this.v / 30, 0, 0.7) + Math.sin(time * 6 + i) * 0.12 * this.thrill; for (const [j, l] of u.legs.entries()) l.rotation.x = sw + (j ? 0.05 : -0.05) * Math.sin(time * 3 + i); }
       u.arms.forEach((arm, j) => { arm.rotation.x = 0.9 + u.raise * (2.0 + 0.2 * Math.sin(time * 9 + i + j)); arm.rotation.z = (j ? 1 : -1) * u.raise * 0.35; });
     }
   }

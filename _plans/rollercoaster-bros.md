@@ -124,10 +124,24 @@ they thought, and walk out.
   Supports stand beside the track and reach over the top. Occupancy counts the space under the track
   as the train's. Saved designs remember it. Switching rebuilds the track as far as it fits.
 
+## Version 1.4: a proper floorless hanging coaster
+
+- The 1.3 hanging cars were the sitting cars moved under the track, side walls and all, so riders'
+  legs were hidden. Now a hanging car (`buildHangCar`) is a bogie on the rails, a short hanger, a
+  beam high over the riders' heads, and four open bucket seats hanging from it with over-the-shoulder
+  bars: no floor and no sides. The beam sits high and narrow so it doesn't block the view ahead.
+- Riders on a hanging coaster have lower legs and shoes hanging under the seat, swinging back as the
+  train speeds up and kicking about on the wild bits. When you ride one, your own legs are in the
+  front seat, so you can look down and see your feet dangling over the ground.
+- Coasters panel: "🦇 New hanging coaster" next to "＋ New coaster" (same price); "Make it a
+  hanging coaster" still switches an existing one.
+- The test is quick by default now (about 80 s: make a park, build a loop and a hanging coaster, see
+  the legs dangle, ride it, VR); `--full` runs the whole five-minute play-through.
+
 ## Testing
 
 `_tools/rollercoaster-bros/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated
-Quest 3, installed with `npm i --prefix _tools/vr-test iwer`) and saves screenshots. About 5 minutes.
+Quest 3, installed with `npm i --prefix _tools/vr-test iwer`) and saves screenshots. About 80 seconds; `--full` for the whole play-through (about 5 minutes).
 
 ## Ideas for later
 

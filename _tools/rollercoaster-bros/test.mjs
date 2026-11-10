@@ -1,8 +1,10 @@
 // Plays Rollercoaster Bros in headless Chromium, checks it, and saves screenshots.
 //
 //   npm i --prefix _tools/vr-test iwer        (once; the VR part uses Meta's emulated Quest 3)
-//   NODE_PATH=$(npm root -g) node _tools/rollercoaster-bros/test.mjs [outDir]
+//   NODE_PATH=$(npm root -g) node _tools/rollercoaster-bros/test.mjs [outDir] [--full]
 //
+// By default it's quick (about a minute): it loads, makes a park, builds a coaster and a hanging coaster,
+// rides it, and does the VR part. --full plays the whole lot (about five minutes):
 // Serves the repo the way Jekyll would publish it (front matter stripped, version filled in). Then, on
 // screen: the title and version, naming your first theme park, the welcome, building a simple loop by hand and with Finish, the train
 // running, visitors queueing, riding and paying, riding it yourself, watching, the speed choices, buying
@@ -21,7 +23,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const ROOT = path.resolve(HERE, '../..');
-const OUT = path.resolve(process.argv[2] || 'rollercoaster-bros-shots');
+const FULL = process.argv.includes('--full');
+const OUT = path.resolve(process.argv.slice(2).find((a) => !a.startsWith('--')) || 'rollercoaster-bros-shots');
 fs.mkdirSync(OUT, { recursive: true });
 let IWER = null;
 try { IWER = fs.readFileSync(require.resolve('iwer/build/iwer.min.js', { paths: [HERE, path.join(HERE, '../vr-test'), ...(process.env.NODE_PATH || '').split(':')] }), 'utf8'); }
@@ -86,7 +89,7 @@ const until = async (expr, sec, what) => {
 };
 const add = (t) => ev(`__rcb.addPiece('${t}')`);
 
-console.log('Rollercoaster Bros ' + VERSION);
+console.log('Rollercoaster Bros ' + VERSION + (FULL ? ' (full)' : ' (quick: --full for everything)'));
 const started = Date.now();
 await pg.goto(BASE);
 await pg.waitForFunction('window.__rcb', null, { timeout: 90000 }).catch((e) => { console.log('the game did not start:', errors.join(' | ')); throw e; });
@@ -96,7 +99,42 @@ check((await pg.textContent('.build-version')).includes(VERSION), 'title shows v
 check(await ev('__rcb.track.complete'), 'a demo coaster runs behind the title');
 await shot('01-title');
 
-// ---------- on screen ----------
+// ---------- quick: the main things ----------
+if (!FULL){
+await ev(`document.getElementById('b-play').click()`);
+await wait(300);
+check(await ev(`document.getElementById('newpark').classList.contains('show')`), 'Play asks you to name a new park');
+await pg.fill('#np-name', 'Quick Park'); await pg.click('#np-free'); await pg.click('#np-go');
+await wait(500);
+check(await ev('__rcb.mode') === 'screen' && await ev('__rcb.park.free'), 'a free-build park starts on the screen');
+await ev('__rcb.closePanels(); __rcb.noRender = true; __rcb.timeScale = 3');
+for (const t of ['straight', 'left', 'left', 'straight', 'straight', 'straight', 'left', 'left']) await add(t);
+check(await ev('__rcb.track.complete'), 'a simple loop can be built');
+// a hanging coaster: track above, feet dangling
+await ev('__rcb.newCoaster(true)');
+check(await ev('__rcb.track.hang && __rcb.cur.data.hang') && await ev('__rcb.park.coasters.length') === 2, 'a new hanging coaster');
+for (const t of ['straight', 'up', 'up', 'steepUp', 'right', 'steepDown', 'down', 'down', 'right', 'loop']) await add(t);
+await ev('__rcb.finishTrack()');
+await until('__rcb.track.complete', 15, 'its track is finished');
+const climb2 = await ev(`__rcb.track.pieces[3].pts[0].tan.y`);
+check(climb2 > 0.2, `two hills in a row join into one smooth climb (${climb2.toFixed(2)} steep at the join)`);
+await until('__rcb.train.riders().length > 0', 120, 'visitors ride the hanging coaster');
+check(await ev('__rcb.train.riderMeshes.filter(Boolean).every((r) => r.userData.legs && r.userData.legs.length === 2)'), 'their legs dangle');
+await until('__rcb.train.state === "loading"', 120, 'the train comes back in');
+await ev('__rcb.noRender = false; __rcb.orbit.follow = false; __rcb.orbit.target.set(56 + 1, 2, -1); __rcb.orbit.dist = 7.5; __rcb.orbit.yaw = 1.1; __rcb.orbit.pitch = 0.12');
+await shot('q1-hanging-train');
+await ev('__rcb.startRide()');
+check(await ev('!!__rcb.train.riderMeshes[0] && __rcb.train.riderMeshes[0].userData.legs.length === 2'), 'riding it, you can see your own legs dangling');
+check(await ev(`__rcb.track.at(__rcb.train.s).pos.y - __rcb.train.seatEye().y > 1`), 'and the track is above your head');
+await until('__rcb.train.state === "running" && __rcb.train.v > 6', 60, 'off you go');
+await ev('__rcb.timeScale = 1; __rcb.look.pitch = -0.75');
+await shot('q2-ride-hanging-look-down');
+await ev('__rcb.look.pitch = 0'); await shot('q3-ride-hanging');
+await ev('__rcb.stopRide(); __rcb.noRender = true');
+}
+
+// ---------- on screen (full) ----------
+if (FULL){
 await ev(`document.getElementById('b-play').click()`);
 await wait(300);
 check(await ev(`document.getElementById('newpark').classList.contains('show')`) && await ev('__rcb.mode') === 'title', 'with no parks yet, Play asks you to make one');
@@ -313,6 +351,7 @@ await shot('20a-hanging-station');
 await ev('__rcb.startRide(); __rcb.timeScale = 1');
 await until('__rcb.train.state === "running" && __rcb.train.v > 4.4 && __rcb.train.dist > 30', 60, 'riding the hanging coaster');
 await shot('20b-ride-hanging');
+check(await ev('__rcb.train.riderMeshes[0] && __rcb.train.riderMeshes[0].userData.legs.length === 2'), 'your own legs dangle on a hanging coaster');
 await ev('__rcb.stopRide(); __rcb.timeScale = 3; __rcb.noRender = true');
 await ev('__rcb.orbit.follow = false; __rcb.orbit.target.set(30, 15, -20); __rcb.orbit.dist = 120; __rcb.orbit.yaw = 0.6; __rcb.orbit.pitch = 0.3; __rcb.noRender = false');
 await shot('20-free-park-tall');
@@ -340,6 +379,8 @@ check(await ev('__rcb.park.coasters.length') === 1 && await ev('__rcb.track.comp
 check(await ev('__rcb.park.state.name') === 'My Park' && await ev(`localStorage.getItem('rollercoaster-bros-save') === null`), 'it becomes a park called My Park');
 check(await ev('__rcb.park.designs.length') === 1, 'saved designs are kept');
 await ev('__rcb.noRender = true; __rcb.timeScale = 3');
+
+}
 
 // ---------- VR ----------
 if (IWER){

@@ -386,12 +386,12 @@ export class Park {
   // ---------- more coasters ----------
   nextPlot(){ for (let p = 0; p < PLOTS.length; p++) if (!this.coasters.some((c) => c.data.plot === p)) return p; return -1; }
   get newPrice(){ return this.free ? 0 : COASTER_PRICE[Math.min(this.coasters.length, COASTER_PRICE.length - 1)]; }
-  addCoaster(){
+  addCoaster(hang = false){
     const plot = this.nextPlot();
     if (plot < 0 || !this.spend(this.newPrice)) return null;
     const used = this.coasters.map((c) => c.name);
     const name = NAMES.find((n) => !used.includes(n)) || 'Coaster ' + (this.coasters.length + 1);
-    const data = { name, plot, track: [], cart: 'classic', speed: 2, color: (this.coasters.length * 3) % 8, riders: 0, earned: 0 };
+    const data = { name, plot, track: [], cart: 'classic', speed: 2, color: (this.coasters.length * 3) % 8, riders: 0, earned: 0, hang: !!hang };
     this.state.coasters.push(data);
     const c = new Coaster(this, data);
     this.coasters.push(c);
