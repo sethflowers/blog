@@ -311,6 +311,7 @@ export function mat(name, opts = {}){
     if (opts.alpha){ m.alphaTest = opts.alpha; m.transparent = false; }
     if (opts.normal != null && m.normalMap) m.normalScale.set(opts.normal, opts.normal);
   }
+  m.name = name;
   mats.set(key, m);
   return m;
 }

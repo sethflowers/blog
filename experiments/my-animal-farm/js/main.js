@@ -36,7 +36,9 @@ document.body.prepend(renderer.domElement);
 setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 1200);
+// near plane at 10 cm (not 5): twice the depth precision, which headsets need to keep surfaces that are
+// close together from flickering at a distance
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1200);
 const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
 
 const sky = new Sky(scene, renderer);
@@ -314,7 +316,13 @@ riding.on('dismount', (h) => {
   const side = V(Math.cos(h.yaw), 0, -Math.sin(h.yaw));
   player.pos.copy(h.pos).addScaledVector(side, 1.0).addScaledVector(V(Math.sin(h.yaw), 0, Math.cos(h.yaw)), 0.6);
   pushOut(player.pos, 0.3, { ignore: ignoreCol });
-  if (mode === 'vr'){ placeRigAt(player.pos); }
+  if (mode === 'vr'){
+    // riding lifted the whole play space up to the saddle: put it back on the ground (it used to stay
+    // up there, so you walked around as tall as a rider)
+    rig.position.y = 0; player.seatSmoothY = null;
+    rig.updateMatrixWorld(true);
+    placeRigAt(player.pos);
+  }
   player.yaw = h.yaw;
   startLead(h);
   updateRideUI();

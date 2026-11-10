@@ -79,6 +79,8 @@ Copy the shape of `my-animal-farm`, `rollercoaster-bros` or `safari-cruise`:
   opened as the session starts lands under the floor or behind you. Place it on the first frame with a
   real pose, bring it back in front of you if you turn away from it, and let B/Y close it. If the game
   pauses while a panel is open, the panel must be visible and closable, or the player is stuck.
+- Anything that moves the play space (riding, vehicles, seats, ladders) must put it back exactly when
+  it ends, height included: getting off a horse once left you rider-tall for the rest of the game.
 - Only tall things (walls) stop your real head; low things (tables, fences) only stop the stick.
 - Teleport-free smooth locomotion on the left stick, snap or smooth turning on the right (a setting).
 - Show the version and key status somewhere you can see in VR (a sign, a wrist watch).
@@ -117,6 +119,13 @@ Aim for a steady 72 fps on a Quest 2 and 60 fps on an iPad.
 
 - Look at it. Take screenshots from the angles a player will see (close up, side on, front on) after
   every visual change, and fix what looks wrong before showing the user.
+- **No two surfaces in the same place** (z-fighting): they flicker, badly in a headset, whose depth
+  precision is low. Typical causes: a shared wall or fence post built twice (once by each neighbour),
+  trim that ends exactly flush with the surface next to it, a floor or deck level with a foundation,
+  ground layers (paths, yards, sand) only millimetres apart. Leave at least 1 cm between overlapping
+  layers, make trim stand 1 cm proud or inset, and build shared pieces once. Keep the camera's near
+  plane at 0.1 m or more. Check with `_tools/coplanar.mjs` (it reads a log of the scenery boxes; see
+  My Animal Farm's `Batch.box` and its test).
 - Lofted/swept shapes: check the winding (normals pointing out) and cap the ends; inside-out faces look
   see-through. Don't paper over it with `DoubleSide`.
 - Markings (spots, patches, stripes) go on the surface: vertex colours or a texture, not separate blobs
@@ -174,5 +183,13 @@ Other Claude sessions work on other games in this repo at the same time and push
   paths (`_experiments/<name>.html`, `experiments/<name>/`, `_plans/<name>.md`, `_tools/<name>/`),
   never `git add -A`, and check `git diff --stat` touches nothing else. A session working from a stale
   copy once put back old versions of two other games.
-- After merging, check that the other games' files are unchanged by your merge, and confirm the Pages
-  deploy (the `pages build and deployment` workflow) succeeded before saying it's live.
+- **Rebase after you merge.** Other sessions push to `master` all the time. After merging your branch
+  into `master`, `git fetch origin master` again; if `master` moved, rebase your work onto it
+  (`git rebase origin/master`, keeping their changes and yours) and re-run your game's quick test
+  before pushing. Never force-push `master`, and never resolve a conflict by taking your copy of
+  another game's files. Then bring your game branch up to date too (`git checkout <branch> &&
+  git rebase origin/master`, push it with `--force-with-lease`), so the next session on that game
+  starts from what's live.
+- After pushing, check that the other games' files are unchanged by your merge
+  (`git diff --name-only <their last commit> HEAD` lists only your paths), and confirm the Pages deploy
+  (the `pages build and deployment` workflow) succeeded before saying it's live.

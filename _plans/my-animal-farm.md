@@ -205,3 +205,19 @@ simulation faster (`__farm.timeScale`).
   (`navigator.storage.persist()`). The title screen says "✓ Saved on this device: plays offline" once
   everything is in.
 - `_tools/offline-check.mjs` opens a game online for 8 seconds, closes it, and starts it offline.
+
+## v1.9: VR height after riding, and no more flickering surfaces
+- Getting off a horse in VR left you as tall as a rider: riding lifts the whole play space up to the
+  saddle, and dismounting never put it back. It's now reset to the ground on every dismount.
+- Flickering edges and patches of ground ("z-fighting": two surfaces in the same place, worst in a
+  headset): the wall between two stalls was built twice (once by each stall), as were its rails and
+  bars; fence posts were doubled where two fences met; the stall door tracks overlapped; the barn door
+  frames, the sliding doors' trims and the corner trims lined up exactly with the surfaces beside them;
+  the house's wall corners overlapped; the porch floor was level with the stone foundation; the stove
+  top was level with the worktop; and the ground layers (yard, drive, lane, paths, parking) sat only
+  1 mm apart where they overlapped. All fixed at their source: each overlapping ground layer now goes
+  1 cm above the one below it. The camera's near plane moved from 5 cm to 10 cm, doubling depth
+  precision.
+- `_tools/coplanar.mjs` finds surfaces in the same place from a log of the scenery boxes (the page
+  sets `globalThis.__boxLog = []` and `Batch.box`/`strip` record into it). The test fails if any
+  visible ones come back.
