@@ -2,7 +2,7 @@
 title: Henry’s Nightfall 2
 description: The sequel. Fight across a zombie island one region at a time, climb each tower to its boss and bring it crashing down, collect coins and buy your arsenal, from a bow to a snowball launcher. Works with mouse and keyboard or on a phone.
 date: 2026-10-04
-version: "1.6"
+version: "1.7"
 layout: null
 ---
 {% raw %}
@@ -10,6 +10,16 @@ layout: null
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- the offline copy is saved straight away, before the game builds its world (it used to wait for
+     the page to finish loading, and closing the game before then left nothing saved for offline) -->
+<script>
+var NF2_VERSION = '{% endraw %}{{ page.version }}{% raw %}';
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/henrys-nightfall-2/sw.js?v=' + NF2_VERSION, { scope: '/experiments/henrys-nightfall-2/', updateViaCache: 'none' }).catch(function(){});
+  // from the home screen, ask iOS to keep the saved copy
+  if ((navigator.standalone || (window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches))) && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -308,6 +318,7 @@ layout: null
   <div class="saveline hidden" id="saveLine"></div>
   <button class="go" id="startBtn">WASH ASHORE</button>
   <button class="go alt hidden" id="newBtn">NEW GAME</button>
+  <div id="offline" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 24px);font:600 11px/1.2 system-ui,sans-serif;opacity:.75;pointer-events:none;z-index:1"></div>
   <div class="build-version" style="position:absolute;right:calc(env(safe-area-inset-right) + 10px);bottom:calc(env(safe-area-inset-bottom) + 8px);font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;pointer-events:none;z-index:1">v{% endraw %}{{ page.version }}{% raw %}</div>
 </div>
 
@@ -8702,12 +8713,17 @@ animate();
 
 })();
 
-// Offline support: once opened, the game and everything it needs stay cached.
-if('serviceWorker' in navigator){
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('/experiments/henrys-nightfall-2/sw.js', { updateViaCache: 'none' }).catch(function(){});
-  });
-}
+// Say on the title screen once everything is saved on this device for offline play (the offline
+// copy itself is registered at the top of the page).
+(function offlineReady(){
+  if (!('caches' in window) || !navigator.serviceWorker) return;
+  var name = 'nightfall-two-' + NF2_VERSION, tries = 0;
+  (function check(){
+    caches.has(name).then(function (has) { return has && caches.open(name).then(function (c) { return c.match('/experiments/henrys-nightfall-2/__offline-ready__'); }); })
+      .then(function (hit) { if (hit){ var el = document.getElementById('offline'); if (el) el.textContent = '✓ Saved on this device: plays offline'; } else if (++tries < 120) setTimeout(check, 1500); })
+      .catch(function () {});
+  })();
+})();
 </script>
 </body>
 </html>
