@@ -428,7 +428,7 @@ if (IWER){
   // drawing in VR: a new coaster, point the laser at the ground and hold the trigger
   const back = await ev('__rcb.park.coasters.indexOf(__rcb.cur)');
   await ev('__rcb.noRender = false'); await wait(800);   // (the head and controllers only move when frames are drawn)
-  await ev('__rcb.newCoaster(false); __rcb.closePanels(); __rcb.toggleDraw()');
+  await ev('__rcb.park.state.money += 5000; __rcb.newCoaster(false); __rcb.closePanels(); __rcb.toggleDraw()');
   await wait(600);
   const aimAt = (x, z) => ev(`(() => { const T = __rcb, R = T.vr[1]; const target = new T.rig.position.constructor(${x}, 0, ${z});
     const d = target.sub(R.rayPos).normalize().applyQuaternion(T.rig.quaternion.clone().invert());
