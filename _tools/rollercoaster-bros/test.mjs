@@ -362,7 +362,7 @@ await pg.click('#np-go');
 await wait(600);
 check(await ev('__rcb.mode') === 'screen' && await ev('__rcb.park.state.name') === 'Free Land' && await ev('__rcb.park.free'), 'a second park, in free-build mode');
 check(await ev('__rcb.park.coasters.length') === 1 && await ev('__rcb.track.pieces.length') === 1, 'it starts empty');
-check(await ev(`document.querySelectorAll('#palette .pb:not(.locked):not(.tool)').length`) === 13, 'every track piece is yours already');
+check(await ev(`document.querySelectorAll('#palette .pb:not(.locked):not(.tool)').length`) === 14, 'every track piece is yours already');
 check((await ev(`document.getElementById('h-money').textContent`)).includes('Free'), 'the money says Free build');
 await ev('__rcb.closePanels(); __rcb.noRender = true; __rcb.timeScale = 3');
 await ev('__rcb.shop("carts")');
