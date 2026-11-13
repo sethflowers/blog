@@ -138,6 +138,22 @@ they thought, and walk out.
 - The test is quick by default now (about 80 s: make a park, build a loop and a hanging coaster, see
   the legs dangle, ride it, VR); `--full` runs the whole five-minute play-through.
 
+## Version 1.5: draw a track
+
+- **✏️ Draw** (palette on screen, tablet in VR). On screen the camera looks straight down, north up;
+  draw with one finger starting at the yellow arrow (a second finger stops drawing and moves the view
+  as usual). In VR, point the laser at the ground and hold the trigger. The line shows as a yellow
+  ribbon on the ground.
+- Letting go turns the line into pieces (`Track.planDrawing`): the line is resampled every metre, then
+  from the end of the track it repeatedly tries each flat piece you own (straight, turns, wide turns),
+  scores how close its points stay to the next stretch of the line and how far along the line it gets,
+  looks one piece further ahead (so turns start at the right moment), and takes the best. It stops at
+  the end of the line, if something is in the way, or if it can't follow the line (too tight a wiggle
+  for the pieces). The pieces go down one by one like Finish. If the line ends near the back of the
+  station, Finish then joins it up. Drawing is flat; add hills and loops by hand afterwards.
+- The quick test drags the mouse round a big loop and checks the coaster is built along it and
+  finished; the VR part draws with the emulated controller's laser and checks pieces are laid.
+
 ## Testing
 
 `_tools/rollercoaster-bros/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated

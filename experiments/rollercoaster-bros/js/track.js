@@ -313,6 +313,72 @@ export class Track {
     return null;
   }
 
+  // ---------- drawing: turn a line drawn on the ground into track pieces ----------
+  // stroke: points {x, z} along the line (any spacing). Lays flat pieces (straights and turns you own)
+  // from the end of the track, each time picking the piece (looking one more piece ahead) that stays
+  // closest to the line and moves along it. Returns { types, why } (types may be shorter than the line
+  // if something is in the way).
+  planDrawing(stroke, owned){
+    const moves = ['straight', 'left', 'right', 'bigLeft', 'bigRight'].filter((t) => owned.includes(t));
+    // even spacing, 1 m apart
+    const S = [];
+    for (const p of stroke){
+      if (!S.length){ S.push({ x: p.x, z: p.z }); continue; }
+      let q = S[S.length - 1], d = Math.hypot(p.x - q.x, p.z - q.z);
+      while (d >= 1){ const f = 1 / d; q = { x: q.x + (p.x - q.x) * f, z: q.z + (p.z - q.z) * f }; S.push(q); d = Math.hypot(p.x - q.x, p.z - q.z); }
+    }
+    if (S.length < 6) return { types: [], why: 'Draw a longer line!' };
+    const near = (x, z, k0, k1) => {
+      let best = 1e9, bk = k0;
+      for (let k = Math.max(0, k0); k <= Math.min(S.length - 1, k1); k++){ const d = (S[k].x - x) ** 2 + (S[k].z - z) ** 2; if (d < best){ best = d; bk = k; } }
+      return { d: Math.sqrt(best), k: bk };
+    };
+    const e0 = this.endPoint();
+    const first = near(e0.x, e0.z, 0, Math.min(S.length - 1, 40));
+    if (first.d > 2.2 * TILE) return { types: [], why: 'Start drawing at the yellow arrow (the end of the track).' };
+    // how well a piece follows the line from stroke index k: average distance, and how far along it gets
+    const score = (pts, k) => {
+      let sum = 0, n = 0, kk = k;
+      for (let q = 2; q < pts.length; q += 2){ const r = near(pts[q].pos.x, pts[q].pos.z, kk, kk + 45); sum += r.d; n++; kk = Math.max(kk, r.k - 3); }
+      const e = pts[pts.length - 1].pos, r = near(e.x, e.z, k, k + 60);
+      return { cost: sum / n + r.d, k: r.k };
+    };
+    this.memo = new Map();
+    try {
+      const out = [];
+      let st = this.end, chain = null, k = first.k, why = null;
+      for (let step = 0; step < 300; step++){
+        if (k >= S.length - 4) break;
+        let best = null;
+        for (const m of moves){
+          const r = this.check(m, st, chain || undefined);
+          if (!r.ok) continue;
+          const a = score(r.s.pts, k);
+          if (a.k <= k + 1) continue;                       // it has to go along the line
+          // one more piece ahead, so turns happen at the right time
+          const y0 = BASE_Y + st.level * LEVEL, y1 = BASE_Y + r.s.end.level * LEVEL, L = this.lift;
+          const link = { type: m, prev: chain, cells: r.cells, ends: new Map([[r.sk, { lo: y0, hi: y0 + L }], [r.ek, { lo: y1, hi: y1 + L }]]) };
+          let ahead = a.k >= S.length - 4 ? 0 : 1e9;
+          if (ahead) for (const m2 of moves){
+            const r2 = this.check(m2, r.s.end, link);
+            if (!r2.ok) continue;
+            const b = score(r2.s.pts, a.k);
+            if (b.k > a.k + 1) ahead = Math.min(ahead, b.cost);
+          }
+          if (ahead > 1e8) ahead = 3 * TILE;
+          const total = a.cost + 0.6 * ahead - 0.02 * (a.k - k);
+          if (!best || total < best.total) best = { m, r, a, link, total };
+        }
+        if (!best){ why = out.length ? 'Something is in the way, so I built as far as I could.' : 'Something is in the way there.'; break; }
+        if (best.a.cost > 2.5 * TILE){ why = 'I couldn\'t follow that bit of the line: try a smoother curve.'; break; }
+        out.push(best.m); chain = best.link; st = best.r.s.end; k = best.a.k;
+        if (this.closes(st)) break;
+      }
+      return { types: out, why };
+    } finally { this.memo = null; }
+  }
+  closes(e){ const s = this.start; return e.i === s.i && e.j === s.j && e.level === s.level && e.d === s.d; }
+
   // ---------- after a change: the whole ride as one list of points ----------
   changed(){
     // slopes next to slopes join up into one smooth climb or drop
