@@ -2,7 +2,7 @@
 title: Rollercoaster Bros
 description: Build your own rollercoaster on a big flat field, ride it (on an iPad or in VR), and earn money from the people who come to ride it. Buy hills, big drops, loops, barrel rolls and jumps, cool new trains, and set how fast it goes.
 date: 2026-11-07
-version: "1.5"
+version: "1.6"
 layout: null
 ---
 {% raw %}
@@ -73,6 +73,8 @@ layout: null
   .prow.on .pplay{background:#b8bccc;}
   .prow .pdel{background:#f0d8d4;padding:10px 12px;}
   .pempty{opacity:.75;margin:8px 0;}
+  .dbox.wide{max-width:980px;}
+  #hcanvas{display:block;position:static;margin:4px 0 0;width:100%;height:min(300px,42vh);border-radius:12px;touch-action:none;background:#cfe6fb;}
   .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.8;pointer-events:none;}
   /* HUD */
   #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
@@ -196,6 +198,14 @@ layout: null
     </div>
     <p class="dsub">You can't change this later, but you can always make another park.</p>
     <div class="dbtns"><button id="np-go" class="go">Build it!</button><button id="np-cancel">Cancel</button></div>
+  </div>
+</div>
+<div id="heights" class="dlg">
+  <div class="dbox wide">
+    <h2>⛰ How high does it go?</h2>
+    <p class="dsub">Your track stretched out flat, seen from the side. Draw a line for how high it goes, from the start (left) to the end (right). Red is the track it will make. Grey bits are turns: they stay level.</p>
+    <canvas id="hcanvas"></canvas>
+    <div class="dbtns"><button id="h-go" class="go">Build it!</button><button id="h-flat">Keep it flat</button><button id="h-clear">Rub out</button><button id="h-cancel">Cancel</button></div>
   </div>
 </div>
 <div id="hud">

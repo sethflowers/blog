@@ -7,7 +7,7 @@
 //    Riding puts you in the front seat.
 import * as THREE from 'three';
 import { V, clamp, lerp, damp, fmtMoney } from './util.js';
-import { PIECES, GROUPS, BUILD_ORDER, COLORS, pieceIcon, TILE, GRID_X, GRID_N, GRID_S } from './track.js';
+import { PIECES, GROUPS, BUILD_ORDER, COLORS, pieceIcon, TILE, LEVEL, GRID_X, GRID_N, GRID_S, Track } from './track.js';
 import { CARTS, SPEEDS, PARK } from './train.js';
 import { Park, PLOTS, NAMES, PARK_NAMES, readParks, deletePark, chooseParkId } from './park.js';
 import { ScreenPanel, Tablet } from './ui.js';
@@ -83,6 +83,7 @@ park.on('say', ({ text, kind }) => say(text, kind));
 park.on('pay', ({ amount }) => { payAcc += amount; payN++; });
 park.on('scared', (c) => { if (!park.scaredT || gameTime - park.scaredT > 40){ park.scaredT = gameTime; say(`Some people think ${c.name} is too scary! A slower speed might help.`, 'bad'); } });
 park.on('dispatch', (c) => { sfx.bell(c.train.cars[0].position); });
+park.on('boost', (c) => { if (c === cur) sfx.whoosh(); });
 park.on('arrive', (c) => { sfx.hiss(c.train.cars[0].position); if (c.train.riders().length) sfx.cheer(c.train.cars[1].position); refreshTablet(); });
 
 function say(text, kind = ''){
@@ -141,29 +142,30 @@ function toggleDraw(){
   if (draw.on){
     clearDrawLine();
     if (mode === 'screen'){ view = 'build'; orbit.follow = false; orbit.target.copy(track.endPoint()).setY(0); orbit.target.z -= 30; orbit.yaw = 0; orbit.pitch = 1.45; orbit.dist = Math.max(orbit.dist, 130); }   // looking straight down, north up
-    say(mode === 'vr' ? 'Point at the ground and hold the trigger to draw your track, starting at the yellow arrow. Let go and it gets built!' : 'Draw your track on the ground with one finger, starting at the yellow arrow. Lift your finger and it gets built!', '');
+    say(mode === 'vr' ? 'Point at the ground and hold the trigger to draw your track, starting at the yellow arrow. Raise your hand to go up! Let go and it gets built.' : 'Draw your track on the ground with one finger, starting at the yellow arrow. Lift your finger and it gets built!', '');
   }
   sfx.click(); refreshPalette(); refreshTablet();
 }
 function addDrawPoint(p){
   const q = draw.pts[draw.pts.length - 1];
   if (q && Math.hypot(p.x - q.x, p.z - q.z) < 0.6) return;
-  draw.pts.push({ x: p.x, z: p.z });
+  draw.pts.push({ x: p.x, z: p.z, y: p.h || 0 });
   updateDrawLine();
 }
 // the line you've drawn: a flat yellow ribbon just above the ground
 function updateDrawLine(){
   const P = draw.pts, pos = [];
   for (let k = 1; k < P.length; k++){
-    const a = P[k - 1], b = P[k], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1, nx = -dz / l * 0.8, nz = dx / l * 0.8, y = 0.3;
-    pos.push(a.x + nx, y, a.z + nz, a.x - nx, y, a.z - nz, b.x + nx, y, b.z + nz, b.x + nx, y, b.z + nz, a.x - nx, y, a.z - nz, b.x - nx, y, b.z - nz);
+    const a = P[k - 1], b = P[k], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1, nx = -dz / l * 0.8, nz = dx / l * 0.8, ya = a.y + 0.3, yb = b.y + 0.3;
+    pos.push(a.x + nx, ya, a.z + nz, a.x - nx, ya, a.z - nz, b.x + nx, yb, b.z + nz, b.x + nx, yb, b.z + nz, a.x - nx, ya, a.z - nz, b.x - nx, yb, b.z - nz);
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   if (!draw.mesh){ draw.mesh = new THREE.Mesh(g, drawMat); draw.mesh.frustumCulled = false; draw.mesh.renderOrder = 2; scene.add(draw.mesh); }
   else { draw.mesh.geometry.dispose(); draw.mesh.geometry = g; }
 }
 function clearDrawLine(){ draw.pts = []; if (draw.mesh){ scene.remove(draw.mesh); draw.mesh.geometry.dispose(); draw.mesh = null; } }
-// the line is finished: work out the pieces and lay them one by one
+// the line is finished: work out the pieces, then how high they go, and lay them one by one
+const HILLS = ['up', 'down', 'steepUp', 'steepDown'];
 function finishDrawing(){
   draw.active = null; draw.vrActive = false;
   const pts = draw.pts.slice();
@@ -174,12 +176,109 @@ function finishDrawing(){
   // ending near the back of the station? then join it up too
   const last = pts[pts.length - 1], back = V(cur.ox, 0, 2 * TILE);
   draw.finishAfter = Math.hypot(last.x - back.x, last.z - back.z) < 3.5 * TILE;
-  building.length = 0; building.push(...plan.types); buildT = 0; draw.pending = true;
-  say(`Building what you drew: ${plan.types.length} pieces!` + (draw.finishAfter ? ' Then back into the station.' : ''), 'good');
-  if (plan.why) setTimeout(() => say(plan.why, 'bad'), 1500);
+  const hills = owned().some((t) => HILLS.includes(t));
+  if (!hills){ buildDrawn(plan.types, plan.why, park.owns('hills') ? '' : ' (Buy Hills in the Shop to draw hills too!)'); return; }
+  // in VR you drew the heights in the air
+  if (mode === 'vr'){ buildDrawn(pts.some((p) => p.y > 1) ? track.heightPlan(plan.types, heightAlong(plan), owned()) : plan.types, plan.why, ''); return; }
+  openHeights(plan);
 }
+// how high the drawn line is (metres) a distance d along the planned pieces
+function heightAlong(plan){
+  const ends = [0]; for (const t of plan.types) ends.push(ends[ends.length - 1] + Track.pieceLength(t));
+  const ks = [plan.k0, ...plan.ks];
+  return (d) => {
+    let i = 0; while (i < plan.types.length - 1 && ends[i + 1] < d) i++;
+    const f = clamp((d - ends[i]) / (ends[i + 1] - ends[i] || 1)), k = Math.round(ks[i] + (ks[i + 1] - ks[i]) * f);
+    return plan.S[clamp(k, 0, plan.S.length - 1)].y;
+  };
+}
+function buildDrawn(types, why, extra){
+  const n = track.fits(types);
+  if (n < types.length) why = 'Something is in the way, so I built as far as I could.';
+  types = types.slice(0, n);
+  if (!types.length){ clearDrawLine(); say('Something is in the way there.', 'bad'); return; }
+  if (n < types.length) draw.finishAfter = false;
+  building.length = 0; building.push(...types); buildT = 0; draw.pending = true;
+  const ups = types.filter((t) => HILLS.includes(t)).length;
+  say(`Building what you drew: ${types.length} pieces${ups ? `, ${ups} of them hills` : ''}!` + (draw.finishAfter ? ' Then back into the station.' : '') + extra, 'good');
+  if (why) setTimeout(() => say(why, 'bad'), 1500);
+}
+
+// ---------- drawing the heights (on screen): your track stretched out flat, seen from the side ----------
+const hts = { plan: null, prof: null, len: 0, ends: [], last: -1, preview: null };
+function openHeights(plan){
+  hts.plan = plan;
+  hts.ends = [0]; for (const t of plan.types) hts.ends.push(hts.ends[hts.ends.length - 1] + Track.pieceLength(t));
+  hts.len = hts.ends[hts.ends.length - 1];
+  hts.prof = new Float32Array(Math.ceil(hts.len) + 1).fill(NaN);
+  hts.preview = plan.types; hts.last = -1;
+  $('heights').classList.add('show');
+  const cv = $('hcanvas'), r = cv.getBoundingClientRect();
+  cv.width = Math.round(r.width * 2); cv.height = Math.round(r.height * 2);
+  drawHeights();
+}
+const H_TOP = 52;   // metres at the top of the picture
+function hGeom(){ const cv = $('hcanvas'), W = cv.width, H = cv.height, l = 90, rr = 30, t = 24, b = 50; return { W, H, l, t, sx: (W - l - rr) / hts.len, sy: (H - t - b) / H_TOP, base: H - b }; }
+// the line you've drawn, filled in everywhere (flat at the start height where you haven't drawn)
+function hTarget(){
+  const P = hts.prof, start = track.end.level * LEVEL, idx = [];
+  for (let i = 0; i < P.length; i++) if (!isNaN(P[i])) idx.push(i);
+  return (d) => {
+    if (!idx.length) return start;
+    const i = clamp(Math.round(d), 0, P.length - 1);
+    if (!isNaN(P[i])) return P[i];
+    let lo = -1, hi = -1; for (const j of idx){ if (j <= i) lo = j; if (j >= i && hi < 0) hi = j; }
+    if (lo < 0) return P[hi]; if (hi < 0) return P[lo];
+    return P[lo] + (P[hi] - P[lo]) * (i - lo) / (hi - lo);
+  };
+}
+function drawHeights(){
+  const cv = $('hcanvas'), g = cv.getContext('2d'), G = hGeom(), { W, H, l, sx, sy, base } = G;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#cfe6fb'; g.fillRect(0, 0, W, base); g.fillStyle = '#5a9a3a'; g.fillRect(0, base, W, H - base);
+  // heights every 8 m
+  g.font = 'bold 22px Arial'; g.textAlign = 'right'; g.textBaseline = 'middle';
+  for (let m = 0; m <= 48; m += 8){ const y = base - m * sy; g.strokeStyle = 'rgba(30,60,120,0.18)'; g.lineWidth = 2; g.beginPath(); g.moveTo(l, y); g.lineTo(W - 20, y); g.stroke(); g.fillStyle = '#2a3a6a'; g.fillText(m + ' m', l - 10, y); }
+  // turns stay level: grey bands
+  hts.plan.types.forEach((t, i) => { if (t === 'straight') return; g.fillStyle = 'rgba(80,80,90,0.18)'; g.fillRect(l + hts.ends[i] * sx, 0, (hts.ends[i + 1] - hts.ends[i]) * sx, base); g.fillStyle = 'rgba(40,40,60,0.6)'; g.textAlign = 'center'; g.font = 'bold 18px Arial'; g.fillText('turn', l + (hts.ends[i] + hts.ends[i + 1]) / 2 * sx, 20); });
+  // the track it will make
+  const types = hts.preview, prof = [];
+  let L = track.end.level, d = 0;
+  prof.push([0, L * LEVEL]);
+  for (const t of types){ const len = Track.pieceLength(t), nL = L + (PIECES[t].du || 0); for (let q = 1; q <= 8; q++){ const f = q / 8, e = PIECES[t].du ? (1 - Math.cos(Math.PI * f)) / 2 : 0; prof.push([d + len * f, (L + (nL - L) * e) * LEVEL]); } d += len; L = nL; }
+  g.strokeStyle = '#d8302a'; g.lineWidth = 8; g.lineJoin = 'round'; g.beginPath();
+  prof.forEach(([x, y], i) => { const px = l + x * sx, py = base - y * sy - 4; if (i) g.lineTo(px, py); else g.moveTo(px, py); }); g.stroke();
+  // the line you drew
+  g.strokeStyle = '#ffd020'; g.lineWidth = 10; g.lineCap = 'round'; g.beginPath(); let pen = false;
+  for (let i = 0; i < hts.prof.length; i++){ const v = hts.prof[i]; if (isNaN(v)){ pen = false; continue; } const px = l + i * sx, py = base - v * sy; if (pen) g.lineTo(px, py); else { g.moveTo(px, py); pen = true; } }
+  g.stroke();
+  g.fillStyle = '#1a2038'; g.font = 'bold 22px Arial'; g.textAlign = 'left'; g.fillText('▶ start', l + 6, base + 24); g.textAlign = 'right'; g.fillText('end', W - 30, base + 24);
+}
+function hPoint(e){
+  const cv = $('hcanvas'), r = cv.getBoundingClientRect(), G = hGeom();
+  const x = (e.clientX - r.left) * cv.width / r.width, y = (e.clientY - r.top) * cv.height / r.height;
+  return { d: clamp((x - G.l) / G.sx, 0, hts.len), h: clamp((G.base - y) / G.sy, 0, 48) };
+}
+function hAdd(p){
+  const i = Math.round(p.d), P = hts.prof;
+  if (hts.last >= 0 && Math.abs(i - hts.last) > 1){ const a = hts.last, va = P[a]; for (let j = Math.min(a, i); j <= Math.max(a, i); j++) P[j] = va + (p.h - va) * (j - a) / (i - a); }
+  P[i] = p.h; hts.last = i;
+}
+function hUpdate(){ hts.preview = track.heightPlan(hts.plan.types, hTarget(), owned()); drawHeights(); }
+// for tests: draw a height line through [d (0..1 along), metres] points
+function drawHeightLine(points){ hts.last = -1; for (const [f, h] of points) hAdd({ d: f * hts.len, h }); hts.last = -1; hUpdate(); }
+function closeHeights(){ $('heights').classList.remove('show'); hts.plan = null; }
 // for tests: draw a line through these points (world x, z) as if with a finger
 function drawTrack(points){ if (!draw.on) toggleDraw(); draw.pts = []; for (const p of points) addDrawPoint({ x: p[0], z: p[1] }); finishDrawing(); }
+
+$('hcanvas').addEventListener('pointerdown', (e) => { $('hcanvas').setPointerCapture(e.pointerId); hts.down = e.pointerId; hts.last = -1; hAdd(hPoint(e)); drawHeights(); });
+$('hcanvas').addEventListener('pointermove', (e) => { if (hts.down !== e.pointerId) return; hAdd(hPoint(e)); drawHeights(); });
+const hUp = (e) => { if (hts.down !== e.pointerId) return; hts.down = null; hts.last = -1; hUpdate(); };
+$('hcanvas').addEventListener('pointerup', hUp); $('hcanvas').addEventListener('pointercancel', hUp);
+$('h-go').onclick = () => { const p = hts.plan; if (!p) return; const types = track.heightPlan(p.types, hTarget(), owned()); closeHeights(); buildDrawn(types, p.why, ''); };
+$('h-flat').onclick = () => { const p = hts.plan; if (!p) return; closeHeights(); buildDrawn(p.types, p.why, ''); };
+$('h-clear').onclick = () => { hts.prof.fill(NaN); hts.preview = hts.plan.types; drawHeights(); };
+$('h-cancel').onclick = () => { closeHeights(); clearDrawLine(); };
 
 function clearTrack(){
   const go = () => { building.length = 0; track.reset(); changed(); sfx.undo(); closePanels(); };
@@ -637,7 +736,13 @@ function vrUpdate(dt){
       laser.visible = true; dot.visible = true;
       laser.position.copy(R.rayPos); laser.lookAt(g); laser.scale.set(rig.scale.x * 3, rig.scale.x * 3, R.rayPos.distanceTo(g));
       dot.position.copy(g); dot.scale.setScalar(rig.scale.x * 40);
-      if (R.trigger > 0.7){ if (!draw.vrActive){ draw.vrActive = true; draw.pts = []; } addDrawPoint(g); }
+      // how high: raise your hand to make the track climb (from wherever your hand was when you started)
+      const handY = (R.pos.y - rig.position.y) / rig.scale.x;
+      if (R.trigger > 0.7){
+        if (!draw.vrActive){ draw.vrActive = true; draw.pts = []; draw.handY0 = handY; }
+        g.h = owned().some((t) => HILLS.includes(t)) ? clamp(track.end.level * LEVEL + (handY - draw.handY0) * 30, 0, 48) : 0;
+        addDrawPoint(g);
+      }
     }
     if (draw.vrActive && R.trigger < 0.4) finishDrawing();
   }
@@ -946,7 +1051,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 window.__rcb = {
   get mode(){ return mode; }, get view(){ return view; }, park, renderer, camera, scene, rig, vr, tablet, orbit, vrs,
   timeScale: 1, noRender: false, version: VERSION, CARTS, get track(){ return track; }, get train(){ return train; },
-  look, drawTrack, toggleDraw, get draw(){ return draw; }, groundAt, startScreen, startVR, toTitle, toggleHang, createPark, openParks, readParks, newParkDialog, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
+  look, drawTrack, drawHeightLine, get hts(){ return hts; }, toggleDraw, get draw(){ return draw; }, groundAt, startScreen, startVR, toTitle, toggleHang, createPark, openParks, readParks, newParkDialog, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
   get building(){ return building.length; }, get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
 };
 void lerp; void PARK;

@@ -175,6 +175,7 @@ export class Coaster {
     this.station = buildStation(park.scene, this.ox, data.name);
     this.train.on('arrive', () => { park.unload(this); park.emit('arrive', this); });
     this.train.on('dispatch', () => park.emit('dispatch', this));
+    this.train.on('boost', () => park.emit('boost', this));
     this.rerate();
   }
   get name(){ return this.data.name; }
