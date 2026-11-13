@@ -59,6 +59,7 @@ const park = new Park(scene);
 let cur = null, track = null, train = null;
 function select(c, fly){
   if (cur && cur !== c && view === 'ride') stopRide();
+  if (cur && cur !== c){ draw.on = false; draw.active = null; draw.pending = false; building.length = 0; clearDrawLine(); }
   cur = c; track = c.track; train = c.train;
   park.state.current = park.coasters.indexOf(c);
   if (fly){ view = 'build'; orbit.follow = true; orbit.target.copy(track.endPoint()).setY(0); }
@@ -130,6 +131,56 @@ function finishTrack(){
   if (!path){ say('I can\'t find a way back to the station from here. Undo a few pieces and try again.', 'bad'); return; }
   building.push(...path); buildT = 0;
 }
+// ---------- drawing a track: draw a line on the ground and the game builds it ----------
+const draw = { on: false, pts: [], active: null, pending: false, finishAfter: false, mesh: null };
+const drawMat = new THREE.MeshBasicMaterial({ color: 0xffe040, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });   // a flat ribbon on the ground
+function toggleDraw(){
+  if (!draw.on && track.complete){ say('This coaster is finished. Undo some pieces (or Clear it) to draw more.', 'bad'); return; }
+  if (view === 'ride') stopRide();
+  draw.on = !draw.on; draw.active = null; draw.vrActive = false;
+  if (draw.on){
+    clearDrawLine();
+    if (mode === 'screen'){ view = 'build'; orbit.follow = false; orbit.target.copy(track.endPoint()).setY(0); orbit.target.z -= 30; orbit.yaw = 0; orbit.pitch = 1.45; orbit.dist = Math.max(orbit.dist, 130); }   // looking straight down, north up
+    say(mode === 'vr' ? 'Point at the ground and hold the trigger to draw your track, starting at the yellow arrow. Let go and it gets built!' : 'Draw your track on the ground with one finger, starting at the yellow arrow. Lift your finger and it gets built!', '');
+  }
+  sfx.click(); refreshPalette(); refreshTablet();
+}
+function addDrawPoint(p){
+  const q = draw.pts[draw.pts.length - 1];
+  if (q && Math.hypot(p.x - q.x, p.z - q.z) < 0.6) return;
+  draw.pts.push({ x: p.x, z: p.z });
+  updateDrawLine();
+}
+// the line you've drawn: a flat yellow ribbon just above the ground
+function updateDrawLine(){
+  const P = draw.pts, pos = [];
+  for (let k = 1; k < P.length; k++){
+    const a = P[k - 1], b = P[k], dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1, nx = -dz / l * 0.8, nz = dx / l * 0.8, y = 0.3;
+    pos.push(a.x + nx, y, a.z + nz, a.x - nx, y, a.z - nz, b.x + nx, y, b.z + nz, b.x + nx, y, b.z + nz, a.x - nx, y, a.z - nz, b.x - nx, y, b.z - nz);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  if (!draw.mesh){ draw.mesh = new THREE.Mesh(g, drawMat); draw.mesh.frustumCulled = false; draw.mesh.renderOrder = 2; scene.add(draw.mesh); }
+  else { draw.mesh.geometry.dispose(); draw.mesh.geometry = g; }
+}
+function clearDrawLine(){ draw.pts = []; if (draw.mesh){ scene.remove(draw.mesh); draw.mesh.geometry.dispose(); draw.mesh = null; } }
+// the line is finished: work out the pieces and lay them one by one
+function finishDrawing(){
+  draw.active = null; draw.vrActive = false;
+  const pts = draw.pts.slice();
+  draw.on = false; refreshPalette(); refreshTablet();
+  if (track.complete){ clearDrawLine(); return; }
+  const plan = track.planDrawing(pts, owned());
+  if (!plan.types.length){ clearDrawLine(); say(plan.why || 'I couldn\'t make a track out of that. Try again!', 'bad'); return; }
+  // ending near the back of the station? then join it up too
+  const last = pts[pts.length - 1], back = V(cur.ox, 0, 2 * TILE);
+  draw.finishAfter = Math.hypot(last.x - back.x, last.z - back.z) < 3.5 * TILE;
+  building.length = 0; building.push(...plan.types); buildT = 0; draw.pending = true;
+  say(`Building what you drew: ${plan.types.length} pieces!` + (draw.finishAfter ? ' Then back into the station.' : ''), 'good');
+  if (plan.why) setTimeout(() => say(plan.why, 'bad'), 1500);
+}
+// for tests: draw a line through these points (world x, z) as if with a finger
+function drawTrack(points){ if (!draw.on) toggleDraw(); draw.pts = []; for (const p of points) addDrawPoint({ x: p[0], z: p[1] }); finishDrawing(); }
+
 function clearTrack(){
   const go = () => { building.length = 0; track.reset(); changed(); sfx.undo(); closePanels(); };
   if (track.pieces.length <= 1) return;
@@ -153,6 +204,7 @@ function refreshPalette(){
   const tool = (ic, label, go, cls = '') => { const b = document.createElement('button'); b.className = 'pb tool ' + cls; b.innerHTML = `<span class="ic">${ic}</span>${label}`; b.onclick = () => { startAudio(); go(); }; P.appendChild(b); return b; };
   tool('↶', 'Undo', undo);
   if (!track.complete) tool('✓', 'Finish', finishTrack, 'go');
+  if (!track.complete) tool('✏️', draw.on ? 'Drawing…' : 'Draw', toggleDraw, draw.on ? 'drawing' : '');
   for (const t of BUILD_ORDER){
     const P0 = PIECES[t], own = park.owns(P0.group);
     if (!own && t !== GROUPS[P0.group].pieces[0]) continue;     // show one locked piece per pack
@@ -387,6 +439,7 @@ $('b-look').onclick = () => { look.yaw = 0; look.pitch = 0; };
 // ---------- riding ----------
 function startRide(){
   if (!track.complete){ say('Finish your track first!', 'bad'); return; }
+  if (draw.on){ draw.on = false; draw.active = null; if (!draw.pending) clearDrawLine(); refreshPalette(); }
   closePanels();
   const v = train.seats[0];
   if (v && v !== 'player'){
@@ -414,12 +467,18 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   startAudio();
   renderer.domElement.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  // drawing: one finger draws (a second finger stops it and moves the view as usual)
+  if (draw.on && view === 'build'){
+    if (pointers.size === 1){ draw.active = e.pointerId; draw.pts = []; const g = groundAt(e.clientX, e.clientY); if (g) addDrawPoint(g); }
+    else { draw.active = null; clearDrawLine(); }
+  }
   if (pointers.size === 2){ const [a, b] = [...pointers.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; }
 });
 renderer.domElement.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId); if (!p) return;
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
+  if (draw.active === e.pointerId && pointers.size === 1){ const g = groundAt(e.clientX, e.clientY); if (g) addDrawPoint(g); return; }
   if (pointers.size >= 2 && pinch){
     const [a, b] = [...pointers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
@@ -430,7 +489,17 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   if (view === 'ride'){ look.yaw = clamp(look.yaw - dx * 0.005, -2.6, 2.6); look.pitch = clamp(look.pitch - dy * 0.005, -1.2, 1.2); }
   else { orbit.yaw -= dx * 0.006; orbit.pitch = clamp(orbit.pitch + dy * 0.005, 0.08, 1.45); }
 });
-const up = (e) => { pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null; };
+const up = (e) => {
+  pointers.delete(e.pointerId); if (pointers.size < 2) pinch = null;
+  if (draw.active === e.pointerId){ if (e.type === 'pointercancel'){ draw.active = null; clearDrawLine(); } else finishDrawing(); }
+};
+// where a point on the screen is on the ground
+const drawRay = new THREE.Raycaster(), groundPlane = new THREE.Plane(V(0, 1, 0), 0);
+function groundAt(cx, cy){
+  const r = renderer.domElement.getBoundingClientRect();
+  drawRay.setFromCamera(new THREE.Vector2((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1), camera);
+  return drawRay.ray.intersectPlane(groundPlane, V());
+}
 renderer.domElement.addEventListener('pointerup', up); renderer.domElement.addEventListener('pointercancel', up);
 renderer.domElement.addEventListener('wheel', (e) => { e.preventDefault(); if (view !== 'ride') orbit.dist = clamp(orbit.dist * Math.exp(e.deltaY * 0.0012), 8, 220); }, { passive: false });
 function pan(dx, dy){
@@ -546,17 +615,31 @@ function vrUpdate(dt){
   if (tabletHolder.visible){ tabletHolder.position.copy(L.pos); tabletHolder.quaternion.copy(L.quat); tabletHolder.scale.setScalar(rig.scale.x); }
   // pointing with the right hand
   laser.visible = false; dot.visible = false;
+  let onTablet = false;
   if (R.tracked && tabletHolder.visible){
     const dir = V(0, 0, -1).applyQuaternion(R.rayQuat);
     tabletHolder.updateMatrixWorld(true);
-    const hit = tablet.ray(R.rayPos, dir, R.triggerDown, 3 * rig.scale.x);
-    if (hit){
+    const hit = tablet.ray(R.rayPos, dir, R.triggerDown && !draw.vrActive, 3 * rig.scale.x);
+    if (hit && !draw.vrActive){
+      onTablet = true;
       laser.visible = true; dot.visible = true;
       laser.position.copy(R.rayPos); laser.lookAt(hit.point); laser.scale.set(rig.scale.x, rig.scale.x, R.rayPos.distanceTo(hit.point));
       dot.position.copy(hit.point); dot.scale.setScalar(rig.scale.x);
       if (hit.clicked){ R.haptic(0.3, 30); sfx.click(); refreshTablet(); }
       if (Math.abs(R.stick.y) > 0.3) tablet.scrollBy(R.stick.y * dt * 900);
     }
+  }
+  // drawing a track: point the laser at the ground and hold the trigger
+  if (draw.on && R.tracked && !onTablet && view === 'build'){
+    const dir = V(0, 0, -1).applyQuaternion(R.rayQuat);
+    if (dir.y < -0.02){
+      const g = R.rayPos.clone().addScaledVector(dir, -R.rayPos.y / dir.y);
+      laser.visible = true; dot.visible = true;
+      laser.position.copy(R.rayPos); laser.lookAt(g); laser.scale.set(rig.scale.x * 3, rig.scale.x * 3, R.rayPos.distanceTo(g));
+      dot.position.copy(g); dot.scale.setScalar(rig.scale.x * 40);
+      if (R.trigger > 0.7){ if (!draw.vrActive){ draw.vrActive = true; draw.pts = []; } addDrawPoint(g); }
+    }
+    if (draw.vrActive && R.trigger < 0.4) finishDrawing();
   }
   // buttons: A rides, B giant size, X/Y shows or hides the tablet
   if (R.aDown){ if (view === 'ride') stopRide(); else startRide(); }
@@ -638,7 +721,7 @@ function tabletSpec(){
   return { title: cur.name, money: cash(), sections: [
     { text: status },
     { grid, cols: 4, cellH: 150 },
-    { buttons: [{ label: '↶ Undo', go: undo }, { label: '✓ Finish', disabled: track.complete, go: finishTrack }, { label: '🗑 Clear', go: clearTrack }] },
+    { buttons: [{ label: '↶ Undo', go: undo }, { label: '✓ Finish', disabled: track.complete, go: finishTrack }, { label: draw.on ? '✏️ Drawing…' : '✏️ Draw', disabled: track.complete && !draw.on, go: toggleDraw }, { label: '🗑 Clear', go: clearTrack }] },
     { buttons: [{ label: '−', disabled: D.speed === 0, go: () => setSpeed(D.speed - 1) }, { label: `⚡ ${SPEEDS[D.speed].name}`, go: speedPanel }, { label: '+', disabled: D.speed === SPEEDS.length - 1, go: () => setSpeed(D.speed + 1) }] },
     { buttons: [{ label: '🎢 Ride (A)', kind: 'primary', disabled: !track.complete, go: startRide }, { label: vrs.giant ? '🧍 Normal (B)' : '🦖 Giant (B)', go: () => setGiant(!vrs.giant) }, { label: '🛒 Shop', go: () => shop() }] },
     { buttons: [{ label: '🎢 Coasters', go: () => coastersPanel() }, { label: '💾 Save design', go: saveDesign }] },
@@ -667,6 +750,8 @@ function simulate(dt, first){
   if (mode === 'title') titleSpin(dt);
   // pieces from Finish go down one at a time
   if (building.length){ buildT -= dt; if (buildT <= 0){ buildT = 0.13; const t = building.shift(); if (!addPiece(t, true)){ building.length = 0; say('Something is in the way. Try Finish again.', 'bad'); } } }
+  // a drawing has been built: tidy away the line (and join up to the station if it ended there)
+  if (!building.length && draw.pending){ draw.pending = false; clearDrawLine(); if (draw.finishAfter && !track.complete){ draw.finishAfter = false; finishTrack(); } }
   for (const c of park.coasters) c.train.update(dt, c.speedV, gameTime);
   if (mode === 'vr' && view === 'ride') vrSeat();
   park.update(dt);
@@ -861,7 +946,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && mod
 window.__rcb = {
   get mode(){ return mode; }, get view(){ return view; }, park, renderer, camera, scene, rig, vr, tablet, orbit, vrs,
   timeScale: 1, noRender: false, version: VERSION, CARTS, get track(){ return track; }, get train(){ return train; },
-  look, startScreen, startVR, toTitle, toggleHang, createPark, openParks, readParks, newParkDialog, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
+  look, drawTrack, toggleDraw, get draw(){ return draw; }, groundAt, startScreen, startVR, toTitle, toggleHang, createPark, openParks, readParks, newParkDialog, addPiece, coastersPanel, newCoaster, saveDesign, designsPanel, buildDesign, select, get cur(){ return cur; }, undo, finishTrack, startRide, stopRide, shop, speedPanel, setSpeed, buyGroup, buyCart, setGiant, closePanels, tabletSpec,
   get building(){ return building.length; }, get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
 };
 void lerp; void PARK;

@@ -110,6 +110,35 @@ check(await ev('__rcb.mode') === 'screen' && await ev('__rcb.park.free'), 'a fre
 await ev('__rcb.closePanels(); __rcb.noRender = true; __rcb.timeScale = 3');
 for (const t of ['straight', 'left', 'left', 'straight', 'straight', 'straight', 'left', 'left']) await add(t);
 check(await ev('__rcb.track.complete'), 'a simple loop can be built');
+// draw a track: drag a finger (the mouse) round a big loop on the ground, and it gets built
+await ev('__rcb.track.reset(); __rcb.track.changed(); __rcb.train.reset(); __rcb.toggleDraw()');
+check(await ev('__rcb.draw.on') && await ev(`[...document.querySelectorAll('#palette .pb.tool')].some((b) => b.textContent.includes('Drawing'))`), 'the Draw tool starts drawing');
+check(await ev('Math.abs(__rcb.orbit.yaw) < 0.01 && __rcb.orbit.pitch > 1.4'), 'the camera looks straight down at the park');
+await ev('__rcb.orbit.target.set(20, 0, -6); __rcb.orbit.dist = 140'); await ev('__rcb.noRender = false'); await wait(700);
+const STROKE = [];
+const addArc = (pts) => { for (const p of pts) STROKE.push(p); };
+for (let z = -8; z >= -50; z -= 3) STROKE.push([0, z]);
+for (let a = 0; a <= 1.001; a += 0.1) STROKE.push([20 - 20 * Math.cos(a * Math.PI), -50 - 20 * Math.sin(a * Math.PI)]);
+for (let z = -50; z <= 18; z += 3) STROKE.push([40, z]);
+for (let a = 0; a <= 1.001; a += 0.1) STROKE.push([20 + 20 * Math.cos(a * Math.PI), 18 + 16 * Math.sin(a * Math.PI)]);
+for (let z = 18; z >= 22; z -= 3) STROKE.push([0, z]);
+void addArc;
+const screenPts = await ev(`(() => { const C = __rcb.camera, r = __rcb.renderer.domElement.getBoundingClientRect(); return ${JSON.stringify(STROKE)}.map(([x, z]) => { const v = new __rcb.rig.position.constructor(x, 0, z).project(C); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; }); })()`);
+check(screenPts.every(([x, y]) => x > 0 && x < 1024 && y > 0 && y < 600), 'the whole loop is on the screen to draw');
+await pg.mouse.move(...screenPts[0]); await pg.mouse.down();
+for (const p of screenPts.slice(1)) await pg.mouse.move(p[0], p[1], { steps: 3 });
+await shot('q0a-drawing');
+await ev('__rcb.noRender = false');
+await pg.mouse.up();
+await wait(300);
+await shot('q0b-drawn');
+await ev('__rcb.noRender = true');
+await until('__rcb.track.complete', 30, 'what you drew is built, and joined up to the station');
+const drawn = await ev(`(() => { const T = __rcb.track; let maxX = -1e9, minZ = 1e9; for (const p of T.path){ maxX = Math.max(maxX, p.pos.x); minZ = Math.min(minZ, p.pos.z); } return { maxX, minZ, n: T.types().length, turns: T.types().filter((t) => /left|right/i.test(t)).length }; })()`);
+check(drawn.maxX > 30 && drawn.maxX < 52 && drawn.minZ < -60 && drawn.minZ > -82, `it goes where it was drawn (${drawn.n} pieces, ${drawn.turns} turns, out to x ${Math.round(drawn.maxX)}, z ${Math.round(drawn.minZ)})`);
+await ev('__rcb.noRender = false; __rcb.orbit.follow = false; __rcb.orbit.target.set(20, 0, -20); __rcb.orbit.dist = 150; __rcb.orbit.pitch = 1.2'); await wait(400);
+await shot('q0c-built-from-drawing');
+await ev('__rcb.noRender = true');
 // a hanging coaster: track above, feet dangling
 await ev('__rcb.newCoaster(true)');
 check(await ev('__rcb.track.hang && __rcb.cur.data.hang') && await ev('__rcb.park.coasters.length') === 2, 'a new hanging coaster');
@@ -396,6 +425,30 @@ if (IWER){
   await wait(1500);
   check(await ev('__rcb.vr[0].tracked && __rcb.vr[1].tracked'), 'both controllers are tracked');
   check(await ev('__rcb.tablet.mesh.visible && __rcb.tablet.mesh.parent.visible'), 'the tablet is on your left hand');
+  // drawing in VR: a new coaster, point the laser at the ground and hold the trigger
+  const back = await ev('__rcb.park.coasters.indexOf(__rcb.cur)');
+  await ev('__rcb.noRender = false'); await wait(800);   // (the head and controllers only move when frames are drawn)
+  await ev('__rcb.park.state.money += 5000; __rcb.newCoaster(false); __rcb.closePanels(); __rcb.toggleDraw()');
+  await wait(600);
+  const aimAt = (x, z) => ev(`(() => { const T = __rcb, R = T.vr[1]; const target = new T.rig.position.constructor(${x}, 0, ${z});
+    const d = target.sub(R.rayPos).normalize().applyQuaternion(T.rig.quaternion.clone().invert());
+    const q = new T.rig.quaternion.constructor().setFromUnitVectors(new T.rig.position.constructor(0, 0, -1), d);
+    window.__iwer.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); })()`);
+  const ox = await ev('__rcb.cur.ox');
+  const vrStroke = [];
+  for (let z = -8; z >= -40; z -= 4) vrStroke.push([ox, z]);
+  for (let a = 0.1; a <= 1.001; a += 0.15) vrStroke.push([ox + 16 - 16 * Math.cos(a * Math.PI / 2), -40 - 16 * Math.sin(a * Math.PI / 2)]);
+  await aimAt(...vrStroke[0]); await wait(300);
+  await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 1)`);
+  for (const p of vrStroke){ await aimAt(...p); await wait(120); }
+  check(await ev('__rcb.draw.pts.length') > 8, `holding the trigger draws on the ground (${await ev('__rcb.draw.pts.length')} points)`);
+  await pg.screenshot({ path: path.join(OUT, 'vr-0-drawing.png') });
+  await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`);
+  await pg.waitForFunction('__rcb.track.types().length >= 5 && __rcb.building === 0', null, { timeout: 30000 }).catch(() => {});
+  const vrTypes = await ev('__rcb.track.types()');
+  check(vrTypes.length >= 5 && vrTypes.some((t) => /right/i.test(t)), `letting go builds what you drew in VR (${vrTypes.join(', ')})`);
+  await ev(`__rcb.select(__rcb.park.coasters[${back}], true)`);
+  await wait(500);
   await ev('__rcb.noRender = false');
   await wait(800);
   await pg.screenshot({ path: path.join(OUT, '23-vr-giant.png') });
