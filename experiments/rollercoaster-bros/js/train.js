@@ -299,7 +299,11 @@ export class Train {
     } else {
       const want = T.speedAt(this.s - CAR_GAP, v0);
       const left = T.length - this.dist;
-      let v = Math.min(want, this.v + 6 * dt);                     // launch
+      // on a booster the tyres shove it forward much harder than the station launch
+      const here = T.at(this.s, this.tmp).piece, boosting = here && here.type === 'boost';
+      if (boosting && !this.boosting) this.emit('boost');
+      this.boosting = boosting;
+      let v = Math.min(want, this.v + (boosting ? 16 : 6) * dt);    // launch
       v = Math.min(v, Math.sqrt(2 * 5 * Math.max(0, left)) + 0.4);  // brakes coming into the station
       this.v = v;
       this.dist += v * dt;

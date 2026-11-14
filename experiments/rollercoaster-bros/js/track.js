@@ -64,16 +64,22 @@ export const PIECES = {
     path: (t) => { const a = hangAngle(t), h = 1.1; return [3 * TILE * t, -h * Math.sin(a), 2.5 * Math.sin(PI * t) ** 2 + h * (1 - Math.cos(a))]; },
     roll: (t) => hangAngle(t),
   },
+  boost: {
+    name: 'Booster', group: 'boost', fun: 0.5, boost: true, f: 2, r: 0, du: 0, dh: 0,
+    // a straight with spinning tyres that shoot the train forward
+    path: (t) => [2 * TILE * t, 0, 0],
+  },
   station: { name: 'Station', group: 'none', fun: 0, f: 2, r: 0, du: 0, dh: 0, path: (t) => [2 * TILE * t, 0, 0] },
 };
 function rollAngle(t){ return 2 * PI * smooth((t - 0.12) / 0.76); }
 function hangAngle(t){ return PI * (smooth((t - 0.05) / 0.2) + smooth((t - 0.75) / 0.2)); }
-export const BUILD_ORDER = ['straight', 'left', 'right', 'bigLeft', 'bigRight', 'up', 'down', 'steepUp', 'steepDown', 'loop', 'roll', 'hang', 'jump'];
+export const BUILD_ORDER = ['straight', 'left', 'right', 'bigLeft', 'bigRight', 'up', 'down', 'steepUp', 'steepDown', 'boost', 'loop', 'roll', 'hang', 'jump'];
 export const GROUPS = {
   starter: { name: 'Starter track', price: 0, pieces: ['straight', 'left', 'right'] },
   wide: { name: 'Wide turns', price: 150, pieces: ['bigLeft', 'bigRight'], text: 'Long sweeping curves.' },
   hills: { name: 'Hills', price: 300, pieces: ['up', 'down'], text: 'Go up, then whoosh down.' },
   steep: { name: 'Big drops', price: 800, pieces: ['steepUp', 'steepDown'], text: 'Climb high and drop fast!' },
+  boost: { name: 'Booster', price: 1200, pieces: ['boost'], text: 'Turbo tyres that shoot your train forward, fast!' },
   loop: { name: 'Loop-the-loop', price: 1500, pieces: ['loop'], text: 'Go all the way round, upside down.' },
   roll: { name: 'Barrel roll', price: 2500, pieces: ['roll'], text: 'Spin right round the track.' },
   hang: { name: 'Upside down', price: 3200, pieces: ['hang'], text: 'Roll over and ride along upside down!' },
@@ -250,6 +256,7 @@ export class Track {
     const piece = { type, i, j, level, d, pts: s.pts, end: s.end, m0: s.m0, m1: s.m1, cells: pre ? pre.cells : cellsOf(s.pts, sk, ek, L),
       ends: new Map([[sk, { lo: y0, hi: y0 + L }], [ek, { lo: y1, hi: y1 + L }]]) };
     piece.mesh = this.meshFor(piece.pts, false);
+    if (PIECES[type].boost) piece.mesh.add(boosterMesh(piece.pts, this.hang));
     this.group.add(piece.mesh);
     this.pieces.push(piece);
     return piece;
@@ -323,9 +330,10 @@ export class Track {
     // even spacing, 1 m apart
     const S = [];
     for (const p of stroke){
-      if (!S.length){ S.push({ x: p.x, z: p.z }); continue; }
+      const py = p.y || 0;
+      if (!S.length){ S.push({ x: p.x, z: p.z, y: py }); continue; }
       let q = S[S.length - 1], d = Math.hypot(p.x - q.x, p.z - q.z);
-      while (d >= 1){ const f = 1 / d; q = { x: q.x + (p.x - q.x) * f, z: q.z + (p.z - q.z) * f }; S.push(q); d = Math.hypot(p.x - q.x, p.z - q.z); }
+      while (d >= 1){ const f = 1 / d; q = { x: q.x + (p.x - q.x) * f, z: q.z + (p.z - q.z) * f, y: q.y + (py - q.y) * f }; S.push(q); d = Math.hypot(p.x - q.x, p.z - q.z); }
     }
     if (S.length < 6) return { types: [], why: 'Draw a longer line!' };
     const near = (x, z, k0, k1) => {
@@ -345,7 +353,7 @@ export class Track {
     };
     this.memo = new Map();
     try {
-      const out = [];
+      const out = [], ks = [];
       let st = this.end, chain = null, k = first.k, why = null;
       for (let step = 0; step < 300; step++){
         if (k >= S.length - 4) break;
@@ -371,10 +379,60 @@ export class Track {
         }
         if (!best){ why = out.length ? 'Something is in the way, so I built as far as I could.' : 'Something is in the way there.'; break; }
         if (best.a.cost > 2.5 * TILE){ why = 'I couldn\'t follow that bit of the line: try a smoother curve.'; break; }
-        out.push(best.m); chain = best.link; st = best.r.s.end; k = best.a.k;
+        out.push(best.m); ks.push(best.a.k); chain = best.link; st = best.r.s.end; k = best.a.k;
         if (this.closes(st)) break;
       }
-      return { types: out, why };
+      return { types: out, why, S, ks, k0: first.k };
+    } finally { this.memo = null; }
+  }
+  // How far along the ride each piece goes (metres, measured flat): for drawing heights.
+  static pieceLength(t){ const P = PIECES[t]; return P.dh ? P.f * TILE * PI / 2 : P.f * TILE; }
+  // Give a flat run of pieces hills: target(d) is how high (metres) the track should be at a distance d
+  // along it. Pairs of straights can become climbs or drops (a slope is two tiles long); turns stay
+  // level. Finds the heights that stay closest to the line (dynamic programming over the levels).
+  heightPlan(types, target, owned){
+    const slopes = ['up', 'down', 'steepUp', 'steepDown'].filter((t) => owned.includes(t));
+    const N = types.length, L0 = this.end.level, pos = [0];
+    for (const t of types) pos.push(pos[pos.length - 1] + Track.pieceLength(t));
+    const cost = (a, b, La, Lb) => {
+      let c = 0;
+      for (let q = 0; q < 4; q++){ const f = (q + 0.5) / 4; const h = (La + (Lb - La) * f) * LEVEL, w = target(a + (b - a) * f); c += (h - w) ** 2; }
+      return c * (b - a) / 4;
+    };
+    const dp = Array.from({ length: N + 1 }, () => new Array(MAX_LEVEL + 1).fill(Infinity));
+    const how = Array.from({ length: N + 1 }, () => new Array(MAX_LEVEL + 1).fill(null));
+    dp[0][L0] = 0;
+    const relax = (i, L, c, from) => { if (c < dp[i][L]){ dp[i][L] = c; how[i][L] = from; } };
+    for (let i = 0; i < N; i++) for (let L = 0; L <= MAX_LEVEL; L++){
+      const c0 = dp[i][L]; if (c0 === Infinity) continue;
+      const t = types[i];
+      relax(i + 1, L, c0 + cost(pos[i], pos[i + 1], L, L), { i, L, t });
+      if (t === 'straight' && types[i + 1] === 'straight'){
+        for (const sl of slopes){
+          const nL = L + PIECES[sl].du;
+          if (nL < 0 || nL > MAX_LEVEL) continue;
+          relax(i + 2, nL, c0 + cost(pos[i], pos[i + 2], L, nL) + 30, { i, L, t: sl });
+        }
+      }
+    }
+    let bestL = 0; for (let L = 0; L <= MAX_LEVEL; L++) if (dp[N][L] < dp[N][bestL]) bestL = L;
+    const out = [];
+    for (let i = N, L = bestL; i > 0;){ const h = how[i][L]; out.unshift(h.t); i = h.i; L = h.L; }
+    return out;
+  }
+  // How many of these pieces would fit on the end of the track, one after another.
+  fits(types){
+    this.memo = new Map();
+    try {
+      let st = this.end, chain = null, n = 0;
+      for (const t of types){
+        const r = this.check(t, st, chain || undefined);
+        if (!r.ok) break;
+        const y0 = BASE_Y + st.level * LEVEL, y1 = BASE_Y + r.s.end.level * LEVEL, L = this.lift;
+        chain = { type: t, prev: chain, cells: r.cells, ends: new Map([[r.sk, { lo: y0, hi: y0 + L }], [r.ek, { lo: y1, hi: y1 + L }]]) };
+        st = r.s.end; n++;
+      }
+      return n;
     } finally { this.memo = null; }
   }
   closes(e){ const s = this.start; return e.i === s.i && e.j === s.j && e.level === s.level && e.d === s.d; }
@@ -515,13 +573,14 @@ export class Track {
     if (!this.speedCache) this.speedCache = new Map();
     if (this.speedCache.has(v0)) return this.speedCache.get(v0);
     const P = this.path, out = new Float32Array(P.length);
-    const g = 9.8, DRAG = 0.0007, LIFT = 4.5, PARK_S = 13;
+    const g = 9.8, DRAG = 0.0007, LIFT = 4.5, PARK_S = 13, BOOST_A = 16, BOOST_MAX = 34;
     let v2 = v0 * v0;
     for (let k = 0; k < P.length; k++){
       const p = P[k];
       if (p.s <= PARK_S || p.piece.type === 'station'){ out[k] = v0; v2 = v0 * v0; continue; }
       const q = P[k - 1], ds = p.s - q.s, dy = p.pos.y - q.pos.y;
       v2 = v2 - 2 * g * dy - 2 * DRAG * v2 * ds;
+      if (p.piece.type === 'boost') v2 = Math.max(v2, Math.min(BOOST_MAX * BOOST_MAX, v2 + 2 * BOOST_A * ds));
       if (dy > 0 && p.tan.y > 0.12 && v2 < LIFT * LIFT) v2 = LIFT * LIFT;        // the chain lift
       v2 = clamp(v2, 9, 48 * 48);
       out[k] = Math.sqrt(v2);
@@ -553,6 +612,23 @@ export class Track {
     const intensity = Math.round(clamp(0.5 + v0 * 0.22 + inv * 0.7 + jumps * 0.9 + drops * 0.4 + (maxV - v0) / 9 + (this.hang ? 0.4 : 0) + Math.min(1.5, tight * (v0 / 16) ** 2 * 0.15), 0, 10) * 10) / 10;
     return { excitement, intensity, maxSpeed: maxV, maxHeight: maxY - BASE_Y, length: this.length, inversions: inv, jumps, pieces: types.length };
   }
+}
+
+// the tyres on a booster: orange, glowing, in pairs every couple of metres
+const BOOST_MAT = new THREE.MeshStandardMaterial({ color: 0xff7a1a, emissive: 0xff5a00, emissiveIntensity: 0.9, roughness: 0.6 });
+const TYRE = new THREE.CylinderGeometry(0.28, 0.28, 0.18, 12).rotateZ(PI / 2);
+function boosterMesh(pts, hang){
+  const geos = [], m = new THREE.Matrix4();
+  for (let k = 2; k < pts.length - 1; k += 2){
+    const p = pts[k];
+    for (const sx of [-0.2, 0.2]){
+      m.makeBasis(p.side, p.up, p.tan.clone().negate()).setPosition(p.pos.clone().addScaledVector(p.side, sx).addScaledVector(p.up, hang ? 0.12 : -0.12));
+      const g = TYRE.clone(); g.applyMatrix4(m); geos.push(g);
+    }
+  }
+  const mesh = new THREE.Mesh(merge(geos), BOOST_MAT);
+  mesh.userData.boost = true;
+  return mesh;
 }
 
 const TIE = (() => { const g = new THREE.BoxGeometry(1.25, 0.09, 0.14).toNonIndexed(); return g; })();
@@ -600,6 +676,10 @@ export function pieceIcon(type, size = 96, color = '#ffd84a'){
     let pen = false;
     for (const [x, y, gap] of pts){ if (gap){ pen = false; continue; } if (pen) g.lineTo(cx + x * sc, cy + y * sc); else { g.moveTo(cx + x * sc, cy + y * sc); pen = true; } }
     g.stroke();
+  }
+  if (P.boost){
+    g.fillStyle = '#ff7a1a';
+    for (const yy of [0.32, 0.5, 0.68]){ g.beginPath(); g.moveTo(size * 0.32, size * (yy + 0.1)); g.lineTo(size * 0.5, size * yy - size * 0.02); g.lineTo(size * 0.68, size * (yy + 0.1)); g.lineTo(size * 0.6, size * (yy + 0.13)); g.lineTo(size * 0.5, size * (yy + 0.05)); g.lineTo(size * 0.4, size * (yy + 0.13)); g.fill(); }
   }
   // where you come in
   const [sx, sy] = pts[0];

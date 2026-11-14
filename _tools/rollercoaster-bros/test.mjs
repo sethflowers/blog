@@ -132,8 +132,20 @@ await ev('__rcb.noRender = false');
 await pg.mouse.up();
 await wait(300);
 await shot('q0b-drawn');
+// then draw how high it goes, on the side view of the track
+check(await ev(`document.getElementById('heights').classList.contains('show')`), 'then a side view asks how high it goes');
+const hc = await ev(`(() => { const r = document.getElementById('hcanvas').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })()`);
+const hp = (f, m) => [hc[0] + (45 + f * (hc[2] * 2 - 120)) / 2, hc[1] + (hc[3] * 2 - 50 - m * (hc[3] * 2 - 74) / 52) / 2];
+await pg.mouse.move(...hp(0.02, 0)); await pg.mouse.down();
+for (const [f, m] of [[0.1, 0], [0.18, 12], [0.26, 28], [0.32, 30], [0.4, 14], [0.48, 4], [0.6, 0], [0.98, 0]]) await pg.mouse.move(...hp(f, m), { steps: 6 });
+await pg.mouse.up(); await wait(200);
+const preview = await ev('__rcb.hts.preview');
+check(preview.some((t) => /up|Up/.test(t)) && preview.some((t) => /down|Down/.test(t)), `drawing a hill there turns straights into climbs and drops (${preview.filter((t) => /up|down|Up|Down/.test(t)).join(', ')})`);
+await shot('q0b2-heights');
+await pg.click('#h-go');
 await ev('__rcb.noRender = true');
 await until('__rcb.track.complete', 30, 'what you drew is built, and joined up to the station');
+check(await ev('__rcb.cur.rating.maxHeight') > 15, `with the hill you drew (${Math.round(await ev('__rcb.cur.rating.maxHeight'))} m high)`);
 const drawn = await ev(`(() => { const T = __rcb.track; let maxX = -1e9, minZ = 1e9; for (const p of T.path){ maxX = Math.max(maxX, p.pos.x); minZ = Math.min(minZ, p.pos.z); } return { maxX, minZ, n: T.types().length, turns: T.types().filter((t) => /left|right/i.test(t)).length }; })()`);
 check(drawn.maxX > 30 && drawn.maxX < 52 && drawn.minZ < -60 && drawn.minZ > -82, `it goes where it was drawn (${drawn.n} pieces, ${drawn.turns} turns, out to x ${Math.round(drawn.maxX)}, z ${Math.round(drawn.minZ)})`);
 await ev('__rcb.noRender = false; __rcb.orbit.follow = false; __rcb.orbit.target.set(20, 0, -20); __rcb.orbit.dist = 150; __rcb.orbit.pitch = 1.2'); await wait(400);
@@ -142,11 +154,16 @@ await ev('__rcb.noRender = true');
 // a hanging coaster: track above, feet dangling
 await ev('__rcb.newCoaster(true)');
 check(await ev('__rcb.track.hang && __rcb.cur.data.hang') && await ev('__rcb.park.coasters.length') === 2, 'a new hanging coaster');
-for (const t of ['straight', 'up', 'up', 'steepUp', 'right', 'steepDown', 'down', 'down', 'right', 'loop']) await add(t);
+for (const t of ['straight', 'boost', 'up', 'up', 'steepUp', 'right', 'steepDown', 'down', 'down', 'right', 'loop']) await add(t);
 await ev('__rcb.finishTrack()');
 await until('__rcb.track.complete', 15, 'its track is finished');
-const climb2 = await ev(`__rcb.track.pieces[3].pts[0].tan.y`);
+const climb2 = await ev(`__rcb.track.pieces[4].pts[0].tan.y`);
 check(climb2 > 0.2, `two hills in a row join into one smooth climb (${climb2.toFixed(2)} steep at the join)`);
+const boost = await ev(`(() => { const T = __rcb.track, sp = T.speeds(__rcb.cur.speedV), ks = T.path.map((p, k) => k).filter((k) => T.path[k].piece.type === 'boost'); return { a: sp[ks[0]], b: sp[ks[ks.length - 1]] }; })()`);
+check(boost.b > boost.a + 6, `a booster speeds the train up (${Math.round(boost.a * 2.237)} → ${Math.round(boost.b * 2.237)} mph)`);
+await until('__rcb.train.boosting && __rcb.train.v > 14', 60, 'and the train really zooms off it');
+await ev(`(() => { const p = __rcb.track.path.find((q) => q.piece.type === 'boost'); __rcb.orbit.follow = false; __rcb.orbit.target.copy(p.pos); __rcb.orbit.dist = 12; __rcb.orbit.yaw = 0.9; __rcb.orbit.pitch = 0.35; __rcb.noRender = false; })()`);
+await shot('q0d-booster');
 await until('__rcb.train.riders().length > 0', 120, 'visitors ride the hanging coaster');
 check(await ev('__rcb.train.riderMeshes.filter(Boolean).every((r) => r.userData.legs && r.userData.legs.length === 2)'), 'their legs dangle');
 await until('__rcb.train.state === "loading"', 120, 'the train comes back in');
@@ -345,7 +362,7 @@ await pg.click('#np-go');
 await wait(600);
 check(await ev('__rcb.mode') === 'screen' && await ev('__rcb.park.state.name') === 'Free Land' && await ev('__rcb.park.free'), 'a second park, in free-build mode');
 check(await ev('__rcb.park.coasters.length') === 1 && await ev('__rcb.track.pieces.length') === 1, 'it starts empty');
-check(await ev(`document.querySelectorAll('#palette .pb:not(.locked):not(.tool)').length`) === 13, 'every track piece is yours already');
+check(await ev(`document.querySelectorAll('#palette .pb:not(.locked):not(.tool)').length`) === 14, 'every track piece is yours already');
 check((await ev(`document.getElementById('h-money').textContent`)).includes('Free'), 'the money says Free build');
 await ev('__rcb.closePanels(); __rcb.noRender = true; __rcb.timeScale = 3');
 await ev('__rcb.shop("carts")');
@@ -428,7 +445,7 @@ if (IWER){
   // drawing in VR: a new coaster, point the laser at the ground and hold the trigger
   const back = await ev('__rcb.park.coasters.indexOf(__rcb.cur)');
   await ev('__rcb.noRender = false'); await wait(800);   // (the head and controllers only move when frames are drawn)
-  await ev('__rcb.park.state.money += 5000; __rcb.newCoaster(false); __rcb.closePanels(); __rcb.toggleDraw()');
+  await ev(`__rcb.park.state.money += 5000; __rcb.park.state.groups.push('hills', 'steep'); __rcb.newCoaster(false); __rcb.closePanels(); __rcb.toggleDraw()`);
   await wait(600);
   const aimAt = (x, z) => ev(`(() => { const T = __rcb, R = T.vr[1]; const target = new T.rig.position.constructor(${x}, 0, ${z});
     const d = target.sub(R.rayPos).normalize().applyQuaternion(T.rig.quaternion.clone().invert());
@@ -440,13 +457,16 @@ if (IWER){
   for (let a = 0.1; a <= 1.001; a += 0.15) vrStroke.push([ox + 16 - 16 * Math.cos(a * Math.PI / 2), -40 - 16 * Math.sin(a * Math.PI / 2)]);
   await aimAt(...vrStroke[0]); await wait(300);
   await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 1)`);
-  for (const p of vrStroke){ await aimAt(...p); await wait(120); }
+  // raise your hand for the middle of the line: that bit goes up
+  for (const [n, p] of vrStroke.entries()){ const up = n > 2 && n < 7 ? 0.6 : 0; await ev(`window.__iwer.controllers.right.position.set(0.15, ${1.3 + up}, -0.2)`); await aimAt(...p); await wait(120); }
+  await ev(`window.__iwer.controllers.right.position.set(0.15, 1.3, -0.2)`);
   check(await ev('__rcb.draw.pts.length') > 8, `holding the trigger draws on the ground (${await ev('__rcb.draw.pts.length')} points)`);
   await pg.screenshot({ path: path.join(OUT, 'vr-0-drawing.png') });
   await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`);
-  await pg.waitForFunction('__rcb.track.types().length >= 5 && __rcb.building === 0', null, { timeout: 30000 }).catch(() => {});
+  await pg.waitForFunction('__rcb.track.types().length >= 3 && __rcb.building === 0', null, { timeout: 30000 }).catch(() => {});
   const vrTypes = await ev('__rcb.track.types()');
-  check(vrTypes.length >= 5 && vrTypes.some((t) => /right/i.test(t)), `letting go builds what you drew in VR (${vrTypes.join(', ')})`);
+  check(vrTypes.length >= 3 && vrTypes.some((t) => /right/i.test(t)), `letting go builds what you drew in VR (${vrTypes.join(', ')})`);
+  check(vrTypes.some((t) => /up/i.test(t)), 'and raising your hand while drawing makes it climb');
   await ev(`__rcb.select(__rcb.park.coasters[${back}], true)`);
   await wait(500);
   await ev('__rcb.noRender = false');

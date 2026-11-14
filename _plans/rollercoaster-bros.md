@@ -154,6 +154,25 @@ they thought, and walk out.
 - The quick test drags the mouse round a big loop and checks the coaster is built along it and
   finished; the VR part draws with the emulated controller's laser and checks pieces are laid.
 
+## Version 1.6: draw the heights too, and boosters
+
+- **Heights on screen.** After drawing from above (if you own Hills or Big drops), a side view opens:
+  the planned track stretched out flat, start on the left, with grey bands where the turns are (they
+  stay level). Draw a line for how high it goes; a red line shows the track it will make, live. "Build
+  it!", "Keep it flat", "Rub out", "Cancel". Drawing on one fixed side plane wouldn't work for a track
+  that goes round and crosses back over itself, so the side view is unrolled along the track.
+- **Heights in VR.** You draw in the air: the laser still says where on the ground, and raising your
+  hand from where it was when you started makes the track climb (30 m per metre of hand, 0 to 48 m).
+  The yellow line shows at that height as you draw.
+- `Track.heightPlan` turns a height line into pieces: dynamic programming over (piece, level), where a
+  pair of straights may become a climb or drop (a slope is two tiles long), turns keep their level,
+  and the cost is how far the track's height is from the line (plus a little per slope so it doesn't
+  wiggle). `Track.fits` checks the result really fits before building; if not it builds what fits.
+  `planDrawing` now also says where along the line each piece ends, which is how VR heights are read.
+- **Booster** ($1,200): a two-tile straight with glowing orange tyres. In the speed model it
+  accelerates the train at 16 m/s² up to 34 m/s (76 mph); the train is allowed to speed up that hard
+  on it, and whooshes as it hits one. In the test a booster takes the train from 28 to 57 mph.
+
 ## Testing
 
 `_tools/rollercoaster-bros/test.mjs` plays it in headless Chromium (and in VR with IWER's emulated
