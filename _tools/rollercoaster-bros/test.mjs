@@ -96,7 +96,7 @@ await pg.waitForFunction('window.__rcb', null, { timeout: 90000 }).catch((e) => 
 await ev('localStorage.clear()');
 await wait(800);
 check((await pg.textContent('.build-version')).includes(VERSION), 'title shows version ' + VERSION);
-{ const { checkLoading } = await import('../loading-check.mjs'); await checkLoading({ browser, url: BASE, check, game: '__rcb', shot: path.join(OUT, '00-loading.png') }); }
+{ const { checkLoading } = await import('../loading-check.mjs'); await checkLoading({ browser, url: BASE, check, main: pg, game: '__rcb', shot: path.join(OUT, '00-loading.png') }); }
 check(await ev('__rcb.track.complete'), 'a demo coaster runs behind the title');
 await shot('01-title');
 

@@ -3,8 +3,14 @@
 //  - while three.js is held back, the loading screen is showing "Loading… n%" (screenshot saved);
 //  - once everything arrives, the game starts and the loading screen goes away;
 //  - when a game file fails to arrive, it says so and offers "Try again" instead of hanging.
-// Use: await checkLoading({ browser, url: BASE, check, game: '__farm', shot: path.join(OUT, '00-loading.png') });
-export async function checkLoading({ browser, url, check, game, shot }){
+// Use: await checkLoading({ browser, url: BASE, check, game: '__farm', main: pg, shot: path.join(OUT, '00-loading.png') });
+// (main: the test's own page, which stops drawing meanwhile: two pages drawing at once in the software
+// GPU made the new one take minutes to start)
+export async function checkLoading({ browser, url, check, game, shot, main }){
+  const quiet = (on) => main && main.evaluate(([g, on]) => { const G = window[g]; if (!G) return; if (on){ window.__ldWasNoRender = G.noRender; G.noRender = true; } else G.noRender = window.__ldWasNoRender; }, [game, on]).catch(() => {});
+  await quiet(true);
+  try { await run(); } finally { await quiet(false); }
+  async function run(){
   const state = (pg) => pg.evaluate(() => {
     const l = document.getElementById('loading'), cs = l && getComputedStyle(l);
     return { visible: !!l && cs.display !== 'none' && +cs.opacity > 0.5, text: (document.getElementById('ld-text') || {}).textContent || '',
@@ -23,7 +29,8 @@ export async function checkLoading({ browser, url, check, game, shot }){
   if (shot) await pg.screenshot({ path: shot });
   release();
   const gone = await pg.waitForFunction(() => { const l = document.getElementById('loading'); return l && getComputedStyle(l).display === 'none'; }, null, { timeout: 120000 }).then(() => true, () => false);
-  check(gone && await pg.evaluate(`!!window.${game}`), 'the loading screen goes away once the game is ready');
+  if (!gone) s = await state(pg);
+  check(gone && await pg.evaluate(`!!window.${game}`), 'the loading screen goes away once the game is ready' + (gone ? '' : ` (still showing "${s.text}")`));
   await ctx.close();
   // 2. a file that never arrives: say so, offer Try again
   ctx = await browser.newContext({ viewport: { width: 1024, height: 700 } });
@@ -34,4 +41,5 @@ export async function checkLoading({ browser, url, check, game, shot }){
   s = await state(pg);
   check(said && s.visible && s.retry, 'a missing file shows "Something went wrong" and a Try again button');
   await ctx.close();
+  }
 }
