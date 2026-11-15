@@ -6,10 +6,12 @@
 // Use: await checkLoading({ browser, url: BASE, check, game: '__farm', main: pg, shot: path.join(OUT, '00-loading.png') });
 // (main: the test's own page, which stops drawing meanwhile: two pages drawing at once in the software
 // GPU made the new one take minutes to start)
-export async function checkLoading({ browser, url, check, game, shot, main }){
+export async function checkLoading({ browser: testBrowser, url, check, game, shot, main }){
+  // its own browser, closed afterwards, so it can't slow down the rest of the test
+  const browser = await testBrowser.browserType().launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const quiet = (on) => main && main.evaluate(([g, on]) => { const G = window[g]; if (!G) return; if (on){ window.__ldWasNoRender = G.noRender; G.noRender = true; } else G.noRender = window.__ldWasNoRender; }, [game, on]).catch(() => {});
   await quiet(true);
-  try { await run(); } finally { await quiet(false); }
+  try { await run(); } finally { await quiet(false); await browser.close(); }
   async function run(){
   const state = (pg) => pg.evaluate(() => {
     const l = document.getElementById('loading'), cs = l && getComputedStyle(l);
