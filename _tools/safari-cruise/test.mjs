@@ -85,6 +85,7 @@ await ev('localStorage.clear()');
 await ev('__sc.noRender = true');
 await wait(1000);
 check((await pg.textContent('.build-version')).includes(VERSION), 'title shows version ' + VERSION);
+{ const { checkLoading } = await import('../loading-check.mjs'); await checkLoading({ browser, url: BASE, check, main: pg, game: '__sc', shot: path.join(OUT, '00-loading.png') }); }
 check(await ev('__sc.sim.animals.length') >= 10, 'animals are out behind the title');
 await shot('01-title');
 

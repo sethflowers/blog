@@ -131,6 +131,7 @@ await pg.goto(BASE);
 await wait(1500);
 await realTime(false); await ev('__vrtest.noRender = true');
 check((await pg.textContent('.build-version')).includes(VERSION), 'title shows version ' + VERSION);
+{ const { checkLoading } = await import('../loading-check.mjs'); await checkLoading({ browser, url: BASE, check, main: pg, game: '__vrtest', shot: path.join(OUT, '00-loading.png') }); }
 check(await ev(`!document.getElementById('enter-vr').disabled`), 'Enter VR is offered (emulated headset found)');
 await shot('01-title');
 

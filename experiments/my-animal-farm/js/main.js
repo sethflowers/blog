@@ -18,6 +18,9 @@ import { Person, Hand } from './people.js';
 import { ScreenUI, VRPanel, WristPanel } from './ui.js';
 import { startAudio, setListener, sfx, setNight } from './audio.js';
 
+// let the loading screen say "Building…" (and draw it) before the world is built
+if (window.__loading) await window.__loading();
+
 const $ = (id) => document.getElementById(id);
 const VERSION = document.body.dataset.version || '';
 const TIME_RATE = 1;          // game minutes per real second
@@ -1361,3 +1364,6 @@ window.__farm = {
   // tap whatever is at a world point (projects it to the screen first)
   tapWorld(p){ const v = V(...p).project(camera); tap((v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight); },
 };
+
+// the game is ready: hide the loading screen
+if (window.__loaded) window.__loaded();

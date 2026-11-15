@@ -146,3 +146,15 @@ villager, and saves screenshots. Headless frames are slow, so the test waits on 
   above the wrist, angled halfway between the forearm and the back of the hand. Forearms are a little
   flatter (7.2 x 6 cm). The test lifts the wrist in three poses and raycasts from the eye to the watch
   face's centre and corners against the body.
+
+## v3.2: a loading screen
+- The game now shows a loading screen from the very first paint: the name, a spinner, a progress bar
+  that fills as the game's files (three.js and the modules) arrive, then a "Building…" step while the
+  world is made, and the version. Before, the title's buttons showed straight away but did nothing
+  until everything had loaded, which on an iPad or headset looked broken.
+- If a file fails to arrive or the start throws, it says "Something went wrong" with a Try again
+  button; after 20 seconds it says a slow connection can take a while (and offers Try again).
+- `main.js` calls `await window.__loading()` before building (so "Building…" is drawn) and
+  `window.__loaded()` at its end. The quick test runs `_tools/loading-check.mjs`: the screen shows
+  while three.js is held back (`00-loading.png`), goes away once the game is ready, and a missing
+  file shows the Try again message.

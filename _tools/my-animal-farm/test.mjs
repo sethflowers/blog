@@ -114,6 +114,7 @@ await pg.waitForFunction('window.__farm', null, { timeout: 90000 });
 await ev('localStorage.clear()');
 await wait(500);
 check((await pg.textContent('.build-version')).includes(VERSION), 'title shows version ' + VERSION);
+{ const { checkLoading } = await import('../loading-check.mjs'); await checkLoading({ browser, url: BASE, check, main: pg, game: '__farm', shot: path.join(OUT, '00-loading.png') }); }
 // no two surfaces in the same place (they flicker, worst in a headset: stall walls built twice, the porch
 // level with the foundation, ground layers 1 mm apart...)
 {

@@ -53,6 +53,17 @@ Copy the shape of `my-animal-farm`, `rollercoaster-bros` or `safari-cruise`:
   - show "✓ Saved on this device: plays offline" on the title screen once the marker is there.
   - Check it with `NODE_PATH=$(npm root -g) node _tools/offline-check.mjs <name>` (opens the game
     online for 8 seconds, closes it, then starts it with the network off).
+- **Always show a loading screen while the game first loads.** A big 3D game can take many seconds
+  on an iPad or a headset, and a title screen whose buttons do nothing (or a blank page) looks broken.
+  Copy `my-animal-farm`'s: a `#loading` overlay right after `<body>` (pure HTML/CSS, so it is the
+  first thing drawn) with the game's name, a spinner, a progress bar that fills as the import map's
+  files arrive ("Loading… 40%"), then a "Building the …" step (`await window.__loading()` in
+  `main.js` before building the world, so it gets drawn), the version, and hidden by
+  `window.__loaded()` at the very end of `main.js`, once everything is ready. If a file fails to
+  arrive or the start throws, it says so with a Try again button instead of hanging, and after 20
+  seconds it says a slow connection can take a while. Check it with `_tools/loading-check.mjs`
+  (called from each game's quick test). Anything slow later (a new level, entering VR) gets a
+  visible "Loading…" too, in VR as well as on screen.
 - "Play in VR" only enables when `navigator.xr.isSessionSupported('immersive-vr')` says yes. Use the
   `local-floor` reference space; ask for 72 Hz on a Quest.
 - One description of each menu or panel, drawn two ways: HTML on screen, a canvas texture in VR (point
