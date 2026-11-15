@@ -221,3 +221,15 @@ simulation faster (`__farm.timeScale`).
 - `_tools/coplanar.mjs` finds surfaces in the same place from a log of the scenery boxes (the page
   sets `globalThis.__boxLog = []` and `Batch.box`/`strip` record into it). The test fails if any
   visible ones come back.
+
+## v2.0: a loading screen
+- The game now shows a loading screen from the very first paint: the name, a spinner, a progress bar
+  that fills as the game's files (three.js and the modules) arrive, then a "Building…" step while the
+  world is made, and the version. Before, the title's buttons showed straight away but did nothing
+  until everything had loaded, which on an iPad or headset looked broken.
+- If a file fails to arrive or the start throws, it says "Something went wrong" with a Try again
+  button; after 20 seconds it says a slow connection can take a while (and offers Try again).
+- `main.js` calls `await window.__loading()` before building (so "Building…" is drawn) and
+  `window.__loaded()` at its end. The quick test runs `_tools/loading-check.mjs`: the screen shows
+  while three.js is held back (`00-loading.png`), goes away once the game is ready, and a missing
+  file shows the Try again message.

@@ -14,6 +14,9 @@ import { Safari, SAVE_KEY, STAFF, JOBS, UPGRADES, TRUCK_PRICE, MAX_TRUCKS, MAX_P
 import { ScreenPanel, Tablet } from './ui.js';
 import { startAudio, setListener, sfx, engines, call } from './audio.js';
 
+// let the loading screen say "Building…" (and draw it) before the world is built
+if (window.__loading) await window.__loading();
+
 const $ = (id) => document.getElementById(id);
 const VERSION = document.body.dataset.version || '';
 
@@ -919,3 +922,6 @@ window.__sc = {
   set camStyle(v){ camStyle = v; },
 };
 void lerp; void angleDiff; void IN; void OUT; void JOBS; void MAX_TRUCKS;
+
+// the game is ready: hide the loading screen
+if (window.__loaded) window.__loaded();

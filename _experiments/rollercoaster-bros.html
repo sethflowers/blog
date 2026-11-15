@@ -2,7 +2,7 @@
 title: Rollercoaster Bros
 description: Build your own rollercoaster on a big flat field, ride it (on an iPad or in VR), and earn money from the people who come to ride it. Buy hills, big drops, loops, barrel rolls and jumps, cool new trains, and set how fast it goes.
 date: 2026-11-07
-version: "1.6"
+version: "1.7"
 layout: null
 ---
 {% raw %}
@@ -144,6 +144,19 @@ layout: null
   .grid button.on{background:#ffe040;color:#1a1a2a;}
   .grid button small{font-weight:600;font-size:12px;opacity:.9;}
   .bicon{width:44px;height:44px;}
+  /* loading screen: shown from the first paint until the game is ready (see "Loading screen" in CLAUDE.md) */
+  #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:#2a4a8a;color:#fff;transition:opacity .4s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .ld-box{width:min(420px,100%);text-align:center;}
+  .ld-name{font-family:inherit;font-weight:bold;font-size:clamp(30px,7vw,50px);line-height:1.05;margin-bottom:24px;text-shadow:0 3px 12px rgba(0,0,0,.4);}
+  .ld-spin{width:56px;height:56px;margin:0 auto 22px;border-radius:50%;border:7px solid rgba(255,255,255,.18);border-top-color:#ffe040;animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg)}}
+  .ld-bar{height:14px;border-radius:7px;background:rgba(255,255,255,.16);overflow:hidden;}
+  #ld-fill{display:block;height:100%;width:3%;background:#ffe040;border-radius:7px;transition:width .3s;}
+  #ld-text{margin-top:12px;font-size:17px;min-height:22px;}
+  #ld-note{margin-top:6px;font-size:14px;min-height:18px;opacity:.8;}
+  #ld-retry{display:none;margin:14px auto 0;padding:12px 24px;border:0;border-radius:12px;font-family:inherit;font-weight:bold;font-size:18px;background:#ffe040;color:#1a2038;}
+  .ld-ver{margin-top:20px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;}
 </style>
 <!-- every script address carries the version, so a new page never runs old code from a cache -->
 <script type="importmap">
@@ -160,6 +173,59 @@ layout: null
 </script>
 </head>
 <body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<!-- loading screen: drawn before anything else, filled in as the game's files arrive, hidden by
+     main.js (window.__loaded) once the game is ready; says so (with a Try again button) if loading fails -->
+<div id="loading" role="status" aria-live="polite">
+  <div class="ld-box">
+    <div class="ld-name">Rollercoaster Bros</div>
+    <div class="ld-spin"></div>
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <div id="ld-text">Loading…</div>
+    <div id="ld-note"></div>
+    <button id="ld-retry" type="button">Try again</button>
+    <div class="ld-ver">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L = document.getElementById('loading'), fill = document.getElementById('ld-fill'), txt = document.getElementById('ld-text'),
+      note = document.getElementById('ld-note'), retry = document.getElementById('ld-retry');
+  var MAIN = '/experiments/rollercoaster-bros/js/main.js', BUILD = 'Building the park…';
+  // the files to wait for: everything in the import map plus main.js (three.js counts for more: it is most of the download)
+  var want = {}, total = 0, have = 0, got = {}, shown = 3, building = false, done = false, failed = false, t0 = Date.now();
+  function add(u){ var p = u.split('?')[0]; if (!want[p]){ want[p] = /\/lib\//.test(p) ? 10 : 1; total += want[p]; } }
+  try { var m = JSON.parse(document.querySelector('script[type=importmap]').textContent).imports; for (var k in m) add(m[k]); } catch (e) {}
+  add(MAIN);
+  function show(p, t){ if (p > shown) shown = p; fill.style.width = shown + '%'; if (txt.textContent !== t) txt.textContent = t; }
+  function tick(){
+    if (done || failed) return;
+    try { performance.getEntriesByType('resource').forEach(function(e){ var p; try { p = new URL(e.name).pathname; } catch (x) { return; } if (want[p] && !got[p]){ got[p] = 1; have += want[p]; } }); } catch (e) {}
+    var f = total ? have / total : 0;
+    if (building || f >= 1) show(Math.min(97, shown + (97 - shown) * 0.03), BUILD);
+    else { show(3 + 82 * f, ''); txt.textContent = 'Loading… ' + Math.round(shown) + '%'; }
+    if (Date.now() - t0 > 20000 && !note.textContent){ note.textContent = 'Still going: a slow connection can take a minute.'; retry.style.display = 'inline-block'; }
+  }
+  var iv = setInterval(tick, 150); tick();
+  retry.onclick = function(){ location.reload(); };
+  // main.js: "await window.__loading()" before building the world, so "Building…" gets drawn first
+  window.__loading = function(){
+    building = true; tick();
+    return new Promise(function(r){ setTimeout(r, 120); requestAnimationFrame(function(){ setTimeout(r, 0); }); });
+  };
+  window.__loaded = function(){
+    if (done) return; done = true; clearInterval(iv);
+    show(100, 'Ready!'); note.textContent = ''; retry.style.display = 'none';
+    var hide = function(){ L.classList.add('done'); setTimeout(function(){ L.style.display = 'none'; }, 450); };
+    requestAnimationFrame(function(){ requestAnimationFrame(hide); }); setTimeout(hide, 600);
+  };
+  window.__loadFailed = function(why){
+    if (done || failed) return; failed = true; clearInterval(iv);
+    txt.textContent = 'Something went wrong while loading.'; note.textContent = why ? String(why).slice(0, 160) : '';
+    retry.style.display = 'inline-block';
+  };
+  addEventListener('error', function(e){ if (!done && e && e.message) window.__loadFailed(e.message); });
+})();
+</script>
 <div id="title">
   <div class="card">
     <h1><span>Rollercoaster</span>BROS</h1>
@@ -223,7 +289,7 @@ layout: null
   <div id="ridebar"><button id="b-off" class="hbtn big">⬅ Get off</button><div id="speedo" class="chip" style="position:static"></div><button id="b-look" class="hbtn">🔄 Look ahead</button></div>
 </div>
 <div id="panel"></div>
-<script type="module" src="/experiments/rollercoaster-bros/js/main.js?v={% endraw %}{{ page.version }}{% raw %}"></script>
+<script type="module" src="/experiments/rollercoaster-bros/js/main.js?v={% endraw %}{{ page.version }}{% raw %}" onerror="window.__loadFailed && window.__loadFailed('A game file did not arrive. Check the connection and try again.')"></script>
 <script>
 if ('serviceWorker' in navigator){
   addEventListener('load', function(){

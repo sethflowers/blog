@@ -13,6 +13,9 @@ import { Park, PLOTS, NAMES, PARK_NAMES, readParks, deletePark, chooseParkId } f
 import { ScreenPanel, Tablet } from './ui.js';
 import { startAudio, setListener, sfx, trainSound } from './audio.js';
 
+// let the loading screen say "Building…" (and draw it) before the world is built
+if (window.__loading) await window.__loading();
+
 const $ = (id) => document.getElementById(id);
 const VERSION = document.body.dataset.version || '';
 
@@ -1055,3 +1058,6 @@ window.__rcb = {
   get building(){ return building.length; }, get time(){ return gameTime; }, get head(){ return headPos.toArray(); },
 };
 void lerp; void PARK;
+
+// the game is ready: hide the loading screen
+if (window.__loaded) window.__loaded();
