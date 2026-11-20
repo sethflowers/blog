@@ -22,6 +22,10 @@ export const cam = {
 const video = () => $('video');
 const stillEl = () => $('still');
 
+// Brave (and some other browsers) can switch the camera off for a page without asking
+export const isBrave = () => !!navigator.brave;
+const tryOther = () => isBrave() ? ' In Brave, tap the lion (Shields) or the page settings and allow the camera for this site, or open the page in Safari.' : ' Try opening the page in Safari.';
+
 export function cameraSupported(){
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
@@ -30,15 +34,16 @@ export function cameraSupported(){
 function why(e){
   const n = e && e.name;
   if (!window.isSecureContext) return 'The camera only works on a secure (https) page.';
-  if (n === 'NotAllowedError' || n === 'SecurityError') return 'The camera is switched off for this page. On an iPad: Settings › Apps › Safari › Camera › Allow (or tap "aA" in the address bar › Website Settings › Camera), then Try again.';
+  if (n === 'NotAllowedError' || n === 'SecurityError') return isBrave() ? 'Brave did not let this page use the camera.' + tryOther()
+    : 'The camera is switched off for this page. On an iPad: Settings › Apps › Safari › Camera › Allow (or tap "aA" in the address bar › Website Settings › Camera), then Try again.';
   if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No camera was found on this device.';
   if (n === 'NotReadableError' || n === 'AbortError') return 'Another app is using the camera. Close it and Try again.';
-  return 'The camera did not start' + (e && e.message ? ': ' + e.message : '.');
+  return 'The camera did not start' + (e && e.message ? ': ' + e.message + '.' : '.') + tryOther();
 }
 
 export async function startCamera(facing = cam.facing){
   cam.error = '';
-  if (!cameraSupported()){ cam.error = window.isSecureContext ? 'This browser cannot use the camera.' : 'The camera only works on a secure (https) page.'; throw new Error(cam.error); }
+  if (!cameraSupported()){ cam.error = window.isSecureContext ? 'This browser doesn\'t let web pages use the camera.' + tryOther() : 'The camera only works on a secure (https) page.'; throw new Error(cam.error); }
   stopCamera();
   const v = video();
   let stream;
