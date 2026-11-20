@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { V, rng, damp, angleDiff, textCanvas, roundRect, wrapText, mergeGeometries, ellipsoid, placed, paint, limb, loft, boxUV } from './util.js';
 import { DOOR } from './gallery.js';
-import { makePerson } from './people.js';
+import { makePerson, makeStyle, applyStyle } from './people.js';
 
 const NAMES = ['Ava', 'Ben', 'Chloe', 'Dev', 'Ella', 'Finn', 'Grace', 'Hiro', 'Isla', 'Jack', 'Kira', 'Leo', 'Maya', 'Noah', 'Olive', 'Priya', 'Quinn', 'Rosa', 'Sam', 'Tom', 'Uma', 'Vik', 'Wren', 'Yara', 'Zed'];
 const SKIN = ['#f3d2b3', '#e0ac7e', '#c68642', '#8d5524', '#f8e0c8', '#a86b42'];
@@ -135,7 +135,9 @@ export class Visitors {
     const root = new THREE.Group(); root.visible = false;
     const P = makePerson(kind, kind.height * (0.95 + R() * 0.08));
     root.add(P.model);
-    const v = { id: i, root, active: false, name: '', state: 'away', pos: V(0, 0, 30), yaw: 0, path: [], wait: 0, visits: [], phase: 0, speed: 1.05 + R() * 0.25, bubbleT: 0, offer: null, like: 'colourful', seen: 0, blend: 1, look: 0, real: P, female: kind.female };
+    // start somewhere different in the walk and idle, so nobody moves in step with anyone else
+    for (const n of ['walk', 'idle']) P.act[n].time = R() * P.act[n].getClip().duration;
+    const v = { id: i, root, active: false, name: '', state: 'away', pos: V(0, 0, 30), yaw: 0, path: [], wait: 0, visits: [], phase: 0, speed: 0.9 + R() * 0.5, bubbleT: 0, offer: null, like: 'colourful', seen: 0, blend: 1, look: 0, real: P, female: kind.female, style: makeStyle(rng((i + 1) * 7919)) };
     // a soft dark patch on the floor under them (grounds them, where the sun's shadow doesn't reach)
     const blob = new THREE.Mesh(blobGeo(), blobMat()); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.012; blob.renderOrder = 1; root.add(blob);
     v.bubble = textCanvas(256, 128);
@@ -274,8 +276,8 @@ export class Visitors {
       P.act.idle.setEffectiveWeight(v.blend * (1 - g) + 1e-3);
       P.act.walk.timeScale = v.speed / 1.2;   // the walk's steps match how fast they go
       P.mixer.update(dt);
-      void t;
-      v.root.position.set(v.pos.x, this.gallery.where(v.pos.x, v.pos.z) === 'plaza' ? -0.02 : 0, v.pos.z);
+      const bounce = applyStyle(P, v.style, 1 - v.blend, t + v.id * 3.1);   // their own way of walking and standing
+      v.root.position.set(v.pos.x, bounce + (this.gallery.where(v.pos.x, v.pos.z) === 'plaza' ? -0.02 : 0), v.pos.z);
       return;
     }
     v.phase = moving ? v.phase + dt * v.speed * 5.6 : v.phase;
