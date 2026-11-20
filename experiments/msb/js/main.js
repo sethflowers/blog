@@ -14,7 +14,7 @@ import { Gallery, START, FRAMES, DECOR, DESK } from './gallery.js';
 import { Visitors } from './visitors.js';
 import { ScreenPanel, VRPanel } from './ui.js';
 import { startAudio, sfx } from './audio.js';
-import { cam, startCamera, stopCamera, flipCamera, snap, cameraSupported } from './camera.js';
+import { cam, startCamera, stopCamera, flipCamera, snap, cameraSupported, setZoom } from './camera.js';
 import { EditSession, HtmlEditor, vrEditorSpec } from './editor-ui.js';
 import { putPicture, delPicture, pictureOf, thumbOf, appraise, nameFor, marketPiece, STAR_NAMES, starText, forgetPicture } from './art.js';
 
@@ -36,7 +36,23 @@ renderer.xr.enabled = true; renderer.xr.setReferenceSpaceType('local-floor'); re
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9ad0f5);
+// the sky: blue fading to pale at the horizon, with soft clouds (a shader on a big sphere that follows you)
+const sky = new THREE.Mesh(new THREE.SphereGeometry(350, 32, 16), new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  vertexShader: 'varying vec3 d; void main(){ d = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }',
+  fragmentShader: `varying vec3 d;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+    void main(){ vec3 v = normalize(d); float y = max(v.y, 0.0);
+      vec3 c = mix(vec3(0.82, 0.9, 0.97), vec3(0.32, 0.58, 0.92), pow(y, 0.55));
+      if (v.y > 0.02){ vec2 uv = v.xz / (v.y + 0.12) * 1.3; float k = n(uv) * 0.5 + n(uv * 2.3) * 0.3 + n(uv * 5.1) * 0.2;
+        c = mix(c, vec3(1.0), smoothstep(0.55, 0.78, k) * smoothstep(0.02, 0.25, v.y) * 0.9); }
+      gl_FragColor = vec4(c, 1.0);
+      #include <colorspace_fragment>
+    }`,
+}));
+sky.frustumCulled = false; sky.renderOrder = -1; scene.add(sky);
+scene.fog = new THREE.Fog(0xc8dcec, 70, 330);
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 400);
 const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
 scene.add(new THREE.HemisphereLight(0xffffff, 0xc8b090, 1.7));
@@ -51,7 +67,16 @@ scene.add(sun, sun.target);
 // ---------- the gallery, visitors, panels ----------
 const gallery = new Gallery(scene);
 // walls, ceilings and floors don't cast shadows (the light comes through the skylights)
-gallery.root.traverse((o) => { if (o.isMesh && ['ceiling', 'skylight', 'lamp', 'wall', 'floor', 'plaza', 'outside', 'mat'].includes(o.material.name)) o.castShadow = false; });
+const NO_SHADOW = ['ceiling', 'beam', 'skylight', 'lamp', 'wall', 'wall-green', 'wall-navy', 'wall-red', 'wains-white', 'wains-green', 'wains-navy', 'wains-red', 'rail', 'skirt',
+  'floor', 'plaza', 'grass', 'asphalt', 'concrete', 'curb', 'road-paint', 'mat', 'soil', 'roof'];
+gallery.root.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && NO_SHADOW.includes(o.material.name)) o.castShadow = false; });
+// the floor's polish: it reflects the room (a blurred picture of the gallery seen from the middle, made once)
+{
+  const pm = new THREE.PMREMGenerator(renderer);
+  const env = pm.fromScene(scene, 0.03, 0.1, 400, { size: 128, position: new THREE.Vector3(0, 1.6, 5) });
+  gallery.M.floor.envMap = env.texture; gallery.M.floor.needsUpdate = true;
+  pm.dispose();
+}
 const visitors = new Visitors(scene, gallery);
 const panel = new ScreenPanel();
 const vrPanel = new VRPanel();
@@ -435,7 +460,7 @@ function tapScreen(x, y){
 // ---------- the camera (screen): the real camera full screen, a shutter, then the editor ----------
 let camBusy = false;
 async function openCamera(){
-  if (mode === 'vr'){ vrs.camOut = true; vrStartCamera(); say('📷 Point the camera and pull the trigger to take a picture. A puts it away.'); return; }
+  if (mode === 'vr'){ vrs.camOut = true; vrStartCamera(); say('📷 Point the camera and pull the trigger to take a picture. Right stick up and down zooms. A puts it away.'); return; }
   closePanels();
   startAudio();
   const C = $('cam');
@@ -445,12 +470,31 @@ async function openCamera(){
   try {
     await startCamera(cam.facing);
     $('cam-msg').style.display = 'none';
+    showZoom();
   } catch (e) {
     $('cam-msg').textContent = cam.error || 'The camera did not start.';
     $('cam-alt').style.display = 'inline-block';
   }
 }
-function closeCamera(){ stopCamera(); $('cam').classList.remove('show'); document.body.classList.remove('camera'); }
+// pinch the camera's picture to zoom (or the 1× 2× 3× buttons, or the mouse wheel)
+const camTouch = new Map(); let camPinch = null;
+function showZoom(){
+  $('cam-zlabel').textContent = cam.zoom.toFixed(cam.zoom < 10 ? 1 : 0) + '×';
+  for (const b of document.querySelectorAll('#cam-zbtns button')) b.classList.toggle('on', Math.abs(+b.dataset.z - cam.zoom) < 0.05);
+  $('cam-zoom').classList.toggle('show', cam.live);
+}
+function camZoom(z){ setZoom(z); showZoom(); }
+{
+  const C = $('cam');
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) C.addEventListener(ev, (e) => e.preventDefault());
+  C.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; e.preventDefault(); camTouch.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (camTouch.size === 2){ const [a, b] = [...camTouch.values()]; camPinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: cam.zoom }; } });
+  C.addEventListener('pointermove', (e) => { const p = camTouch.get(e.pointerId); if (!p) return; p.x = e.clientX; p.y = e.clientY; if (camPinch && camTouch.size >= 2){ const [a, b] = [...camTouch.values()]; camZoom(camPinch.z * Math.hypot(a.x - b.x, a.y - b.y) / Math.max(20, camPinch.d)); } });
+  const up = (e) => { camTouch.delete(e.pointerId); if (camTouch.size < 2) camPinch = null; };
+  C.addEventListener('pointerup', up); C.addEventListener('pointercancel', up);
+  C.addEventListener('wheel', (e) => { e.preventDefault(); camZoom(cam.zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12)); }, { passive: false });
+  for (const b of document.querySelectorAll('#cam-zbtns button')) b.addEventListener('click', (e) => { e.stopPropagation(); camZoom(+b.dataset.z); });
+}
+function closeCamera(){ stopCamera(); camTouch.clear(); camPinch = null; $('cam').classList.remove('show'); document.body.classList.remove('camera'); }
 async function shutter(){
   if (camBusy) return;
   const shot = cam.live ? snap() : null;
@@ -462,7 +506,7 @@ async function shutter(){
 // with no camera: a photo of the gallery from where you stand
 function gallerySnap(w = 1280, h = 960, from = null){
   const rt = new THREE.WebGLRenderTarget(w, h, { samples: 4 }); rt.texture.colorSpace = THREE.SRGBColorSpace;
-  const c3 = new THREE.PerspectiveCamera(60, w / h, 0.1, 200);
+  const c3 = new THREE.PerspectiveCamera(from && from.fov ? from.fov : 60, w / h, 0.1, 200);
   if (from){ c3.position.copy(from.pos); c3.quaternion.copy(from.quat); }
   else { camera.updateMatrixWorld(true); camera.matrixWorld.decompose(c3.position, c3.quaternion, c3.scale); c3.scale.set(1, 1, 1); }
   c3.updateMatrixWorld(true);
@@ -566,7 +610,7 @@ press('b-art', () => { sfx.click(); myArt(); });
 press('b-shop', () => { sfx.click(); shop(); });
 press('b-menu', () => { sfx.click(); menu(); });
 press('cam-shoot', () => shutter());
-press('cam-flip', async () => { try { await flipCamera(); $('cam-msg').style.display = 'none'; } catch (e) { $('cam-msg').textContent = cam.error; $('cam-msg').style.display = 'block'; } });
+press('cam-flip', async () => { try { await flipCamera(); $('cam-msg').style.display = 'none'; showZoom(); } catch (e) { $('cam-msg').textContent = cam.error; $('cam-msg').style.display = 'block'; } });
 press('cam-close', () => closeCamera());
 press('cam-alt', () => { closeCamera(); sfx.shutter(); flash(); edit(gallerySnap()); });
 
@@ -632,7 +676,7 @@ function vrShoot(){
   sfx.shutter(); vr[1].haptic(0.6, 80);
   let shot = null;
   if (cam.live && videoTex) shot = snap();
-  if (!shot){ const q = camVR.quaternion.clone(); shot = gallerySnap(1024, 768, { pos: camVR.getWorldPosition(V()).addScaledVector(V(0, 0, -1).applyQuaternion(q), 0.08), quat: q }); }
+  if (!shot){ const q = camVR.quaternion.clone(); shot = gallerySnap(1024, 768, { pos: camVR.getWorldPosition(V()).addScaledVector(V(0, 0, -1).applyQuaternion(q), 0.08), quat: q, fov: viewCam.fov }); }
   vrs.camOut = false;
   edit(shot);
 }
@@ -695,11 +739,20 @@ function vrUpdate(dt){
     if (R.bDown || L.bDown){ if (session) session.cancel(); else closePanels(); return; }
   } else {
     if (L.aDown){ menu(); return; }
-    if (R.aDown){ vrs.camOut = !vrs.camOut; sfx.click(); if (vrs.camOut){ vrStartCamera(); say('📷 Pull the trigger to take a picture. A puts the camera away.'); } }
+    if (R.aDown){ vrs.camOut = !vrs.camOut; sfx.click(); if (vrs.camOut){ vrStartCamera(); say('📷 Pull the trigger to take a picture. Right stick up and down zooms. A puts it away.'); } }
     if (R.bDown && vrs.camOut){ vrs.camOut = false; }
   }
   if (!onPanel && !vrPage && R.tracked){
-    if (vrs.camOut){ if (R.triggerDown) vrShoot(); }
+    if (vrs.camOut){
+      // the right stick up and down zooms the camera (the headset's own camera, or the view of the gallery)
+      if (Math.abs(R.stick.y) > 0.25){
+        vrs.zoom = clamp((vrs.zoom || 1) * Math.exp(-R.stick.y * dt * 1.6), 1, 5);
+        viewCam.fov = 55 / vrs.zoom; viewCam.updateProjectionMatrix();
+        if (cam.live) setZoom(vrs.zoom);
+        vrs.zoomShow = 1.5;
+      }
+      if (R.triggerDown) vrShoot();
+    }
     else {
       // point at frames, people and the desk (checked 20 times a second)
       vrs.pickT -= dt;
@@ -792,6 +845,7 @@ function simulate(dt){
     camScreen.visible = mode === 'screen';
     if (camScreen.visible){ camScreen.position.y = -0.17 + Math.sin(gameTime * 1.6) * 0.003 + (Math.hypot(stick.x, stick.y) > 0.1 ? Math.abs(Math.sin(gameTime * 7)) * 0.006 : 0); }
   }
+  sky.position.copy(headPos);
   visitors.update(dt, { fame: save.fame, appeal: appeal() + (mode === 'title' ? 4 : 0), player: mode === 'title' ? null : player.pos });
   // the art market changes now and then
   save.marketT += dt; if (save.marketT > 240){ save.marketT = 0; if (save.market.length) save.market.shift(); }

@@ -89,3 +89,61 @@ icons with the game's own painter.
 
 ### 1.0
 First version.
+
+### 2.0
+The user asked for: nicer editing, pinch-to-zoom in the camera, easier drawing with different brush
+sizes, a selection tool to pick out an object, a much nicer-looking gallery (it was bland), more
+realistic people, and a more realistic outside.
+
+- **Camera zoom**: pinch the camera's picture (or the 1× 2× 3× 5× buttons, or the mouse wheel). When
+  the camera can zoom itself (`getCapabilities().zoom`, usual on iPads and phones) it uses that, with
+  `applyConstraints` calls queued so a fast pinch doesn't pile them up; otherwise the video is
+  enlarged on screen and `snap()` crops the same middle part, so the photo matches what you saw. The
+  page's own pinch-zoom (iOS `gesture*` events) is blocked on the camera screen. In VR the right stick
+  zooms (the headset's camera, or the view of the gallery the camera photographs).
+- **Looking closer in the editor**: two fingers on the picture zoom and move the *view* (not the
+  picture) in every tool except Crop (crop zoom), a picked sticker (size and turn) and words (size); a
+  stroke started by the first finger is taken back when the second lands. 🔍 − / ＋ / ⤢ Fit buttons and
+  the mouse wheel do the same. The whole stage takes touches, so a line can start just off the picture.
+- **Drawing**: 8 brushes (pen, pencil, marker, highlighter, spray, neon, rainbow, eraser), 5 size
+  buttons that show the real dot size (XS–XL) plus an exact-size slider, see-through, 11 colours and a
+  colour picker, and a ring on the picture showing the brush size where you're drawing (where the
+  mouse is, on a computer). Strokes are drawn on their own layer, so the eraser only rubs out drawing,
+  never the photo.
+- **🪄 Select** (new tab): the magic wand (tap the thing: a flood fill from that spot over similar
+  colours, both close to the first colour and to their neighbours, holes filled in; "How fussy"
+  slider; tap more spots to add) or draw round it (lasso; draw again to add). Undo last pick, Swap
+  (everything else), Clear. Then: Colour pop (the rest black and white), Blur the rest, Spotlight, Cut
+  out (a new background: colours, sunset, sky, stripes, dots), Make it shine, and **Copy it as a
+  sticker**: the picked part becomes a sticker you can drag, size, turn and copy. The mask is worked
+  out at about 320 px on the photo before filters (cached), and scaled up smoothly, which gives it a
+  soft edge. The rest of the picture is tinted blue with a gold edge round what's picked, on screen
+  and on the VR panel. `render()` can now be called while it is running (the mask needs a plain
+  render of the photo): its scratch canvas is per call depth (that bug would have drawn the mask's
+  render over the picture being made).
+- **The gallery**: polished oak parquet in chevrons (MeshStandardMaterial with a reflection of the room,
+  `PMREMGenerator.fromScene` once at start), coloured feature walls (forest green west wall, navy
+  free-standing wall, deep red wing), panelling under the pictures (panel, brass rail, skirting,
+  stiles), a beamed ceiling round the skylights, pendant lamps, columns and a beam at the wing's
+  doorway, door frames, gold "MSB GALLERY" lettering, tall bronze-framed windows onto the plaza, a
+  walnut and marble art market desk. Picture spots are 10 cm shorter (1.3 m) so frames clear the rail.
+  The coplanar check found the panelling's backs and the road's ends overlapping: the south wall's
+  panelling is now built per wall piece, the road stops at the kerb.
+- **Outside**: sandstone-block cladding with a cornice, dentils, a granite plinth and stone window
+  surrounds; an entrance canopy on two columns with lights; the name in gold letters; MAKE / SELL /
+  BUY banners; planters and flower beds; a granite plaza with a round inlay where the fountain goes,
+  park benches, street lamps, hedges on a stone kerb; leafy trees (lumpy crowns, darker underneath,
+  instanced, only those near the plaza cast shadows); the street with pavements, kerbs and road
+  markings, parked cars, a row of townhouses with pitched roofs; distant hills; a sky with clouds and
+  a little haze. The outside is its own group (`gallery.outside`).
+- **People**: ten people built once (vertex colours, one material): a lofted body with hips, waist,
+  chest and shoulders, a head with jaw, ears, nose, eyes with irises, eyebrows and mouth, hair styles
+  (short, cropped, long, bob, bun, ponytail, bald, beards), trousers, dresses, jackets, long or short
+  sleeves, shoes; arms and legs jointed at the elbow and knee. They walk with bending knees and
+  swinging arms, shift their weight while standing, and while looking at a picture hold a pose (hands
+  behind the back, a hand on the chin, arms folded) with the head turning a little.
+- Tests: camera pinch and the 2× button, eight brushes and five sizes, the eraser leaving the photo
+  alone, pinch-zooming the view without drawing, the magic wand, Cut out and Swap, the lasso, Colour
+  pop, Copy it as a sticker, screenshots outside and of the visitors, the VR camera zoom and the magic
+  wand on the VR panel. The VR part freezes the shadow map and hides the street (headless headset
+  frames are slow in software rendering); the whole test takes about 1¾ minutes.
