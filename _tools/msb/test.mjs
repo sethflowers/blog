@@ -317,8 +317,12 @@ await ev(`__msb.standAt({ x: 0, z: 6, yaw: 0 })`);
 const money0 = await ev('__msb.save.money');
 // make the visitors keen: they come quickly and like what they see
 await ev(`(() => { const V = __msb.visitors; V.spawnT = 0; V.R = (() => { let s = 7; return () => { s = (s * 16807) % 2147483647; return (s % 1000) / 1000 * 0.4; }; })(); })()`);
+const prog0 = await ev('__msb.renderer.info.programs.length');
 const gotOffer = await ev(`__msb.advance(240, () => __msb.visitors.list.some((v) => v.offer && v.offer.art === __msb.save.art[0]))`);
 check(gotOffer, 'a visitor looks at your picture and offers to buy it');
+// the people were made ready behind the loading screen: their arrival compiles no new shaders (that was the freeze)
+check(await ev('(() => { for (const v of __msb.visitors.list) if (v.active) v.root.traverse((o) => { o.frustumCulled = false; }); __msb.renderNow(); return __msb.renderer.info.programs.length; })()') === prog0, `visitors walking in don't need new shaders (the freeze when they first appeared): ${prog0} programs`);
+check(await ev('__msb.visitors.list.length') >= 16 && await ev('new Set(__msb.visitors.list.map((v) => v.real && v.real.model.uuid)).size === __msb.visitors.list.length'), `${await ev('__msb.visitors.list.length')} different people`);
 check(await ev(`document.querySelectorAll('#jobs .job').length`) >= 1, 'the offer shows as a card with Sell and ✕');
 const offer = await ev(`(() => { const v = __msb.visitors.list.find((v) => v.offer && v.offer.art === __msb.save.art[0]); return v && { id: v.id, price: v.offer.price, name: v.name }; })()`);
 if (offer){

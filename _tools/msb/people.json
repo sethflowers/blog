@@ -1,0 +1,92 @@
+[
+ {
+  "id": "Female_Adult_01",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_03",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_04",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_05",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_06",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_08",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_10",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_11",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Female_Adult_12",
+  "height": 1.66,
+  "female": true
+ },
+ {
+  "id": "Male_Adult_01",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_02",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_03",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_04",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_05",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_06",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_08",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_10",
+  "height": 1.78,
+  "female": false
+ },
+ {
+  "id": "Male_Adult_12",
+  "height": 1.78,
+  "female": false
+ }
+]

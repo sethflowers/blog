@@ -185,3 +185,27 @@ built from rounded tubes in bright colours.
   or make an offer, shake their heads when they don't, and blend between walking and standing. If
   the models can't load, the 2.0 people are used. Loader and helpers copied from three.js r180
   (`lib/addons/`: GLTFLoader, BufferGeometryUtils, SkeletonUtils), all saved for offline play.
+
+### 3.1
+The user said the game froze for a second when the people first appeared, and that it was easy to
+tell there were only two models (perhaps the woman's hair).
+
+- **The freeze**: the first time a person was drawn, the graphics card compiled the shaders for
+  skinned, physically based materials (and their shadow shaders) and uploaded their textures, all in
+  the middle of play. Now `warmUp()` draws every person once, out of sight behind the loading screen
+  (after `initTexture` and `compileAsync`), before the loading screen goes. The test checks that no new
+  shader programs appear when visitors walk in.
+- **18 different people** instead of two models in different clothes: avatars from **Microsoft's
+  Rocketbox library** (MIT licence, github.com/microsoft/Microsoft-Rocketbox), 9 women and 9 men of
+  different ages, skin tones and styles. `_tools/msb/rocketbox.mjs` downloads each avatar's FBX and
+  textures (2048 px TGA, shrunk to 512 px JPEG; the hair/eyelash texture to a 96-colour PNG), loads it
+  with three.js's FBXLoader in headless Chromium, gives it standard materials (hair alpha-tested,
+  double-sided), retargets the walk / idle / nod / head-shake animations from Xbot onto its 3ds Max
+  "Bip01" skeleton (a Mixamo → biped bone map; same world-space retargeting as 3.0), and exports a .glb
+  with three.js's GLTFExporter. Two fixes made the files 3x smaller: the mesh is split into one piece
+  per material (the exporter wrote every vertex once per material group, 14 times), and identical
+  vertices are merged (the FBX loader gives every triangle corner its own vertex). About 0.9 MB per
+  person, 16 MB in all, saved for offline play; the people list is `models/people/list.json` and
+  `_tools/msb/people.json`. Michelle, the Ready Player Me man and the retargeted clips file are gone,
+  and so is the outfit recolouring. Every visitor in the pool is a different person (up to 8 in the
+  gallery at once).
