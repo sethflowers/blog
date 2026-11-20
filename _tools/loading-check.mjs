@@ -19,7 +19,9 @@ export async function checkLoading({ browser: testBrowser, url, check, game, sho
       retry: !!document.getElementById('ld-retry') && getComputedStyle(document.getElementById('ld-retry')).display !== 'none' };
   });
   // 1. slow download: the loading screen shows straight away
-  let ctx = await browser.newContext({ viewport: { width: 1024, height: 700 } });
+  // (service workers blocked: one registered at the top of the page can otherwise fetch three.js itself
+  // before the hold-back below catches it, and serve it to the page)
+  let ctx = await browser.newContext({ viewport: { width: 1024, height: 700 }, serviceWorkers: 'block' });
   let pg = await ctx.newPage();
   let release; const gate = new Promise((r) => { release = r; });
   await pg.route('**/lib/three.core.min.js*', async (r) => { await gate; await r.continue(); });
@@ -35,7 +37,7 @@ export async function checkLoading({ browser: testBrowser, url, check, game, sho
   check(gone && await pg.evaluate(`!!window.${game}`), 'the loading screen goes away once the game is ready' + (gone ? '' : ` (still showing "${s.text}")`));
   await ctx.close();
   // 2. a file that never arrives: say so, offer Try again
-  ctx = await browser.newContext({ viewport: { width: 1024, height: 700 } });
+  ctx = await browser.newContext({ viewport: { width: 1024, height: 700 }, serviceWorkers: 'block' });
   pg = await ctx.newPage();
   await pg.route('**/js/util.js*', (r) => r.abort());
   await pg.goto(url, { waitUntil: 'commit' });

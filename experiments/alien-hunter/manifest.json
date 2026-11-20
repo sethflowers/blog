@@ -1,0 +1,16 @@
+{
+  "name": "Alien Hunter",
+  "short_name": "Alien Hunter",
+  "description": "X-ray the townsfolk and zap the aliens in disguise, on an iPad or in VR.",
+  "start_url": "/experiments/alien-hunter/",
+  "scope": "/experiments/alien-hunter/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#24124a",
+  "theme_color": "#24124a",
+  "icons": [
+    { "src": "/experiments/alien-hunter/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/alien-hunter/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/alien-hunter/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
