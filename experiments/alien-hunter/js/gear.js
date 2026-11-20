@@ -8,10 +8,10 @@ import { materials, INNER } from './people.js';
 // the gun points along -z, its handle hangs down (-y); `muzzle` is where the bolt comes out
 export function makeGun(){
   const P = (g, c, ...a) => paint(placed(g, ...a), c);
-  const orange = '#ff8a2a', silver = '#d8e0ea', purple = '#7a3ab8', dark = '#3a2456';
+  const silver = '#c8ccd2', purple = '#e8641a', dark = '#1e1f24';
   const parts = [
-    P(new THREE.CylinderGeometry(0.038, 0.03, 0.2, 16).rotateX(Math.PI / 2), orange, 0, 0, -0.06),
-    P(new THREE.SphereGeometry(0.038, 14, 10), orange, 0, 0, 0.04),
+    P(new THREE.CylinderGeometry(0.038, 0.03, 0.2, 16).rotateX(Math.PI / 2), '#4a4e56', 0, 0, -0.06),
+    P(new THREE.SphereGeometry(0.038, 14, 10), '#4a4e56', 0, 0, 0.04),
     P(new THREE.CylinderGeometry(0.02, 0.056, 0.05, 16).rotateX(Math.PI / 2), silver, 0, 0, -0.185),
     P(new THREE.BoxGeometry(0.008, 0.045, 0.09), purple, 0, 0.045, -0.03),
     P(new THREE.BoxGeometry(0.034, 0.11, 0.046), dark, 0, -0.068, 0.012, 0.28),
@@ -19,7 +19,7 @@ export function makeGun(){
   ];
   for (const z of [-0.12, -0.08, -0.04]) parts.push(P(new THREE.TorusGeometry(0.04, 0.008, 6, 16), silver, 0, 0, z));
   const g = new THREE.Group();
-  const body = new THREE.Mesh(mergeGeometries(parts), materials.skin); body.castShadow = true; g.add(body);
+  const body = new THREE.Mesh(mergeGeometries(parts), new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.6, roughness: 0.35 })); body.castShadow = true; g.add(body);
   const tip = new THREE.Mesh(new THREE.SphereGeometry(0.034, 12, 10), new THREE.MeshBasicMaterial({ color: '#7af8ff', toneMapped: false }));
   tip.position.z = -0.212; g.add(tip);
   const muzzle = new THREE.Object3D(); muzzle.position.z = -0.25; g.add(muzzle);

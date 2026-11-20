@@ -101,3 +101,55 @@ walking, the menu board in front of you and its buttons, B closing it, leaving V
 Also changed `_tools/loading-check.mjs` to block service workers in its browser: this game's worker
 (registered at the top of the page, as it should be) sometimes fetched three.js itself before the
 check's hold-back caught it, so the game finished loading and the check saw "Ready!".
+
+## 2.0: realistic people, and a town to match
+
+The user wanted the game to look more real, with people like MSB's, and the town made more real too so
+the people wouldn't look out of place.
+
+**People** (`people.js`, rewritten). The same 18 Microsoft Rocketbox avatars as MSB (MIT licence;
+converted by `_tools/msb/rocketbox.mjs` into .glb files with walk, idle, nod and head-shake animations;
+copied into `experiments/alien-hunter/models/people/`, about 18 MB, saved for offline play), loaded
+with three.js's GLTFLoader and SkeletonUtils (`lib/addons/`, from MSB). Each is made once, in a pool,
+and reused town after town; a town has at most 18 people (every one a different person) and they get
+male or female names to match. MSB's walking styles (lean, arm swing, elbows, toes, sway, bounce, a
+weight shift while standing) are laid over the animation; fleeing aliens play the walk faster with a
+forward lean. People more than 35 m away are animated every fourth frame and without their style.
+A soft dark patch under each person grounds them.
+- **The insides follow the bones.** The skeleton (skull, rib cage with a heart, spine, pelvis, arm and
+  leg bones, joints, hands, feet) and the alien (head with big eyes and antennae, body, tentacle arms
+  and legs, hands, feet) are a few shared shapes placed every frame between the avatar's joints
+  (eyes and head, neck to pelvis, shoulder to elbow to hand to fingertip, hip to knee to ankle to toe),
+  so they walk, flinch and fall exactly with the body. All of everyone's insides are drawn as about 14
+  instanced meshes per set, in three sets: X (the X-ray: its own layer, glowing, only filled while the
+  X-ray is in use and for people within 40 m), F (the zap flash, in the normal view) and D (dead
+  aliens, lit, in both views).
+- **The X-ray shader is skinned**, so people's ghosts in the X-ray walk with them instead of standing
+  in their rest pose.
+- **Zapped**: the animation's pose is held, the arms fly out and everything shakes, while the body and
+  the insides take turns (the cartoon electrocution flash). An alien's body then disappears in a puff
+  and the green alien inside falls flat on its back (arms out, legs apart, X eyes) in a puddle of goo.
+- **No freeze when people first appear**: like MSB, `warmUp()` draws everyone once behind the loading
+  screen (after uploading the textures and compiling the shaders), including the X-ray passes.
+- The loading screen counts the avatars (they are most of the download).
+
+**The town** (`town.js`, `textures.js`): physically based materials (`mat()` in util.js, replacing the
+cartoon toon materials) with made-up textures and normal maps for relief: weatherboard siding in
+muted colours, red brick (every third house and two shops), painted render, shingle roofs, asphalt,
+concrete sidewalk slabs, brick paths, wood plank floors, checked shop tiles, plastered rooms inside (a
+1 cm plaster lining on every inside wall face, so the outside's siding or brick doesn't show indoors;
+window frames now stand 2 cm proud of the wall so they still clear the lining by 1 cm), a white
+ceiling, reflective window glass, metal lamp posts, muted furniture and shop colours, shop signs in a
+serif on painted boards. MSB's trees (smooth lumpy crowns, darker underneath, instanced), parked cars
+along the kerbs (they stop you and the shock gun) and its ring of distant hills.
+**Light** (main.js, from MSB): ACES filmic tone mapping, a weaker sky light, a stronger warm sun, MSB's
+sky, and the town's own reflected light as `scene.environment` (a blurred picture of the street from the
+crossroads, made once with PMREMGenerator), which is what the glass, metal and cars reflect. The
+plaster linings and ceilings are left out of the X-ray (like floors and roads: seen edge-on they
+flooded it with glow). The shock gun is gunmetal with an orange fin.
+
+**Tests**: the test now pauses the game's own clock on screen and runs it with `advance()` (screenshots
+are slow with the new materials in software rendering, and people kept walking between steps); people
+are looked up by id (`__ah.person(id)`); bystanders are moved out of the line of fire before zapping a
+real person; the VR checks hide the buildings and freeze the shadow map (each emulated headset frame
+took 2 to 3 s with them), except for the VR screenshot. About 90 s with the loading check.

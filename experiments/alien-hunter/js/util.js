@@ -1,5 +1,5 @@
 // Shared helpers (from My Animal Farm and Safari Cruise): seeded random, noise, merging geometry, lofted
-// (swept) shapes, canvas text, cartoon (toon) materials and freeing what is thrown away.
+// (swept) shapes, canvas text, cached materials and freeing what is thrown away.
 import * as THREE from 'three';
 
 export const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -279,21 +279,13 @@ export function disposeTree(obj){
   obj.traverse((o) => { if (o.geometry && !o.geometry.userData.keep) o.geometry.dispose(); });
 }
 
-// Cartoon shading: flat bands of sunlight (a toon material with a tiny gradient texture). Faces turned
-// away from the sun get none of it (only the sky light), so they can't show speckled self-shadowing.
-let gradient = null;
-function toonGradient(){
-  if (gradient) return gradient;
-  const d = new Uint8Array([0, 0, 0, 255, 0, 0, 0, 255, 150, 150, 150, 255, 255, 255, 255, 255]);
-  gradient = new THREE.DataTexture(d, 4, 1, THREE.RGBAFormat);
-  gradient.minFilter = gradient.magFilter = THREE.NearestFilter; gradient.generateMipmaps = false; gradient.needsUpdate = true;
-  return gradient;
-}
-// materials are cached by name, so the same colour is one material everywhere
+// Materials, cached by name so the same surface is one material everywhere: physically based
+// (MeshStandardMaterial), lit by the sun, the sky light and the town's own reflected light
+// (scene.environment, made in main.js).
 const mats = new Map();
-export function toon(name, color, opts = {}){
+export function mat(name, color, opts = {}){
   if (mats.has(name)) return mats.get(name);
-  const m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient(), ...opts });
+  const m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, ...opts });
   m.name = name; mats.set(name, m); return m;
 }
 export function basic(name, opts){

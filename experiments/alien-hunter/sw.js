@@ -16,7 +16,12 @@ var CACHE = 'alien-hunter-' + V;
 var BASE = '/experiments/alien-hunter/';
 var READY = BASE + '__offline-ready__';
 var VERSIONED = ['lib/three.core.min.js', 'lib/three.module.min.js',
-  'js/audio.js', 'js/gear.js', 'js/main.js', 'js/people.js', 'js/town.js', 'js/ui.js', 'js/util.js'];
+  'lib/addons/BufferGeometryUtils.js', 'lib/addons/GLTFLoader.js', 'lib/addons/SkeletonUtils.js',
+  'js/audio.js', 'js/gear.js', 'js/main.js', 'js/people.js', 'js/textures.js', 'js/town.js', 'js/ui.js', 'js/util.js',
+  // the people (Microsoft Rocketbox avatars, MIT licence)
+  'models/people/list.json'].concat(['Female_Adult_01', 'Female_Adult_03', 'Female_Adult_04', 'Female_Adult_05', 'Female_Adult_06', 'Female_Adult_08',
+  'Female_Adult_10', 'Female_Adult_11', 'Female_Adult_12', 'Male_Adult_01', 'Male_Adult_02', 'Male_Adult_03', 'Male_Adult_04', 'Male_Adult_05',
+  'Male_Adult_06', 'Male_Adult_08', 'Male_Adult_10', 'Male_Adult_12'].map(function (n) { return 'models/people/' + n + '.glb'; }));
 var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 var ASSETS = [BASE].concat(VERSIONED.map(function (f) { return BASE + f + '?v=' + V; }), STATIC.map(function (f) { return BASE + f; }));
 

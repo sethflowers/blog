@@ -81,5 +81,5 @@ service, riding, driving, the shop and saving) on screen and then in VR (same IW
 runs the game forward inside the page instead of waiting for frames, and only draws for screenshots):
 `NODE_PATH=$(npm root -g) node _tools/safari-cruise/test.mjs out/`.
 `_tools/alien-hunter/test.mjs` plays Alien Hunter (walking, doors and houses, the X-ray tablet, zapping aliens and people, clearing
-towns, memory, saving) on screen and then in VR (same IWER install; under a minute):
+towns, memory, saving) on screen and then in VR (same IWER install; about a minute and a half):
 `NODE_PATH=$(npm root -g) node _tools/alien-hunter/test.mjs out/`.
