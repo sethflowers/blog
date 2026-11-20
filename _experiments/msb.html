@@ -1,0 +1,345 @@
+---
+title: MSB (Make Sell Buy)
+description: Run your own art gallery in first person, on an iPad or in VR. Take photos with your device's real camera, edit them with filters, adjustments, drawing, stickers, words and frames, then hang them on the walls. Visitors wander in and offer to buy what they like. Buy other artists' paintings, frames and decorations, and open the east wing.
+date: 2026-11-20
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1e1a28">
+<meta name="apple-mobile-web-app-title" content="MSB">
+<link rel="manifest" href="/experiments/msb/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/msb/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/msb/icon-192.png">
+<title>MSB: Make Sell Buy</title>
+<!-- the offline copy is saved straight away, not once the page has loaded (see CLAUDE.md) -->
+<script>
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/msb/sw.js?v={% endraw %}{{ page.version }}{% raw %}', { scope: '/experiments/msb/', updateViaCache: 'none' }).catch(function(){});
+  // from the home screen, ask iOS to keep the saved copy (and your pictures)
+  if ((navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches)) && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+</script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#1e1a28;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;
+    font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;}
+  body>canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;}
+  button{font-family:inherit;cursor:pointer;}
+  /* title */
+  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;overflow-y:auto;
+    background:linear-gradient(180deg,rgba(30,26,40,.05) 0%,rgba(30,26,40,.8) 68%);}
+  #title.hidden{display:none;}
+  .card{max-width:660px;width:100%;text-align:center;}
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(70px,16vw,150px);line-height:.9;font-weight:900;letter-spacing:.04em;color:#ffcf4a;
+    text-shadow:0 5px 0 #a8781a,0 10px 0 #4a3008,0 18px 36px rgba(0,0,0,.55);}
+  h1 span{display:block;font-family:"Avenir Next","Helvetica Neue",Arial,sans-serif;font-size:.24em;letter-spacing:.24em;margin-top:14px;text-shadow:0 3px 8px rgba(0,0,0,.6);}
+  h1 .mk{color:#ff6aa8;} h1 .sl{color:#4ae08a;} h1 .by{color:#5ab4ff;} h1 .dt{color:#fff;}
+  .sub{margin:20px 0 20px;font-size:20px;font-weight:700;text-shadow:0 2px 6px rgba(0,0,0,.8);}
+  .tbtn{display:block;width:100%;max-width:380px;margin:12px auto;padding:17px 20px;font-size:23px;font-weight:bold;line-height:1;color:#2a1e08;
+    background:#ffcf4a;border:0;border-radius:18px;box-shadow:0 6px 0 #a8781a;}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 3px 0 #a8781a;}
+  .tbtn:disabled{background:#8a86a0;box-shadow:0 6px 0 #5a5670;color:#2a2840;cursor:default;}
+  .tbtn.second{background:#f2eefa;box-shadow:0 6px 0 #9a90b8;font-size:18px;padding:14px;color:#2a1e3a;}
+  #status{margin-top:10px;font-size:15px;opacity:.95;min-height:20px;text-shadow:0 1px 4px #000;}
+  #offline{margin-top:2px;font-size:13px;opacity:.85;min-height:16px;text-shadow:0 1px 4px #000;}
+  .help{margin-top:14px;font-size:13.5px;opacity:.95;line-height:1.6;text-shadow:0 1px 4px #000;}
+  .help b{color:#ffcf4a;}
+  .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.85;pointer-events:none;text-shadow:0 1px 3px #000;}
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
+  body.playing #hud{display:block;}
+  .chip{position:absolute;background:rgba(30,26,40,.8);border-radius:16px;padding:9px 14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  #h-stat{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));}
+  #h-money{font-weight:900;font-size:27px;color:#ffcf4a;position:relative;}
+  #h-rate{font-size:14px;margin-top:3px;line-height:1.45;} #h-rate b{color:#ffcf4a;}
+  .pop{position:absolute;left:100%;top:0;margin-left:10px;font-weight:900;font-size:21px;animation:up 1.4s ease-out forwards;white-space:nowrap;text-shadow:0 2px 4px #000;color:#8aff8a;}
+  .pop.neg{color:#ff9a8a;}
+  @keyframes up{from{transform:translateY(8px);opacity:0}20%{opacity:1}to{transform:translateY(-26px);opacity:0}}
+  #jobs{position:absolute;left:calc(10px + env(safe-area-inset-left));top:calc(92px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:7px;max-width:340px;}
+  .job{pointer-events:auto;display:flex;align-items:center;gap:8px;background:rgba(170,110,10,.93);color:#fff;border-radius:14px;padding:7px 8px 7px 10px;font-size:14.5px;font-weight:700;line-height:1.25;animation:pop .25s ease-out;}
+  .job .ji{font-size:24px;} .job .jt{flex:1;} .job small{display:block;font-weight:600;opacity:.92;font-size:12px;}
+  .job button{border:0;border-radius:10px;font-weight:900;font-size:15px;padding:9px 12px;}
+  .jyes{background:#2aa04a;color:#fff;} .jno{background:rgba(0,0,0,.3);color:#fff;}
+  #h-msg{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));width:min(540px,46vw);display:flex;flex-direction:column;gap:6px;}
+  .msg{background:rgba(30,26,40,.9);border-radius:12px;padding:9px 14px;font-size:16px;font-weight:700;text-align:center;animation:pop .25s ease-out;}
+  .msg.good{background:rgba(30,130,60,.94);} .msg.bad{background:rgba(190,36,50,.94);} .msg.money{background:rgba(170,110,10,.95);}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+  #topbtns{position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+  .hbtn{pointer-events:auto;border:0;border-radius:14px;background:rgba(30,26,40,.85);color:#fff;font-weight:800;font-size:17px;padding:11px 15px;min-width:130px;text-align:left;}
+  .hbtn:active{background:#ffcf4a;color:#2a1e08;}
+  #b-cam{pointer-events:auto;position:absolute;right:calc(18px + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));width:116px;height:116px;border-radius:50%;
+    border:6px solid #ffe8a8;background:#ff6aa8;color:#fff;font-size:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 6px 0 rgba(0,0,0,.35);}
+  #b-cam small{font-size:14px;font-weight:900;margin-top:2px;}
+  #b-cam:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(0,0,0,.35);}
+  /* your artworks as little items along the bottom */
+  #strip{position:absolute;left:max(36vw,240px);right:calc(150px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));display:flex;gap:8px;justify-content:flex-end;overflow:hidden;}
+  .item{pointer-events:auto;flex:0 0 auto;width:74px;border:0;border-radius:12px;background:rgba(30,26,40,.85);padding:5px 5px 3px;color:#fff;display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .item img{width:64px;height:64px;border-radius:6px;background:#e8e2d4;}
+  .item small{font-size:12px;font-weight:800;color:#ffcf4a;}
+  .item.wall{box-shadow:inset 0 0 0 3px #4ae08a;}
+  .item.more{font-size:20px;font-weight:900;justify-content:center;height:90px;}
+  /* the thumb stick appears wherever your left thumb goes down */
+  #stick{position:fixed;width:120px;height:120px;border-radius:60px;border:3px solid rgba(255,240,200,.55);background:rgba(30,26,40,.28);display:none;pointer-events:none;z-index:6;}
+  #stick.on{display:block;}
+  #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:27px;background:rgba(255,207,74,.92);box-shadow:0 3px 8px rgba(0,0,0,.4);}
+  #stick-hint{position:absolute;left:calc(26px + env(safe-area-inset-left));bottom:calc(26px + env(safe-area-inset-bottom));width:110px;height:110px;border-radius:55px;border:2px dashed rgba(60,50,80,.6);color:#3a2e50;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center;opacity:.9;}
+  @media (hover:hover) and (pointer:fine){ #stick-hint{display:none;} }
+  /* panels */
+  #panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(20,14,30,.42);padding:14px;}
+  #panel.show{display:flex;}
+  .card-panel{width:min(660px,100%);max-height:min(92vh,940px);display:flex;flex-direction:column;background:#fbf8f1;color:#2a2238;border-radius:22px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .phead{display:flex;align-items:center;gap:12px;background:#2a2238;color:#fff;padding:13px 16px;}
+  .phead h2{font-size:23px;flex:1;}
+  .pmoney{font-weight:900;color:#ffcf4a;font-size:19px;}
+  .phead .x{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:10px;width:42px;height:42px;font-size:18px;}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0;background:#ece4d4;}
+  .tabs button{border:0;border-radius:12px 12px 0 0;padding:11px 14px;font-weight:800;font-size:15px;background:#d8ccb4;color:#4a3a2a;}
+  .tabs button.on{background:#fbf8f1;color:#2a2238;}
+  .pbody{overflow-y:auto;padding:6px 18px 18px;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  .psec{margin-top:12px;}
+  .psec h3{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#9a5a1a;margin-bottom:6px;}
+  .psec p{font-size:17px;line-height:1.45;}
+  .psec ul{padding-left:20px;font-size:16px;line-height:1.55;}
+  .pimg{display:block;margin:4px auto 0;max-width:100%;height:auto;border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.25);}
+  .row{display:flex;align-items:center;gap:12px;padding:8px 10px;margin:6px 0;background:#f0e8d8;border-radius:14px;}
+  .row.on{background:#dff2e2;}
+  .ricon{width:60px;height:60px;flex:0 0 60px;border-radius:8px;object-fit:contain;background:#e8e2d4;}
+  .rl{flex:1;min-width:0;}
+  .row b{display:block;font-size:16px;} .row small{display:block;font-size:13px;color:#5a4a3a;margin-top:2px;}
+  .row button,.btns button,.grid button{border:0;border-radius:12px;padding:11px 15px;font-weight:800;font-size:15px;background:#2a2238;color:#fff;white-space:nowrap;}
+  .row button:disabled,.btns button:disabled,.grid button:disabled{background:#c8c0b4;color:#f4f4f4;}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .btns button.on,.row button.on{background:#ffcf4a;color:#2a1e08;}
+  .btns button.primary,.row button.primary{background:#2a9a4a;} .btns button.primary{font-size:18px;padding:13px 22px;} .btns button.danger{background:#b8443a;}
+  /* the camera: the real camera's picture full screen, a big shutter button */
+  #cam{position:fixed;inset:0;z-index:40;background:#000;display:none;}
+  #cam.show{display:block;}
+  #cam-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  body.cam-mirror #cam-video{transform:scaleX(-1);}
+  #cam-bar{position:absolute;right:calc(20px + env(safe-area-inset-right));top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;}
+  .cbtn{border:0;width:66px;height:66px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;font-size:28px;box-shadow:0 0 0 3px rgba(255,255,255,.6);}
+  #cam-shoot{width:96px;height:96px;border:0;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.45),inset 0 0 0 5px #1e1a28;font-size:0;}
+  #cam-shoot:active{transform:scale(.92);}
+  #cam-msg{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);width:min(520px,80vw);text-align:center;font-size:18px;font-weight:700;line-height:1.45;background:rgba(30,26,40,.85);padding:16px 20px;border-radius:16px;}
+  #cam-alt{display:none;position:absolute;left:50%;top:62%;transform:translateX(-50%);border:0;border-radius:14px;background:#ffcf4a;color:#2a1e08;font-size:18px;font-weight:900;padding:14px 20px;}
+  .cam-tip{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);font-size:15px;font-weight:700;background:rgba(0,0,0,.45);padding:7px 14px;border-radius:12px;}
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:60;}
+  #flash.go{animation:flash .45s ease-out;}
+  @keyframes flash{from{opacity:.95}to{opacity:0}}
+  /* the photo editor */
+  #editor{position:fixed;inset:0;z-index:45;background:#16131e;display:none;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+  #editor.show{display:flex;}
+  #ed-top{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#221d2e;}
+  #ed-top .sp{flex:1;text-align:center;font-weight:900;font-size:18px;color:#ffcf4a;letter-spacing:.06em;}
+  .tb{border:0;border-radius:12px;padding:10px 14px;font-weight:800;font-size:16px;background:#3a3248;color:#fff;}
+  .tb:disabled{opacity:.35;}
+  .tb.on{background:#ffcf4a;color:#2a1e08;}
+  #ed-done{background:#2aa04a;font-size:17px;padding:10px 20px;}
+  #ed-cancel{background:#5a2a34;}
+  #ed-main{flex:1;display:flex;flex-direction:column;min-height:0;}
+  #ed-stage{flex:1;min-height:0;min-width:0;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:14px;position:relative;
+    background:repeating-conic-gradient(#1c1826 0% 25%,#201b2b 0% 50%) 50%/32px 32px;}
+  #ed-canvas{display:block;touch-action:none;border:6px solid #9a6a3a;border-radius:2px;background:#000;}
+  #ed-side{display:flex;flex-direction:column;background:#221d2e;min-height:0;flex-shrink:0;}
+  #ed-tabs{display:flex;gap:4px;padding:6px 8px;overflow-x:auto;background:#1a1624;}
+  .etab{flex:1 0 auto;min-width:62px;border:0;border-radius:12px;background:transparent;color:#cfc8dc;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px;}
+  .etab span{font-size:24px;} .etab small{font-size:12px;font-weight:800;}
+  .etab.on{background:#ffcf4a;color:#2a1e08;}
+  #ed-tray{padding:8px 10px 10px;overflow-y:auto;max-height:34vh;touch-action:pan-y;-webkit-overflow-scrolling:touch;}
+  .erow{display:flex;flex-wrap:wrap;gap:7px;margin:5px 0;}
+  .erow.scroll{flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x;padding-bottom:4px;}
+  .erow.sliders{flex-direction:column;gap:4px;}
+  .erow.hint{font-size:13px;color:#a8a0b8;font-weight:600;}
+  .erow.label{font-size:12px;color:#ffcf4a;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-top:8px;}
+  .ebtn{flex:0 0 auto;border:0;border-radius:11px;background:#3a3248;color:#fff;font-weight:800;font-size:14.5px;padding:9px 12px;white-space:nowrap;}
+  .ebtn b{color:#ffcf4a;margin-left:3px;}
+  .ebtn.on{background:#ffcf4a;color:#2a1e08;} .ebtn.on b{color:#7a3a00;}
+  .ebtn.gold{background:#8a5a10;} .ebtn.alt{background:#2e3a52;} .ebtn.alt.on{background:#ffcf4a;}
+  .ebtn.locked{opacity:.55;}
+  .ebtn.thumb{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px;}
+  .ebtn.thumb img{height:62px;width:auto;max-width:92px;border-radius:6px;display:block;}
+  .ebtn.thumb small{font-size:12px;}
+  .ebtn.swatch{width:38px;height:38px;border-radius:50%;padding:0;box-shadow:inset 0 0 0 2px rgba(255,255,255,.35);}
+  .ebtn.swatch.on{box-shadow:0 0 0 3px #ffcf4a,inset 0 0 0 2px rgba(0,0,0,.3);}
+  .ebtn.emoji{font-size:30px;padding:4px 8px;background:#2c2638;}
+  .fsw{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;box-shadow:0 0 0 1px rgba(255,255,255,.4);}
+  .eslider{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;}
+  .elabel{flex:0 0 118px;} .eval{flex:0 0 52px;text-align:right;color:#ffcf4a;}
+  .eslider input{flex:1;height:36px;-webkit-appearance:none;appearance:none;background:transparent;touch-action:pan-x;}
+  .eslider input::-webkit-slider-runnable-track{height:8px;border-radius:4px;background:#4a4058;}
+  .eslider input::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;border-radius:50%;background:#ffcf4a;margin-top:-11px;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+  .eslider input::-moz-range-track{height:8px;border-radius:4px;background:#4a4058;}
+  .eslider input::-moz-range-thumb{width:28px;height:28px;border-radius:50%;background:#ffcf4a;border:0;}
+  .erow.textrow{flex-wrap:nowrap;}
+  .etext{flex:1;min-width:0;font:700 18px inherit;font-family:inherit;padding:10px 12px;border-radius:10px;border:0;background:#fff;color:#222;-webkit-user-select:text;user-select:text;}
+  /* wide screens: the tools on the right of the picture */
+  @media (min-aspect-ratio: 5/4) and (min-width: 760px){
+    #ed-main{flex-direction:row;}
+    #ed-side{width:min(410px,42vw);}
+    #ed-tabs{display:grid;grid-template-columns:repeat(7,1fr);overflow:visible;}
+    .etab{min-width:0;padding:6px 2px;} .etab small{font-size:11px;}
+    #ed-tray{max-height:none;flex:1;}
+  }
+  /* loading screen: shown from the first paint until the game is ready (see "Loading screen" in CLAUDE.md) */
+  #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:#1e1a28;color:#fff;transition:opacity .4s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .ld-box{width:min(420px,100%);text-align:center;}
+  .ld-name{font-family:Georgia,serif;font-weight:900;font-size:clamp(44px,10vw,72px);line-height:1.05;margin-bottom:6px;color:#ffcf4a;}
+  .ld-sub{font-weight:800;letter-spacing:.2em;font-size:14px;margin-bottom:22px;opacity:.9;}
+  .ld-spin{width:56px;height:56px;margin:0 auto 22px;border-radius:50%;border:7px solid rgba(255,255,255,.18);border-top-color:#ffcf4a;animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg)}}
+  .ld-bar{height:14px;border-radius:7px;background:rgba(255,255,255,.16);overflow:hidden;}
+  #ld-fill{display:block;height:100%;width:3%;background:#ffcf4a;border-radius:7px;transition:width .3s;}
+  #ld-text{margin-top:12px;font-size:17px;min-height:22px;}
+  #ld-note{margin-top:6px;font-size:14px;min-height:18px;opacity:.8;}
+  #ld-retry{display:none;margin:14px auto 0;padding:12px 24px;border:0;border-radius:12px;font-family:inherit;font-weight:bold;font-size:18px;background:#ffcf4a;color:#2a1e08;}
+  .ld-ver{margin-top:20px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;}
+</style>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "three": "/experiments/msb/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/lib/three.core.min.js": "/experiments/msb/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/art.js": "/experiments/msb/js/art.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/audio.js": "/experiments/msb/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/camera.js": "/experiments/msb/js/camera.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/editor.js": "/experiments/msb/js/editor.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/editor-ui.js": "/experiments/msb/js/editor-ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/gallery.js": "/experiments/msb/js/gallery.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/ui.js": "/experiments/msb/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/util.js": "/experiments/msb/js/util.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/msb/js/visitors.js": "/experiments/msb/js/visitors.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<!-- loading screen: drawn before anything else, filled in as the game's files arrive, hidden by
+     main.js (window.__loaded) once the game is ready; says so (with a Try again button) if loading fails -->
+<div id="loading" role="status" aria-live="polite">
+  <div class="ld-box">
+    <div class="ld-name">MSB</div>
+    <div class="ld-sub">MAKE · SELL · BUY</div>
+    <div class="ld-spin"></div>
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <div id="ld-text">Loading…</div>
+    <div id="ld-note"></div>
+    <button id="ld-retry" type="button">Try again</button>
+    <div class="ld-ver">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L = document.getElementById('loading'), fill = document.getElementById('ld-fill'), txt = document.getElementById('ld-text'),
+      note = document.getElementById('ld-note'), retry = document.getElementById('ld-retry');
+  var MAIN = '/experiments/msb/js/main.js', BUILD = 'Building the gallery…';
+  // the files to wait for: everything in the import map plus main.js (three.js counts for more: it is most of the download)
+  var want = {}, total = 0, have = 0, got = {}, shown = 3, building = false, done = false, failed = false, t0 = Date.now();
+  function add(u){ var p = u.split('?')[0]; if (!want[p]){ want[p] = /\/lib\//.test(p) ? 10 : 1; total += want[p]; } }
+  try { var m = JSON.parse(document.querySelector('script[type=importmap]').textContent).imports; for (var k in m) add(m[k]); } catch (e) {}
+  add(MAIN);
+  function show(p, t){ if (p > shown) shown = p; fill.style.width = shown + '%'; if (txt.textContent !== t) txt.textContent = t; }
+  function tick(){
+    if (done || failed) return;
+    try { performance.getEntriesByType('resource').forEach(function(e){ var p; try { p = new URL(e.name).pathname; } catch (x) { return; } if (want[p] && !got[p]){ got[p] = 1; have += want[p]; } }); } catch (e) {}
+    var f = total ? have / total : 0;
+    if (building || f >= 1) show(Math.min(97, shown + (97 - shown) * 0.03), BUILD);
+    else { show(3 + 82 * f, ''); txt.textContent = 'Loading… ' + Math.round(shown) + '%'; }
+    if (Date.now() - t0 > 20000 && !note.textContent){ note.textContent = 'Still going: a slow connection can take a minute.'; retry.style.display = 'inline-block'; }
+  }
+  var iv = setInterval(tick, 150); tick();
+  retry.onclick = function(){ location.reload(); };
+  window.__loading = function(){
+    building = true; tick();
+    return new Promise(function(r){ setTimeout(r, 120); requestAnimationFrame(function(){ setTimeout(r, 0); }); });
+  };
+  window.__loaded = function(){
+    if (done) return; done = true; clearInterval(iv);
+    show(100, 'Ready!'); note.textContent = ''; retry.style.display = 'none';
+    var hide = function(){ L.classList.add('done'); setTimeout(function(){ L.style.display = 'none'; }, 450); };
+    requestAnimationFrame(function(){ requestAnimationFrame(hide); }); setTimeout(hide, 600);
+  };
+  window.__loadFailed = function(why){
+    if (done || failed) return; failed = true; clearInterval(iv);
+    txt.textContent = 'Something went wrong while loading.'; note.textContent = why ? String(why).slice(0, 160) : '';
+    retry.style.display = 'inline-block';
+  };
+  addEventListener('error', function(e){ if (!done && e && e.message) window.__loadFailed(e.message); });
+})();
+</script>
+<div id="title">
+  <div class="card">
+    <h1>MSB<span><b class="mk">MAKE</b> <b class="dt">·</b> <b class="sl">SELL</b> <b class="dt">·</b> <b class="by">BUY</b></span></h1>
+    <p class="sub">Your own art gallery. Take photos with your real camera, turn them into art, and sell them!</p>
+    <button id="b-play" class="tbtn">▶ Play</button>
+    <button id="b-vr" class="tbtn">🥽 Play in VR</button>
+    <button id="b-new" class="tbtn second">Start a new gallery</button>
+    <p id="status"></p>
+    <p id="offline"></p>
+    <div class="help">
+      <b>Make:</b> 📷 takes a real photo · edit it with crop, filters, sliders, drawing, stickers, words and frames<br>
+      <b>Sell:</b> hang it on a wall and visitors make offers, or sell it to the dealer<br>
+      <b>Buy:</b> the 🛒 Art Market desk sells paintings, frames, decorations and a whole new wing<br>
+      <b>iPad:</b> left thumb walks · drag to look · tap frames, people and the desk<br>
+      <b>Computer:</b> WASD walks · drag to look · click things · C camera · I my art · B buy<br>
+      <b>VR:</b> left stick walks · right stick turns · A camera · trigger takes the picture or picks things · X menu · B closes
+    </div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="hud">
+  <div id="h-stat" class="chip"><div id="h-money"><span id="h-mval"></span></div><div id="h-rate"></div></div>
+  <div id="jobs"></div>
+  <div id="h-msg"></div>
+  <div id="topbtns">
+    <button id="b-art" class="hbtn">🖼 My Art</button>
+    <button id="b-shop" class="hbtn">🛒 Art Market</button>
+    <button id="b-menu" class="hbtn">☰ Menu</button>
+  </div>
+  <div id="strip"></div>
+  <div id="stick-hint">walk<br>here</div>
+  <button id="b-cam">📷<small>CAMERA</small></button>
+</div>
+<div id="stick"><div id="knob"></div></div>
+<div id="panel"></div>
+<div id="cam">
+  <video id="cam-video" playsinline muted autoplay></video>
+  <div id="cam-msg">Starting the camera…</div>
+  <button id="cam-alt">📸 Photograph the gallery instead</button>
+  <div id="cam-bar">
+    <button id="cam-close" class="cbtn" title="Close">✕</button>
+    <button id="cam-shoot" title="Take the picture">●</button>
+    <button id="cam-flip" class="cbtn" title="Switch camera">🔄</button>
+  </div>
+  <div class="cam-tip">Point at something and press the big button</div>
+</div>
+<div id="flash"></div>
+<div id="editor">
+  <div id="ed-top">
+    <button id="ed-cancel" class="tb">✕ Bin it</button>
+    <button id="ed-undo" class="tb" title="Undo">↶</button>
+    <button id="ed-redo" class="tb" title="Redo">↷</button>
+    <button id="ed-compare" class="tb" title="Hold to see the original">👁 Before</button>
+    <div class="sp">EDIT YOUR PHOTO</div>
+    <button id="ed-done" class="tb">✓ Done</button>
+  </div>
+  <div id="ed-main">
+    <div id="ed-stage"><canvas id="ed-canvas"></canvas></div>
+    <div id="ed-side">
+      <div id="ed-tabs"></div>
+      <div id="ed-tray"></div>
+    </div>
+  </div>
+</div>
+<script type="module" src="/experiments/msb/js/main.js?v={% endraw %}{{ page.version }}{% raw %}" onerror="window.__loadFailed && window.__loadFailed('A game file did not arrive. Check the connection and try again.')"></script>
+</body>
+</html>
+{% endraw %}

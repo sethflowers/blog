@@ -1,0 +1,16 @@
+{
+  "name": "MSB: Make Sell Buy",
+  "short_name": "MSB",
+  "description": "Run your own art gallery: take photos with your camera, edit them, sell them, buy more art.",
+  "start_url": "/experiments/msb/",
+  "scope": "/experiments/msb/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1e1a28",
+  "theme_color": "#1e1a28",
+  "icons": [
+    { "src": "/experiments/msb/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/msb/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/msb/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
