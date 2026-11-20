@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { V, rng, damp, angleDiff, textCanvas, roundRect, wrapText, mergeGeometries, ellipsoid, placed, paint, limb, loft, boxUV } from './util.js';
 import { DOOR } from './gallery.js';
+import { makePerson } from './people.js';
 
 const NAMES = ['Ava', 'Ben', 'Chloe', 'Dev', 'Ella', 'Finn', 'Grace', 'Hiro', 'Isla', 'Jack', 'Kira', 'Leo', 'Maya', 'Noah', 'Olive', 'Priya', 'Quinn', 'Rosa', 'Sam', 'Tom', 'Uma', 'Vik', 'Wren', 'Yara', 'Zed'];
 const SKIN = ['#f3d2b3', '#e0ac7e', '#c68642', '#8d5524', '#f8e0c8', '#a86b42'];
@@ -79,9 +80,22 @@ function buildPerson(R){
   return { body: merged(body), head: merged(head), upperArm, foreArm, thigh, shin, female, height: 0.92 + R() * 0.16, pose: pick(['behind', 'chin', 'relaxed', 'folded']) };
 }
 
+// the soft shadow under a person's feet (one shape and material, shared)
+let _bg = null, _bm = null;
+function blobGeo(){ if (!_bg){ _bg = new THREE.PlaneGeometry(0.9, 0.9); _bg.userData.keep = true; } return _bg; }
+function blobMat(){
+  if (_bm) return _bm;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, 'rgba(0,0,0,0.42)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  _bm = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  return _bm;
+}
 export class Visitors {
-  constructor(scene, gallery){
-    this.scene = scene; this.gallery = gallery;
+  // kinds: the realistic people (people.js), or null for the simple built-in ones
+  constructor(scene, gallery, kinds = null){
+    this.scene = scene; this.gallery = gallery; this.kinds = kinds;
     this.list = [];
     this.handlers = {};
     this.spawnT = 3;
@@ -92,6 +106,7 @@ export class Visitors {
   emit(ev, ...a){ for (const f of this.handlers[ev] || []) f(...a); }
 
   make(i){
+    if (this.kinds) return this.makeReal(i);
     const R = this.R, P = buildPerson(rng((Date.now() + i * 7919) >>> 0)), M = PEOPLE_MAT();
     const root = new THREE.Group(); root.visible = false;
     const v = { id: i, root, active: false, name: '', state: 'away', pos: V(0, 0, 30), yaw: 0, path: [], wait: 0, visits: [], phase: 0, speed: 1.0 + R() * 0.3, bubbleT: 0, offer: null, like: 'colourful', seen: 0, pose: P.pose, blend: 0, look: 0 };
@@ -109,6 +124,30 @@ export class Visitors {
     v.scale = P.height; root.scale.setScalar(v.scale);
     this.scene.add(root);
     return v;
+  }
+  // a realistic person: a copy of one of the models in one of its outfits, a soft shadow under the feet
+  makeReal(i){
+    const R = this.R, kinds = this.kinds;
+    // alternate men and women, each in a different outfit
+    const men = kinds.filter((k) => !k.female), women = kinds.filter((k) => k.female);
+    const kind = i % 2 ? women[Math.floor(i / 2) % women.length] : men[Math.floor(i / 2) % men.length];
+    const root = new THREE.Group(); root.visible = false;
+    const P = makePerson(kind, kind.height * (0.95 + R() * 0.08));
+    root.add(P.model);
+    const v = { id: i, root, active: false, name: '', state: 'away', pos: V(0, 0, 30), yaw: 0, path: [], wait: 0, visits: [], phase: 0, speed: 1.05 + R() * 0.25, bubbleT: 0, offer: null, like: 'colourful', seen: 0, blend: 1, look: 0, real: P, female: kind.female };
+    // a soft dark patch on the floor under them (grounds them, where the sun's shadow doesn't reach)
+    const blob = new THREE.Mesh(blobGeo(), blobMat()); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.012; blob.renderOrder = 1; root.add(blob);
+    v.bubble = textCanvas(256, 128);
+    v.bubbleSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: v.bubble.tex, depthTest: true, transparent: true }));
+    v.bubbleSprite.scale.set(0.8, 0.4, 1); v.bubbleSprite.position.y = 2.1; v.bubbleSprite.visible = false; root.add(v.bubbleSprite);
+    v.pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.8, 0.45), new THREE.MeshBasicMaterial({ visible: false })); v.pick.position.y = 0.9; v.pick.userData = { kind: 'visitor', v }; root.add(v.pick);
+    this.scene.add(root);
+    return v;
+  }
+  // a gesture: a nod (agree) or a shake of the head, played once over the walk or idle
+  gesture(v, name){
+    const P = v.real; if (!P || !P.act[name]) return;
+    const a = P.act[name]; a.reset(); a.setEffectiveWeight(1); a.fadeIn(0.25); a.play(); P.gesture = a;
   }
   get active(){ return this.list.filter((v) => v.active); }
 
@@ -204,9 +243,10 @@ export class Visitors {
             v.offer = { price, slot: s, art, t: 45 };
             v.state = 'offer';
             this.say(v, `💰 I'd pay $${price}!`, 99);
-            this.emit('offer', v);
+            this.emit('offer', v); this.gesture(v, 'agree');
           } else {
             this.say(v, op > 0.7 ? '😍 Love it!' : op > 0.45 ? '🙂 Nice!' : '🤔 Hmm…');
+            this.gesture(v, op > 0.45 ? 'agree' : 'headShake');
             this.next(v);
           }
         }
@@ -224,6 +264,19 @@ export class Visitors {
   // the body: a walk (knees bend as each leg swings through, arms swing opposite), or a pose while
   // looking at a picture (hands behind the back, a hand on the chin, arms folded), blended smoothly
   animate(v, dt, moving){
+    if (v.real){
+      const P = v.real, t = this.time || 0;
+      v.blend = damp(v.blend, moving ? 0 : 1, 6, dt);
+      const g = P.gesture && P.gesture.isRunning() ? Math.min(1, (P.gesture.getClip().duration - P.gesture.time) * 3, P.gesture.time * 4) : 0;
+      if (P.gesture && !P.gesture.isRunning()){ P.gesture.stop(); P.gesture = null; }
+      P.act.walk.setEffectiveWeight((1 - v.blend) * (1 - g));
+      P.act.idle.setEffectiveWeight(v.blend * (1 - g) + 1e-3);
+      P.act.walk.timeScale = v.speed / 1.2;   // the walk's steps match how fast they go
+      P.mixer.update(dt);
+      void t;
+      v.root.position.set(v.pos.x, this.gallery.where(v.pos.x, v.pos.z) === 'plaza' ? -0.02 : 0, v.pos.z);
+      return;
+    }
     v.phase = moving ? v.phase + dt * v.speed * 5.6 : v.phase;
     v.blend = damp(v.blend, moving ? 0 : 1, 5, dt);
     const ph = v.phase, k = 1 - v.blend, still = v.blend, t = this.time || 0;
@@ -255,8 +308,8 @@ export class Visitors {
     v.root.position.set(v.pos.x, bob + (this.gallery.where(v.pos.x, v.pos.z) === 'plaza' ? -0.02 : 0), v.pos.z);
   }
   // you answered an offer
-  accept(v){ const o = v.offer; if (!o) return null; v.offer = null; this.say(v, '🎉 Thank you!'); v.carry = o.art; this.leave(v); return o; }
-  decline(v){ if (!v.offer) return; v.offer = null; this.say(v, '😕 Maybe next time'); this.next(v); }
+  accept(v){ const o = v.offer; if (!o) return null; v.offer = null; this.say(v, '🎉 Thank you!'); this.gesture(v, 'agree'); v.carry = o.art; this.leave(v); return o; }
+  decline(v){ if (!v.offer) return; v.offer = null; this.say(v, '😕 Maybe next time'); this.gesture(v, 'headShake'); this.next(v); }
   // a word from them about what they're looking at (from their panel)
   chat(v){
     const art = (v.offer && v.offer.art) || (v.target && v.target.art);

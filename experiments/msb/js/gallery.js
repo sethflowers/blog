@@ -2,6 +2,7 @@
 // buy, an entrance onto a little plaza, the art market desk, picture spots on every wall (frames are
 // hung there when you hang a picture), decoration spots, and the walls you bump into.
 import * as THREE from 'three';
+import { mergeVertices } from '/experiments/msb/lib/addons/BufferGeometryUtils.js';
 import { V, Batch, textCanvas, roundRect, wrapText, mergeGeometries, boxUV, ellipsoid, paint, placed, rng, hash2, vnoise } from './util.js';
 
 export const H = 5.2;              // ceiling height
@@ -15,7 +16,17 @@ const T = 0.3;                                       // wall thickness
 
 // materials (cached by name)
 const mats = new Map();
-function lam(name, opts){ if (!mats.has(name)){ const m = new THREE.MeshLambertMaterial(opts); m.name = name; mats.set(name, m); } return mats.get(name); }
+// physically based (MeshStandardMaterial): lit by the sun, the sky light and the room's own reflected
+// light (scene.environment, made in main.js). The old brightening glows are toned right down.
+function lam(name, opts = {}){
+  if (!mats.has(name)){
+    const o = { roughness: 0.88, metalness: 0, ...opts };
+    if (o.emissive && !opts.glow){ o.emissive = o.emissive.clone().multiplyScalar(0.15); }
+    delete o.glow;
+    const m = new THREE.MeshStandardMaterial(o); m.name = name; mats.set(name, m);
+  }
+  return mats.get(name);
+}
 function bas(name, opts){ if (!mats.has(name)){ const m = new THREE.MeshBasicMaterial(opts); m.name = name; mats.set(name, m); } return mats.get(name); }
 function canvasTex(w, h, draw, repeat = true){
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
@@ -27,6 +38,23 @@ function canvasTex(w, h, draw, repeat = true){
 function pixTex(w, h, fn, repeat = true){
   return canvasTex(w, h, (g) => { const img = g.createImageData(w, h), d = img.data; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++){ const c = fn(x, y), i = (y * w + x) * 4; d[i] = c[0]; d[i + 1] = c[1]; d[i + 2] = c[2]; d[i + 3] = 255; } g.putImageData(img, 0, 0); }, repeat);
 }
+// a normal map from a height function (0..1), for surface relief: grooves, joints, plaster
+function normalTex(w, h, height, strength = 2, repeat = true){
+  const H = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) H[y * w + x] = height(x, y);
+  const t = pixTex(w, h, (x, y) => {
+    const at = (a, b) => H[((b + h) % h) * w + ((a + w) % w)];
+    const dx = (at(x + 1, y) - at(x - 1, y)) * strength, dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+    const l = Math.hypot(dx, dy, 1);
+    return [(-dx / l * 0.5 + 0.5) * 255, (dy / l * 0.5 + 0.5) * 255, (1 / l * 0.5 + 0.5) * 255];
+  }, repeat);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+}
+const woodH = (x, y) => { const c = Math.floor(x / 128), xl = x - c * 128, xh = xl < 64 ? xl : 128 - xl; const q = (y + xh) / 32, f = q - Math.floor(q); const e = Math.min(f, 1 - f) * 32, sm = Math.min(xh, 64 - xh); return (e < 1.3 || sm < 1.1 ? 0 : 1) + vnoise((xh - y) * 0.06, f * 8, 5) * 0.08; };
+const stoneH = (x, y) => { const row = Math.floor(y / 32), off = row % 2 ? 32 : 0, fx = (x + off) % 64, fy = y % 32; const j = Math.min(fx, 64 - fx, fy, 32 - fy); return Math.min(1, j / 3) + vnoise(x * 0.25, y * 0.25, 4, 64) * 0.25; };
+const paverH = (x, y) => { const fx = x % 128, fy = y % 128, j = Math.min(fx, 128 - fx, fy, 128 - fy); return Math.min(1, j / 2.5) + hash2(x, y, 11) * 0.05; };
+const plasterH = (x, y) => vnoise(x * 0.09375, y * 0.09375, 12, 24) * 0.6 + vnoise(x * 0.375, y * 0.375, 13, 96) * 0.4;
 // polished oak parquet laid in chevrons (each plank runs from a seam to the next; it tiles every 512 px)
 function woodTex(){
   return pixTex(512, 512, (x, y) => {
@@ -105,7 +133,8 @@ export const FRAMES = {
 function frameMat(id){
   const F = FRAMES[id] || FRAMES.wood;
   if (F.glow) return bas('frame-' + id, { color: F.color });
-  return lam('frame-' + id, { color: F.color, emissive: id === 'gold' || id === 'ornate' ? new THREE.Color('#3a2a08') : new THREE.Color(0) });
+  const metal = id === 'gold' || id === 'ornate';
+  return lam('frame-' + id, { color: F.color, metalness: metal ? 0.9 : 0, roughness: metal ? 0.32 : id === 'black' ? 0.45 : 0.6 });
 }
 
 // what you can buy to decorate the gallery
@@ -117,6 +146,33 @@ export const DECOR = {
   fountain: { name: 'Little fountain', icon: '⛲', price: 300, fame: 4 },
 };
 
+// soft shadows where things meet the floor (a cheap stand-in for ambient occlusion): a dark band
+// fading away from the foot of each wall, and soft patches under furniture
+let aoStripMat = null, aoBlobMat = null;
+function aoMats(){
+  if (aoStripMat) return;
+  const c = document.createElement('canvas'); c.width = 4; c.height = 64; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, 'rgba(0,0,0,0.5)'); gr.addColorStop(0.25, 'rgba(0,0,0,0.22)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
+  const t = new THREE.CanvasTexture(c); t.flipY = false;
+  aoStripMat = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, toneMapped: false }); aoStripMat.name = 'ao';
+  const b = document.createElement('canvas'); b.width = b.height = 64; const bg = b.getContext('2d');
+  const rg = bg.createRadialGradient(32, 32, 4, 32, 32, 31); rg.addColorStop(0, 'rgba(0,0,0,0.5)'); rg.addColorStop(0.55, 'rgba(0,0,0,0.25)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
+  bg.fillStyle = rg; bg.fillRect(0, 0, 64, 64);
+  aoBlobMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(b), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, toneMapped: false }); aoBlobMat.name = 'ao';
+}
+// a flat quad on the floor from (x0, z0) to (x1, z1); v runs from the edge at "from" outward
+function floorQuad(x0, z0, x1, z1, y, vAlongZ, flip){
+  const g = new THREE.BufferGeometry();
+  const P = [x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1];
+  let U = vAlongZ ? [0, 0, 1, 0, 1, 1, 0, 1] : [0, 0, 0, 1, 1, 1, 1, 0];
+  if (flip) U = U.map((v, i) => (i % 2 ? 1 - v : v));
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0], 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
+  g.setIndex([0, 2, 1, 0, 3, 2]);
+  return g;
+}
 export class Gallery {
   constructor(scene){
     this.scene = scene;
@@ -134,23 +190,26 @@ export class Gallery {
     const b = new Batch();
     const rep = (t, k) => { t.repeat.set(k, k); return t; };
     const col = (c) => new THREE.Color(c);
+    const nrm = (t, k) => rep(t, k);
+    const plasterN = nrm(normalTex(256, 256, plasterH, 1.2), 1 / 1.6), N2 = new THREE.Vector2(0.35, 0.35);
+    const P = { normalMap: plasterN, normalScale: N2 };
     const M = {
-      wall: lam('wall', { color: '#f3efe6', emissive: col('#2e2c28') }),
-      green: lam('wall-green', { color: '#3e6e58', emissive: col('#0e1c16') }),
-      navy: lam('wall-navy', { color: '#2a4a74', emissive: col('#0a1424') }),
-      red: lam('wall-red', { color: '#7e2c38', emissive: col('#1c080c') }),
+      wall: lam('wall', { color: '#f3efe6', emissive: col('#2e2c28'), ...P }),
+      green: lam('wall-green', { color: '#3e6e58', emissive: col('#0e1c16'), ...P }),
+      navy: lam('wall-navy', { color: '#2a4a74', emissive: col('#0a1424'), ...P }),
+      red: lam('wall-red', { color: '#7e2c38', emissive: col('#1c080c'), ...P }),
       wWhite: lam('wains-white', { color: '#e2d9c6', emissive: col('#26221c') }), wGreen: lam('wains-green', { color: '#2c5242', emissive: col('#08120e') }),
       wNavy: lam('wains-navy', { color: '#1e385a', emissive: col('#060c18') }), wRed: lam('wains-red', { color: '#5e1e2a', emissive: col('#120406') }),
-      rail: lam('rail', { color: '#c9a464', emissive: col('#2a1c06') }), skirt: lam('skirt', { color: '#2e2822' }),
-      floor: new THREE.MeshStandardMaterial({ map: rep(woodTex(), 1 / 4.2), roughness: 0.34, metalness: 0, envMapIntensity: 0.7 }),
-      ceil: lam('ceiling', { color: '#f4f2ee', emissive: col('#9a9790') }), beam: lam('beam', { color: '#ece7dc', emissive: col('#8a857c') }),
+      rail: lam('rail', { color: '#c9a464', emissive: col('#2a1c06'), metalness: 0.6, roughness: 0.38 }), skirt: lam('skirt', { color: '#2e2822' }),
+      floor: new THREE.MeshStandardMaterial({ map: rep(woodTex(), 1 / 4.2), normalMap: nrm(normalTex(512, 512, woodH, 3), 1 / 4.2), normalScale: new THREE.Vector2(0.7, 0.7), roughness: 0.3, metalness: 0, envMapIntensity: 0.9 }),
+      ceil: lam('ceiling', { color: '#f4f2ee', emissive: col('#6e6b65'), glow: true }), beam: lam('beam', { color: '#ece7dc', emissive: col('#5e5a54'), glow: true }),
       sky: bas('skylight', { color: '#eef7ff' }), lamp: bas('lamp', { color: '#fff3c8' }),
-      stone: lam('stone', { map: rep(stoneTex(), 1 / 2) }), cornice: lam('cornice', { color: '#e9dfc8', emissive: col('#1a160e') }), plinth: lam('plinth', { color: '#8c867a' }),
+      stone: lam('stone', { map: rep(stoneTex(), 1 / 2), normalMap: nrm(normalTex(256, 256, stoneH, 2.5), 1 / 2), roughness: 0.92 }), cornice: lam('cornice', { color: '#e9dfc8', emissive: col('#1a160e') }), plinth: lam('plinth', { color: '#8c867a' }),
       column: lam('column', { color: '#f2ede2', emissive: col('#22201a') }),
-      bronze: lam('bronze', { color: '#3a3630' }), dark: lam('dark', { color: '#2a2a2e' }), trim: lam('trim', { color: '#5a5650' }),
-      desk: lam('desk', { color: '#5a3820' }), deskTop: lam('desk-top', { color: '#f2eee6', emissive: col('#26241e') }),
-      rope: lam('rope', { color: '#a01a2a' }), brass: lam('brass', { color: '#d8b04a', emissive: col('#2a1a00') }),
-      glass: new THREE.MeshLambertMaterial({ color: '#cfe6f2', transparent: true, opacity: 0.2, depthWrite: false }),
+      bronze: lam('bronze', { color: '#3a3630', metalness: 0.6, roughness: 0.45 }), dark: lam('dark', { color: '#2a2a2e' }), trim: lam('trim', { color: '#5a5650' }),
+      desk: lam('desk', { color: '#5a3820', roughness: 0.55 }), deskTop: lam('desk-top', { color: '#f2eee6', emissive: col('#26241e'), roughness: 0.22 }),
+      rope: lam('rope', { color: '#a01a2a' }), brass: lam('brass', { color: '#d8b04a', emissive: col('#2a1a00'), metalness: 0.85, roughness: 0.3 }),
+      glass: Object.assign(new THREE.MeshStandardMaterial({ color: '#cfe6f2', transparent: true, opacity: 0.18, depthWrite: false, roughness: 0.05, metalness: 0.1 }), { name: 'glass' }),
     };
     M.floor.name = 'floor';
     this.M = M;
@@ -190,6 +249,8 @@ export class Gallery {
     this.walls.push({ x0: PART.x0, x1: PART.x1, z0: PART.z0, z1: PART.z1, tall: true });
     // panelling below the pictures: a panel 1.5 cm proud, a rail 3 cm, a skirting board 2.5 cm, and stiles
     const RAIL = 0.78;
+    aoMats();
+    const ao = new Batch();
     const run = (axis, at, dir, a, c, wm) => {
       const L = c - a, mid = (a + c) / 2;
       const piece = (d, y0, y1, m, pa = a, pc = c) => {
@@ -197,6 +258,10 @@ export class Gallery {
         if (axis === 'z') b.box(len, y1 - y0, t, m, mm, (y0 + y1) / 2, cc); else b.box(t, y1 - y0, len, m, cc, (y0 + y1) / 2, mm);
       };
       piece(0.015, 0, RAIL, wm); piece(0.03, RAIL, RAIL + 0.05, M.rail); piece(0.025, 0, 0.14, M.skirt);
+      // the soft shadow on the floor at its foot
+      const W = 0.6, y = 0.006;
+      if (axis === 'z'){ const z1 = at + dir * W; ao.add(floorQuad(a, Math.min(at, z1), c, Math.max(at, z1), y, true, dir < 0), aoStripMat); }
+      else { const x1 = at + dir * W; ao.add(floorQuad(Math.min(at, x1), a, Math.max(at, x1), c, y, false, dir < 0), aoStripMat); }
       const n = Math.max(1, Math.round(L / 1.3));
       for (let k = 1; k < n; k++){ const p = a + L * k / n; piece(0.022, 0.14, RAIL, wm, p - 0.025, p + 0.025); }
       void mid;
@@ -211,6 +276,11 @@ export class Gallery {
     // round the free-standing wall
     b.box(10.03, RAIL, 0.33, M.wNavy, 0, RAIL / 2, 0); b.box(10.06, 0.05, 0.36, M.rail, 0, RAIL + 0.025, 0); b.box(10.05, 0.14, 0.35, M.skirt, 0, 0.07, 0);
     for (const x of [-3.75, -1.25, 1.25, 3.75]) b.box(0.05, RAIL - 0.14, 0.344, M.wNavy, x, (RAIL + 0.14) / 2, 0);
+    // soft shadows round the free-standing wall, under the desk and the columns
+    for (const d of [-1, 1]) ao.add(floorQuad(-5.3, d < 0 ? -0.75 : 0.15, 5.3, d < 0 ? -0.15 : 0.75, 0.006, true, d < 0), aoStripMat);
+    ao.add(floorQuad(DESK.x - 2.1, DESK.z - 0.9, DESK.x + 2.1, DESK.z + 0.9, 0.007, true, false), aoBlobMat);
+    for (const z of [-2.55, 2.55]) ao.add(floorQuad(13.45 - 0.6, z - 0.6, 13.45 + 0.6, z + 0.6, 0.007, true, false), aoBlobMat);
+    this.aoMeshes = ao.build(this.root, { shadows: false, receive: false });
     // door frames (4 cm proud): the entrance, and both sides of the wing's doorway
     const frame = (axis, at, dir, a, c, top) => {
       const d = 0.04, cc = at + dir * d / 2;
@@ -241,13 +311,25 @@ export class Gallery {
       b.box(0.32, 0.42, 0.09, M.cornice, wm, WY1 + 0.08, 10.485);
     }
     // the ceiling: beams between the skylights
-    b.box(28.6, 0.3, 20.6, M.ceil, 0, h + 0.15, 0, 0, 1);
-    b.box(11.7, 0.3, 16.6, M.ceil, (WING.x0 + WING.x1) / 2, h + 0.14, 0, 0, 1);
+    // (in pieces round the skylights: the sun shines in through them)
+    const slab = (x0, x1, z0, z1, y0) => b.box(x1 - x0, 0.3, z1 - z0, M.ceil, (x0 + x1) / 2, y0 + 0.15, (z0 + z1) / 2, 0, 1);
+    const holes = (X0, X1, Z0, Z1, hx, hz, y0) => {
+      const zs = [Z0, ...hz.flat(), Z1];
+      for (let i = 0; i < zs.length - 1; i++){
+        const z0 = zs[i], z1 = zs[i + 1];
+        if (i % 2 === 0){ slab(X0, X1, z0, z1, y0); continue; }
+        const xs = [X0, ...hx.flat(), X1];
+        for (let k = 0; k < xs.length - 1; k += 2) slab(xs[k], xs[k + 1], z0, z1, y0);
+      }
+    };
+    holes(-14.3, 14.3, -10.3, 10.3, [[-11.5, -6.5], [-2.5, 2.5], [6.5, 11.5]], [[-6.3, -3.7], [3.7, 6.3]], h);
+    holes(14.3, 26, -8.3, 8.3, [[17, 23]], [[-6.5, -3.9], [3.9, 6.5]], h - 0.01);
     for (const z of [-6.45, -3.55, 3.55, 6.45]) b.box(28, 0.36, 0.3, M.beam, 0, h - 0.18, z);
     for (const x of [-11.65, -6.35, -2.65, 2.65, 6.35, 11.65]) b.box(0.3, 0.36, 20, M.beam, x, h - 0.18, 0);
     for (const z of [-3.65, 3.65]) b.box(11.7, 0.36, 0.3, M.beam, 20.15, h - 0.19, z);
-    for (const x of [-9, 0, 9]) for (const z of [-5, 5]) b.box(5, 0.04, 2.6, M.sky, x, h - 0.03, z, 0, 1);
-    b.box(6, 0.04, 2.6, M.sky, 20, h - 0.04, -5.2); b.box(6, 0.04, 2.6, M.sky, 20, h - 0.04, 5.2);
+    // skylight glass up in the openings (frosted: it glows, and lets the sun through)
+    for (const x of [-9, 0, 9]) for (const z of [-5, 5]) b.box(5, 0.04, 2.6, M.sky, x, h + 0.2, z, 0, 1);
+    b.box(6, 0.04, 2.6, M.sky, 20, h + 0.19, -5.2); b.box(6, 0.04, 2.6, M.sky, 20, h + 0.19, 5.2);
     // pendant lamps
     for (const [x, z] of [[-9, 0], [9, 0], [0, 8.2], [-9, 8.2], [9, 8.2], [20.15, 0]]){
       b.cyl(0.008, 0.008, h - 3.3, M.dark, x, (h + 3.3) / 2, z, 6);
@@ -388,7 +470,7 @@ export class Gallery {
     const b = new Batch(), M = this.M;
     const rep = (t, k) => { t.repeat.set(k, k); return t; };
     const O = {
-      plaza: lam('plaza', { map: rep(paverTex(), 1 / 2) }), grass: lam('grass', { map: rep(grassTex(), 1 / 3) }),
+      plaza: lam('plaza', { map: rep(paverTex(), 1 / 2), normalMap: rep(normalTex(256, 256, paverH, 2.5), 1 / 2), roughness: 0.8 }), grass: lam('grass', { map: rep(grassTex(), 1 / 3) }),
       hedge: lam('hedge', { map: rep(hedgeTex(), 1 / 1.2) }), asphalt: lam('asphalt', { map: rep(asphaltTex(), 1 / 4) }),
       concrete: lam('concrete', { map: rep(concreteTex(), 1 / 2) }), curb: lam('curb', { color: '#b4b0a6' }), paint: lam('road-paint', { color: '#eeeae0' }),
       soil: lam('soil', { color: '#4a3424' }), wood: lam('bench-wood', { color: '#8a5a32' }), roof: lam('roof', { color: '#4a4c54' }),
@@ -494,7 +576,9 @@ export class Gallery {
     }
     const n = tall ? 9 : 8, base = new THREE.Color('#3f7a2e'), dark = new THREE.Color('#24501c'), light = new THREE.Color('#6aa844');
     for (let k = 0; k < n; k++){
-      const blob = new THREE.IcosahedronGeometry(1, 1), p = blob.attributes.position;
+      // (vertices shared, so the crown is smooth rather than faceted)
+      const ico = new THREE.IcosahedronGeometry(1, 1); ico.deleteAttribute('normal'); ico.deleteAttribute('uv');
+      const blob = mergeVertices(ico), p = blob.attributes.position;
       const r = tall ? 0.75 + R() * 0.35 : 0.9 + R() * 0.55;
       const cx = tall ? (R() - 0.5) * 0.9 : (R() - 0.5) * 2.4, cz = tall ? (R() - 0.5) * 0.9 : (R() - 0.5) * 2.4;
       const cy = tall ? trunkH + 0.4 + k * 0.62 : trunkH + 0.8 + R() * 1.6;
@@ -507,6 +591,7 @@ export class Gallery {
         colA.set([c.r, c.g, c.b], i * 3);
       }
       blob.setAttribute('color', new THREE.BufferAttribute(colA, 3));
+      blob.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(p.count * 2), 2));
       blob.computeVertexNormals();
       parts.push(blob);
     }
@@ -725,6 +810,8 @@ export class Gallery {
   placeDecor(spot){
     const m = this.decorMesh(spot.kind, spot.i);
     m.position.copy(spot.pos); m.rotation.y = spot.ry;
+    const R = { plant: 0.55, bench: 1.2, sculpture: 0.75, fountain: 1.9 }[spot.kind];
+    if (R){ aoMats(); const sh = new THREE.Mesh(this.blobGeo || (this.blobGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), aoBlobMat); sh.scale.set(R * 2, 1, spot.kind === 'bench' ? R : R * 2); sh.position.y = 0.007; m.add(sh); }
     this.root.add(m); m.updateMatrixWorld(true);
     spot.mesh = m;
     const r = { plant: 0.4, bench: 0, sculpture: 0.5, rug: 0, fountain: 1.4 }[spot.kind];

@@ -17,7 +17,9 @@ var CACHE = 'msb-' + V;
 var BASE = '/experiments/msb/';
 var READY = BASE + '__offline-ready__';
 var VERSIONED = ['lib/three.core.min.js', 'lib/three.module.min.js',
-  'js/art.js', 'js/audio.js', 'js/camera.js', 'js/editor.js', 'js/editor-ui.js', 'js/gallery.js', 'js/main.js', 'js/ui.js', 'js/util.js', 'js/visitors.js'];
+  'js/art.js', 'js/audio.js', 'js/camera.js', 'js/editor.js', 'js/editor-ui.js', 'js/gallery.js', 'js/main.js', 'js/people.js', 'js/ui.js', 'js/util.js', 'js/visitors.js',
+  'lib/addons/GLTFLoader.js', 'lib/addons/BufferGeometryUtils.js', 'lib/addons/SkeletonUtils.js',
+  'models/Michelle.glb', 'models/readyplayer.me.glb', 'models/clips.json'];
 var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 var ASSETS = [BASE].concat(VERSIONED.map(function (f) { return BASE + f + '?v=' + V; }), STATIC.map(function (f) { return BASE + f; }));
 

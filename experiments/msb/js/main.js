@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { V, clamp, damp, textCanvas, roundRect, wrapText, fmtMoney } from './util.js';
 import { Gallery, START, FRAMES, DECOR, DESK } from './gallery.js';
 import { Visitors } from './visitors.js';
+import { loadPeople } from './people.js';
 import { ScreenPanel, VRPanel } from './ui.js';
 import { startAudio, sfx } from './audio.js';
 import { cam, startCamera, stopCamera, flipCamera, snap, cameraSupported, setZoom } from './camera.js';
@@ -31,6 +32,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// filmic tone mapping: bright sunlight and dim corners in one picture, like a camera sees them
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.25;
 renderer.setClearColor(0x9ad0f5, 1);
 renderer.xr.enabled = true; renderer.xr.setReferenceSpaceType('local-floor'); renderer.xr.setFoveation(0.5);
 document.body.prepend(renderer.domElement);
@@ -55,10 +58,11 @@ sky.frustumCulled = false; sky.renderOrder = -1; scene.add(sky);
 scene.fog = new THREE.Fog(0xc8dcec, 70, 330);
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 400);
 const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
-scene.add(new THREE.HemisphereLight(0xffffff, 0xc8b090, 1.7));
-scene.add(new THREE.AmbientLight(0xffffff, 0.35));
-const sun = new THREE.DirectionalLight(0xfff4e0, 1.5);
-const SUN_DIR = V(0.25, 1, 0.35).normalize();
+// light: the sun (through the skylights and windows: the ceiling and walls cast shadows), a little
+// sky light, and the room's own light bouncing about (scene.environment, below)
+const hemi = new THREE.HemisphereLight(0xdfeeff, 0xb89a78, 0.8); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d8, 3.4);
+const SUN_DIR = V(0.32, 1, 0.42).normalize();
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.05;
 Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 80 });
 sun.position.copy(SUN_DIR).multiplyScalar(40).add(V(6, 0, 4)); sun.target.position.set(6, 0, 4);
@@ -67,17 +71,24 @@ scene.add(sun, sun.target);
 // ---------- the gallery, visitors, panels ----------
 const gallery = new Gallery(scene);
 // walls, ceilings and floors don't cast shadows (the light comes through the skylights)
-const NO_SHADOW = ['ceiling', 'beam', 'skylight', 'lamp', 'wall', 'wall-green', 'wall-navy', 'wall-red', 'wains-white', 'wains-green', 'wains-navy', 'wains-red', 'rail', 'skirt',
-  'floor', 'plaza', 'grass', 'asphalt', 'concrete', 'curb', 'road-paint', 'mat', 'soil', 'roof'];
+const NO_SHADOW = ['skylight', 'lamp', 'glass', 'wains-white', 'wains-green', 'wains-navy', 'wains-red', 'rail', 'skirt',
+  'floor', 'plaza', 'grass', 'asphalt', 'concrete', 'curb', 'road-paint', 'mat', 'soil'];
 gallery.root.traverse((o) => { if (o.isMesh && !o.isInstancedMesh && NO_SHADOW.includes(o.material.name)) o.castShadow = false; });
-// the floor's polish: it reflects the room (a blurred picture of the gallery seen from the middle, made once)
+// the room's own light: a blurred picture of the gallery seen from the middle, made once and used as the
+// light that bounces off everything (and the floor's reflections). Twice, so light bounces twice.
 {
   const pm = new THREE.PMREMGenerator(renderer);
-  const env = pm.fromScene(scene, 0.03, 0.1, 400, { size: 128, position: new THREE.Vector3(0, 1.6, 5) });
-  gallery.M.floor.envMap = env.texture; gallery.M.floor.needsUpdate = true;
+  let env = null;
+  for (let k = 0; k < 2; k++){
+    const e = pm.fromScene(scene, 0.04, 0.1, 400, { size: 128, position: new THREE.Vector3(0, 1.7, 5) });
+    if (env) env.dispose(); env = e; scene.environment = env.texture; scene.environmentIntensity = 1.0;
+  }
   pm.dispose();
 }
-const visitors = new Visitors(scene, gallery);
+// the people: realistic models if they load (the simple built-in ones otherwise)
+let peopleKinds = null;
+try { peopleKinds = await loadPeople(); } catch (e) { console.warn('people models did not load, using simple ones', e); }
+const visitors = new Visitors(scene, gallery, peopleKinds);
 const panel = new ScreenPanel();
 const vrPanel = new VRPanel();
 scene.add(vrPanel.mesh); vrPanel.mesh.visible = false;
