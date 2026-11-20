@@ -3,7 +3,7 @@
 // in it; and six modes play with what they find. A headset that can do AR (a Quest 3) gets its own
 // passthrough mode.
 import { $, h, say, save, store, drawBits, bits, banner } from '/experiments/camera-magic/js/util.js';
-import { cam, startCamera, stopCamera, flipCamera, useImage, fit, cameraSupported, drawCovering } from '/experiments/camera-magic/js/camera.js';
+import { cam, startCamera, stopCamera, flipCamera, useImage, fit, cameraSupported, drawCovering, isBrave } from '/experiments/camera-magic/js/camera.js';
 import * as vision from '/experiments/camera-magic/js/vision.js';
 import { unlockAudio, sound, sfx } from '/experiments/camera-magic/js/audio.js';
 import { getRenderer, resizeRenderer } from '/experiments/camera-magic/js/three-layer.js';
@@ -30,20 +30,27 @@ const threeCanvas = $('three');
 const status = $('status');
 const isStandalone = () => navigator.standalone || (window.matchMedia && (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches));
 if (!cameraSupported()){
-  status.textContent = window.isSecureContext ? 'This browser can\'t use the camera.' : 'The camera needs a secure (https) page.';
+  status.textContent = window.isSecureContext ? 'This browser doesn\'t let web pages use the camera.' + (isBrave() ? ' In Brave, allow the camera in Shields or the page settings, or open the page in Safari.' : ' Try Safari.') : 'The camera needs a secure (https) page.';
 } else status.textContent = 'Nothing leaves this device: all the seeing happens right here.';
 
 async function begin(facing){
   unlockAudio();
   status.textContent = 'Starting the camera…';
   $('b-start').disabled = $('b-selfie').disabled = true;
+  // no answer after a while (no camera prompt showed, or it is waiting behind something): say so,
+  // and let Start be tapped again, instead of "Starting the camera…" for ever
+  const slow = setTimeout(() => {
+    status.textContent = 'Still waiting for the camera. If no "use the camera?" question appeared, this browser may have the camera switched off for this page.' + (isBrave() ? ' In Brave, tap the lion (Shields) or the page settings and allow the camera, or open the page in Safari.' : ' Try Safari.');
+    $('b-start').disabled = $('b-selfie').disabled = false;
+    $('b-start').textContent = '▶ Try again';
+  }, 8000);
   try {
     await startCamera(facing);
     play();
   } catch (e) {
     status.textContent = cam.error || 'The camera did not start.';
     $('b-start').textContent = '▶ Try again';
-  } finally { $('b-start').disabled = $('b-selfie').disabled = false; }
+  } finally { clearTimeout(slow); $('b-start').disabled = $('b-selfie').disabled = false; }
 }
 $('b-start').onclick = () => begin('environment');
 $('b-selfie').onclick = () => begin('user');

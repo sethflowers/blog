@@ -97,7 +97,7 @@ const mode = {
     // choose where to be (when not busy)
     if (S.state !== 'held'){
       const open = hands.filter((hd) => hd.open).sort((a, b) => b.size - a.size)[0];
-      const things = R.objects.filter((o) => o.score > 0.45).sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h);
+      const things = R.objects.filter((o) => o.score > 0.4).sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h);
       if (S.berry){ S.target = { x: S.berry.x, y: S.berry.y }; S.why = 'berry'; }
       else if (open){ S.target = { x: open.palm.x, y: open.palm.y }; S.why = 'hand'; }
       else if (things.length){

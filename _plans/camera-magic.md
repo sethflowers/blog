@@ -16,7 +16,7 @@ passthrough AR mode as a bonus.
   model loads the first time a mode needs it ("Loading the hand tracker…"), runs in VIDEO mode at its
   own rate (objects about 9 a second, hands and face every frame), GPU first with a CPU fallback
   (`?cpu` forces the CPU). The segmenter looks at a 256-px copy of the picture.
-  - Object detector: EfficientDet-Lite0, the 80 COCO things (`labels.js` gives them friendly names,
+  - Object detector: EfficientDet-Lite0 (float16, always on the CPU: see 1.1), the 80 COCO things (`labels.js` gives them friendly names,
     pictures and the hunt's clues).
   - Hand landmarker (21 points a hand, two hands), face landmarker (478 points plus blendshapes such
     as `jawOpen` and `eyeBlinkLeft`), pose landmarker lite (33 points), selfie segmenter.
@@ -54,8 +54,8 @@ passthrough AR mode as a bonus.
 
 - No world tracking on the iPad web (no ARKit in Safari): overlays stick to what the models find, and
   Look around only follows turning.
-- The small object model gets things wrong sometimes (in the test picture it calls a poodle and a
-  corgi "cat"). A bigger model (EfficientDet-Lite2) would be better and slower.
+- The small object model gets things wrong sometimes (in the test picture it calls one of the cats a
+  dog). A bigger model (EfficientDet-Lite2) would be better and slower.
 - First start downloads about 37 MB (the service worker saves it all for offline).
 
 ## Tests
@@ -71,6 +71,23 @@ Quest 3: bubbles appear, a controller pops them, memory flat after 30 pops, B le
 from Pip.
 
 ## Versions
+
+### 1.1
+- **The object spotter found nothing on the iPad** (so the Hunt never found anything either). 1.0
+  shipped EfficientDet-Lite0 *int8*, run on the GPU first. On the GPU that model returns no detections
+  at all, with no error, so the CPU fallback never kicked in; the tests only ever ran with `?cpu`, so
+  they didn't notice. Compared on four pictures in both delegates: int8 models give nothing (or junk)
+  on the GPU; float16 works on both. Now the *float16* Lite0 (7 MB), always on the CPU (about 100 ms a
+  look headless, quicker on an iPad), which is also what the tests use. Lite2 finds a little more
+  (vases) but is three times slower; not worth it while hands run alongside in Pip. The Hunt and Pip
+  accept a match from 40% (was 45%), and the spotter reports from 30%.
+- The test now also opens the page as an iPad does (no `?cpu`) and must find the chairs in MediaPipe's
+  dining-room picture, and the Hunt must find "A comfy place to sit" there.
+- **Brave showed no camera prompt** and the title screen stayed on "Starting the camera…". Now, after
+  8 seconds without an answer, it says no camera question appeared and the browser may have the camera
+  switched off for the page (in Brave: allow it in Shields or the page settings, or use Safari), and
+  Start becomes Try again. A browser with no camera support says so straight away. Both are tested
+  (a `getUserMedia` that never answers; no `mediaDevices`).
 
 ### 1.0
 First version: everything above.

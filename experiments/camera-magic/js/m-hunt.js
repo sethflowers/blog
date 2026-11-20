@@ -7,7 +7,7 @@ import { CLUES, nameOf, iconOf } from '/experiments/camera-magic/js/labels.js';
 import { h, say, banner, burst, shuffle, save, store } from '/experiments/camera-magic/js/util.js';
 import { sfx } from '/experiments/camera-magic/js/audio.js';
 
-const ROUND = 6, HOLD = 0.6, MIN_SCORE = 0.45;
+const ROUND = 6, HOLD = 0.6, MIN_SCORE = 0.4;
 const S = { clues: [], i: 0, found: [], hold: 0, holdBox: null, cheer: 0, done: false };
 
 function newHunt(){

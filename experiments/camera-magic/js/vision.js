@@ -18,8 +18,10 @@ const FILESET = { wasmLoaderPath: BASE + 'lib/mediapipe/vision_wasm_internal.js?
                   wasmBinaryPath: BASE + 'lib/mediapipe/vision_wasm_internal.wasm?v=' + V };
 
 export const MODELS = {
-  objects: { name: 'the object spotter', cls: ObjectDetector, file: 'efficientdet_lite0.tflite', every: 110,
-    opts: { scoreThreshold: 0.35, maxResults: 8 } },
+  // the float16 model, always on the CPU: version 1.0 shipped the int8 model, which finds nothing at
+  // all on the GPU (no error, just no results), and the GPU is what an iPad used
+  objects: { name: 'the object spotter', cls: ObjectDetector, file: 'efficientdet_lite0.tflite', every: 110, delegate: 'CPU',
+    opts: { scoreThreshold: 0.3, maxResults: 10 } },
   hands: { name: 'the hand tracker', cls: HandLandmarker, file: 'hand_landmarker.task', every: 0,
     opts: { numHands: 2, minHandDetectionConfidence: 0.5, minHandPresenceConfidence: 0.5, minTrackingConfidence: 0.5 } },
   face: { name: 'the face tracker', cls: FaceLandmarker, file: 'face_landmarker.task', every: 0,
@@ -53,9 +55,10 @@ export function load(name, onState){
     runningMode: 'VIDEO', ...m.opts });
   loading[name] = (async () => {
     let t;
-    try { t = await make(opts.delegate); }
+    const delegate = m.delegate || opts.delegate;
+    try { t = await make(delegate); }
     catch (e) {
-      if (opts.delegate === 'CPU') throw e;
+      if (delegate === 'CPU') throw e;
       console.warn('[camera-magic] ' + name + ' on the GPU failed, using the CPU', e);
       t = await make('CPU');
     }

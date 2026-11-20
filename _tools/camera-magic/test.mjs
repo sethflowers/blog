@@ -27,7 +27,7 @@ try { IWER = fs.readFileSync(require.resolve('iwer/build/iwer.min.js', { paths: 
 catch (e) { console.log('(IWER not installed: skipping the AR part. npm i --prefix _tools/vr-test iwer)'); }
 
 // the test pictures
-const PICS = ['cats_and_dogs.jpg', 'pointing_up.jpg', 'portrait.jpg', 'pose.jpg'];
+const PICS = ['cats_and_dogs.jpg', 'pointing_up.jpg', 'portrait.jpg', 'pose.jpg', 'living_room.jpg'];
 const PIC_DIR = path.join(os.tmpdir(), 'camera-magic-test-pictures');
 fs.mkdirSync(PIC_DIR, { recursive: true });
 for (const p of PICS){
@@ -113,7 +113,7 @@ await shot('02-live-camera');
 
 console.log('🔍 what it sees');
 await pic('cats_and_dogs.jpg');
-// (the small object model calls the poodle and the corgi cats too, but it finds all four animals)
+// (the small object model mixes up cats and dogs sometimes, but it finds all four animals)
 await until(() => window.__cm.R.objects.filter((o) => o.label === 'cat' || o.label === 'dog').length >= 3, 20, 'it spots the animals in the cats-and-dogs picture');
 await pg.waitForTimeout(300);
 await shot('03-objects');
@@ -141,6 +141,10 @@ await pic('cats_and_dogs.jpg');
 await ev(() => window.__cm.modes.hunt.setClue(['cat']));
 await until(() => window.__cm.modes.hunt.state.found.includes('cat'), 20, 'holding the camera on a cat finds the "cat" clue');
 check(/Clue 2 of 6/.test(await pg.textContent('#banner')), 'the next clue shows');
+// a real clue in a real room: "A comfy place to sit" in a dining room
+await pic('living_room.jpg');
+await ev(() => { const H = window.__cm.modes.hunt; H.state.clues[H.state.i] = { text: 'A comfy place to sit', icon: '🪑', any: ['chair', 'couch', 'bench'] }; });
+await until(() => window.__cm.modes.hunt.state.found.includes('chair'), 20, 'in a dining room, "A comfy place to sit" finds a chair');
 await shot('07-hunt');
 
 console.log('🫧 bubbles');
@@ -221,6 +225,40 @@ await ev(() => { window.__cm.modes.look.scatter(); });
 await pg.click('#tabs [data-mode=look]'); await pg.waitForTimeout(200);
 const m2 = await counts();
 check(m2[0] <= m1[0] + 2 && m2[1] <= m1[1], `switching modes and new balloons don't pile up memory (geometries ${m1[0]} → ${m2[0]}, textures ${m1[1]} → ${m2[1]})`);
+
+console.log('as on an iPad (GPU where the game asks for it, not ?cpu)');
+// 1.0 bug: on the GPU the object spotter found nothing at all, and the tests only ever used ?cpu
+{
+  const p2 = await ctx.newPage();
+  await p2.goto(BASE);
+  await p2.waitForFunction(() => window.__cm, null, { timeout: 60000 });
+  await p2.evaluate(async () => { await window.__cm.useImage('/__pics/living_room.jpg'); window.__cm.playing = true; document.body.classList.add('playing'); document.getElementById('title').classList.add('hidden'); window.__cm.setMode('spot'); });
+  const ok = await p2.waitForFunction(() => window.__cm.R.objects.filter((o) => o.label === 'chair').length >= 2, null, { timeout: 60000, polling: 200 }).then(() => true, () => false);
+  const seen = await p2.evaluate(() => window.__cm.R.objects.map((o) => o.label).join(', '));
+  check(ok, `without ?cpu the object spotter still finds the chairs in a dining room (${seen || 'nothing'})`);
+  await p2.screenshot({ path: path.join(OUT, '15-dining-room.png') });
+  await p2.close();
+}
+
+console.log('a browser that never answers the camera request (Brave on the iPad)');
+{
+  const p3 = await ctx.newPage();
+  await p3.addInitScript(() => { navigator.mediaDevices.getUserMedia = () => new Promise(() => {}); });
+  await p3.goto(BASE + '?cpu');
+  await p3.waitForFunction(() => window.__cm, null, { timeout: 60000 });
+  await p3.waitForFunction(() => document.getElementById('loading').style.display === 'none');
+  await p3.click('#b-start');
+  const said = await p3.waitForFunction(() => /Still waiting for the camera/.test(document.getElementById('status').textContent) && !document.getElementById('b-start').disabled, null, { timeout: 15000 }).then(() => true, () => false);
+  check(said, 'with no answer to the camera request it says so and offers Try again (not "Starting the camera…" for ever)');
+  await p3.screenshot({ path: path.join(OUT, '16-no-camera-answer.png') });
+  await p3.close();
+  const p4 = await ctx.newPage();
+  await p4.addInitScript(() => { Object.defineProperty(navigator, 'mediaDevices', { get: () => undefined }); });
+  await p4.goto(BASE + '?cpu');
+  await p4.waitForFunction(() => window.__cm, null, { timeout: 60000 });
+  check(/doesn't let web pages use the camera/.test(await p4.textContent('#status')), 'a browser with no camera at all says so on the title screen');
+  await p4.close();
+}
 
 if (IWER){
   console.log('🥽 AR (emulated Quest 3)');
