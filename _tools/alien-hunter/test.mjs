@@ -25,7 +25,7 @@ let IWER = null;
 try { IWER = fs.readFileSync(require.resolve('iwer/build/iwer.min.js', { paths: [HERE, path.join(HERE, '../vr-test'), ...(process.env.NODE_PATH || '').split(':')] }), 'utf8'); }
 catch (e) { console.log('(IWER not installed: skipping the VR part. npm i --prefix _tools/vr-test iwer)'); }
 
-const TYPES = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.html': 'text/html' };
+const TYPES = { '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.html': 'text/html', '.glb': 'model/gltf-binary' };
 function page(name){
   const src = fs.readFileSync(path.join(ROOT, '_experiments', name + '.html'), 'utf8');
   const fm = src.match(/^---\n([\s\S]*?)\n---\n/);
@@ -89,6 +89,7 @@ await shot('01-title');
 
 // ---------- on screen ----------
 await ev(`document.getElementById('b-play').click()`);
+await ev('__ah.paused = true');   // (on screen the test runs the game itself)
 await wait(300);
 check(await ev('__ah.mode') === 'screen', 'Play starts the game on the screen');
 check(await ev(`!!document.querySelector('#panel.show') && document.querySelector('#panel h2').textContent.includes('Alien Hunter')`), 'a welcome explains how to hunt');
@@ -140,14 +141,14 @@ await ev(`for (const p of __ah.people.list){ p.state = 'idle'; p.wait = 1e9; p.p
 await ev('__ah.toggleXray(true)');
 check(await ev('__ah.xrayOn') && await ev(`getComputedStyle(document.getElementById('xray')).display !== 'none'`), 'the X-ray tablet comes up on screen');
 const hid = await look('!p.alien && !p.dead');
-await until(`__ah.people.list[${hid}].revealed`, 3, 'holding a person in the X-ray screen scans them');
+await until(`__ah.person(${hid}).revealed`, 3, 'holding a person in the X-ray screen scans them');
 await ev('__ah.advance(0.1)');
-check(!(await ev(`__ah.people.list[${hid}].alien`)) && (await ev(`document.getElementById('xr-text').textContent`)).includes('human'), 'a real person shows up as human (bones inside)');
+check(!(await ev(`__ah.person(${hid}).alien`)) && (await ev(`document.getElementById('xr-text').textContent`)).includes('human'), 'a real person shows up as human (bones inside)');
 await shot('06-xray-human');
-const aid = await look('p.alien && !p.dead');
+const aid = await look('p.alien && !p.dead && !p.revealed');
 await ev(`__ah.advance(0.4)`);
 check(await ev('__ah.scan.progress') > 0, 'the tablet shows the scan going');
-await until(`__ah.people.list[${aid}].revealed`, 3, 'an alien gets scanned');
+await until(`__ah.person(${aid}).revealed`, 3, 'an alien gets scanned');
 await ev('__ah.advance(0.1)');
 check(/ALIEN/.test(await ev(`document.getElementById('xr-text').textContent`)), 'and shows up as an ALIEN');
 await shot('07-xray-alien');
@@ -156,32 +157,36 @@ await ev(`(() => { const T = __ah.town, p = __ah.people.list.find((p) => !p.dead
   const h = T.houses[T.nodes[p.node].house], g = T.nodes[h.gateNode]; __ah.standAt({ x: g.x, z: g.z, yaw: 0 }); __ah.aimAt(p); __ah.player.pitch = -0.05; })()`);
 await shot('07b-xray-through-wall');
 // zap the alien: it falls down dead
-check(await ev(`__ah.people.list[${aid}].flee`), 'a revealed alien runs away from you');
+check(await ev(`__ah.person(${aid}).flee`), 'a revealed alien runs away from you');
 // (hold it still to aim)
-const hold = (id) => ev(`(() => { const p = __ah.people.list[${id}]; p.state = 'idle'; p.wait = 1e9; p.path = []; p.target = null; p.flee = true; })()`);
+const hold = (id) => ev(`(() => { const p = __ah.person(${id}); p.state = 'idle'; p.wait = 1e9; p.path = []; p.target = null; p.flee = true; })()`);
 await hold(aid);
 await look(`p.id === ${aid}`);
-const zr = await ev(`(() => { const r = __ah.zapScreen(innerWidth / 2, innerHeight / 2); const p = __ah.people.list[${aid}]; return { hit: r && r.id, state: p.state, d: Math.hypot(p.pos.x - __ah.player.pos.x, p.pos.z - __ah.player.pos.z), cool: 0 }; })()`);
+const zr = await ev(`(() => { const r = __ah.zapScreen(innerWidth / 2, innerHeight / 2); const p = __ah.person(${aid}); return { hit: r && r.id, state: p.state, d: Math.hypot(p.pos.x - __ah.player.pos.x, p.pos.z - __ah.player.pos.z), cool: 0 }; })()`);
 if (process.env.DEBUG) console.log(zr);
 await ev('__ah.advance(0.05)');
 await shot('08-zap');
 await ev('__ah.toggleXray(false)'); await ev('__ah.advance(0.15)');
 await shot('08b-zapped-alien');
-await until(`__ah.people.list[${aid}].dead`, 2, 'zapping an alien kills it');
+await until(`__ah.person(${aid}).dead`, 2, 'zapping an alien kills it');
 await ev('__ah.advance(1.2)');
-check(await ev(`__ah.people.list[${aid}].fall.rotation.x`) < -1.4, 'it falls down flat');
+check(await ev(`__ah.person(${aid}).fall.rotation.x`) < -1.4, 'it falls down flat');
 check(await ev('__ah.save.score') === 100, 'and scores 100');
 await ev('__ah.toggleXray(false)');
-await ev(`(() => { const p = __ah.people.list[${aid}]; __ah.standAt({ x: p.pos.x + 2.5, z: p.pos.z + 1.5, yaw: 0 }); __ah.aimAt({ x: p.pos.x, y: p.pos.y + 0.2, z: p.pos.z - 0.6 }); })()`);
+await ev(`(() => { const p = __ah.person(${aid}); __ah.standAt({ x: p.pos.x + 2.5, z: p.pos.z + 1.5, yaw: 0 }); __ah.aimAt({ x: p.pos.x, y: p.pos.y + 0.2, z: p.pos.z - 0.6 }); })()`);
 await shot('09-dead-alien');
 // zap a real person: ow, and points off
 const hid2 = await look('!p.alien && !p.dead');
 await hold(hid2); await look(`p.id === ${hid2}`);
+// (nobody else in the line of fire)
+await ev(`for (const q of __ah.people.list) if (q.id !== ${hid2} && !q.dead && q.pos.distanceTo(__ah.player.pos) < 12) q.pos.set(-60, 0, -60 + q.id);`);
 await ev(`__ah.zapScreen(innerWidth / 2, innerHeight / 2)`);
 await ev('__ah.advance(0.3)');
 await shot('10-zap-human');
-await until(`__ah.people.list[${hid2}].state !== 'zapped'`, 2, 'a zapped person recovers');
-check(!(await ev(`__ah.people.list[${hid2}].dead`)) && await ev('__ah.save.score') === 50 && await ev('__ah.lvl.oops') === 1, 'zapping a real person doesn\'t kill them, costs 50 and counts a mistake');
+if (process.env.DEBUG) console.log(await ev(`(() => { const p = __ah.person(${hid2}); return { st: p.state, zapT: p.zapT, flash: p.flash, vis: p.P.model.visible, rootVis: p.root.visible, pos: p.pos.toArray(), me: __ah.player.pos.toArray(), F: __ah.people.sets.F.m.skull.count, X: __ah.people.sets.X.m.skull.count }; })()`));
+await until(`__ah.person(${hid2}).state !== 'zapped'`, 2, 'a zapped person recovers');
+if (process.env.DEBUG) console.log(await ev('({ s: __ah.save.score, o: __ah.lvl.oops, z: __ah.lvl.zapped })'));
+check(!(await ev(`__ah.person(${hid2}).dead`)) && await ev('__ah.save.score') === 50 && await ev('__ah.lvl.oops') === 1, 'zapping a real person doesn\'t kill them, costs 50 and counts a mistake');
 // clear the town
 await ev(`for (const p of __ah.people.list) if (p.alien && !p.dead){ p.revealed = true; __ah.people.zap(p); }`);
 await until('__ah.people.aliensLeft === 0', 3, 'zapping every alien...');
@@ -205,7 +210,8 @@ check(await ev(`JSON.parse(localStorage.getItem('alien-hunter-v1')).town === __a
 
 // ---------- VR ----------
 if (IWER){
-  await ev('__ah.xrScale = 0.3');
+  // (headless headset frames are slow in software rendering: smaller frames, the shadow map frozen, no trees or hills)
+  await ev('__ah.xrScale = 0.2; __ah.renderer.shadowMap.autoUpdate = false; __ah.town.root.visible = false;   // (the buildings are most of the cost)');
   await ev('__ah.startVR(false)');
   await pg.waitForFunction('__ah.mode === "vr"', null, { timeout: 30000 });
   check(true, 'VR session starts');
@@ -222,28 +228,31 @@ if (IWER){
   await ev(`(() => { for (const p of __ah.people.list){ p.state = 'idle'; p.wait = 1e9; p.path = []; } const p = __ah.people.list.find((p) => !p.dead);
     const h = __ah.head; p.pos.set(h[0] - 0.15, __ah.town.groundAt(h[0], h[2] - 4), h[2] - 4); window.__vrTarget = p.id; })()`);
   await nextFrame(); await nextFrame();
-  await pg.waitForFunction('__ah.people.list[window.__vrTarget].revealed || __ah.scan.progress > 0', null, { timeout: 30000 }).catch(() => {});
-  await pg.waitForFunction('__ah.people.list[window.__vrTarget].revealed', null, { timeout: 30000 }).catch(() => {});
-  check(await ev('__ah.people.list[window.__vrTarget].revealed'), 'pointing the tablet at a person scans them');
+  await ev('__ah.timeScale = 6');   // (the scan takes 0.7 s of game time: fewer slow headset frames)
+  await pg.waitForFunction('__ah.person(window.__vrTarget).revealed', null, { timeout: 30000 }).catch(() => {});
+  await ev('__ah.timeScale = 1');
+  check(await ev('__ah.person(window.__vrTarget).revealed'), 'pointing the tablet at a person scans them');
+  await ev('__ah.town.root.visible = true'); await nextFrame(); await nextFrame();
   await pg.screenshot({ path: path.join(OUT, '20-vr-tablet.png'), timeout: 120000 });
+  await ev('__ah.town.root.visible = false');
   // zap with the trigger
-  const tgt = await ev('__ah.people.list[window.__vrTarget].alien');
+  const tgt = await ev('__ah.person(window.__vrTarget).alien');
   // point the gun at them
-  await ev(`(() => { const R = __ah.vr[1], p = __ah.people.list[window.__vrTarget], V = __ah.rig.position.constructor;
+  await ev(`(() => { const R = __ah.vr[1], p = __ah.person(window.__vrTarget), V = __ah.rig.position.constructor;
     const d = new V(p.pos.x, p.pos.y + 1.1, p.pos.z).sub(R.rayPos).normalize().applyQuaternion(__ah.rig.quaternion.clone().invert());
     const q = new __ah.rig.quaternion.constructor().setFromUnitVectors(new V(0, 0, -1), d);
     window.__iwer.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); })()`);
   await nextFrame(); await nextFrame();
-  await ev(`(() => { const p = __ah.people.list[window.__vrTarget]; p.state = 'idle'; p.wait = 1e9; p.path = []; p.target = null; p.flee = true; })()`);
-  await ev(`(() => { const p = __ah.people.list[window.__vrTarget], h = __ah.head; p.pos.set(h[0] - 0.15, __ah.town.groundAt(h[0], h[2] - 4), h[2] - 4); })()`);
-  await ev(`(() => { const R = __ah.vr[1], p = __ah.people.list[window.__vrTarget], V = __ah.rig.position.constructor;
+  await ev(`(() => { const p = __ah.person(window.__vrTarget); p.state = 'idle'; p.wait = 1e9; p.path = []; p.target = null; p.flee = true; })()`);
+  await ev(`(() => { const p = __ah.person(window.__vrTarget), h = __ah.head; p.pos.set(h[0] - 0.15, __ah.town.groundAt(h[0], h[2] - 4), h[2] - 4); })()`);
+  await ev(`(() => { const R = __ah.vr[1], p = __ah.person(window.__vrTarget), V = __ah.rig.position.constructor;
     const d = new V(p.pos.x, p.pos.y + 1.1, p.pos.z).sub(R.rayPos).normalize().applyQuaternion(__ah.rig.quaternion.clone().invert());
     const q = new __ah.rig.quaternion.constructor().setFromUnitVectors(new V(0, 0, -1), d);
     window.__iwer.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); })()`);
   await nextFrame(); await nextFrame();
   await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 1)`); await nextFrame(); await nextFrame();
   await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`); await nextFrame(); await nextFrame();
-  check(await ev(`__ah.people.list[window.__vrTarget].state === 'zapped' || __ah.people.list[window.__vrTarget].dead || __ah.lvl.oops > 0`), `the trigger zaps (hit the ${tgt ? 'alien' : 'person'} in front)`);
+  check(await ev(`__ah.person(window.__vrTarget).state === 'zapped' || __ah.person(window.__vrTarget).dead || __ah.lvl.oops > 0`), `the trigger zaps (hit the ${tgt ? 'alien' : 'person'} in front)`);
   await pg.screenshot({ path: path.join(OUT, '21-vr-zap.png'), timeout: 120000 });
   // walking
   const h0 = await ev('__ah.head');

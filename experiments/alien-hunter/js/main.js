@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { V, clamp, damp } from './util.js';
 import { Town, START, FLOOR_Y } from './town.js';
-import { People, INNER } from './people.js';
+import { People, INNER, loadPeople } from './people.js';
 import { makeGun, makeTablet, drawStrip, Effects } from './gear.js';
 import { ScreenPanel, VRPanel } from './ui.js';
 import { startAudio, sfx } from './audio.js';
@@ -29,6 +29,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// filmic tone mapping: bright sunlight and shady corners in one picture, as a camera sees them (from MSB)
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
 renderer.setClearColor(0x9ad8ff, 1);
 renderer.xr.enabled = true; renderer.xr.setReferenceSpaceType('local-floor'); renderer.xr.setFoveation(0.5);
 document.body.prepend(renderer.domElement);
@@ -37,30 +39,42 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 900);
 const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
 const SUN_DIR = V(0.45, 0.75, 0.35).normalize();
-scene.fog = new THREE.Fog(0xb8e4ff, 120, 520);
-const sky = new THREE.Mesh(new THREE.SphereGeometry(800, 32, 16), new THREE.ShaderMaterial({
+scene.fog = new THREE.Fog(0xc8dcec, 90, 420);
+// the sky: blue fading to pale at the horizon, soft clouds (MSB's)
+const sky = new THREE.Mesh(new THREE.SphereGeometry(500, 32, 16), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
   vertexShader: 'varying vec3 d; void main(){ d = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }',
   fragmentShader: `varying vec3 d;
     float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
     void main(){ vec3 v = normalize(d); float y = max(v.y, 0.0);
-      vec3 c = mix(vec3(0.75, 0.9, 1.0), vec3(0.3, 0.6, 1.0), pow(y, 0.6));
-      if (v.y > 0.03){ vec2 uv = v.xz / (v.y + 0.15) * 1.1; float k = n(uv) * 0.6 + n(uv * 2.1) * 0.4; c = mix(c, vec3(1.0), step(0.62, k) * smoothstep(0.03, 0.3, v.y)); }
+      vec3 c = mix(vec3(0.82, 0.9, 0.97), vec3(0.32, 0.58, 0.92), pow(y, 0.55));
+      if (v.y > 0.02){ vec2 uv = v.xz / (v.y + 0.12) * 1.3; float k = n(uv) * 0.5 + n(uv * 2.3) * 0.3 + n(uv * 5.1) * 0.2;
+        c = mix(c, vec3(1.0), smoothstep(0.55, 0.78, k) * smoothstep(0.02, 0.25, v.y) * 0.9); }
       gl_FragColor = vec4(c, 1.0);
       #include <colorspace_fragment>
     }`,
 }));
 sky.frustumCulled = false; sky.renderOrder = -1; scene.add(sky);
-scene.add(new THREE.HemisphereLight(0xe0f0ff, 0x6a8a4a, 1.5));
-const sun = new THREE.DirectionalLight(0xfff6e0, 2.2);
-sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.08;
+// light: a warm sun, a little sky light, and the town's own light bouncing about (scene.environment)
+scene.add(new THREE.HemisphereLight(0xdfeeff, 0x8a7a60, 0.7));
+const sun = new THREE.DirectionalLight(0xfff0d8, 3.2);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.05;
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 260 });
 scene.add(sun, sun.target);
 
 // ---------- the town, its people, your gear ----------
 const town = new Town(scene);
-const people = new People(scene, town);
+// the town's own light: a blurred picture of the street from the crossroads, used as the light that
+// bounces off everything (and what glass, metal and cars reflect); made once
+{
+  const pm = new THREE.PMREMGenerator(renderer);
+  const e = pm.fromScene(scene, 0.04, 0.1, 600, { size: 128, position: new THREE.Vector3(0, 2, 0) });
+  scene.environment = e.texture; scene.environmentIntensity = 0.8;
+  pm.dispose();
+}
+// the townsfolk: realistic people (Rocketbox avatars), loaded behind the loading screen
+const people = new People(scene, town, await loadPeople());
 const effects = new Effects(scene);
 const panel = new ScreenPanel();
 const vrPanel = new VRPanel();
@@ -69,12 +83,17 @@ scene.add(vrPanel.mesh); vrPanel.mesh.visible = false;
 // the X-ray look: every surface as a faint glow, brightest where you see it edge-on, fading with distance
 const xrayMat = new THREE.ShaderMaterial({
   uniforms: { col: { value: new THREE.Color('#4ac8ff') }, far: { value: 34 } },
+  // (with skinning, so the people's ghosts walk with them rather than standing in their rest pose)
   vertexShader: `#include <common>
+    #include <skinning_pars_vertex>
     varying vec3 vN; varying vec3 vV;
     void main(){
       #include <beginnormal_vertex>
+      #include <skinbase_vertex>
+      #include <skinnormal_vertex>
       #include <defaultnormal_vertex>
       #include <begin_vertex>
+      #include <skinning_vertex>
       #include <project_vertex>
       vN = normalize(transformedNormal); vV = -mvPosition.xyz;
     }`,
@@ -105,7 +124,7 @@ const laser = new THREE.Mesh(new THREE.CylinderGeometry(0.002, 0.002, 1, 6).tran
 laser.visible = false; scene.add(laser);
 // hidden while the X-ray view is drawn
 // (and so are the ground, roads and floors: seen edge-on they would flood the view with glow)
-const NOT_XRAY = [sky, people.fx, gunScreen, gunVR, tabletVR, vrPanel.mesh, laser, ...town.flat];
+const NOT_XRAY = [sky, people.fx, ...people.flat, gunScreen, gunVR, tabletVR, vrPanel.mesh, laser, ...town.flat];
 
 // ---------- saving ----------
 const DEFAULTS = { v: 1, town: 1, score: 0, best: 0, turn: 'snap', welcomed: false, zapped: 0, oops: 0 };
@@ -143,7 +162,7 @@ function drawBoard(){
 // ---------- a town's worth of aliens ----------
 let lvl = { n: 1, count: 0, aliens: 0, t: 0, zapped: 0, oops: 0, done: false, doneT: 0 };
 function startTown(n){
-  const count = Math.min(24, 10 + 2 * n);
+  const count = Math.min(people.pool.length, 10 + 2 * n);   // (every person in a town is a different one)
   const aliens = Math.max(2, Math.round(count * (0.42 + Math.random() * 0.16)));
   people.spawn(count, aliens, player.pos, n, (Date.now() ^ (n * 7919)) >>> 0);
   lvl = { n, count, aliens, t: 0, zapped: 0, oops: 0, done: false, doneT: 0 };
@@ -217,7 +236,7 @@ function clearedPanel(){
   showPanel({ title: '🎉 Town cleared!', money: '⭐ ' + save.score, sections: [
     { text: `You found and zapped all ${lvl.aliens} aliens in town ${lvl.n} in ${mm}:${String(ss).padStart(2, '0')}.` },
     { list: [`👽 Aliens zapped: ${lvl.zapped}`, `😬 Real people zapped by mistake: ${lvl.oops}`, lvl.bonus ? `✨ No-mistakes bonus: +${lvl.bonus} ⭐` : 'No bonus this time: scan people before you zap them!', `🏆 Best score: ${save.best}`] },
-    { text: `More aliens are landing in the next town (${Math.min(24, 10 + 2 * (lvl.n + 1))} people to check).` },
+    { text: `More aliens are landing in the next town (${Math.min(people.pool.length, 10 + 2 * (lvl.n + 1))} people to check).` },
     { buttons: [{ label: 'Next town ▶', kind: 'primary', go: nextTown }] },
   ] });
 }
@@ -554,6 +573,7 @@ function frame(){ try { step(); } catch (e) { console.error(e); } }
 function step(){
   const dt = Math.min(clock.getDelta(), 1 / 20);
   const T = window.__ah, steps = T && T.timeScale > 1 ? Math.round(T.timeScale) : 1;
+  if (T && T.paused && mode !== 'vr') return;   // (the test runs the game itself, with advance())
   for (let k = 0; k < steps; k++) simulate(dt);
   if (T && T.noRender && mode !== 'vr') return;     // (a headset only sends its next frame once this one is drawn)
   render();
@@ -596,7 +616,7 @@ function simulate(dt){
   }
   cool -= dt;
   // townsfolk, and the doors they (and you) walk through
-  people.update(dt, mode === 'title' ? { x: 999, z: 999 } : player.pos);
+  people.update(dt, mode === 'title' ? { x: 999, z: 999 } : player.pos, (mode === 'screen' && xrayOn) || (mode === 'vr' && tabletVR.visible));
   doorWho.length = 0; doorWho.push(player.pos); for (const p of people.list) if (!p.dead) doorWho.push(p.pos);
   town.updateDoors(dt, doorWho);
   // the X-ray scan
@@ -739,11 +759,26 @@ window.__ah = {
   get mode(){ return mode; }, get lvl(){ return lvl; }, get save(){ return save; }, get xrayOn(){ return xrayOn; }, get time(){ return gameTime; },
   get head(){ return headPos.toArray(); }, get vrPage(){ return vrPage; }, get scan(){ return scanState; },
   town, people, effects, player, renderer, camera, scene, rig, vr, vrs, vrPanel, panel, tabletVR, gunVR, stick, keys,
-  timeScale: 1, noRender: false, version: VERSION, START, FLOOR_Y,
+  person: (id) => people.pool[id],
+  timeScale: 1, noRender: false, paused: false, version: VERSION, START, FLOOR_Y,
   startScreen, startVR, toTitle, startTown, nextTown, toggleXray, zapScreen, zap, aimAt, standAt, menu, welcome, closePanels, advance,
   renderNow(){ if (mode !== 'vr') placeScreenCamera(1 / 60); render(); },
 };
 void sfx;
 
 // the game is ready: hide the loading screen
+// warm up before the loading screen goes: draw every person once (out of sight, behind the loading
+// screen) so their shaders, shadow shaders, X-ray shaders and textures are ready (MSB froze for a
+// moment when its first visitors walked in, without this)
+async function warmUp(){
+  const saved = people.pool.map((p) => [p.root.visible, p.root.position.clone()]);
+  people.pool.forEach((p, i) => { p.root.visible = true; p.root.position.set(-6 + (i % 6) * 2, 0, 2 - Math.floor(i / 6) * 2); });
+  scene.traverse((o) => { if (o.isMesh || o.isSprite) for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'alphaMap', 'emissiveMap']) if (m && m[k]) renderer.initTexture(m[k]); });
+  try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); } catch (e) { /* compiled on first draw instead */ }
+  placeScreenCamera(0); camera.position.set(0, 1.6, 8); camera.lookAt(0, 1, 0); camera.updateMatrixWorld(true);
+  renderer.render(scene, camera);
+  syncXrayCam(); renderer.setRenderTarget(xrTarget); renderer.clear(); drawXray(xrayCam); renderer.setRenderTarget(null);
+  people.pool.forEach((p, i) => { p.root.visible = saved[i][0]; p.root.position.copy(saved[i][1]); });
+}
+await warmUp();
 if (window.__loaded) window.__loaded();
