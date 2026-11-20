@@ -1,0 +1,16 @@
+{
+  "name": "Camera Magic",
+  "short_name": "Camera Magic",
+  "description": "What a web page can do with the camera: spot things, pop bubbles with your fingers, meet Pip and dress up.",
+  "start_url": "/experiments/camera-magic/",
+  "scope": "/experiments/camera-magic/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#2a1660",
+  "theme_color": "#2a1660",
+  "icons": [
+    { "src": "/experiments/camera-magic/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/camera-magic/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/camera-magic/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
