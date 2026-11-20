@@ -1044,7 +1044,7 @@ window.__msb = {
 async function warmUp(){
   const saved = visitors.list.map((v) => [v.root.visible, v.root.position.clone()]);
   visitors.list.forEach((v, i) => { v.root.visible = true; v.root.position.set(-4 + (i % 5) * 2, 0, 2 + Math.floor(i / 5) * 2); });
-  scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap', 'emissiveMap']) if (m && m[k]) renderer.initTexture(m[k]); });
+  scene.traverse((o) => { if (o.isMesh || o.isSprite) for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap', 'emissiveMap']) if (m && m[k]) renderer.initTexture(m[k]); });
   try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); } catch (e) { /* compiled on first draw instead */ }
   placeScreenCamera(0); renderer.render(scene, camera);
   visitors.list.forEach((v, i) => { v.root.visible = saved[i][0]; v.root.position.copy(saved[i][1]); });
