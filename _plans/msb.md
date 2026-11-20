@@ -147,3 +147,41 @@ realistic people, and a more realistic outside.
   pop, Copy it as a sticker, screenshots outside and of the visitors, the VR camera zoom and the magic
   wand on the VR panel. The VR part freezes the shadow map and hides the street (headless headset
   frames are slow in software rendering); the whole test takes about 1¾ minutes.
+
+### 3.0
+The user said the people looked like muppets and the environment felt very flat, and asked whether
+that was three.js. It wasn't: it was how the scene was lit and made. Lambert materials lit by a
+strong hemisphere light and an ambient light (every surface evenly lit from every side), no shading
+where surfaces meet, smooth untextured surfaces, sunlight passing through the ceiling, and people
+built from rounded tubes in bright colours.
+
+- **Light**: filmic tone mapping (ACES, exposure 1.25); MeshStandardMaterial everywhere (`lam()` now
+  makes standard materials and tones the old brightening glows down); the gallery's own light as
+  `scene.environment` (a PMREM made from the gallery itself, captured twice so light bounces twice);
+  a weaker sky light, a stronger warm sun. The **ceiling now has real openings for the skylights** and
+  the ceiling, beams and walls cast shadows, so the sun comes in through the skylights and windows in
+  bright patches instead of lighting the whole room evenly (the ceiling and beams keep a soft glow, as
+  a gallery's white ceiling would). Brass, bronze and gold frames are metallic; the desk top and floor
+  are glossy.
+- **Surface relief**: normal maps generated from height functions (the floor's grooves and grain,
+  plaster on the walls, the facade's stone joints, the plaza's paving joints).
+- **Contact shadows** (a cheap stand-in for ambient occlusion): a soft dark band on the floor at the
+  foot of every wall and round the free-standing wall, soft patches under the desk, the columns,
+  bought decorations and every person.
+- **Trees**: smooth crowns (shared vertices) instead of faceted ones.
+- **People**: real rigged, textured, animated models instead of built-in shapes. Two models from
+  three.js's examples (r180, `examples/models/gltf/`): *Michelle* (a Mixamo character) and a
+  *Ready Player Me* man. They are third-party assets made available with three.js's examples, not
+  CC0: fine for this hobby project, but check their terms before using MSB commercially. The walk,
+  idle, nod and head-shake animations come from three.js's Mixamo *Xbot* model and are retargeted onto
+  both people by `_tools/msb/people.mjs`, saved as `models/clips.json` (about 1 MB, compressed by the
+  server), so Xbot itself isn't downloaded. Retargeting: each bone turns in world space by as much as
+  Xbot's turned from its rest pose; each target bone's rest is first turned to point the way Xbot's
+  does (the man's rig rests in an A-pose, Xbot's in a T-pose: without this his arms stuck out).
+  Michelle's rig was exported Z-up, which a plain copy of the rotations turned on its side.
+  Variety: six outfits for the man (suit, waistcoat, hat and trouser colours, skin tones) and four for
+  Michelle (trouser colours), made by recolouring only the clothing's hues in their textures at start
+  (512 px each). Ten people in the pool, alternating men and women. They nod when they like a picture
+  or make an offer, shake their heads when they don't, and blend between walking and standing. If
+  the models can't load, the 2.0 people are used. Loader and helpers copied from three.js r180
+  (`lib/addons/`: GLTFLoader, BufferGeometryUtils, SkeletonUtils), all saved for offline play.
