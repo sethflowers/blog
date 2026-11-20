@@ -19,7 +19,8 @@ var READY = BASE + '__offline-ready__';
 var VERSIONED = ['lib/three.core.min.js', 'lib/three.module.min.js',
   'js/art.js', 'js/audio.js', 'js/camera.js', 'js/editor.js', 'js/editor-ui.js', 'js/gallery.js', 'js/main.js', 'js/people.js', 'js/ui.js', 'js/util.js', 'js/visitors.js',
   'lib/addons/GLTFLoader.js', 'lib/addons/BufferGeometryUtils.js', 'lib/addons/SkeletonUtils.js',
-  'models/Michelle.glb', 'models/readyplayer.me.glb', 'models/clips.json'];
+  'models/people/list.json',
+  'models/people/Female_Adult_01.glb', 'models/people/Female_Adult_03.glb', 'models/people/Female_Adult_04.glb', 'models/people/Female_Adult_05.glb', 'models/people/Female_Adult_06.glb', 'models/people/Female_Adult_08.glb', 'models/people/Female_Adult_10.glb', 'models/people/Female_Adult_11.glb', 'models/people/Female_Adult_12.glb', 'models/people/Male_Adult_01.glb', 'models/people/Male_Adult_02.glb', 'models/people/Male_Adult_03.glb', 'models/people/Male_Adult_04.glb', 'models/people/Male_Adult_05.glb', 'models/people/Male_Adult_06.glb', 'models/people/Male_Adult_08.glb', 'models/people/Male_Adult_10.glb', 'models/people/Male_Adult_12.glb'];
 var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 var ASSETS = [BASE].concat(VERSIONED.map(function (f) { return BASE + f + '?v=' + V; }), STATIC.map(function (f) { return BASE + f; }));
 

@@ -100,7 +100,8 @@ export class Visitors {
     this.handlers = {};
     this.spawnT = 3;
     this.R = rng(Date.now() >>> 0);
-    for (let i = 0; i < POOL; i++) this.list.push(this.make(i));
+    const n = kinds ? kinds.length : POOL;   // every person once
+    for (let i = 0; i < n; i++) this.list.push(this.make(i));
   }
   on(ev, fn){ (this.handlers[ev] = this.handlers[ev] || []).push(fn); }
   emit(ev, ...a){ for (const f of this.handlers[ev] || []) f(...a); }
