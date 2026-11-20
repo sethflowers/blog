@@ -2,7 +2,7 @@
 // sometimes like one enough to offer to buy it (they wait by it for your answer). A fixed pool of
 // people is made once and reused, so nothing is built or thrown away while you play.
 import * as THREE from 'three';
-import { V, rng, damp, angleDiff, textCanvas, roundRect, wrapText, mergeGeometries, ellipsoid, placed, paint, limb } from './util.js';
+import { V, rng, damp, angleDiff, textCanvas, roundRect, wrapText, mergeGeometries, ellipsoid, placed, paint, limb, loft, boxUV } from './util.js';
 import { DOOR } from './gallery.js';
 
 const NAMES = ['Ava', 'Ben', 'Chloe', 'Dev', 'Ella', 'Finn', 'Grace', 'Hiro', 'Isla', 'Jack', 'Kira', 'Leo', 'Maya', 'Noah', 'Olive', 'Priya', 'Quinn', 'Rosa', 'Sam', 'Tom', 'Uma', 'Vik', 'Wren', 'Yara', 'Zed'];
@@ -12,26 +12,71 @@ const PANTS = ['#2a3448', '#4a3a2a', '#1e1e24', '#5a6a7a', '#7a5a3a'];
 const HAIR = ['#2a1a10', '#5a3a1a', '#d8b060', '#a83a1a', '#111111', '#888888'];
 const LIKES = ['colourful', 'bold', 'detailed', 'creative'];
 export const MAX_VISITORS = 8;
+const POOL = 10;   // people made (a few more than can be in at once, so the faces vary)
 
 const mats = new Map();
 const mat = (c) => { if (!mats.has(c)){ const m = new THREE.MeshLambertMaterial({ color: c }); m.name = 'v' + c; mats.set(c, m); } return mats.get(c); };
-let geo = null;
-function shapes(){
-  if (geo) return geo;
-  geo = {
-    leg: limb(0.82, 0.075, 0.06).translate(0, 0, 0),
-    shoe: placed(ellipsoid(0.07, 0.05, 0.13, 10, 6), 0, -0.84, 0.04),
-    body: mergeGeometries([placed(ellipsoid(0.21, 0.36, 0.15, 14, 10), 0, 1.22, 0), placed(new THREE.CylinderGeometry(0.2, 0.19, 0.2, 14), 0, 0.95, 0)]),
-    arm: limb(0.62, 0.055, 0.045),
-    hand: placed(ellipsoid(0.05, 0.06, 0.045, 8, 6), 0, -0.64, 0),
-    head: mergeGeometries([placed(ellipsoid(0.13, 0.155, 0.14, 16, 12), 0, 1.74, 0), placed(new THREE.CylinderGeometry(0.05, 0.06, 0.12, 8), 0, 1.58, 0)]),
-    nose: placed(ellipsoid(0.025, 0.03, 0.03, 8, 6), 0, 1.72, 0.14),
-    eye: new THREE.SphereGeometry(0.018, 8, 6),
-    hair: placed(new THREE.SphereGeometry(0.145, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), 0, 1.76, -0.01),
-    bun: placed(new THREE.SphereGeometry(0.07, 10, 8), 0, 1.86, -0.11),
-  };
-  for (const g of Object.values(geo)) g.userData.keep = true;
-  return geo;
+// ---------- what a person looks like ----------
+// Each person is a few meshes with vertex colours (one shared material): body, head (so it can turn),
+// and upper/lower arms and legs on elbow and knee joints. Built once per person in the pool.
+const PEOPLE_MAT = () => mats.get('people') || (mats.set('people', Object.assign(new THREE.MeshLambertMaterial({ vertexColors: true }), { name: 'people' })), mats.get('people'));
+const C = (g, col) => paint(g, col);
+const tint = (hex, k) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
+function merged(parts){ const g = mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p))); g.userData.keep = true; return g; }
+// a body part that tapers down from r0 to r1 (sides squashed a little, front to back)
+function seg(len, r0, r1, squash = 0.88){ return limb(len, r0, r1, { seg: 12, squash }); }
+function buildPerson(R){
+  const pick = (a) => a[Math.floor(R() * a.length)];
+  const female = R() < 0.5;
+  const skin = pick(SKIN), hair = pick(HAIR), shoes = pick(['#1e1a18', '#3a2a20', '#f0f0ec', '#5a3a2a', '#20242c']);
+  const top = pick(SHIRT), bottom = pick(PANTS), dress = female && R() < 0.4;
+  const longSleeves = R() < 0.5, jacket = !dress && R() < 0.3, jacketCol = pick(['#2a2a34', '#4a3a2a', '#3a4a5a', '#6a2a2a', '#2a4a3a']);
+  const hairStyle = female ? pick(['long', 'long', 'bun', 'pony', 'bob']) : pick(['short', 'short', 'crop', 'bald', 'short']);
+  const beard = !female && R() < 0.3;
+  const w = female ? 0.92 : 1.0, hip = female ? 1.08 : 0.96;
+  const torsoCol = jacket ? jacketCol : dress ? top : top;
+  // the body: hips, waist, chest, shoulders (a smooth loft), neck
+  const sec = (y, rx, rz) => ({ p: [0, y, 0.00001 * y], rx, ry: rz });
+  const body = [];
+  const hipsCol = dress ? top : bottom;
+  body.push(C(loft([sec(0.84, 0.15 * hip, 0.11), sec(0.92, 0.165 * hip, 0.115), sec(1.02, 0.16 * hip, 0.11)], { ring: 18, steps: 4 }), hipsCol));
+  body.push(C(loft([sec(1.0, 0.15 * w * (female ? 0.92 : 1), 0.1), sec(1.08, 0.135 * w * (female ? 0.88 : 1), 0.095), sec(1.2, 0.15 * w, 0.105 * (female ? 1.08 : 1)),
+    sec(1.32, 0.175 * w, 0.11), sec(1.42, 0.19 * w, 0.1), sec(1.47, 0.17 * w, 0.085), sec(1.5, 0.08, 0.06)], { ring: 18, steps: 4 }), torsoCol));
+  if (jacket){ body.push(C(placed(new THREE.CylinderGeometry(0.055, 0.06, 0.04, 10), 0, 1.5, 0.015), top)); }   // the shirt collar under the jacket
+  if (dress){ body.push(C(loft([sec(0.48, 0.24 * hip, 0.2), sec(0.7, 0.2 * hip, 0.16), sec(0.9, 0.165 * hip, 0.12)], { ring: 20, steps: 3, capStart: true, capEnd: false }), top)); }
+  body.push(C(placed(new THREE.CylinderGeometry(0.043, 0.05, 0.13, 10), 0, 1.53, -0.005), skin));
+  // the head (pivot at the top of the neck)
+  const head = [];
+  head.push(C(placed(ellipsoid(0.088, 0.112, 0.102, 18, 14), 0, 0.12, 0), skin));
+  head.push(C(placed(ellipsoid(0.07, 0.055, 0.078, 14, 10), 0, 0.055, 0.016), skin));                    // jaw
+  for (const s of [-1, 1]) head.push(C(placed(ellipsoid(0.016, 0.03, 0.02, 8, 6), s * 0.088, 0.11, -0.005), skin));   // ears
+  head.push(C(placed(ellipsoid(0.017, 0.028, 0.022, 8, 6), 0, 0.1, 0.098, -0.25), tint(skin, 0.95)));      // nose
+  for (const s of [-1, 1]){
+    head.push(C(placed(ellipsoid(0.017, 0.011, 0.008, 10, 6), s * 0.034, 0.128, 0.09), '#f6f4f0'));      // the whites of the eyes
+    head.push(C(placed(new THREE.SphereGeometry(0.0075, 8, 6), s * 0.034, 0.128, 0.097), '#2a1a10'));      // irises
+    head.push(C(placed(boxUV(0.03, 0.007, 0.01), s * 0.035, 0.148, 0.094, 0, 0, s * -0.12), tint(hair, 0.9)));   // eyebrows
+  }
+  head.push(C(placed(ellipsoid(0.022, 0.006, 0.006, 10, 4), 0, 0.062, 0.088), female ? '#b8485a' : tint(skin, 0.7)));   // mouth
+  // the hair: a cap tilted back, so the hairline sits high on the forehead and low at the back of the neck
+  const cap = (sx, sy, sz, y, z, th = 0.55) => placed(new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI * th), 0, y, z, -0.42, 0, 0, sx, sy, sz);
+  if (hairStyle !== 'bald') head.push(C(cap(0.097, hairStyle === 'crop' ? 0.1 : 0.11, 0.11, 0.128, -0.006, hairStyle === 'crop' ? 0.45 : 0.55), hair));
+  if (hairStyle === 'short' || hairStyle === 'crop') head.push(C(placed(ellipsoid(0.088, 0.07, 0.06, 12, 8), 0, 0.1, -0.05), hair));
+  if (hairStyle === 'long') head.push(C(placed(ellipsoid(0.1, 0.17, 0.065, 14, 10), 0, 0.02, -0.06), hair));
+  if (hairStyle === 'bob') head.push(C(placed(ellipsoid(0.105, 0.09, 0.1, 14, 10), 0, 0.075, -0.02), hair));
+  if (hairStyle === 'bun') head.push(C(placed(new THREE.SphereGeometry(0.045, 12, 8), 0, 0.2, -0.08), hair), C(placed(ellipsoid(0.088, 0.07, 0.06, 12, 8), 0, 0.1, -0.05), hair));
+  if (hairStyle === 'pony') head.push(C(placed(ellipsoid(0.035, 0.12, 0.035, 10, 8), 0, 0.03, -0.12, 0.3), hair), C(placed(ellipsoid(0.088, 0.07, 0.06, 12, 8), 0, 0.1, -0.05), hair));
+  if (beard) head.push(C(placed(ellipsoid(0.074, 0.05, 0.075, 14, 8), 0, 0.045, 0.024), hair));
+  // arms (shoulder at the top) and legs (hip at the top)
+  const sleeve = jacket ? jacketCol : top;
+  const upperArm = merged([C(seg(0.29, 0.048 * w, 0.04 * w), sleeve), C(placed(new THREE.SphereGeometry(0.05 * w, 10, 8), 0, 0, 0), sleeve)]);
+  const fore = [C(seg(0.25, 0.04 * w, 0.032 * w), longSleeves || jacket ? sleeve : skin)];
+  fore.push(C(placed(ellipsoid(0.026, 0.048, 0.042, 10, 8), 0, -0.29, 0.005), skin), C(placed(ellipsoid(0.012, 0.028, 0.012, 6, 5), 0.0, -0.27, 0.035, 0.6), skin));
+  const foreArm = merged(fore);
+  const thigh = merged([C(seg(0.43, 0.078 * hip, 0.056), dress ? skin : bottom)]);
+  const shinParts = [C(seg(0.4, 0.054, 0.038), dress ? skin : bottom)];
+  shinParts.push(C(placed(ellipsoid(0.046, 0.042, 0.125, 12, 8), 0, -0.415, 0.035), shoes), C(placed(boxUV(0.09, 0.02, 0.24), 0, -0.448, 0.035), tint(shoes, 0.6)));
+  const shin = merged(shinParts);
+  return { body: merged(body), head: merged(head), upperArm, foreArm, thigh, shin, female, height: 0.92 + R() * 0.16, pose: pick(['behind', 'chin', 'relaxed', 'folded']) };
 }
 
 export class Visitors {
@@ -41,30 +86,27 @@ export class Visitors {
     this.handlers = {};
     this.spawnT = 3;
     this.R = rng(Date.now() >>> 0);
-    for (let i = 0; i < MAX_VISITORS; i++) this.list.push(this.make(i));
+    for (let i = 0; i < POOL; i++) this.list.push(this.make(i));
   }
   on(ev, fn){ (this.handlers[ev] = this.handlers[ev] || []).push(fn); }
   emit(ev, ...a){ for (const f of this.handlers[ev] || []) f(...a); }
 
   make(i){
-    const G = shapes(), R = this.R, pick = (a) => a[Math.floor(R() * a.length)];
+    const R = this.R, P = buildPerson(rng((Date.now() + i * 7919) >>> 0)), M = PEOPLE_MAT();
     const root = new THREE.Group(); root.visible = false;
-    const v = { id: i, root, active: false, name: '', state: 'away', pos: V(0, 0, 30), yaw: 0, path: [], wait: 0, visits: [], phase: 0, speed: 1.1, bubbleT: 0, offer: null, like: 'colourful', seen: 0 };
-    const skin = mat(pick(SKIN)), shirt = mat(pick(SHIRT)), pants = mat(pick(PANTS)), hair = mat(pick(HAIR)), dark = mat('#1a1a1a');
-    const add = (g, m, parent = root) => { const mesh = new THREE.Mesh(g, m); mesh.castShadow = true; parent.add(mesh); return mesh; };
-    v.legs = [-1, 1].map((s) => { const p = new THREE.Group(); p.position.set(s * 0.1, 0.86, 0); root.add(p); add(G.leg, pants, p); add(G.shoe, dark, p); return p; });
-    add(G.body, shirt);
-    v.arms = [-1, 1].map((s) => { const p = new THREE.Group(); p.position.set(s * 0.25, 1.46, 0); p.rotation.z = s * 0.12; root.add(p); add(G.arm, shirt, p); add(G.hand, skin, p); return p; });
-    add(G.head, skin); add(G.nose, skin); add(G.hair, hair);
-    if (R() < 0.4) add(G.bun, hair);
-    for (const s of [-1, 1]){ const e = add(G.eye, dark); e.position.set(s * 0.05, 1.77, 0.125); e.castShadow = false; }
+    const v = { id: i, root, active: false, name: '', state: 'away', pos: V(0, 0, 30), yaw: 0, path: [], wait: 0, visits: [], phase: 0, speed: 1.0 + R() * 0.3, bubbleT: 0, offer: null, like: 'colourful', seen: 0, pose: P.pose, blend: 0, look: 0 };
+    const mesh = (g, parent = root) => { const m = new THREE.Mesh(g, M); m.castShadow = true; parent.add(m); return m; };
+    v.body = mesh(P.body);
+    v.head = new THREE.Group(); v.head.position.set(0, 1.565, 0.005); root.add(v.head); mesh(P.head, v.head);
+    v.legs = [-1, 1].map((s) => { const hip = new THREE.Group(); hip.position.set(s * 0.09, 0.9, 0); root.add(hip); mesh(P.thigh, hip); const knee = new THREE.Group(); knee.position.y = -0.43; hip.add(knee); mesh(P.shin, knee); return { hip, knee }; });
+    v.arms = [-1, 1].map((s) => { const sh = new THREE.Group(); sh.position.set(s * 0.2 * (P.female ? 0.92 : 1), 1.44, -0.005); sh.rotation.z = s * 0.07; root.add(sh); mesh(P.upperArm, sh); const el = new THREE.Group(); el.position.y = -0.29; sh.add(el); mesh(P.foreArm, el); return { sh, el, s }; });
     // a speech bubble over the head (its canvas is redrawn, never remade)
     v.bubble = textCanvas(256, 128);
     v.bubbleSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: v.bubble.tex, depthTest: true, transparent: true }));
-    v.bubbleSprite.scale.set(0.8, 0.4, 1); v.bubbleSprite.position.y = 2.25; v.bubbleSprite.visible = false; root.add(v.bubbleSprite);
+    v.bubbleSprite.scale.set(0.8, 0.4, 1); v.bubbleSprite.position.y = 2.1; v.bubbleSprite.visible = false; root.add(v.bubbleSprite);
     // something to point at
-    v.pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.9, 0.5), new THREE.MeshBasicMaterial({ visible: false })); v.pick.position.y = 0.95; v.pick.userData = { kind: 'visitor', v }; root.add(v.pick);
-    v.scale = 0.9 + R() * 0.2; root.scale.setScalar(v.scale);
+    v.pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.8, 0.45), new THREE.MeshBasicMaterial({ visible: false })); v.pick.position.y = 0.9; v.pick.userData = { kind: 'visitor', v }; root.add(v.pick);
+    v.scale = P.height; root.scale.setScalar(v.scale);
     this.scene.add(root);
     return v;
   }
@@ -119,6 +161,7 @@ export class Visitors {
   }
 
   update(dt, ctx){
+    this.time = (this.time || 0) + dt;
     // ctx: { fame, appeal, player, onlyOffers }
     const hung = this.gallery.slots.filter((s) => s.art && this.gallery.slotOpen(s)).length;
     const want = Math.min(MAX_VISITORS, hung ? 1 + Math.floor(hung / 2) + Math.floor(ctx.appeal / 3) : 0);
@@ -174,14 +217,42 @@ export class Visitors {
         o.t -= dt;
         if (o.t <= 0){ this.emit('gaveUp', v); v.offer = null; this.say(v, '😕 Oh well…'); this.next(v); }
       }
-      // walking: swing the legs and arms
-      v.phase = moving ? v.phase + dt * v.speed * 6.5 : damp(v.phase, Math.round(v.phase / Math.PI) * Math.PI, 8, dt);
-      const sw = Math.sin(v.phase) * 0.45;
-      v.legs[0].rotation.x = sw; v.legs[1].rotation.x = -sw;
-      v.arms[0].rotation.x = -sw * 0.8; v.arms[1].rotation.x = sw * 0.8;
-      v.root.position.set(v.pos.x, Math.abs(Math.cos(v.phase)) * 0.03 * (moving ? 1 : 0) + (this.gallery.where(v.pos.x, v.pos.z) === 'plaza' ? -0.02 : 0), v.pos.z);
+      this.animate(v, dt, moving);
       v.root.rotation.y = v.yaw;
     }
+  }
+  // the body: a walk (knees bend as each leg swings through, arms swing opposite), or a pose while
+  // looking at a picture (hands behind the back, a hand on the chin, arms folded), blended smoothly
+  animate(v, dt, moving){
+    v.phase = moving ? v.phase + dt * v.speed * 5.6 : v.phase;
+    v.blend = damp(v.blend, moving ? 0 : 1, 5, dt);
+    const ph = v.phase, k = 1 - v.blend, still = v.blend, t = this.time || 0;
+    for (const [n, L] of v.legs.entries()){
+      const p = ph + n * Math.PI;
+      const shift = Math.sin(t * 0.7 + v.id) * 0.04 * (n ? 1 : -1);   // shifting weight while standing
+      L.hip.rotation.x = -Math.sin(p) * 0.5 * k + shift * still;
+      L.knee.rotation.x = (0.05 + Math.max(0, Math.cos(p)) * 0.95) * k + (0.04 + Math.max(0, shift) * 1.5) * still;
+    }
+    const looking = v.state === 'look' || v.state === 'offer';
+    const pose = looking ? v.pose : 'relaxed';
+    for (const A of v.arms){
+      const p = ph + (A.s < 0 ? 0 : Math.PI);
+      const walkSh = Math.sin(p) * 0.42, walkEl = -0.25 - Math.max(0, -Math.sin(p)) * 0.35;
+      let sh = 0.02, el = -0.12, sz = A.s * 0.07, sy = 0;
+      if (pose === 'behind'){ sh = 0.42; el = -1.15; sz = A.s * 0.16; sy = A.s * 0.5; }
+      else if (pose === 'folded'){ sh = -0.35; el = -1.75; sz = A.s * 0.05; sy = -A.s * 0.9; }
+      else if (pose === 'chin'){ if (A.s > 0){ sh = -0.7; el = -2.35; sz = A.s * 0.12; sy = -A.s * 0.45; } else { sh = -0.25; el = -1.6; sy = A.s * -0.8; } }
+      A.sh.rotation.x = walkSh * k + sh * still; A.el.rotation.x = walkEl * k + el * still;
+      A.sh.rotation.z = A.s * 0.07 * k + sz * still; A.sh.rotation.y = sy * still;
+    }
+    // the head: looks up at a picture, round at you now and then, a slight sway
+    v.look = damp(v.look, looking ? -0.1 : 0.02, 3, dt);
+    v.head.rotation.x = v.look + Math.sin(t * 0.9 + v.id) * 0.02;
+    v.head.rotation.y = Math.sin(t * 0.37 + v.id * 2) * (looking ? 0.18 : 0.08);
+    v.head.rotation.z = (looking ? Math.sin(t * 0.5 + v.id) * 0.06 : 0);
+    v.body.rotation.y = Math.sin(ph) * 0.05 * k;
+    const bob = moving ? Math.abs(Math.cos(ph)) * 0.025 - 0.012 : -0.004;
+    v.root.position.set(v.pos.x, bob + (this.gallery.where(v.pos.x, v.pos.z) === 'plaza' ? -0.02 : 0), v.pos.z);
   }
   // you answered an offer
   accept(v){ const o = v.offer; if (!o) return null; v.offer = null; this.say(v, '🎉 Thank you!'); v.carry = o.art; this.leave(v); return o; }

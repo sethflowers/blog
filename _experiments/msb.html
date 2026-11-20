@@ -2,7 +2,7 @@
 title: MSB (Make Sell Buy)
 description: Run your own art gallery in first person, on an iPad or in VR. Take photos with your device's real camera, edit them with filters, adjustments, drawing, stickers, words and frames, then hang them on the walls. Visitors wander in and offer to buy what they like. Buy other artists' paintings, frames and decorations, and open the east wing.
 date: 2026-11-20
-version: "1.0"
+version: "2.0"
 layout: null
 ---
 {% raw %}
@@ -148,7 +148,25 @@ if ('serviceWorker' in navigator){
   #ed-main{flex:1;display:flex;flex-direction:column;min-height:0;}
   #ed-stage{flex:1;min-height:0;min-width:0;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:14px;position:relative;
     background:repeating-conic-gradient(#1c1826 0% 25%,#201b2b 0% 50%) 50%/32px 32px;}
-  #ed-canvas{display:block;touch-action:none;border:6px solid #9a6a3a;border-radius:2px;background:#000;}
+  #ed-canvas{display:block;touch-action:none;border:6px solid #9a6a3a;border-radius:2px;background:#000;transform-origin:50% 50%;will-change:transform;}
+  #ed-stage{touch-action:none;}
+  #ed-zoom{position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:4px;background:rgba(20,16,30,.8);border-radius:14px;padding:4px;opacity:.75;}
+  #ed-zoom.zoomed{opacity:1;box-shadow:0 0 0 2px #ffcf4a;}
+  #ed-zoom button{border:0;border-radius:10px;background:#3a3248;color:#fff;font-weight:900;font-size:17px;min-width:40px;height:38px;padding:0 10px;}
+  #ed-zlabel{min-width:52px;text-align:center;font-weight:800;font-size:14px;color:#ffcf4a;}
+  .erow.wrap{flex-wrap:wrap;}
+  .erow.sizes{gap:6px;}
+  .ebtn.size{width:56px;height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px;}
+  .ebtn.size i{display:block;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.4);}
+  .ebtn.size small{font-size:11px;}
+  .epick{width:44px;height:38px;border:0;border-radius:10px;background:none;padding:0;flex:0 0 auto;}
+  #cam{touch-action:none;}
+  #cam-zoom{display:none;position:absolute;left:50%;bottom:calc(64px + env(safe-area-inset-bottom));transform:translateX(-50%);align-items:center;gap:10px;}
+  #cam-zoom.show{display:flex;}
+  #cam-zlabel{font-weight:900;font-size:16px;background:rgba(0,0,0,.55);padding:6px 10px;border-radius:12px;color:#ffcf4a;min-width:56px;text-align:center;}
+  #cam-zbtns{display:flex;gap:6px;background:rgba(0,0,0,.45);padding:5px;border-radius:24px;}
+  #cam-zbtns button{border:0;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-weight:900;font-size:14px;}
+  #cam-zbtns button.on{background:#ffcf4a;color:#2a1e08;}
   #ed-side{display:flex;flex-direction:column;background:#221d2e;min-height:0;flex-shrink:0;}
   #ed-tabs{display:flex;gap:4px;padding:6px 8px;overflow-x:auto;background:#1a1624;}
   .etab{flex:1 0 auto;min-width:62px;border:0;border-radius:12px;background:transparent;color:#cfc8dc;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 6px;}
@@ -185,7 +203,7 @@ if ('serviceWorker' in navigator){
   @media (min-aspect-ratio: 5/4) and (min-width: 760px){
     #ed-main{flex-direction:row;}
     #ed-side{width:min(410px,42vw);}
-    #ed-tabs{display:grid;grid-template-columns:repeat(7,1fr);overflow:visible;}
+    #ed-tabs{display:grid;grid-template-columns:repeat(8,1fr);overflow:visible;}
     .etab{min-width:0;padding:6px 2px;} .etab small{font-size:11px;}
     #ed-tray{max-height:none;flex:1;}
   }
@@ -319,7 +337,8 @@ if ('serviceWorker' in navigator){
     <button id="cam-shoot" title="Take the picture">●</button>
     <button id="cam-flip" class="cbtn" title="Switch camera">🔄</button>
   </div>
-  <div class="cam-tip">Point at something and press the big button</div>
+  <div id="cam-zoom"><span id="cam-zlabel">1.0×</span><div id="cam-zbtns"><button data-z="1">1×</button><button data-z="2">2×</button><button data-z="3">3×</button><button data-z="5">5×</button></div></div>
+  <div class="cam-tip">Pinch to zoom · press the big button to take the picture</div>
 </div>
 <div id="flash"></div>
 <div id="editor">
@@ -332,7 +351,9 @@ if ('serviceWorker' in navigator){
     <button id="ed-done" class="tb">✓ Done</button>
   </div>
   <div id="ed-main">
-    <div id="ed-stage"><canvas id="ed-canvas"></canvas></div>
+    <div id="ed-stage"><canvas id="ed-canvas"></canvas>
+      <div id="ed-zoom"><button id="ed-zout" title="Zoom out">−</button><span id="ed-zlabel">100%</span><button id="ed-zin" title="Zoom in">＋</button><button id="ed-zfit" title="See all of it">⤢ Fit</button></div>
+    </div>
     <div id="ed-side">
       <div id="ed-tabs"></div>
       <div id="ed-tray"></div>

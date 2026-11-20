@@ -48,9 +48,19 @@ export const ASPECTS = [
 ];
 export const COLORS = ['#ffffff', '#111111', '#ff3b30', '#ff9500', '#ffd60a', '#34c759', '#00c7be', '#0a84ff', '#5e5ce6', '#ff2d92', '#a2845e'];
 export const BRUSHES = [
-  { id: 'pen', name: 'Pen', icon: '🖊' }, { id: 'marker', name: 'Marker', icon: '🖍' },
-  { id: 'neon', name: 'Neon', icon: '✨' }, { id: 'rainbow', name: 'Rainbow', icon: '🌈' },
+  { id: 'pen', name: 'Pen', icon: '🖊' }, { id: 'pencil', name: 'Pencil', icon: '✏️' }, { id: 'marker', name: 'Marker', icon: '🖍' },
+  { id: 'highlight', name: 'Highlighter', icon: '🖌' }, { id: 'spray', name: 'Spray', icon: '💨' }, { id: 'neon', name: 'Neon', icon: '✨' },
+  { id: 'rainbow', name: 'Rainbow', icon: '🌈' }, { id: 'eraser', name: 'Eraser', icon: '🧽' },
 ];
+// brush sizes, as a share of the picture's width
+export const SIZES = [{ id: 'XS', v: 0.004 }, { id: 'S', v: 0.009 }, { id: 'M', v: 0.018 }, { id: 'L', v: 0.034 }, { id: 'XL', v: 0.065 }];
+// what to do with a selection
+export const SEL_FX = [
+  { id: 'none', name: 'Just select', icon: '⬚' }, { id: 'pop', name: 'Colour pop', icon: '🎨', tip: 'everything else black and white' },
+  { id: 'blur', name: 'Blur the rest', icon: '💧' }, { id: 'spot', name: 'Spotlight', icon: '🔦', tip: 'the rest goes dark' },
+  { id: 'cut', name: 'Cut out', icon: '✂️', tip: 'a new background' }, { id: 'bright', name: 'Make it shine', icon: '✨' },
+];
+export const BACKDROPS = ['#ffffff', '#111111', '#ffd6e8', '#cfe8ff', '#d8f5d0', '#fff2b0', 'sunset', 'sky', 'stripes', 'dots'];
 export const STICKERS = ['😎', '😂', '😍', '🥳', '🤩', '😺', '🐶', '🦄', '👑', '🎩', '🕶', '💖', '⭐', '🌈', '🔥', '⚡', '🌸', '🍕', '🎈', '🎉', '💬', '👍', '🚀', '🌙'];
 export const FONTS = [
   { id: 'sans', name: 'Clean', css: 'bold {s}px "Avenir Next", "Helvetica Neue", Arial, sans-serif' },
@@ -68,10 +78,12 @@ export function newState(){
     filter: 'none', strength: 100,
     adj: Object.fromEntries(ADJUST.map((a) => [a.id, 0])),
     strokes: [], stickers: [], text: { str: '', color: '#ffffff', size: 0.1, v: 0.86, style: 'outline', font: 'sans' },
+    sel: { lasso: [], magic: [], invert: false }, selFx: 'none', selBg: '#ffffff',
     frame: 'wood', border: 'none',
   };
 }
 export const clone = (s) => JSON.parse(JSON.stringify(s));
+export const hasSel = (s) => !!(s.sel && (s.sel.lasso.length || s.sel.magic.length));
 // how many different kinds of edit went into a picture (it makes it worth more)
 export function editsUsed(s){
   const n = newState(), used = [];
@@ -82,6 +94,7 @@ export function editsUsed(s){
   if (s.stickers.length) used.push('stickers');
   if (s.text.str.trim()) used.push('text');
   if (s.border !== 'none') used.push('border');
+  if (hasSel(s) && s.selFx !== 'none') used.push('select');
   return used;
 }
 
@@ -121,7 +134,12 @@ export function settleCrop(src, s){
 
 // draw the picture described by `s` from `src` into canvas `out` (resized so its longest side is `max`)
 // opts.plain: only the crop (for Compare)
+let depth = 0;
 export function render(src, s, out, max = 720, opts = {}){
+  depth++;
+  try { return renderNow(src, s, out, max, opts); } finally { depth--; }
+}
+function renderNow(src, s, out, max, opts){
   const R = cropRect(src, s);
   const bord = opts.plain ? 'none' : s.border;
   const pad = bord === 'none' ? 0 : 0.06, padB = bord === 'polaroid' ? 0.2 : pad;
@@ -130,7 +148,7 @@ export function render(src, s, out, max = 720, opts = {}){
   if (out.width !== OW || out.height !== OH){ out.width = OW; out.height = OH; }
   const g = out.getContext('2d', { willReadFrequently: true });
   // the picture itself, on its own canvas first (the pixel work happens there)
-  const pic = scratch(W, H), pg = pic.getContext('2d', { willReadFrequently: true });
+  const pic = scratch(W, H, depth), pg = pic.getContext('2d', { willReadFrequently: true });
   pg.save(); pg.fillStyle = '#000'; pg.fillRect(0, 0, W, H);
   pg.imageSmoothingQuality = 'high';
   const th = (s.angle || 0) * Math.PI / 180, ca = Math.abs(Math.cos(th)), sa = Math.abs(Math.sin(th));
@@ -140,9 +158,10 @@ export function render(src, s, out, max = 720, opts = {}){
   pg.restore();
   if (!opts.plain){
     pixels(pg, W, H, s);
-    drawStrokes(pg, W, H, s.strokes);
-    drawStickers(pg, W, H, s.stickers);
-    drawText(pg, W, H, s.text);
+    if (hasSel(s) && s.selFx !== 'none' && !opts.noSelFx) selectionFx(src, s, pg, W, H);
+    if (!opts.noStrokes) drawStrokes(pg, W, H, s.strokes);
+    if (!opts.noStickers) drawStickers(pg, W, H, s.stickers, opts.cuts);
+    if (!opts.noText) drawText(pg, W, H, s.text);
   }
   // the mat round it
   if (bord !== 'none'){ g.fillStyle = bord === 'black' ? '#111' : bord === 'polaroid' ? '#fbfaf4' : '#f4f1ea'; g.fillRect(0, 0, OW, OH); }
@@ -151,8 +170,8 @@ export function render(src, s, out, max = 720, opts = {}){
   return { x: ox / OW, y: oy / OH, w: W / OW, h: H / OH };   // where the picture is inside the output (for pointing)
 }
 const scratches = {};
-function scratch(w, h){
-  const k = 'p'; let c = scratches[k];
+function scratch(w, h, d = 0){
+  const k = 'p' + d; let c = scratches[k];
   if (!c){ c = scratches[k] = C(w, h); }
   if (c.width !== w || c.height !== h){ c.width = w; c.height = h; }
   return c;
@@ -299,44 +318,173 @@ function boxBlur(d, W, H, r){
 }
 
 // ---------- drawing, stickers, words (all in 0..1 picture coordinates, so they scale with it) ----------
-function drawStrokes(g, W, H, strokes){
-  for (const st of strokes){
-    if (!st.pts.length) continue;
+function drawStrokes(out, W, H, strokes){
+  if (!strokes.length) return;
+  const layer = scratchN('strokes', W, H), g = layer.getContext('2d');
+  g.clearRect(0, 0, W, H);
+  strokes.forEach((st, k) => {
+    if (!st.pts.length) return;
     g.save();
     g.lineCap = 'round'; g.lineJoin = 'round';
-    const lw = st.size * W;
-    g.lineWidth = st.brush === 'marker' ? lw * 2.2 : lw;
-    g.strokeStyle = st.color; g.fillStyle = st.color;
-    if (st.brush === 'marker') g.globalAlpha = 0.45;
+    const lw = st.size * W, P = (p) => [p[0] * W, p[1] * H];
+    g.lineWidth = lw; g.strokeStyle = st.color; g.fillStyle = st.color;
+    g.globalAlpha = st.alpha == null ? 1 : st.alpha;
+    if (st.brush === 'eraser'){ g.globalCompositeOperation = 'destination-out'; g.strokeStyle = g.fillStyle = '#000'; g.globalAlpha = 1; }
+    if (st.brush === 'marker'){ g.globalAlpha *= 0.55; g.lineWidth = lw * 1.6; }
+    if (st.brush === 'highlight'){ g.globalAlpha *= 0.35; g.lineWidth = lw * 2.4; g.lineCap = 'butt'; }
+    if (st.brush === 'pencil'){ g.globalAlpha *= 0.85; g.lineWidth = Math.max(1, lw * 0.6); }
     if (st.brush === 'neon'){ g.shadowColor = st.color; g.shadowBlur = lw * 2.5; }
+    if (st.brush === 'spray'){
+      // dots scattered round the path (the same every time: seeded by the stroke)
+      let seed = 9973 * (k + 1);
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+      for (let i = 0; i < st.pts.length; i++){
+        const [x, y] = P(st.pts[i]);
+        for (let d = 0; d < 14; d++){ const a = rnd() * 6.283, r = Math.sqrt(rnd()) * lw * 1.6; g.globalAlpha = (st.alpha == null ? 1 : st.alpha) * (0.25 + rnd() * 0.5); g.fillRect(x + Math.cos(a) * r, y + Math.sin(a) * r, Math.max(1, lw * 0.12), Math.max(1, lw * 0.12)); }
+      }
+      g.restore(); return;
+    }
     if (st.brush === 'rainbow'){
       for (let i = 1; i < st.pts.length; i++){
         g.strokeStyle = `hsl(${(i * 9) % 360},95%,58%)`;
-        g.beginPath(); g.moveTo(st.pts[i - 1][0] * W, st.pts[i - 1][1] * H); g.lineTo(st.pts[i][0] * W, st.pts[i][1] * H); g.stroke();
+        const a = P(st.pts[i - 1]), b = P(st.pts[i]);
+        g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
       }
-      if (st.pts.length === 1){ g.fillStyle = 'hsl(0,95%,58%)'; g.beginPath(); g.arc(st.pts[0][0] * W, st.pts[0][1] * H, lw / 2, 0, 7); g.fill(); }
-      g.restore(); continue;
+      if (st.pts.length === 1){ const a = P(st.pts[0]); g.fillStyle = 'hsl(0,95%,58%)'; g.beginPath(); g.arc(a[0], a[1], lw / 2, 0, 7); g.fill(); }
+      g.restore(); return;
     }
-    if (st.pts.length === 1){ g.beginPath(); g.arc(st.pts[0][0] * W, st.pts[0][1] * H, g.lineWidth / 2, 0, 7); g.fill(); }
+    if (st.pts.length === 1){ const a = P(st.pts[0]); g.beginPath(); g.arc(a[0], a[1], g.lineWidth / 2, 0, 7); g.fill(); }
     else {
-      g.beginPath(); g.moveTo(st.pts[0][0] * W, st.pts[0][1] * H);
+      const a0 = P(st.pts[0]); g.beginPath(); g.moveTo(a0[0], a0[1]);
       for (let i = 1; i < st.pts.length - 1; i++){
-        const mx = (st.pts[i][0] + st.pts[i + 1][0]) / 2 * W, my = (st.pts[i][1] + st.pts[i + 1][1]) / 2 * H;
-        g.quadraticCurveTo(st.pts[i][0] * W, st.pts[i][1] * H, mx, my);
+        const a = P(st.pts[i]), b = P(st.pts[i + 1]);
+        g.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
       }
-      const L = st.pts[st.pts.length - 1]; g.lineTo(L[0] * W, L[1] * H);
+      const L = P(st.pts[st.pts.length - 1]); g.lineTo(L[0], L[1]);
       g.stroke();
       if (st.brush === 'neon'){ g.shadowBlur = 0; g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = lw * 0.35; g.stroke(); }
     }
     g.restore();
+  });
+  out.drawImage(layer, 0, 0);
+}
+const scratchesN = {};
+function scratchN(k, w, h){ let c = scratchesN[k]; if (!c) c = scratchesN[k] = C(w, h); if (c.width !== w || c.height !== h){ c.width = w; c.height = h; } return c; }
+
+// ---------- the selection: draw round something (lasso) or tap it (magic wand) ----------
+// The mask is worked out at about 320 px (on the picture before filters), cached, and scaled up with
+// smoothing, which gives it a soft edge.
+const maskCache = { key: '', canvas: null };
+export function selectionMask(src, s){
+  const key = JSON.stringify([s.sel, s.rot, s.flip, s.aspect, s.zoom, s.cx, s.cy, s.angle]);
+  if (maskCache.key === key && maskCache.canvas) return maskCache.canvas;
+  const plain = C(1, 1);
+  render(src, { ...newState(), rot: s.rot, flip: s.flip, aspect: s.aspect, zoom: s.zoom, cx: s.cx, cy: s.cy, angle: s.angle }, plain, 320, { plain: true });
+  const W = plain.width, H = plain.height;
+  const m = C(W, H), g = m.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff';
+  for (const poly of s.sel.lasso){ if (poly.length < 3) continue; g.beginPath(); g.moveTo(poly[0][0] * W, poly[0][1] * H); for (const p of poly) g.lineTo(p[0] * W, p[1] * H); g.closePath(); g.fill(); }
+  if (s.sel.magic.length){
+    const d = plain.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    const img = g.getImageData(0, 0, W, H), o = img.data;
+    for (const seed of s.sel.magic){
+      const fill = flood(d, W, H, Math.floor(seed.u * W), Math.floor(seed.v * H), seed.tol);
+      for (let p = 0; p < W * H; p++) if (fill[p]){ o[p * 4] = o[p * 4 + 1] = o[p * 4 + 2] = o[p * 4 + 3] = 255; }
+    }
+    g.putImageData(img, 0, 0);
   }
+  if (s.sel.invert){ g.globalCompositeOperation = 'xor'; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; }
+  maskCache.key = key; maskCache.canvas = m;
+  return m;
+}
+// grow a region from (x, y) over pixels whose colour is close to the seed's (and to their neighbours'),
+// then fill small holes in it
+function flood(d, W, H, x, y, tol){
+  const n = W * H, out = new Uint8Array(n);
+  if (x < 0 || y < 0 || x >= W || y >= H) return out;
+  const i0 = (y * W + x) * 4, r0 = d[i0], g0 = d[i0 + 1], b0 = d[i0 + 2];
+  const lim = (tol || 30) * 2.2, step = lim * 0.55;
+  const dist = (i, r, g, b) => { const dr = d[i] - r, dg = d[i + 1] - g, db = d[i + 2] - b; return Math.sqrt(dr * dr * 0.3 + dg * dg * 0.59 + db * db * 0.11) * 1.6; };
+  const stack = [y * W + x]; out[y * W + x] = 1;
+  while (stack.length){
+    const p = stack.pop(), px = p % W, py = (p / W) | 0, i = p * 4;
+    for (const [qx, qy] of [[px + 1, py], [px - 1, py], [px, py + 1], [px, py - 1]]){
+      if (qx < 0 || qy < 0 || qx >= W || qy >= H) continue;
+      const q = qy * W + qx; if (out[q]) continue;
+      const j = q * 4;
+      if (dist(j, r0, g0, b0) < lim && dist(j, d[i], d[i + 1], d[i + 2]) < step){ out[q] = 1; stack.push(q); }
+    }
+  }
+  // close little holes: a pixel surrounded mostly by the region joins it
+  for (let pass = 0; pass < 2; pass++){
+    const copy = out.slice();
+    for (let yy = 1; yy < H - 1; yy++) for (let xx = 1; xx < W - 1; xx++){
+      const p = yy * W + xx; if (copy[p]) continue;
+      let c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) c += copy[p + dy * W + dx];
+      if (c >= 5) out[p] = 1;
+    }
+  }
+  return out;
+}
+// the mask at the picture's size, as 0..1 per pixel
+function maskAt(src, s, W, H){
+  const m = selectionMask(src, s), c = scratchN('mask', W, H), g = c.getContext('2d', { willReadFrequently: true });
+  g.clearRect(0, 0, W, H); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(m, 0, 0, W, H);
+  const d = g.getImageData(0, 0, W, H).data, a = new Float32Array(W * H);
+  for (let p = 0; p < W * H; p++) a[p] = d[p * 4 + 3] / 255;
+  return a;
+}
+function selectionFx(src, s, g, W, H){
+  const a = maskAt(src, s, W, H), img = g.getImageData(0, 0, W, H), d = img.data;
+  let other = null;
+  if (s.selFx === 'blur'){ other = new Uint8ClampedArray(d); const r = Math.max(2, Math.round(Math.max(W, H) / 60)); boxBlur(other, W, H, r); boxBlur(other, W, H, r); boxBlur(other, W, H, r); }
+  if (s.selFx === 'cut'){ const b = scratchN('bg', W, H); paintBackdrop(b.getContext('2d'), W, H, s.selBg); other = b.getContext('2d').getImageData(0, 0, W, H).data; }
+  for (let p = 0, i = 0; p < W * H; p++, i += 4){
+    const k = a[p];
+    let r = d[i], gg = d[i + 1], b = d[i + 2];
+    if (s.selFx === 'bright'){ if (k > 0){ const L = 0.299 * r + 0.587 * gg + 0.114 * b; const f = 1 + 0.25 * k; r = (L + (r - L) * (1 + 0.4 * k)) * f; gg = (L + (gg - L) * (1 + 0.4 * k)) * f; b = (L + (b - L) * (1 + 0.4 * k)) * f; } d[i] = r; d[i + 1] = gg; d[i + 2] = b; continue; }
+    if (k >= 1) continue;
+    let R, G, B;
+    if (s.selFx === 'pop'){ const L = 0.299 * r + 0.587 * gg + 0.114 * b; R = G = B = L; }
+    else if (s.selFx === 'spot'){ R = r * 0.28; G = gg * 0.28; B = b * 0.32; }
+    else { R = other[i]; G = other[i + 1]; B = other[i + 2]; }
+    d[i] = R + (r - R) * k; d[i + 1] = G + (gg - G) * k; d[i + 2] = B + (b - B) * k;
+  }
+  g.putImageData(img, 0, 0);
+}
+export function paintBackdrop(g, W, H, bg){
+  if (bg === 'sunset' || bg === 'sky'){ const gr = g.createLinearGradient(0, 0, 0, H); if (bg === 'sunset'){ gr.addColorStop(0, '#3a1c71'); gr.addColorStop(0.5, '#d76d77'); gr.addColorStop(1, '#ffaf7b'); } else { gr.addColorStop(0, '#4a9ae8'); gr.addColorStop(1, '#d8f0ff'); } g.fillStyle = gr; g.fillRect(0, 0, W, H); return; }
+  if (bg === 'stripes'){ const n = 12; for (let i = 0; i < n; i++){ g.fillStyle = i % 2 ? '#ffe28a' : '#ff8ab8'; g.fillRect(i * W / n, 0, W / n + 1, H); } return; }
+  if (bg === 'dots'){ g.fillStyle = '#2a3a8a'; g.fillRect(0, 0, W, H); g.fillStyle = '#ffd84a'; const s = Math.max(W, H) / 14; for (let y = 0; y < H + s; y += s) for (let x = ((y / s) % 2) * s / 2; x < W + s; x += s){ g.beginPath(); g.arc(x, y, s * 0.18, 0, 7); g.fill(); } return; }
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+}
+// the selected part of the finished picture as its own image (to become a sticker), cropped to it
+export function cutOut(src, s, cuts){
+  const pic = C(1, 1);
+  const st = { ...s, border: 'none', stickers: [], text: { ...s.text, str: '' }, selFx: 'none' };
+  render(src, st, pic, 900, { cuts });
+  const W = pic.width, H = pic.height, a = maskAt(src, s, W, H);
+  let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (a[y * W + x] > 0.5){ if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 <= x0 || y1 <= y0) return null;
+  const g = pic.getContext('2d', { willReadFrequently: true }), img = g.getImageData(0, 0, W, H);
+  for (let p = 0; p < W * H; p++) img.data[p * 4 + 3] = Math.round(img.data[p * 4 + 3] * a[p]);
+  g.putImageData(img, 0, 0);
+  const pad = 2; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(W - 1, x1 + pad); y1 = Math.min(H - 1, y1 + pad);
+  const out = C(x1 - x0 + 1, y1 - y0 + 1); out.getContext('2d').drawImage(pic, -x0, -y0);
+  return { canvas: out, u: (x0 + x1) / 2 / W, v: (y0 + y1) / 2 / H, w: (x1 - x0) / W };
 }
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-function drawStickers(g, W, H, list){
+function drawStickers(g, W, H, list, cuts){
   for (const s of list){
     g.save();
     g.translate(s.u * W, s.v * H); g.rotate(s.r || 0);
     const px = s.s * W;
+    if (s.cut != null){
+      const c = cuts && cuts[s.cut];
+      if (c){ const h = px * c.height / c.width; g.shadowColor = 'rgba(0,0,0,0.4)'; g.shadowBlur = px * 0.04; g.shadowOffsetY = px * 0.02; g.drawImage(c, -px / 2, -h / 2, px, h); }
+      g.restore(); continue;
+    }
     g.font = `${px}px ${EMOJI_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.shadowColor = 'rgba(0,0,0,0.35)'; g.shadowBlur = px * 0.08; g.shadowOffsetY = px * 0.04;
     g.fillText(s.e, 0, px * 0.06);
@@ -363,7 +511,7 @@ function drawText(g, W, H, t){
 }
 
 // the picture's finished size for keeping
-export function bake(src, s, max = 1024){ const c = C(1, 1); render(src, s, c, max); return c; }
+export function bake(src, s, max = 1024, cuts){ const c = C(1, 1); render(src, s, c, max, { cuts }); return c; }
 
 // downscale a camera frame (or any image) into a canvas no bigger than max on its long side
 export function toCanvas(img, max = 1600){
