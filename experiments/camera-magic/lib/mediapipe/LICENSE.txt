@@ -1,0 +1,7 @@
+MediaPipe Tasks Vision 1.2.3 (vision_bundle.mjs, vision_wasm_internal.js, vision_wasm_internal.wasm)
+from the npm package @mediapipe/tasks-vision, and the models in ../../models/ from
+https://storage.googleapis.com/mediapipe-models/ (EfficientDet-Lite0 object detector, hand landmarker,
+face landmarker, pose landmarker lite, selfie segmenter).
+Copyright Google LLC. Licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+Kept here (not on a CDN) so Camera Magic works offline.
