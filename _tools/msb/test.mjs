@@ -322,6 +322,9 @@ const gotOffer = await ev(`__msb.advance(240, () => __msb.visitors.list.some((v)
 check(gotOffer, 'a visitor looks at your picture and offers to buy it');
 // the people were made ready behind the loading screen: their arrival compiles no new shaders (that was the freeze)
 check(await ev('(() => { for (const v of __msb.visitors.list) if (v.active) v.root.traverse((o) => { o.frustumCulled = false; }); __msb.renderNow(); return __msb.renderer.info.programs.length; })()') === prog0, `visitors walking in don't need new shaders (the freeze when they first appeared): ${prog0} programs`);
+check(await ev('new Set(__msb.visitors.list.map((v) => v.style && v.style.lean.toFixed(3) + v.style.swing.toFixed(3))).size === __msb.visitors.list.length && new Set(__msb.visitors.list.map((v) => v.speed.toFixed(3))).size > 10'), 'everyone walks their own way (lean, arm swing, speed, ...)');
+// the hands hang in line with the forearms (they used to bend outward at the wrist)
+check(await ev(`(() => { const v = __msb.visitors.list.find((v) => v.real); const B = v.real.bones, ok = []; for (const s of ['L', 'R']){ const h = B[s + '_Hand']; if (!h) return false; ok.push(h.quaternion.angleTo(v.real.rest[s + '_Hand']) < 0.05); } return ok.every(Boolean); })()`), 'the wrists stay straight (hands in line with the forearms)');
 check(await ev('__msb.visitors.list.length') >= 16 && await ev('new Set(__msb.visitors.list.map((v) => v.real && v.real.model.uuid)).size === __msb.visitors.list.length'), `${await ev('__msb.visitors.list.length')} different people`);
 check(await ev(`document.querySelectorAll('#jobs .job').length`) >= 1, 'the offer shows as a card with Sell and ✕');
 const offer = await ev(`(() => { const v = __msb.visitors.list.find((v) => v.offer && v.offer.art === __msb.save.art[0]); return v && { id: v.id, price: v.offer.price, name: v.name }; })()`);

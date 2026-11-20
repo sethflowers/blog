@@ -209,3 +209,20 @@ tell there were only two models (perhaps the woman's hair).
   `_tools/msb/people.json`. Michelle, the Ready Player Me man and the retargeted clips file are gone,
   and so is the outfit recolouring. Every visitor in the pool is a different person (up to 8 in the
   gallery at once).
+
+### 3.2
+The user asked for variety in how the people walk (they all walked the same), and said they held
+their hands oddly: the wrists turned inward.
+
+- **Wrists**: the hand bones copied Xbot's hand rotations, which on the Rocketbox skeleton bent the
+  wrists outward with the palms turned back. The retargeter now gives each hand its own rest pose
+  relative to the forearm (a straight wrist), while still using the hand's direction to line up the
+  forearm (without it the forearms bent inward). Fingers keep Xbot's relaxed curl. Test: the hands'
+  rotations stay at their rest pose.
+- **Walking styles** (`makeStyle` / `applyStyle` in people.js): after the animation poses the body,
+  each person's own style is laid on top: forward lean or upright, head tilt, arm swing from 55% to
+  130% of the animation's (scaled from the arm's rest pose), slightly bent elbows, arms close in or
+  held out, toes pointing out, hip sway, bounce, shoulders; while standing, a slow weight shift at
+  their own rate. Rotations are about the person's own forward / right / up axes, worked out in each
+  bone's parent frame. Speeds range from 0.9 to 1.4 m/s (the steps keep pace), and everyone starts at
+  a random point in the walk and idle cycles, so nobody moves in step.

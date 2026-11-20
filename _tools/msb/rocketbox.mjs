@@ -93,7 +93,8 @@ for (const P of PEOPLE){
     });
     // keep only the person (drop helper objects), bones renamed the way three.js names them
     const key = (n) => n.replace(/^mixamorig:?/, '');
-    // Mixamo bone → Rocketbox (3ds Max biped) bone
+    // Mixamo bone → Rocketbox (3ds Max biped) bone. The hands don't copy Xbot's (that bent the wrists
+    // outward with the palms turned back): each keeps its own rest pose, in line with its forearm.
     const MAP = { Hips: 'Bip01_Pelvis', Spine: 'Bip01_Spine', Spine1: 'Bip01_Spine1', Spine2: 'Bip01_Spine2', Neck: 'Bip01_Neck', Head: 'Bip01_Head' };
     for (const [s, S] of [['Left', 'L'], ['Right', 'R']]){
       Object.assign(MAP, { [s + 'Shoulder']: `Bip01_${S}_Clavicle`, [s + 'Arm']: `Bip01_${S}_UpperArm`, [s + 'ForeArm']: `Bip01_${S}_Forearm`, [s + 'Hand']: `Bip01_${S}_Hand`,
@@ -112,7 +113,7 @@ for (const P of PEOPLE){
       const inv = Object.fromEntries(Object.entries(MAP).map(([a, b]) => [b, a]));
       for (const o of order){
         const k = inv[o.name]; if (!k || !sb[k]) continue;
-        const L = { t: o, s: sb[k], Wt: o.getWorldQuaternion(new THREE.Quaternion()), Ws: sb[k].getWorldQuaternion(new THREE.Quaternion()), vals: [] };
+        const L = { rest: /Hand$/.test(k) ? o.quaternion.clone() : null, t: o, s: sb[k], Wt: o.getWorldQuaternion(new THREE.Quaternion()), Ws: sb[k].getWorldQuaternion(new THREE.Quaternion()), vals: [] };
         // point each target bone (at rest) the way the source's points
         const tcName = Object.entries(MAP).find(([a]) => sb[a] && sb[a].parent === sb[k] && tb[MAP[a]]);
         if (tcName && k !== 'Hips'){ const tc = tb[tcName[1]], sc = sb[tcName[0]]; const dt = wp(tc).sub(wp(o)).normalize(), ds = wp(sc).sub(wp(sb[k])).normalize(); L.Wt.premultiply(new THREE.Quaternion().setFromUnitVectors(dt, ds)); }
@@ -124,12 +125,12 @@ for (const P of PEOPLE){
         const time = clip.duration * f / n; times.push(+time.toFixed(3));
         mx.setTime(time); src.updateMatrixWorld(true); tw.clear();
         for (const L of list){
-          const Qt = L.s.getWorldQuaternion(new THREE.Quaternion()).multiply(L.Ws.clone().invert()).multiply(L.Wt);
-          tw.set(L.t, Qt);
           // the parent's world turn: animated if it's one of ours, else as it rests (it may itself sit under animated bones)
           let par = L.t.parent;
           if (tw.has(par)) pw.copy(tw.get(par));
           else { par.getWorldQuaternion(pw); let up = par.parent; while (up && !tw.has(up)) up = up.parent; if (up){ const rest = up.getWorldQuaternion(new THREE.Quaternion()).invert(); pw.premultiply(rest).premultiply(tw.get(up)); } }
+          const Qt = L.rest ? pw.clone().multiply(L.rest) : L.s.getWorldQuaternion(new THREE.Quaternion()).multiply(L.Ws.clone().invert()).multiply(L.Wt);
+          tw.set(L.t, Qt);
           q.copy(pw).invert().multiply(Qt);
           L.vals.push(+q.x.toFixed(3), +q.y.toFixed(3), +q.z.toFixed(3), +q.w.toFixed(3));
         }
