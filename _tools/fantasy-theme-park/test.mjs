@@ -488,7 +488,7 @@ await ev(`__ftp.park.s.time = 11 * 60`);
   await ev('__ftp.show.showT = -1; __ftp.ui.act("deselect")');
   // weather: a wet day
   await ev(`(() => { const S = __ftp.park.s; S.time = 12 * 60; S.weather = { day: S.day, kind: 'sunny', from: 0, to: 0 }; __ftp.speed = 0; })()`);
-  await pg.waitForFunction(`__ftp.show.cloud < 0.02`, null, { timeout: 30000 }).catch(() => {});
+  await pg.waitForFunction(`__ftp.show.cloud < 0.02 && __ftp.sky.night < 0.05 && __ftp.sky.sun.intensity > 1`, null, { timeout: 30000 }).catch(() => {});
   const sun0 = await ev('__ftp.sky.sun.intensity');
   await ev(`(() => { const S = __ftp.park.s; S.weather = { day: S.day, kind: 'rain', from: 0, to: 24 }; })()`);
   await pg.waitForFunction(`__ftp.show.wet > 0.6 && __ftp.show.cloud > 0.75`, null, { timeout: 30000 }).catch(() => {});
