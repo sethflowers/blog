@@ -176,6 +176,14 @@ export function buildArch(theme, name, width = 8){
 export const archThemeColor = (theme) => (THEMES[theme] || THEMES.main).color;
 
 // --- car parks: tarmac, bays, kerbs, lamp posts and a sign ---------------------------------------------
+// the rows of bays (5 m deep) with aisles (7 m) between, across the car park's depth
+function lotRows(D){ const rows = []; let z = -D / 2 + 0.4; while (z + 5 <= D / 2 - 0.4){ rows.push(z); z += 5; if (z + 7 + 5 <= D / 2 - 0.4){ z += 7; rows.push(z); z += 5; } else break; } return rows; }
+// where each bay is (in the park), and which way a car in it faces
+export function lotBays(o){
+  const W = o.w * 2, D = o.d * 2, rows = lotRows(D), out = [];
+  rows.forEach((rz, ri) => { for (let x = -W / 2 + 1; x + 2.5 <= W / 2 - 1; x += 2.5) out.push({ x: o.x + x + 1.25, z: o.z + rz + 2.5, yaw: ri % 2 ? Math.PI : 0, aisle: o.z + rz + (ri % 2 ? -3.5 : 8.5) }); });
+  return out;
+}
 export function buildLot(o, park){
   const W = o.w * 2, D = o.d * 2, g = new THREE.Group(), B = new Batch();
   const y0 = park.groundAt(o.x, o.z);
@@ -185,8 +193,7 @@ export function buildLot(o, park){
   // kerbs round the edge
   for (const [x, z, w, d] of [[0, -D / 2 + 0.1, W, 0.2], [0, D / 2 - 0.1, W, 0.2], [-W / 2 + 0.1, 0, 0.2, D - 0.4], [W / 2 - 0.1, 0, 0.2, D - 0.4]]) B.box('kerb', x, 0.06, z, w, 0.24, d);
   // rows of bays: bays (5 m) and aisles (7 m) across the depth
-  const rows = []; let z = -D / 2 + 0.4;
-  while (z + 5 <= D / 2 - 0.4){ rows.push(z); z += 5; if (z + 7 + 5 <= D / 2 - 0.4){ z += 7; rows.push(z); z += 5; } else break; }
+  const rows = lotRows(D);
   const line = (x, zz, w, d) => B.box('line', x, 0.075, zz, w, 0.01, d);
   let bays = 0;
   for (let rI = 0; rI < rows.length; rI++){

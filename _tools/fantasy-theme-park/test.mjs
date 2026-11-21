@@ -319,9 +319,9 @@ check(await ev(`document.querySelectorAll('#tray .card').length`) === 4, 'the Ri
 await ev(`__ftp.ui.act('newcoaster')`);
 await stroke([[-130, gz - 170], [-130, gz - 170]]);
 check(await count('coaster') === 1 && await ev('__ftp.tools.kind') === 'cedit', 'a coaster station goes down, and the Ride Workshop opens');
-for (const t of ['straight', 'up', 'up', 'steepDown', 'loop']) await ev(`__ftp.ui.act('cpiece:${t}')`);
+for (const t of ['straight', 'up', 'up', 'loop']) await ev(`__ftp.ui.act('cpiece:${t}')`);   // (staying up off the ground: the land is different every time)
 const CO = () => ev(`__ftp.park.s.objects.find((o) => o.type === 'coaster')`);
-check((await CO()).pieces.length === 5, `track pieces are laid (${(await CO()).pieces.join(', ')})`);
+check((await CO()).pieces.length === 4, `track pieces are laid (${(await CO()).pieces.join(', ')})` + ((await CO()).pieces.length === 4 ? '' : ' ' + await ev(`__ftp.ui.toasts.map((t) => t.text).join(' / ')`)));
 await ev(`__ftp.ui.act('cfinish')`);
 let cst = await ev(`__ftp.rides.stats(__ftp.park.s.objects.find((o) => o.type === 'coaster'))`);
 check(cst && cst.complete && cst.fun > 2 && cst.inversions >= 1, `Finish closes the circuit (fun ${cst && cst.fun}, scary ${cst && cst.scary}, queasy ${cst && cst.queasy})`);
@@ -343,6 +343,16 @@ await shot('12-riding');
 await ev(`__ftp.ui.act('walk')`);
 check(await ev('__ftp.mode') === 'build' && !(await ev('__ftp.riding')), 'Get off puts you back');
 await ev('__ftp.timeScale = 1');
+// (reported: a hanging coaster said "too low" for every piece, then the game froze)
+await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newhang')`);
+await stroke([[-200, gz - 170], [-200, gz - 170]]);
+const hang = await ev(`(() => { const o = __ftp.park.s.objects.filter((o) => o.type === 'coaster').pop(); return o.hang ? o.id : null; })()`);
+check(!!hang, 'a hanging coaster station goes down');
+await ev(`__ftp.ui.act('cpiece:straight'); __ftp.ui.act('cpiece:up'); __ftp.ui.act('cpiece:left')`);
+check((await ev(`__ftp.park.obj('${hang}').pieces`)).length === 3, `its first pieces lay (no "too low") (${await ev(`__ftp.ui.toasts.map((t) => t.text).join(' / ')`)})`);
+const tf = Date.now(); await ev(`__ftp.ui.act('cfinish')`); const finishMs = Date.now() - tf;
+check(finishMs < 4000, `Finish answers quickly, whatever it finds (${finishMs} ms)`);
+await ev(`__ftp.ui.act('cdone')`);
 // flat rides
 await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newride:carousel')`);
 await stroke([[-150, gz - 40], [-150, gz - 40]]);
@@ -350,8 +360,17 @@ await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newride:wheel')`);
 await stroke([[-185, gz - 95], [-185, gz - 95]]);
 check(await ev(`__ftp.park.s.objects.filter((o) => o.type === 'ride').map((o) => o.kind).sort().join()`) === 'carousel,wheel', 'a carousel and a big wheel go up');
 const car = await ev(`__ftp.park.s.objects.find((o) => o.kind === 'carousel').id`);
+// (reported: riding the big wheel you couldn't see anything: the cabin glass was opaque)
+check(await ev(`(() => { const o = __ftp.park.s.objects.find((o) => o.kind === 'wheel'), it = __ftp.rides.get(o.id); let ok = false; it.group.userData.mounts[0].traverse((m) => { if (m.isMesh && m.material.transparent && m.material.opacity < 0.4) ok = true; }); return ok; })()`), 'the big wheel\'s cabins have glass you can see through');
+
 await ev(`__ftp.select('${car}'); __ftp.ui.act('redit'); __ftp.ui.act('rmounts:mixed'); __ftp.ui.act('rtiers:2'); __ftp.ui.act('rdone')`);
 check(await ev(`__ftp.park.obj('${car}').mounts === 'mixed' && __ftp.park.obj('${car}').tiers === 2`), 'the carousel can be redesigned (two tiers of mixed animals)');
+// (reported: the animals faced the middle) each animal faces the way the carousel turns
+check(await ev(`(() => { const it = __ftp.rides.get('${car}'), V = __ftp.rig.position.constructor; let worst = 1;
+  for (const m of it.group.userData.mounts){ m.updateWorldMatrix(true, false); const p = m.getWorldPosition(new V()).sub(it.group.position); p.y = 0;
+    const along = new V(1, 0, 0).transformDirection(m.matrixWorld); along.y = 0; along.normalize();
+    const travel = new V(p.z, 0, -p.x).normalize(); worst = Math.min(worst, along.dot(travel)); }
+  return worst > 0.95; })()`), 'every carousel animal faces the way it goes round (not in at the middle)');
 await ev(`(() => { const o = __ftp.park.obj('${car}'); __ftp.select(null); __ftp.focus(o.x, o.z, 30); __ftp.want.pitch = 0.2; __ftp.want.yaw = 0.5; })()`);
 await shot('13-carousel');
 

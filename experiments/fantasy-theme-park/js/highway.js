@@ -52,7 +52,7 @@ export class Highway {
   }
 }
 // a saloon car 4.5 m long, along +x
-function carGeometry(){
+export function carGeometry(){
   const parts = { body: new Batch(), glass: new Batch(), tyre: new Batch(), chrome: new Batch() };
   const b = parts.body;
   b.box('body', 0, 0.62, 0, 4.4, 0.62, 1.78);

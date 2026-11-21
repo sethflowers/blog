@@ -107,6 +107,7 @@ export function upgrade(S){
   if (!S.lands) S.lands = [];
   if (!S.objects) S.objects = [];
   if (!S.day) S.day = 1;
+  if (!S.litter) S.litter = [];
   S.v = SAVE_VERSION;
   return S;
 }
@@ -210,6 +211,8 @@ export class Park {
     r.objsAfter = new Map(); for (const id of r.objs.keys()){ const o = this.byId.get(id); r.objsAfter.set(id, o ? JSON.stringify(o) : null); }
     if (r.landsBefore) r.landsAfter = JSON.stringify(this.s.lands);
     if (r.nameBefore !== undefined) r.nameAfter = this.s.name;
+    // Tycoon: the edit has to be paid for (economy.js); if it can't be, it's taken back
+    if (this.charge && !this.charge(r)){ this._apply(r, false); return null; }
     this.undoStack.push(r); if (this.undoStack.length > 200) this.undoStack.shift();
     this.redoStack.length = 0;
     this.dirty = true;
@@ -219,8 +222,8 @@ export class Park {
   cancel(){ if (!this.rec) return; const r = this.rec; this.rec = null; this._apply(r, false); }
   get canUndo(){ return this.undoStack.length > 0; }
   get canRedo(){ return this.redoStack.length > 0; }
-  undo(){ const r = this.undoStack.pop(); if (!r) return null; this._apply(r, false); this.redoStack.push(r); this.dirty = true; return r.label; }
-  redo(){ const r = this.redoStack.pop(); if (!r) return null; this._apply(r, true); this.undoStack.push(r); this.dirty = true; return r.label; }
+  undo(){ const r = this.undoStack.pop(); if (!r) return null; this._apply(r, false); if (this.refund) this.refund(r, false); this.redoStack.push(r); this.dirty = true; return r.label; }
+  redo(){ const r = this.redoStack.pop(); if (!r) return null; this._apply(r, true); if (this.refund) this.refund(r, true); this.undoStack.push(r); this.dirty = true; return r.label; }
   _apply(r, forward){
     const dirty = newDirty();
     for (const [name, before] of Object.entries(r.layers)){
