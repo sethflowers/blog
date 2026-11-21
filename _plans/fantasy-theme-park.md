@@ -265,16 +265,18 @@ test grows with each one.
    queues, bridges, lands with names and arches, park entrance gate, parking lots, scenery and
    lamps, day and night, build view and walk mode, undo/redo, saving, offline, VR (model mode and
    life-size walking).
-2. **1.1: Buildings.** The building kit, templates per theme, stalls and carts with menus,
-   restaurants with seating, bathrooms, other facilities, interiors, blueprint library.
-3. **1.2: First rides.** The Ride Workshop, coasters (all of Rollercoaster Bros's track, drawing and
+2. **1.1: Buildings.** The building kit (rooms, wall styles, fitted roofs, materials, towers, chimneys,
+   awnings, signs), ready-made buildings per theme, interiors you can walk into.
+3. **1.2: Shops, food and facilities.** Stalls and carts you design, with menus and prices; restaurants
+   with seating; bathrooms; other facilities; the blueprint library.
+4. **1.3: First rides.** The Ride Workshop, coasters (all of Rollercoaster Bros's track, drawing and
    trains, plus wooden and mine-train types), carousel and big wheel; ride them on screen and in VR.
-4. **1.3: Opening day.** Guests (cars, parking, needs, queues, food, bathrooms, thoughts), the
+5. **1.4: Opening day.** Guests (cars, parking, needs, queues, food, bathrooms, thoughts), the
    crowd at three levels of detail, Tycoon mode, money, finances, rating, unlocks, staff,
    breakdowns.
-5. **1.4: More rides.** Drop tower, swing ride, swinging ship, teacups, scrambler, spinning coaster.
-6. **1.5: Water and track rides.** Log flume, boats, park railway, dark ride, go-karts.
-7. **2.0: Showtime.** Weather, fireworks and night shows (a simple show editor), land music, the
+6. **1.5: More rides.** Drop tower, swing ride, swinging ship, teacups, scrambler, spinning coaster.
+7. **1.6: Water and track rides.** Log flume, boats, park railway, dark ride, go-karts.
+8. **2.0: Showtime.** Weather, fireworks and night shows (a simple show editor), land music, the
    park map and guide, park photos, a performance pass on a Quest 2, a polish pass on every panel.
 
 ## 13. Tests (`_tools/fantasy-theme-park/test.mjs`)
@@ -363,3 +365,67 @@ What's in it, and how it works.
   every 90 s with a new picture for the parks list, and when the page is hidden. Export/import as a
   `.park.json` file.
 - **Test**: `_tools/fantasy-theme-park/test.mjs` (quick by default; `--full` adds the other landscapes).
+
+## Version 1.1: Buildings (built)
+
+- **The kit** (`buildings.js`). A building is data: `floors` (the rooms of each storey, 2 m cells on the
+  building's own grid; a storey's rooms must stand on the storey below), `walls` (a style per outside
+  wall: window (the default), plain, door, arch, shopfront, open), `roof` (hipped, gabled, flat,
+  battlements, spire, dome), `m` (walls, roof, woodwork, stonework, floors), `timber`, round `towers` on
+  grid corners, and `extras` (chimneys, awnings, signs with any words). Buildings stand on the park's
+  2 m grid and turn in quarter turns, so they line up with paths.
+- **Geometry.** Walls are built in each wall's own frame (x along it, z inward), so one set of styles
+  serves every side; windows have frames, sills, glazing bars and glass that glows warm after dark;
+  doors stand open (you can walk in); arches are cut with an extruded shape; shopfronts get a riser,
+  mullions and a fascia. Inside faces are plastered. Convex corners get quoins (or timber posts) 5 cm
+  proud, the base course 3 cm and string courses 4 cm, so no two faces ever share a plane. The floor is
+  level, 15 cm above the highest ground, on a foundation down to the lowest. Roofs are fitted over
+  every part with nothing above it: the cells are split into rectangles (greedily, largest first) and
+  each gets its own roof; roof faces carry UVs along the eaves and up the slope so slates and tiles run
+  the right way, with a timber underside and fascia boards. New textures: clay tiles and shingles.
+- **Ready-made**: cottage, townhouse, shop row, plain building (Main Street), tavern, gatehouse
+  tower, castle keep (Castle Town), pavilion (Sky Kingdom), saloon (Frontier Gulch), harbour warehouse
+  (Pirate Harbour), woodland hut (Enchanted Wood). All made from the kit, so they can be changed.
+- **Editing** (`btools.js`): Buildings tab → tap where it goes (green or red ghost, quarter turns).
+  Tap a building → Edit: Rooms (drag to add or rub out rooms on a storey; the storeys above are lifted
+  off, and the roof, so you can see in; add or remove storeys, up to six), Walls (choose a style, tap
+  walls; doors and shopfronts only on the ground floor), Roof, Materials (with timber framing), Extras
+  (tower on a corner, chimney on a roof, awning over a ground-floor wall, sign on a wall, take away).
+  The tools work from the pointer's ray (walls and roofs are above the ground), so the same code serves
+  a finger, the mouse and the VR laser. Each stroke or tap is one undoable edit.
+- **Interiors**: hanging lamps (about one per six cells) light the floor at night (the light pools now
+  know a lamp indoors lights its own floor). Walking: the floor inside is the building's floor
+  (`park.floorAt` asks the buildings first), its ground-storey walls and towers are solid, doorways and
+  arches are not; small steps (up to 35 cm) are fine.
+- **Rules**: buildings can't go on paths, water, the car park or the entrance, or on ground too steep
+  (more than about 3 m across), and clear trees in the way; paths, car parks and the land tools stay
+  out of buildings; trees can't go inside, furniture and lamps can.
+
+### Fixes from playing 1.0 (in 1.1)
+
+- **Lamps didn't light up** (only the ground under them did): the bulb sat inside lantern glass that
+  was opaque dark glass. Lantern panes are now clear warm glass that glows after dark (`lampGlass`,
+  driven by the sky like the bulbs and windows). Test: the lamps' glass glows at night.
+- **The light under a lamp was a flat disc**, floating above or sunk into a slope. Pools of light are
+  now draped over whatever is under them (a 6 x 6 grid per pool following `floorAt`, so paths and
+  bridges too); a lamp indoors lights its own flat floor. Test: on a slope, the pool lies within 2 cm.
+- **Water cut into the ground and put up walls**: water fills to the height where the stroke starts,
+  so painting up a slope dug a trench uphill to that level, with steep earth walls and the water out
+  of sight at the bottom (and the trench crept further up a cell at a time, because lowering the
+  water's edge let the next cell in). Now the level comes from the lowest ground under the brush;
+  water won't go where a cell's highest corner is more than 1.2 m above it (it says why: lower the
+  ground first); the water's edge is dug to just under the surface and the next ring of ground
+  halfway down to it, so the banks slope. Trees in new water are cleared. Test: water painted up a
+  hill fills the low end and stops, with the message.
+- **The ground under the entrance flickered**: the gateway's wall was an extruded shape with an
+  arch-shaped hole touching the ground, which leaves a strip of wall lying across the opening at
+  exactly the path's height. The outline now goes round the opening (the same fix in the building
+  kit's arches). Test: no upward face lies across the opening at path height.
+- **It froze while walking (the clock still ran, nothing responded)**: the signs of the browser
+  taking the 3D view away when the iPad runs short of graphics memory. Now: tablets draw at 1.5x
+  rather than 2x (much less memory), and if the view is lost anyway the park is saved and a panel
+  says what happened with a Reload button (also if frames keep failing). Walking can never get stuck:
+  standing in water (somehow) you can walk out, and a slope that blocks you for 1.5 s lets you go.
+  Tests: the lost-view panel; walking out of water.
+- Interiors: inside walls, floors and ceilings have a soft fill light (they were black by day), and
+  window glass is partly see-through.

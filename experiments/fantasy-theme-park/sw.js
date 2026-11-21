@@ -16,7 +16,7 @@ var CACHE = 'fantasy-theme-park-' + V;
 var BASE = '/experiments/fantasy-theme-park/';
 var READY = BASE + '__offline-ready__';
 var VERSIONED = ['lib/three.core.min.js', 'lib/three.module.min.js',
-  'js/audio.js', 'js/highway.js', 'js/icons.js', 'js/main.js', 'js/materials.js', 'js/models.js', 'js/names.js', 'js/objects.js', 'js/park.js', 'js/paths.js', 'js/sky.js', 'js/store.js', 'js/structures.js', 'js/terrain.js', 'js/thumbs.js', 'js/tools.js', 'js/ui.js', 'js/util.js', 'js/vr.js'];
+  'js/audio.js', 'js/btools.js', 'js/buildings.js', 'js/highway.js', 'js/icons.js', 'js/main.js', 'js/materials.js', 'js/models.js', 'js/names.js', 'js/objects.js', 'js/park.js', 'js/paths.js', 'js/sky.js', 'js/store.js', 'js/structures.js', 'js/terrain.js', 'js/thumbs.js', 'js/tools.js', 'js/ui.js', 'js/util.js', 'js/vr.js'];
 var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 var ASSETS = [BASE].concat(VERSIONED.map(function (f) { return BASE + f + '?v=' + V; }), STATIC.map(function (f) { return BASE + f; }));
 

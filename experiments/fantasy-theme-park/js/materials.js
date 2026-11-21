@@ -311,6 +311,31 @@ P.hedge = () => {
   }
   return [c, h];
 };
+// clay roof tiles: rows of rounded pantiles (2 m tile: 10 rows, 8 across), rows along U, downhill along V
+P.tiles = () => {
+  const c = canvas(), h = canvas(), r = rng(47), rows = 10, cols = 8, t = [];
+  for (let i = 0; i < rows * cols; i++) t.push(r());
+  perPixel(c, h, (x, y, col, ho) => {
+    const rh = S / rows, j = Math.floor(y / rh), f = y / rh - j, cw = S / cols, ci = Math.floor((x + (j % 2) * cw / 2) / cw) % cols, fx = ((x + (j % 2) * cw / 2) % cw) / cw;
+    const round = Math.sin(fx * Math.PI), shade = 0.55 + 0.45 * round * (0.6 + 0.4 * f), tt = t[j * cols + ci];
+    const v = shade * (f > 0.9 ? 0.6 : 1);
+    col[0] = (158 + 50 * tt) * v; col[1] = (78 + 26 * tt) * v; col[2] = (52 + 14 * tt) * v; ho[0] = 40 + 200 * round * (0.4 + 0.6 * f);
+  });
+  grain(c, h, 14, 10, 3);
+  return [c, h];
+};
+// wooden shingles: staggered rows of narrow boards
+P.shingles = () => {
+  const c = canvas(), h = canvas(), r = rng(53), rows = 14, cols = 12, t = [];
+  for (let i = 0; i < rows * cols; i++) t.push(r());
+  perPixel(c, h, (x, y, col, ho) => {
+    const rh = S / rows, j = Math.floor(y / rh), f = y / rh - j, cw = S / cols, xx = x + (j % 2) * cw / 2, ci = Math.floor(xx / cw) % cols, fx = (xx % cw) / cw;
+    const tt = t[j * cols + ci], edge = fx < 0.06 || f > 0.92, g = 0.85 + 0.15 * Math.sin(xx * 0.9 + tt * 9);
+    const v = (edge ? 0.45 : 1) * g * (0.75 + 0.25 * f);
+    col[0] = (120 + 40 * tt) * v; col[1] = (92 + 30 * tt) * v; col[2] = (66 + 20 * tt) * v; ho[0] = edge ? 30 : 80 + 160 * f;
+  });
+  return [c, h];
+};
 P.needles = () => {
   const c = canvas(), cx = c.getContext('2d'), r = rng(37);
   for (let i = 0; i < 2600; i++){
@@ -350,7 +375,7 @@ export function texture(name){
   }
   return t;
 }
-const NORMAL = { grass: 2.5, dirt: 3, rock: 5, sand: 2, pavers: 4, cobbles: 6, flagstone: 3, crazy: 4, tarmac: 1.5, boards: 4, gravel: 5, concrete: 1.5, ashlar: 4, brick: 4, slate: 4, wood: 2, bark: 6, plaster: 1.5, water: 2, hedge: 5 };
+const NORMAL = { grass: 2.5, dirt: 3, rock: 5, sand: 2, pavers: 4, cobbles: 6, flagstone: 3, crazy: 4, tarmac: 1.5, boards: 4, gravel: 5, concrete: 1.5, ashlar: 4, brick: 4, slate: 4, wood: 2, bark: 6, plaster: 1.5, water: 2, hedge: 5, tiles: 4, shingles: 4 };
 
 // material definitions: painting, metres per tile, roughness, metalness, tint
 const DEF = {
@@ -366,6 +391,8 @@ const DEF = {
   canvas: { c: 0xffffff, r: 0.85, vc: true, side: THREE.DoubleSide }, glass: { c: 0x203038, r: 0.08, mt: 0.2 },
   stone: { t: 'ashlar', m: 2, r: 0.85, c: 0xc8c0b0 }, marble: { c: 0xe8e4dc, r: 0.3 },
   tyre: { c: 0x18181a, r: 0.9 }, chrome: { c: 0xd0d4d8, r: 0.2, mt: 1 },
+  tiles: { t: 'tiles', m: 2, r: 0.75 }, shingles: { t: 'shingles', m: 2, r: 0.85 }, boardwall: { t: 'boards', m: 2, r: 0.8, c: 0xb89a80 },
+  floortile: { t: 'flagstone', m: 2, r: 0.5, c: 0xe8e0d0 },
   line: { c: 0xf0eee6, r: 0.8 }, yellowline: { c: 0xe0b030, r: 0.8 },
 };
 const matCache = new Map();
@@ -389,7 +416,13 @@ export function mat(name, opts){
 // warm glowing bulbs: their brightness follows the night (set by sky.js)
 export const glow = new THREE.MeshStandardMaterial({ color: 0x302a20, emissive: 0xffd8a0, emissiveIntensity: 0, roughness: 0.4 });
 glow.name = 'glow';
-matCache.set('glow', glow);
+// window glass: dark by day, a warm lamplit glow after dark (sky.js sets how bright)
+export const winGlow = new THREE.MeshStandardMaterial({ color: 0x2a3a42, emissive: 0xffc070, emissiveIntensity: 0, roughness: 0.06, metalness: 0.3, transparent: true, opacity: 0.55, depthWrite: false });
+winGlow.name = 'winglass';
+// lantern panes: clear warm glass that glows after dark (sky.js sets how bright)
+export const lampGlass = new THREE.MeshStandardMaterial({ color: 0xfff0d0, emissive: 0xffc878, emissiveIntensity: 0, roughness: 0.15, metalness: 0, transparent: true, opacity: 0.6, depthWrite: false });
+lampGlass.name = 'lampglass';
+matCache.set('glow', glow); matCache.set('winglass', winGlow); matCache.set('lampglass', lampGlass);
 
 // a soft round spot, for lamp light on the ground and bulb halos
 let spotTex = null;

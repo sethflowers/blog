@@ -17,6 +17,7 @@ import { parkName } from './names.js';
 import * as store from './store.js';
 import { clamp, damp, angleDiff, esc, disposeTree } from './util.js';
 import { Audio } from './audio.js';
+import { bounds, toWorld } from './buildings.js';
 
 const VERSION = document.body.dataset.version || '?';
 const $ = (id) => document.getElementById(id);
@@ -24,13 +25,18 @@ const $ = (id) => document.getElementById(id);
 class App {
   constructor(){
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // a tablet's screen is big and its graphics memory small: draw at 1.5x there (2x on a computer)
+    this.touch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.touch ? 1.5 : 2));
     r.setSize(innerWidth, innerHeight);
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.0;
     r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.xr.enabled = true;
     document.body.prepend(r.domElement);
+    // if the device runs out of graphics memory the browser takes the 3D view away (the screen freezes
+    // while the clock still ticks): save the park and say so, with a button to start again
+    r.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.lost(); });
     r.domElement.id = 'view';
     setRenderer(r);
     this.scene = new THREE.Scene();
@@ -104,7 +110,7 @@ class App {
     for (const e of W.objects.inst.values()) for (const m of e.meshes){ m.dispose(); }
     for (const g of W.objects.structs.values()) g.traverse((o) => { if (o.userData.ownMaterial){ o.material.map && o.material.map.dispose(); o.material.dispose(); } if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose(); });
     this.scene.remove(W.objects.group); this.scene.remove(W.objects.halos); W.objects.halos.geometry.dispose();
-    if (W.objects.pools){ this.scene.remove(W.objects.pools); W.objects.pools.dispose(); }
+    if (W.objects.pools){ this.scene.remove(W.objects.pools); W.objects.pools.geometry.dispose(); }
     this.world = null;
   }
   changed(ch){
@@ -120,6 +126,14 @@ class App {
     if (this.selected && !this.park.obj(this.selected)) this.selected = null;
     this.ui.refresh();
     this.saveSoon();
+  }
+  lost(){
+    if (this.isLost) return; this.isLost = true;
+    this.save().catch(() => {});
+    const d = document.createElement('div'); d.id = 'lost';
+    d.innerHTML = '<div class="pcard"><div class="phead"><h2>The picture stopped</h2></div><p>This device ran short of graphics memory, so the browser paused the 3D view. Your park is saved.</p><div class="pbtns"><button class="pb primary" id="lost-reload">Reload</button></div></div>';
+    document.body.appendChild(d);
+    document.getElementById('lost-reload').onclick = () => location.reload();
   }
   saveSoon(){ if (!this.demo) this.saveTimer = 1.5; }
   async save(picture){
@@ -247,6 +261,17 @@ class App {
     return [x, z];
   }
   setSpeed(s){ this.speed = s; this.ui.refresh(); }
+  // a building's middle, in the park
+  buildingCentre(o){ const b = bounds(o); return toWorld(o, (b.i0 + b.i1 + 1), (b.j0 + b.j1 + 1)); }
+  // turn a building a quarter turn about its middle (returns why not, or nothing)
+  rotateBuilding(o, dir){
+    const b = bounds(o), [cx, cz] = this.buildingCentre(o), r = (o.r || 0) + dir * Math.PI / 2, c = Math.cos(r), s = Math.sin(r);
+    const lx = b.i0 + b.i1 + 1, lz = b.j0 + b.j1 + 1;
+    const n = { ...o, r, x: Math.round((cx - (lx * c + lz * s)) / 2) * 2, z: Math.round((cz - (-lx * s + lz * c)) / 2) * 2 };
+    const why = this.tools.B.problem(n, o.id); if (why) return why;
+    this.park.begin('Turn building'); this.park.changeObject(o.id, { r: n.r, x: n.x, z: n.z }); this.park.commit();
+    return null;
+  }
   select(id){ this.selected = id; this.ui.refresh(); }
   focus(x, z, dist){ this.want.x = x; this.want.z = z; if (dist) this.want.dist = dist; }
   startVR(){ this.vr.start(); }
@@ -442,10 +467,12 @@ class App {
   walkTo(W, x, z){
     x = clamp(x, -HALF + 10, HALF - 10); z = clamp(z, -HALF + 10, HALF - 10);
     const wet = (px, pz) => !Number.isNaN(this.park.waterAt(px, pz)) && !this.park.pathAt(px, pz) && this.park.waterAt(px, pz) > this.park.groundAt(px, pz) + 0.4;
-    if (wet(x, z)){ if (!wet(x, W.z)) z = W.z; else if (!wet(W.x, z)) x = W.x; else return; }
+    // (if you're somehow standing in the water already, any way out is allowed: walking must never get stuck)
+    if (wet(x, z) && !wet(W.x, W.z)){ if (!wet(x, W.z)) z = W.z; else if (!wet(W.x, z)) x = W.x; else return; }
     // too steep to climb (a cliff): stay put that way
     const h0 = this.park.floorAt(W.x, W.z), h1 = this.park.floorAt(x, z), step = Math.hypot(x - W.x, z - W.z);
-    if (step > 0 && (h1 - h0) / step > 1.4){ return; }
+    if (step > 0 && h1 - h0 > 0.35 && (h1 - h0) / step > 1.4 && !W.stuck){ W.blocked = (W.blocked || 0) + 1; if (W.blocked > 90) W.stuck = true; return; }   // (a doorstep is fine; a cliff isn't)
+    W.blocked = 0; W.stuck = false;
     [x, z] = this.objects.collide(x, z, 0.3);
     W.x = x; W.z = z;
   }
@@ -483,12 +510,14 @@ class App {
       if (this.sinceSave > 90 && this.mode !== 'title' && !this.demo){ this.wantPicture = true; this.sinceSave = 0; }
       if (this.mode !== 'title' && !this.inVR && (this.uiTick = (this.uiTick || 0) + dt) > 0.5){ this.uiTick = 0; this.ui.drawTop(); }
       if (!this.noRender || this.inVR){
-        this.renderer.render(this.scene, this.camera);
+        this.renderer.render(this.scene, this.camera); this.badFrames = 0;
         if (this.wantPicture && !this.inVR){ this.wantPicture = false; this.picture = this.snapshot(); if (this.sinceSave === 0) this.save(this.picture); }
       }
     } catch (e) {
       // never let one bad frame stop the game (in VR, an exception here would end the loop for good)
       if (!this.frameErr || performance.now() - this.frameErr > 5000){ this.frameErr = performance.now(); console.error(e); }
+      // a frame that fails every time (rather than once) means the view is stuck: say so
+      this.badFrames = (this.badFrames || 0) + 1; if (this.badFrames > 300) this.lost();
     }
   }
   // behind the title: a slow drift round the entrance, low down, in the late afternoon light

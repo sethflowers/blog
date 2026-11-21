@@ -3,7 +3,7 @@
 // glass reflect it. Lamps' glow follows how dark it is (materials.glow).
 import * as THREE from 'three';
 import { clamp, lerp, smooth, rng } from './util.js';
-import { glow } from './materials.js';
+import { glow, winGlow, lampGlass } from './materials.js';
 
 const DOME_VS = `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w; }`;
 const DOME_FS = `
@@ -115,6 +115,8 @@ export class Sky {
     this.moon.position.copy(md).multiplyScalar(3200); this.moon.lookAt(0, 0, 0);
     this.moon.material.opacity = this.starMat.opacity;
     glow.emissiveIntensity = 3.2 * smooth((this.night - 0.15) / 0.6);
+    winGlow.emissiveIntensity = 0.9 * smooth((this.night - 0.2) / 0.6);
+    lampGlass.emissiveIntensity = 1.5 * smooth((this.night - 0.15) / 0.6); lampGlass.opacity = 0.6 + 0.35 * smooth((this.night - 0.15) / 0.6);
     if (cam){ this.dome.position.copy(cam); this.stars.position.copy(cam); this.moon.position.add(cam); }
     // a new reflection map when the light has changed enough
     if (Math.abs(hour - this.lastEnvHour) > 0.5 || !this.envTarget){

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { CATALOG, model, resolveMat } from './models.js';
 import { texture, mat } from './materials.js';
 import { buildFence, buildSign, buildLot, buildGate, disposeStructure } from './structures.js';
+import { buildBuilding, fromTemplate } from './buildings.js';
 
 const SIZE = 128;
 export class Thumbs {
@@ -25,6 +26,7 @@ export class Thumbs {
     else if (type === 'sign'){ obj = buildSign({ name: 'Welcome' }); own = true; }
     else if (type === 'lot'){ obj = buildLot({ x: 0, z: 0, w: 10, d: 8, name: 'Parking' }, fakePark); own = true; }
     else if (type === 'gate'){ obj = buildGate('Your Park'); own = true; }
+    else if (type.startsWith('tpl:')){ obj = buildBuilding({ ...fromTemplate(type.slice(4)), x: 0, z: 0, r: 0 }, fakePark); own = true; }
     else return '';
     this.scene.add(obj);
     const box = new THREE.Box3().setFromObject(obj), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());

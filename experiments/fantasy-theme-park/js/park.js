@@ -142,6 +142,7 @@ export class Park {
   // where you stand: on a path (its top, or a bridge deck) or the ground
   floorAt(x, z){
     const k = this.cellIndex(x, z);
+    if (k >= 0 && this.buildingFloor){ const b = this.buildingFloor(k); if (b !== null) return b; }
     if (k >= 0 && this.s.path[k]){ const y = this.pathHeight ? this.pathHeight(x, z) : null; if (y !== null && y !== undefined) return y; }
     return this.groundAt(x, z);
   }

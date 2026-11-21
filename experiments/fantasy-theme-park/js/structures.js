@@ -49,9 +49,10 @@ export function buildGate(name){
   const B = new Batch(), g = new THREE.Group();
   const add = (key, geo, x, y, z, rx = 0, ry = 0, sx = 1, sy = 1, sz = 1) => B.add(geo, key, new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, 0)), new THREE.Vector3(sx, sy, sz)));
   // the gatehouse wall with its arch, 3 m deep
-  const sh = new THREE.Shape(); sh.moveTo(-4.6, 0); sh.lineTo(4.6, 0); sh.lineTo(4.6, 11.2); sh.lineTo(-4.6, 11.2); sh.lineTo(-4.6, 0);
-  const hole = new THREE.Path(); hole.moveTo(-3.2, 0); hole.lineTo(3.2, 0); hole.lineTo(3.2, 5.2); hole.absarc(0, 5.2, 3.2, 0, Math.PI, false); hole.lineTo(-3.2, 0);
-  sh.holes.push(hole);
+  // the outline goes round the opening (an arch-shaped hole touching the ground would leave a strip of
+  // wall lying across the opening at exactly the path's height, which flickered against it)
+  const sh = new THREE.Shape(); sh.moveTo(-4.6, 0); sh.lineTo(-3.2, 0); sh.lineTo(-3.2, 5.2); sh.absarc(0, 5.2, 3.2, Math.PI, 0, true);
+  sh.lineTo(3.2, 0); sh.lineTo(4.6, 0); sh.lineTo(4.6, 11.2); sh.lineTo(-4.6, 11.2); sh.lineTo(-4.6, 0);
   const wall = new THREE.ExtrudeGeometry(sh, { depth: 3, bevelEnabled: false, curveSegments: 18 });
   add('ashlar', wall, 0, 0, -1.5);
   // the arch's voussoirs: a band of lighter stone round the opening, standing 3 cm proud
@@ -96,7 +97,7 @@ export function buildGate(name){
     g.userData.glows = (g.userData.glows || []).concat([[s * 4.0, 4.2, 2.08], [s * 4.0, 4.2, -2.08]]);
     for (const z of [1.9, -1.9]){
       B.box('iron', s * 4.0, 4.65, z, 0.06, 0.06, 0.4);
-      B.box('glass', s * 4.0, 4.2, z + Math.sign(z) * 0.18, 0.3, 0.45, 0.3);
+      B.box('lampglass', s * 4.0, 4.2, z + Math.sign(z) * 0.18, 0.3, 0.45, 0.3);
       add('glow', new THREE.SphereGeometry(0.1, 8, 6), s * 4.0, 4.2, z + Math.sign(z) * 0.18);
       add('iron', new THREE.ConeGeometry(0.28, 0.25, 4), s * 4.0, 4.55, z + Math.sign(z) * 0.18, 0, Math.PI / 4);
     }
