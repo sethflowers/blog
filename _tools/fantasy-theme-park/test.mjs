@@ -315,7 +315,7 @@ await shot('04c-stalls');
 
 // ---------- rides ----------
 await ev(`__ftp.ui.act('tab:rides')`);
-check(await ev(`document.querySelectorAll('#tray .card').length`) === 10, 'the Rides tray offers three coasters and seven flat rides');
+check(await ev(`document.querySelectorAll('#tray .card').length`) === 15, 'the Rides tray offers coasters, flat rides, and water and track rides');
 await ev(`__ftp.ui.act('newcoaster')`);
 await stroke([[-130, gz - 170], [-130, gz - 170]]);
 check(await count('coaster') === 1 && await ev('__ftp.tools.kind') === 'cedit', 'a coaster station goes down, and the Ride Workshop opens');
@@ -379,6 +379,29 @@ check(await ev(`__ftp.park.s.objects.filter((o) => o.type === 'ride').map((o) =>
   check(await ev(`__ftp.park.obj('${sh}').style`) === 'viking', 'the ship can be a longship');
   await ev(`(() => { const o = __ftp.park.obj('${sh}'); __ftp.select(null); __ftp.ui.act('tab:select'); __ftp.focus(-95, ${gz} - 236, 60); __ftp.want.pitch = 0.25; __ftp.want.yaw = 0.3; })()`);
   await shot('13b-more-rides');
+}
+// water and track rides (1.6): drawn as a loop
+{
+  const loop = (cx, cz, rx, rz) => { const out = []; for (let a = 0; a <= 6.4; a += 0.3) out.push([cx + Math.cos(a) * rx, cz + Math.sin(a) * rz]); return out; };
+  // a lake for the boats first
+  await ev(`__ftp.ui.act('tab:terrain'); __ftp.ui.act('wmode:add'); __ftp.ui.act('size:16')`);
+  await stroke(loop(150, gz - 260, 10, 6));
+  await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('drawride:boats')`); await stroke(loop(150, gz - 260, 9, 6));
+  await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('drawride:railway')`); await stroke(loop(200, gz - 160, 30, 22));
+  await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('drawride:flume')`); await stroke(loop(200, gz - 260, 22, 14));
+  await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('drawride:karts')`); await stroke(loop(55, gz - 280, 16, 8));
+  await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newride:dark')`); await stroke([[100, gz - 300 + 20], [100, gz - 300 + 20]]);
+  const built = await ev(`__ftp.park.s.objects.filter((o) => o.type === 'ride').map((o) => o.kind)`);
+  check(['boats', 'railway', 'flume', 'karts', 'dark'].every((k) => built.includes(k)), `swan boats, a railway, a log flume, go-karts and a dark ride are built (${built.join(', ')}; ${await ev(`__ftp.ui.toasts.map((t) => t.text).join(' / ')`)})`);
+  await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('drawride:boats')`); await stroke(loop(0, gz - 140, 14, 8));
+  check((await ev(`__ftp.ui.toasts.map((t) => t.text).join(' ')`)).includes('water all the way round'), 'boats drawn on dry land are refused, with the reason');
+  for (const kind of ['railway', 'flume']){
+    await ev(`__ftp.ride(__ftp.park.s.objects.find((o) => o.kind === '${kind}'))`); await wait(600);
+    check(await ev(`__ftp.mode === 'ride' && __ftp.camera.position.distanceTo(__ftp.riding.seat().eye) < 0.5`), `the ${kind} can be ridden`);
+    await ev('__ftp.stopRide()');
+  }
+  await ev(`(() => { __ftp.select(null); __ftp.ui.act('tab:select'); __ftp.focus(185, ${gz} - 220, 120); __ftp.want.pitch = 0.5; __ftp.want.yaw = 0.4; })()`);
+  await shot('13c-track-rides');
 }
 const car = await ev(`__ftp.park.s.objects.find((o) => o.kind === 'carousel').id`);
 // (reported: riding the big wheel you couldn't see anything: the cabin glass was opaque)

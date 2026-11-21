@@ -8,6 +8,7 @@ import { buildBuilding, fromTemplate } from './buildings.js';
 import { buildStall, newStall } from './shops.js';
 import { buildCarousel, buildWheel, newRide, FLAT } from './rides.js';
 import { FLAT_BUILD } from './flatrides.js';
+import { TRACK_BUILD, TRACK_RIDES, sampleRoute } from './trackrides.js';
 import { pieceIcon } from './coaster/track.js';
 
 const SIZE = 128;
@@ -35,6 +36,8 @@ export class Thumbs {
     else if (type === 'sign'){ obj = buildSign({ name: 'Welcome' }); own = true; }
     else if (type === 'lot'){ obj = buildLot({ x: 0, z: 0, w: 10, d: 8, name: 'Parking' }, fakePark); own = true; }
     else if (type === 'gate'){ obj = buildGate('Your Park'); own = true; }
+    else if (type.startsWith('ride:') && TRACK_RIDES[type.slice(5)]){ const o = newRide(type.slice(5)); o.pts = sampleRoute(); obj = TRACK_BUILD[o.kind](o, { groundAt: () => 0, waterAt: () => 0 }); own = true; }
+    else if (type === 'ride:dark'){ obj = TRACK_BUILD.dark(newRide('dark')); own = true; }
     else if (type.startsWith('ride:') && FLAT[type.slice(5)]){ const o = newRide(type.slice(5)); obj = o.kind === 'carousel' ? buildCarousel(o) : o.kind === 'wheel' ? buildWheel(o) : FLAT_BUILD[o.kind](o); own = true; }
     else if (type.startsWith('stall:')){ obj = buildStall(newStall(type.slice(6))); own = true; }
     else if (type.startsWith('bp:')){ const d = ((this.app && this.app.blueprints) || []).find((q) => q.id === type.slice(3)); if (!d) return ''; obj = d.kind === 'stall' ? buildStall(d.data) : buildBuilding({ walls: {}, towers: [], extras: [], ...d.data, x: 0, z: 0, r: 0 }, fakePark); own = true; }

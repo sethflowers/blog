@@ -6,6 +6,7 @@ import { N, CELL, HALF } from './park.js';
 import { CATALOG } from './models.js';
 import { TILE, PIECES, COASTER_PIECES, newCoaster, newRide, stationCells, flatRadius, buildCarousel, buildWheel } from './rides.js';
 import { FLAT_BUILD } from './flatrides.js';
+import { TRACK_BUILD, tidyLoop, TRACK_RIDES } from './trackrides.js';
 import { disposeStructure } from './structures.js';
 
 const DIRV = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -63,7 +64,7 @@ export class RideTools {
       this.ghost.position.set(o.x, o.y0 - 0.9, o.z); this.ghost.visible = true;
     } else if (k === 'ride'){
       const o = this.rideAt(p), key = 'r' + o.kind + o.size + (o.tiers || '') + (o.gondolas || '');
-      if (key !== this.ghostKey){ this.clearGhost(); this.ghostKey = key; this.ghost = o.kind === 'carousel' ? buildCarousel(o) : o.kind === 'wheel' ? buildWheel(o) : FLAT_BUILD[o.kind](o); this.app.scene.add(this.ghost); }
+      if (key !== this.ghostKey){ this.clearGhost(); this.ghostKey = key; this.ghost = o.kind === 'carousel' ? buildCarousel(o) : o.kind === 'wheel' ? buildWheel(o) : o.kind === 'dark' ? TRACK_BUILD.dark(o) : FLAT_BUILD[o.kind](o); this.app.scene.add(this.ghost); }
       const bad = !!this.problemAt(this.rideCells(o), o.id);
       this.ghost.traverse((c) => { if (c.isMesh) c.material = bad ? this.T.ghostBad : this.T.ghostOk; });
       this.ghost.position.set(o.x, this.P.groundAt(o.x, o.z), o.z); this.ghost.rotation.y = o.r || 0; this.ghost.visible = true;
@@ -95,6 +96,43 @@ export class RideTools {
     const P = this.P, set = new Set(cells.map(([x, z]) => P.cellIndex(x, z)));
     for (const q of P.s.objects.slice()) if (CATALOG[q.type] && set.has(P.cellIndex(q.x, q.z))) P.removeObject(q.id);
     void h;
+  }
+
+  // --- drawing a route (railway, boats, flume, karts): a yellow line as you draw, a loop when you let go -----
+  drawDown(p){ if (!p) return; this.drawn = [[p.x, p.z]]; this.drawLine(); }
+  drawMove(p){ if (!p || !this.drawn) return; const l = this.drawn[this.drawn.length - 1]; if (Math.hypot(p.x - l[0], p.z - l[1]) > 2){ this.drawn.push([p.x, p.z]); this.drawLine(); } }
+  drawCancel(){ this.drawn = null; this.drawLine(); }
+  drawLine(){
+    if (this.line){ this.app.scene.remove(this.line); this.line.geometry.dispose(); this.line = null; }
+    if (!this.drawn || this.drawn.length < 2) return;
+    const g = new THREE.BufferGeometry().setFromPoints(this.drawn.map(([x, z]) => new THREE.Vector3(x, this.P.floorAt(x, z) + 0.6, z)));
+    this.line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffd84a })); this.line.renderOrder = 8; this.app.scene.add(this.line);
+  }
+  drawUp(){
+    const raw = this.drawn; this.drawn = null; this.drawLine();
+    if (!raw) return;
+    const kind = this.T.opts.kind, pts = tidyLoop(raw);
+    if (!pts) return this.say('Draw a bigger loop (at least 40 m round), ending near where you started.', 'bad');
+    const P = this.P, ignore = this.T.opts.move;
+    for (const [x, z] of pts){
+      const i = Math.floor((x + HALF) / CELL), j = Math.floor((z + HALF) / CELL);
+      if (!P.editable(i, j)) return this.say('The route goes outside the park.', 'bad');
+      const wet = !Number.isNaN(P.waterAt(x, z));
+      if (kind === 'boats' && !wet) return this.say('Swan boats need water all the way round: draw on a lake (Land → Water to make one).', 'bad');
+      if (kind !== 'boats' && wet) return this.say('That goes into the water: draw round it.', 'bad');
+      if ((kind === 'flume' || kind === 'karts') && P.pathAt(x, z)) return this.say('That crosses a path: draw round it (the railway can cross paths; this can\'t).', 'bad');
+      const st = this.T.inStructure(x, z, false, ignore); if (st) return this.say(st.type === 'building' ? 'A building is in the way.' : st.type === 'lot' ? 'The car park is in the way.' : st.type === 'gate' ? 'The entrance is in the way.' : 'Another ride is in the way.', 'bad');
+    }
+    P.begin(ignore ? 'Redraw ' + TRACK_RIDES[kind].name.toLowerCase() : 'Build ' + TRACK_RIDES[kind].name.toLowerCase());
+    // trees along the route go
+    const near = new Set(); for (const [x, z] of pts) for (const [dx, dz] of [[0, 0], [2, 0], [-2, 0], [0, 2], [0, -2]]) near.add(P.cellIndex(x + dx, z + dz));
+    for (const q of P.s.objects.slice()) if (CATALOG[q.type] && near.has(P.cellIndex(q.x, q.z))) P.removeObject(q.id);
+    let id;
+    if (ignore){ id = ignore; P.changeObject(id, { pts, x: pts[0][0], z: pts[0][1] }); }
+    else { const o = newRide(kind); Object.assign(o, { pts, x: pts[0][0], z: pts[0][1] }); id = P.addObject(o).id; }
+    P.commit();
+    this.T.set('select'); this.app.ui.tab = 'select'; this.app.select(id);
+    this.say(`${TRACK_RIDES[kind].name} built. Join its station to a path so guests can get on.`, 'good');
   }
 
   // --- the coaster workshop -----

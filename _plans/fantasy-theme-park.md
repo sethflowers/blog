@@ -552,3 +552,27 @@ What's in it, and how it works.
   station); more fun, more queasy.
 - Each has a size, two colours and a speed in the designer, ratings, a price in Tycoon, a footprint
   and height that track and buildings keep clear of (`rideHeight`), and a capacity per cycle.
+
+## Version 1.6: Water and track rides (built)
+
+- `trackrides.js`. **Drawn rides**: Rides tab → Park railway, Swan boats, Log flume or Go-karts → draw the
+  route as a loop with a finger, the mouse or the VR laser (a yellow line follows); it's tidied into a
+  smooth loop (Catmull-Rom, a point every 4 m, at least 40 m round). Checked: inside the park; boats on
+  water all the way round, the others not in water; the flume and karts don't cross paths (the railway
+  can: level crossings); nothing through buildings, car parks, the entrance or other rides. Trees on
+  the route are cleared. The station is where you started drawing. "Draw it again" in the designer.
+  - Railway: ballast, sleepers and two rails swept along the route; an engine (boiler, chimney, cab,
+    headlamp) and three open carriages at 6 m/s.
+  - Swan boats: white swans with curved necks and folded wings, bobbing gently round the lake.
+  - Log flume: a wooden trough with water in it, a lift a third of the way round up to the chosen drop
+    (8/12/16 m), a run along the top, the big drop, a splash; supports where it's up; logs that crawl up
+    the lift and race down the drop.
+  - Go-karts: a 6.4 m tarmac circuit with red and white kerbs and tyre walls, six karts racing at
+    different speeds in different lines.
+- **Dark ride**: tapped down like a flat ride (16/20/24 m); a show building (rough stone with horns for
+  the dragon's lair, boards for pirate treasure, a dark timber house with turrets for the haunted hall)
+  with an arched entrance and its name; inside, cars wind along a serpentine past scenes: a dragon
+  with glowing eyes and embers, treasure chests of gold, glowing ghosts.
+- Ribbons swept along routes are wound to face up (at first they faced down and vanished from above);
+  the flume's trough is drawn from both sides.
+- Ratings, capacity, prices (Tycoon: by route length) and riding as for the other rides.

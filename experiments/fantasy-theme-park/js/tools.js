@@ -11,6 +11,7 @@ import { FENCES } from './structures.js';
 import { BuildingTools } from './btools.js';
 import { RideTools } from './ridetools.js';
 import { stationCells, flatRadius } from './rides.js';
+import { DRAWN } from './trackrides.js';
 import { newStall } from './shops.js';
 import { foodName, shopName } from './names.js';
 
@@ -60,6 +61,7 @@ export class Tools {
     this.last = p;
     if (this.kind === 'building') return this.B.placeHover(p);
     if (this.kind === 'coaster' || this.kind === 'ride') return this.R.hover(p);
+    if (this.kind === 'drawride') return;
     if (this.kind === 'bedit') return;
     if (!p){ this.brush.w = 0; if (this.ghost) this.ghost.visible = false; return; }
     if (this.stroke) return;
@@ -74,6 +76,7 @@ export class Tools {
   down(p){
     this.cancel();
     if (this.kind === 'bedit'){ this.B.editDown(p); return; }
+    if (this.kind === 'drawride'){ this.R.drawDown(p); return; }
     if (!p) return;
     this.last = p;
     const k = this.kind, P = this.P;
@@ -91,6 +94,7 @@ export class Tools {
     if (!p) return;
     this.last = p;
     if (this.kind === 'bedit'){ this.B.editMove(); return; }
+    if (this.kind === 'drawride'){ this.R.drawMove(p); return; }
     const s = this.stroke;
     if (!s){ this.hover(p); return; }
     s.moved += Math.hypot(p.x - s.prev.x, p.z - s.prev.z);
@@ -115,6 +119,7 @@ export class Tools {
   }
   up(p){
     if (this.kind === 'bedit'){ this.B.editUp(); return; }
+    if (this.kind === 'drawride'){ this.R.drawUp(p); return; }
     const s = this.stroke; if (!s) return;
     p = p || this.last || s.start;
     this.stroke = null;
@@ -135,6 +140,7 @@ export class Tools {
   }
   cancel(){
     if (this.kind === 'bedit') this.B.editCancel();
+    if (this.kind === 'drawride' && this.R) this.R.drawCancel();
     if (this.kind === 'building' && this.stroke){ this.stroke = null; return; }
     if (this.stroke){ this.stroke = null; this.P.cancel(); this.cells.count = 0; if (this.ghost && this.kind === 'fence') this.clearGhost(); }
   }
@@ -218,6 +224,7 @@ export class Tools {
     // rides: a flat ride's circle, a coaster's station
     if (this.app.rides) for (const it of this.app.rides.items.values()){
       const o = it.o; if (o.id === ignore) continue;
+      if (o.type === 'ride' && DRAWN[o.kind]){ if ((o.pts || []).some(([px, pz]) => Math.abs(px - x) < 3 && Math.abs(pz - z) < 3)) return o; continue; }
       if (o.type === 'ride' && Math.hypot(x - o.x, z - o.z) < flatRadius(o)) return o;
       if (o.type === 'coaster' && stationCells(o).some(([cx, cz]) => Math.abs(cx - x) <= 1 && Math.abs(cz - z) <= 1)) return o;
     }
