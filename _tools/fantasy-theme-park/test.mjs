@@ -36,6 +36,7 @@ if (IWER) await ctx.addInitScript({ content: IWER + `
 ;window.__iwer = new IWER.XRDevice(IWER.metaQuest3, { stereoEnabled: false });
 window.__iwer.installRuntime({ forceInstall: true });
 ` });
+await ctx.addInitScript({ content: 'window.__ftpNoRender = true;' });
 const pg = await ctx.newPage();
 const errors = [];
 pg.on('pageerror', (e) => errors.push(e.message + ' ' + (e.stack || '').split('\n').slice(1, 4).join(' ')));
@@ -75,7 +76,7 @@ check(true, 'Build it opens the new park');
 await wait(1500);
 check((await ev('(async () => (await (await import("/experiments/fantasy-theme-park/js/store.js?v=' + VERSION + '")).listParks()).length)()')) === 1, 'the park is saved on the device');
 check(await ev('__ftp.park.s.name') === 'Test Kingdom' && await count('gate') === 1 && await count('lot') === 1, 'it starts with its entrance and a car park');
-await shot('02-new-park');
+if (FULL) await shot('02-new-park');
 await ev('__ftp.noRender = true');
 
 const gz = await ev('__ftp.park.s.objects.find((o) => o.type === "gate").z');
@@ -237,6 +238,7 @@ check(JSON.stringify(snap) === JSON.stringify(snap2), 'it opens again exactly as
 await ev('__ftp.toTitle(true)'); await wait(800);
 check(await ev(`document.querySelectorAll('#parks-list .pk').length`) === 1 && await ev(`!!document.querySelector('#parks-list img')`), 'Your parks lists it, with a picture');
 if (FULL) await shot('07-parks');
+if (FULL){
 await pg.click('#parks-new'); await pg.fill('#np-name', 'Cliffside Fair'); await pg.click('[data-land="coast"]'); await pg.click('#np-go');
 await pg.waitForFunction('__ftp.mode === "build" && __ftp.park.s.name === "Cliffside Fair"', null, { timeout: 60000 }); await wait(800);
 check(await ev('!!__ftp.terrain.sea') && await ev('__ftp.park.s.water.some((w) => !Number.isNaN(w))'), 'a Coastal Cliffs park has the sea');
@@ -245,7 +247,7 @@ if (FULL) await shot('08-coast');
 await ev('__ftp.toTitle(true)'); await wait(600);
 check(await ev(`document.querySelectorAll('#parks-list .pk').length`) === 2, 'both parks are in the list');
 await ev(`document.querySelector('[data-park]').click()`); await pg.waitForFunction('__ftp.mode === "build"', null, { timeout: 60000 });
-
+} else { await ev(`document.querySelector('[data-park]').click()`); await pg.waitForFunction('__ftp.mode === "build"', null, { timeout: 60000 }); }
 if (FULL){
   for (const land of ['lake', 'hills']){
     await ev('__ftp.toTitle(true)'); await wait(400);
@@ -257,6 +259,10 @@ if (FULL){
 }
 
 // ---------- VR ----------
+const pull = async () => {
+  await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 1)`); await pg.waitForFunction('__ftp.vr.trig[1]', null, { timeout: 30000 }).catch(() => {});
+  await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`); await pg.waitForFunction('!__ftp.vr.trig[1]', null, { timeout: 30000 }).catch(() => {});
+};
 if (IWER){
   await ev('__ftp.noRender = false');
   await ev('__ftp.startVR()');
@@ -277,22 +283,19 @@ if (IWER){
       const d = dir.applyQuaternion(A.rig.quaternion.clone().invert()); const q = new A.rig.quaternion.constructor().setFromUnitVectors(new A.rig.position.constructor(0, 0, -1), d);
       window.__iwer.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); })()`);
     await wait(700);
-    await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 1)`); await wait(500);
-    await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`); await wait(500);
-    return true;
+    await pull(); return true;
   };
   check(await aimTab('tab:plants') && await ev('__ftp.ui.tab') === 'plants', 'pointing at the tablet and pulling the trigger picks a tab');
   await pg.screenshot({ path: path.join(OUT, '10-vr-model.png') });
   // build with the laser: point at the ground and pull the trigger to plant a tree
   n = await count('oak');
   await ev(`(() => { const A = __ftp; A.tools.set('place', { type: 'oak' }); const R = A.vr.hand('right').ctrl, from = R.getWorldPosition(new A.rig.position.constructor());
-    const g = A.vr.focus().clone(); g.x += 12; g.z -= 30; g.y = A.park.floorAt(g.x, g.z); const dir = g.sub(from).normalize();
+    const gt = A.park.s.objects.find((o) => o.type === 'gate'); const g = new A.rig.position.constructor(gt.x + 27, 0, gt.z - 36); g.y = A.park.floorAt(g.x, g.z); const dir = g.sub(from).normalize();
     const d = dir.applyQuaternion(A.rig.quaternion.clone().invert()); const q = new A.rig.quaternion.constructor().setFromUnitVectors(new A.rig.position.constructor(0, 0, -1), d);
     window.__iwer.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); })()`);
-  await wait(800);
-  await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 1)`); await wait(500);
-  await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 0)`); await wait(600);
-  check(await count('oak') === n + 1, 'the laser plants a tree where it points');
+  await pg.waitForFunction('!!__ftp.vr.groundPt', null, { timeout: 30000 }).catch(() => {});
+  await pull();
+  check(await count('oak') === n + 1, 'the laser plants a tree where it points' + (await count('oak') === n + 1 ? '' : ' ' + await ev(`JSON.stringify({ g: __ftp.vr.groundPt, hover: __ftp.vr.hover, kind: __ftp.tools.kind, t: __ftp.ui.toasts.map((t) => t.text) })`)));
   await ev('__ftp.vr.toggleLife()'); await wait(800);
   check(await ev('__ftp.rig.scale.x') === 1 && await ev('__ftp.vr.life'), 'B stands you in the park at full size');
   const head = await ev('__ftp.camera.getWorldPosition(new __ftp.rig.position.constructor()).y - __ftp.park.floorAt(__ftp.camera.getWorldPosition(new __ftp.rig.position.constructor()).x, __ftp.camera.getWorldPosition(new __ftp.rig.position.constructor()).z)');

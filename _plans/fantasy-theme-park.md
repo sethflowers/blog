@@ -293,7 +293,13 @@ Quick by default (about a minute), `--full` for the long play-through. Expose
   in the kit, paths and terrain layers; offline check.
 - A test for every bug reported.
 
-## 14. Decisions to confirm
+## 14. Decisions (the user's answers)
+
+- The large download (realistic people) is fine, as long as there's a loading indicator and it works
+  offline. The loading screen shows the percentage and the megabytes so far.
+- Music made in code, and building before guests (the order below), were taken as the defaults.
+
+The original questions:
 
 - **Realistic people** add about 1 MB a person to the offline download (18 people ≈ 19 MB, as in
   MSB). Worth it for the look; the first open takes longer on a slow connection.

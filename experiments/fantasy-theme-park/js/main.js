@@ -41,7 +41,7 @@ class App {
     this.thumbs = new Thumbs(r);
     this.audio = new Audio();
     this.ui = new UI(this);
-    this.mode = 'title'; this.speed = 1; this.timeScale = 1; this.noRender = false;
+    this.mode = 'title'; this.speed = 1; this.timeScale = 1; this.noRender = !!window.__ftpNoRender;   // (tests: draw only for screenshots)
     this.selected = null;
     this.orbit = { x: 0, z: 200, yaw: 0, pitch: 0.75, dist: 140, ty: 0 };
     this.want = { ...this.orbit };
@@ -152,7 +152,7 @@ class App {
   }
   // back to the title (and to your parks, if asked)
   async toTitle(showParks){
-    if (this.mode !== 'title' && !this.demo){ this.wantPicture = true; await new Promise((r) => setTimeout(r, 120)); await this.save(this.picture); }
+    if (this.mode !== 'title' && !this.demo && !this.inVR){ this.renderer.render(this.scene, this.camera); this.picture = this.snapshot(); await this.save(this.picture); }
     if (this.inVR){ this.vr.end(); }
     this.mode = 'title';
     document.body.classList.remove('playing', 'walking');
