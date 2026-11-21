@@ -69,6 +69,9 @@ export class VR {
       await A.renderer.xr.setSession(s);
       if (s.supportedFrameRates && s.updateTargetFrameRate && [...s.supportedFrameRates].includes(72)) s.updateTargetFrameRate(72).catch(() => {});
       this.session = s; this.active = true;
+      // a headset has less to spare: sharper in the middle than at the edges, fewer realistic people
+      try { A.renderer.xr.setFoveation(0.7); } catch (e) { /* not every browser */ }
+      A.people.NEAR = 10;
       s.addEventListener('end', () => this.ended());
       A.camera.near = 0.1; A.camera.updateProjectionMatrix();
       for (const h of this.hands){ A.rig.add(h.ctrl, h.grip); }
@@ -85,6 +88,7 @@ export class VR {
   end(){ if (this.session) this.session.end().catch(() => {}); }
   ended(){
     const A = this.app; this.active = false; this.session = null;
+    A.people.NEAR = A.touch ? 14 : 22;
     for (const h of this.hands){ A.rig.remove(h.ctrl, h.grip); }
     if (this.tablet.group.parent) this.tablet.group.parent.remove(this.tablet.group);
     A.rig.position.set(0, 0, 0); A.rig.rotation.set(0, 0, 0); A.rig.scale.setScalar(1);
@@ -349,6 +353,11 @@ export class VR {
     fitText(g, P.title, 44, y + 40, TW - 200);
     if (P.close) btn(TW - 140, y + 14, 100, 52, P.close, 'Close', { size: 22 });
     y += 80;
+    if (P.image){
+      const sz = Math.min(TW - 88, TH - 420 - y); g.drawImage(P.image, 44, y, sz, sz);
+      for (const L of P.labels || []){ const lx = 44 + L.u * sz, ly = y + L.v * sz; g.font = `600 ${L.land ? 22 : 17}px "Avenir Next", Arial, sans-serif`; const w = g.measureText(L.text).width + 16; btn(lx - w / 2, ly - 14, w, 28, L.id ? 'mapgo:' + L.x + ',' + L.z : 'mapgo:' + L.x + ',' + L.z, L.text, { size: L.land ? 20 : 16 }); }
+      y += sz + 12;
+    }
     g.fillStyle = '#e8e0d0'; g.font = '400 24px "Avenir Next", Arial, sans-serif';
     for (const l of P.lines){ y = wrapText(g, l, 44, y, TW - 88, 30) + 4; if (y > TH - 300) break; }
     if (P.input !== undefined){

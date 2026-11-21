@@ -2,7 +2,7 @@
 title: Fantasy Theme Park
 description: Build whole theme parks of your own - lay out the land, paths, lakes and car parks, plant woods, split it into named lands with arches over the paths, name everything - then walk round it. On an iPad, a computer or in VR.
 date: 2026-11-20
-version: "1.6"
+version: "2.0"
 layout: null
 ---
 {% raw %}
@@ -130,6 +130,10 @@ layout: null
   .pb.danger{color:#f4a494;border-color:rgba(240,140,120,.35);}
   .pb.on{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
   .pb.swb{padding:8px;} .pb.swb .sw{width:26px;height:26px;}
+  .pmap{position:relative;margin-top:10px;border-radius:12px;overflow:hidden;} .pmap img{display:block;width:100%;}
+  .maplab{position:absolute;transform:translate(-50%,-50%);border:0;background:rgba(20,23,29,.78);color:#f3eee3;border-radius:8px;padding:3px 7px;font-size:11.5px;font-weight:600;white-space:nowrap;} .maplab.land{font-family:var(--serif);font-size:15px;color:var(--gold);background:rgba(20,23,29,.55);}
+  .pgal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px;} .pgal img{width:100%;border-radius:8px;display:block;} .pgal small{color:var(--dim);font-size:11px;} .pgal a{color:inherit;text-decoration:none;}
+  #panel.modal .pcard{max-width:760px;}
   .prow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;}
   .plabel{font:700 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--gold);min-width:68px;}
   .prow .pb{padding:8px 12px;font-size:14px;} .prow .pb.wide{flex:1;min-width:150px;justify-content:flex-start;} .prow .pb.plain{background:none;border-color:transparent;min-width:64px;justify-content:center;font-variant-numeric:tabular-nums;}
@@ -198,6 +202,7 @@ if ('serviceWorker' in navigator){
     "/experiments/fantasy-theme-park/js/coaster/track.js": "/experiments/fantasy-theme-park/js/coaster/track.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/coaster/train.js": "/experiments/fantasy-theme-park/js/coaster/train.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/coaster/cutil.js": "/experiments/fantasy-theme-park/js/coaster/cutil.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/showtime.js": "/experiments/fantasy-theme-park/js/showtime.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/shops.js": "/experiments/fantasy-theme-park/js/shops.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/sky.js": "/experiments/fantasy-theme-park/js/sky.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/store.js": "/experiments/fantasy-theme-park/js/store.js?v={% endraw %}{{ page.version }}{% raw %}",

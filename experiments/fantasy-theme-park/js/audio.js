@@ -21,8 +21,8 @@ export class Audio {
   tick(){
     if (!this.ctx || !this.on || document.hidden) { if (this.wind) this.wind.gain.value = 0; return; }
     const c = this.ctx, t = c.currentTime, night = this._night || 0;
-    this.wind.gain.setTargetAtTime(0.05 + 0.04 * Math.sin(t * 0.2), t, 1.5);
-    if (night < 0.5 && Math.random() < 0.28) this.bird(t);
+    this.wind.gain.setTargetAtTime(0.05 + 0.04 * Math.sin(t * 0.2) + 0.14 * (this._rain || 0), t, 1.5);
+    if (night < 0.5 && Math.random() < 0.28 * (1 - (this._rain || 0))) this.bird(t);
     if (night > 0.5 && Math.random() < 0.6) this.cricket(t);
   }
   bird(t){
@@ -41,6 +41,15 @@ export class Audio {
     for (let k = 0; k < 3; k++){ const t0 = t + k * 0.06; g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.008, t0 + 0.01); g.gain.linearRampToValueAtTime(0, t0 + 0.04); }
     o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 0.25);
   }
+  // fireworks: a rising whoosh, and a bang (softer far away)
+  whoosh(){ if (!this.ctx) return; const c = this.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain(); o.type = 'sawtooth'; o.frequency.setValueAtTime(300, t); o.frequency.exponentialRampToValueAtTime(1400, t + 1.4); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.012, t + 0.2); g.gain.exponentialRampToValueAtTime(0.0005, t + 1.5); o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 1.6); }
+  bang(dist = 100){
+    if (!this.ctx) return; const c = this.ctx, t = c.currentTime + Math.min(1.5, dist / 340), len = c.sampleRate * 0.8, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); s.buffer = buf; f.type = 'lowpass'; f.frequency.value = 900; g.gain.value = Math.min(0.5, 30 / Math.max(20, dist));
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t);
+  }
+  set rain(v){ if (this.wind) this._rain = v; }
   click(){
     if (!this.ctx) return;
     const c = this.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();

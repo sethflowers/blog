@@ -29,6 +29,7 @@ export function priceOf(o){
     case 'arch': return 650;
     case 'sign': return 120;
     case 'stall': return 1100;
+    case 'fireworks': return 2500;
     case 'building': return (o.floors || []).reduce((a, f) => a + f.length, 0) * 650 + (o.towers || []).length * 2400 + (o.extras || []).length * 160 + (o.use ? 1500 : 0);
     case 'coaster': return 4000 + (o.pieces || []).reduce((a, t) => a + (PIECE_PRICE[t] || 200), 0);
     case 'ride': if (o.pts && o.pts.length){ const L = o.pts.reduce((a, p, i) => { const q = o.pts[(i + 1) % o.pts.length]; return a + Math.hypot(q[0] - p[0], q[1] - p[1]); }, 0); return Math.round({ railway: 6000 + 60 * L, boats: 4000 + 30 * L, flume: 8000 + 120 * L, karts: 5000 + 40 * L }[o.kind]); }

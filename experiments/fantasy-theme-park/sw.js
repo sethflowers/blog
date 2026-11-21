@@ -16,7 +16,7 @@ var CACHE = 'fantasy-theme-park-' + V;
 var BASE = '/experiments/fantasy-theme-park/';
 var READY = BASE + '__offline-ready__';
 var VERSIONED = ['lib/three.core.min.js', 'lib/three.module.min.js',
-  'js/audio.js', 'js/btools.js', 'js/buildings.js', 'js/highway.js', 'js/icons.js', 'js/main.js', 'js/materials.js', 'js/models.js', 'js/names.js', 'js/objects.js', 'js/park.js', 'js/paths.js', 'js/rides.js', 'js/flatrides.js', 'js/trackrides.js', 'js/people.js', 'js/guests.js', 'js/economy.js', 'lib/addons/GLTFLoader.js', 'lib/addons/SkeletonUtils.js', 'lib/addons/BufferGeometryUtils.js', 'js/ridetools.js', 'js/coaster/track.js', 'js/coaster/train.js', 'js/coaster/cutil.js', 'js/shops.js', 'js/sky.js', 'js/store.js', 'js/structures.js', 'js/terrain.js', 'js/thumbs.js', 'js/tools.js', 'js/ui.js', 'js/util.js', 'js/vr.js'];
+  'js/audio.js', 'js/btools.js', 'js/buildings.js', 'js/highway.js', 'js/icons.js', 'js/main.js', 'js/materials.js', 'js/models.js', 'js/names.js', 'js/objects.js', 'js/park.js', 'js/paths.js', 'js/rides.js', 'js/flatrides.js', 'js/trackrides.js', 'js/people.js', 'js/guests.js', 'js/economy.js', 'lib/addons/GLTFLoader.js', 'lib/addons/SkeletonUtils.js', 'lib/addons/BufferGeometryUtils.js', 'js/ridetools.js', 'js/coaster/track.js', 'js/coaster/train.js', 'js/coaster/cutil.js', 'js/showtime.js', 'js/shops.js', 'js/sky.js', 'js/store.js', 'js/structures.js', 'js/terrain.js', 'js/thumbs.js', 'js/tools.js', 'js/ui.js', 'js/util.js', 'js/vr.js'];
 var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 // the realistic people (big, and the same from version to version): kept under addresses without a
 // version, and copied from an earlier version's saved copy when there is one, so an update doesn't

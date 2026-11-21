@@ -469,6 +469,49 @@ await ev('__ftp.park.s.time = 23 * 60'); const tn = await ev('__ftp.park.s.time'
 check(await ev('__ftp.park.s.time') - tn > 8, 'nights go by quickly while the park is shut');
 await ev(`__ftp.park.s.time = 11 * 60`);
 
+// ---------- showtime (2.0): fireworks, weather, map, photos ----------
+{
+  await ev(`__ftp.park.s.time = 20.9 * 60; __ftp.tools.set('fwsite')`);
+  const fp = await ev(`(() => { for (let x = -60; x <= 60; x += 4) for (let z = ${gz - 120}; z <= ${gz - 40}; z += 4) if (!__ftp.objects.canPlace('fireworks', x, z)) return [x, z]; return null; })()`);
+  await stroke([fp]);
+  check(await count('fireworks') === 1 && await ev(`__ftp.objects.structs.has(__ftp.selected)`), 'a fireworks site can be placed (Park tab) and is built');
+  await ev('__ftp.ui.refresh()');
+  check(await ev(`!!document.querySelector('[data-act="fwstyle:willow"]') && !!document.querySelector('[data-act="fwtry"]')`), 'its panel offers styles and Try it now');
+  await pg.click('[data-act="fwstyle:willow"]');
+  check(await ev(`__ftp.park.obj(__ftp.selected).style`) === 'willow', 'you can choose its style');
+  await pg.click('[data-act="fwtry"]');
+  await pg.waitForFunction(`__ftp.show.life.some((l) => l > 0.6)`, null, { timeout: 30000 }).catch(() => {});
+  check(await ev(`__ftp.show.life.filter((l) => l > 0).length`) > 50, 'Try it now sends fireworks up, and they burst');
+  await ev(`__ftp.park.s.time = 20.98 * 60; __ftp.park.s.showDay = -1`);
+  await pg.waitForFunction(`__ftp.show.showT >= 0`, null, { timeout: 30000 }).catch(() => {});
+  check(await ev('__ftp.show.showT') >= 0, 'at 9 pm the nightly fireworks show starts');
+  await ev('__ftp.show.showT = -1; __ftp.ui.act("deselect")');
+  // weather: a wet day
+  await ev(`(() => { const S = __ftp.park.s; S.time = 12 * 60; S.weather = { day: S.day, kind: 'rain', from: 0, to: 24 }; })()`);
+  await pg.waitForFunction(`__ftp.show.wet > 0.6`, null, { timeout: 30000 }).catch(() => {});
+  check(await ev('__ftp.show.rain.visible') && await ev('__ftp.sky.sun.intensity') < 1.6, 'on a rainy day it rains, and the sun is dimmed');
+  await ev('__ftp.ui.drawTop()');
+  check((await ev(`document.getElementById('t-time').textContent`)).includes('rain'), 'the clock says it\'s raining');
+  await shot('06b-rain');
+  await ev(`(() => { const S = __ftp.park.s; S.weather = { day: S.day, kind: 'sunny', from: 0, to: 0 }; })()`);
+  // the map
+  await ev('__ftp.ui.act("parkmap"); __ftp.ui.refresh()');
+  check(await ev(`!!document.querySelector('.pmap img') && document.querySelectorAll('.maplab').length > 3`), `the park map shows the park from above with names on it (${await ev("document.querySelectorAll('.maplab').length")})`);
+  await shot('06c-map');
+  const before = await ev('[__ftp.want.x, __ftp.want.z]');
+  await ev(`document.querySelectorAll('.maplab')[document.querySelectorAll('.maplab').length - 1].click()`);
+  check(await ev('!__ftp.ui.dialog') && JSON.stringify(await ev('[__ftp.want.x, __ftp.want.z]')) !== JSON.stringify(before), 'tapping a name on the map takes you there');
+  // photos
+  await ev('__ftp.noRender = false'); await ev('__ftp.takePhoto()'); await ev('__ftp.noRender = true');
+  check((await ev('__ftp.photos()')).length === 1, 'Take a photo keeps the view in the park\'s photos');
+  await ev('__ftp.ui.act("album")'); await wait(400); await ev('__ftp.ui.refresh()');
+  check(await ev(`document.querySelectorAll('.pgal img').length`) === 1, 'Photos shows it');
+  await ev('__ftp.ui.act("dlg:done")');
+  // music on and off (the menu)
+  const mu = await ev("__ftp.settings.music !== false"); await ev(`__ftp.ui.openMenu(); __ftp.ui.act("dlg:music")`);
+  check(await ev('__ftp.settings.music !== false') !== mu, 'music can be turned off and on (menu)'); await ev('__ftp.ui.act("dlg:music"); __ftp.ui.dialog = null; __ftp.ui.refresh()');
+}
+
 // ---------- memory: things come and go, the shapes don't pile up ----------
 await ev('__ftp.noRender = false'); await wait(300);
 const mem = () => ev('({ g: __ftp.renderer.info.memory.geometries, t: __ftp.renderer.info.memory.textures })');

@@ -16,6 +16,7 @@ import { foodName, shopName } from './names.js';
 import { FLAT, MOUNTS, RIDE_COLORS, COASTER_PIECES, PIECES, COLORS, CARTS, SPEEDS, SHIP_STYLES, DARK_THEMES } from './rides.js';
 import { TRACK_RIDES, DRAWN } from './trackrides.js';
 import { fmt, UNLOCKS, WAGES } from './economy.js';
+import { FIREWORK_STYLES } from './showtime.js';
 const SWATCH = { ashlar: '#d8ccb0', brick: '#a0503a', boardwall: '#9a7a60', marble: '#e8e4dc', rockface: '#8a8478', slate: '#4a5060', tiles: '#b0553a', shingles: '#7a5a40', copper: '#5fa08a',
   darkwood: '#4a3426', wood: '#a07a52', white: '#f2efe8', iron: '#24262a', stone: '#b8b0a0', boards: '#9a7450', floortile: '#ddd5c4', pavers: '#9a4a3a', cobbles: '#8a8278' };
 const swatchOf = (k) => k.includes('#') ? '#' + k.split('#')[1] : SWATCH[k] || '#888';
@@ -151,8 +152,8 @@ export class UI {
         return { hint: k === 'coaster' ? 'Tap where the station goes (the arrow shows which way the train leaves). Then lay the track.' : k === 'ride' ? 'Tap where it goes, beside a path.' : 'Build a ride, design it, name it, and ride it.', sections: S };
       }
       case 'park':
-        cards('Build', [{ id: 'tool:lot', label: 'Car park', thumb: 'lot', on: k === 'lot' }, { id: 'roadtool', label: 'Road', swatch: 'tarmac' }, { id: 'selectgate', label: 'Entrance', thumb: 'gate' }]);
-        chips('Your park', [{ id: 'parkinfo', label: 'Guests, money and staff' }, { id: 'renamepark', label: 'Rename the park' }, { id: 'menu', label: 'Menu' }]);
+        cards('Build', [{ id: 'tool:lot', label: 'Car park', thumb: 'lot', on: k === 'lot' }, { id: 'roadtool', label: 'Road', swatch: 'tarmac' }, { id: 'selectgate', label: 'Entrance', thumb: 'gate' }, { id: 'tool:fwsite', label: 'Fireworks site', thumb: 'fireworks', on: k === 'fwsite' }]);
+        chips('Your park', [{ id: 'parkinfo', label: 'Guests, money and staff' }, { id: 'parkmap', label: 'Map' }, { id: 'photo', label: 'Take a photo' }, { id: 'album', label: 'Photos' }, { id: 'renamepark', label: 'Rename the park' }, { id: 'menu', label: 'Menu' }]);
         return { hint: k === 'lot' ? 'Drag out a car park (at least 12 x 12 m). Put it by a road, with a path to the entrance.' : 'Car parks, roads and the entrance. Guests will drive in on the highway.', sections: S };
       case 'bulldoze':
         chips('Brush', SIZES.slice(0, 3).map(([s, l]) => ({ id: 'size:' + s, label: l, on: o.size === s })).concat([{ id: 'bpaths', label: o.paths === false ? 'Paths: keep' : 'Paths: remove', on: o.paths !== false }]));
@@ -196,6 +197,13 @@ export class UI {
       b.push({ id: 'renameobj', label: 'Rename' }, { id: 'brot:-1', label: '⟲ Turn' }, { id: 'brot:1', label: 'Turn ⟳' }, { id: 'bmove', label: 'Move' }, { id: 'savedesign', label: 'Save design' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
       const land = this.P.landAt(...(() => { const g = this.app.objects.structs.get(o.id); return g ? [g.position.x, g.position.z] : [o.x, o.z]; })());
       if (land) lines.push('In ' + land.name);
+      return { title, lines, buttons: b, close: 'deselect' };
+    }
+    if (o.type === 'fireworks'){
+      const S = this.P.s;
+      lines.push(`${(FIREWORK_STYLES.find(([k]) => k === (o.style || 'peony')) || [0, ''])[1]} · the show is at 9 pm${S.show === false ? ' (off)' : ''}`);
+      for (const [k, l] of FIREWORK_STYLES) b.push({ id: 'fwstyle:' + k, label: l, on: (o.style || 'peony') === k });
+      b.push({ id: 'fwtry', label: 'Try it now', kind: 'primary' }, { id: 'fwshow', label: S.show === false ? 'Show: off' : 'Show: on' }, { id: 'objmove', label: 'Move' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
       return { title, lines, buttons: b, close: 'deselect' };
     }
     if (o.type === 'coaster' || o.type === 'ride'){
@@ -319,6 +327,13 @@ export class UI {
       case 'ropen': { const o = P.obj(A.selected); if (o){ P.begin(o.open === false ? 'Open' : 'Close'); P.changeObject(o.id, { open: o.open === false }); P.commit(); } break; }
       case 'rmove': { const o = P.obj(A.selected); if (o){ this.tab = 'rides'; T.rot = 0; T.set('ride', { kind: o.kind, move: o.id }); A.select(null); this.toast('Tap where it should go.'); } break; }
       case 'parkinfo': this.parkDialog(); break;
+      case 'fwstyle': { const o = P.obj(A.selected); if (o){ P.begin('Fireworks'); P.changeObject(o.id, { style: v }); P.commit(); } break; }
+      case 'fwtry': { const o = P.obj(A.selected); if (o) for (let k = 0; k < 4; k++) setTimeout(() => A.show.launch(o), k * 450); break; }
+      case 'fwshow': P.s.show = P.s.show === false; A.saveSoon(); break;
+      case 'photo': A.takePhoto(); break;
+      case 'album': A.photos().then((list) => { this.dialog = { title: 'Photos of ' + P.s.name, lines: [list.length ? `${list.length} photos. Tap one to save it.` : 'No photos yet: Take a photo (Park tab) keeps the view.'], gallery: list, buttons: [{ id: 'dlg:done', label: 'Done', kind: 'primary' }], on: () => {} }; this.refresh(); }); break;
+      case 'parkmap': { const m = A.parkMap(); this.dialog = { title: 'Map of ' + P.s.name, lines: ['Tap a name to go there.'], image: m.canvas, labels: m.labels, buttons: [{ id: 'dlg:done', label: 'Close', kind: 'primary' }], on: () => {} }; break; }
+      case 'mapgo': { const [x, z] = v.split(',').map(Number); this.dialog = null; if (A.mode === 'walk') A.setMode('build'); A.focus(x, z, 60); break; }
       case 'rprice': { const o = P.obj(A.selected); if (o){ P.begin('Ticket price'); P.changeObject(o.id, { price: Math.max(0, Math.min(30, (o.price || 0) + (+v) * 0.5)) }); P.commit(); } break; }
       case 'rfix': { const o = P.obj(A.selected), it = o && A.rides.get(o.id); if (it && it.broken){ if (A.economy.tycoon && !A.economy.canAfford(300)){ this.toast('Not enough money to fix it.', 'bad'); break; } A.economy.spend('running', A.economy.tycoon ? 300 : 0); A.guests.fix(it); this.toast(o.name + ' is fixed.', 'good'); } break; }
       case 'gfollow': { const g = A.guestSel; if (g){ A.setMode('walk'); A.walker.x = g.x; A.walker.z = g.z; A.walker.yaw = g.yaw + Math.PI; } break; }
@@ -510,6 +525,7 @@ export class UI {
     this.dialog = { title: this.P.s.name, lines: [LANDS[this.P.s.land].name + ' · ' + this.P.s.objects.length.toLocaleString() + ' things built'], buttons: [
       { id: 'dlg:resume', label: 'Back to the park', kind: 'primary' }, { id: 'dlg:rename', label: 'Rename the park' },
       { id: 'dlg:parks', label: 'Your parks' }, A.inVR ? null : { id: 'dlg:export', label: 'Save a copy as a file' },
+      { id: 'dlg:music', label: 'Music: ' + (A.settings.music === false ? 'off' : 'on') }, { id: 'dlg:map', label: 'Park map' }, A.inVR ? null : { id: 'dlg:photo', label: 'Take a photo' },
       { id: 'dlg:nights', label: 'Nights: ' + ({ short: 'short', skip: 'skipped', real: 'full length' }[A.settings.nights || 'short']) }, A.isEvening() ? { id: 'dlg:morning', label: 'Skip to morning' } : null,
       { id: 'dlg:turn', label: 'VR turning: ' + (A.settings.smoothTurn ? 'smooth' : 'snap') }, { id: 'dlg:help', label: 'How to play' }].filter(Boolean),
       on: (v) => {
@@ -519,6 +535,9 @@ export class UI {
         if (v === 'turn'){ A.settings.smoothTurn = !A.settings.smoothTurn; A.saveSettings(); this.openMenu(); }
         if (v === 'nights'){ const o = ['short', 'skip', 'real']; A.settings.nights = o[(o.indexOf(A.settings.nights || 'short') + 1) % 3]; A.saveSettings(); this.openMenu(); }
         if (v === 'morning') A.skipToMorning();
+        if (v === 'music'){ A.settings.music = A.settings.music === false; A.saveSettings(); this.openMenu(); }
+        if (v === 'map') setTimeout(() => this.act('parkmap'), 0);
+        if (v === 'photo') A.takePhoto();
         if (v === 'help') this.help();
       } };
   }
@@ -530,6 +549,9 @@ export class UI {
       'Tap anything with Select to name it, turn it, move it or remove it.',
       'Walk: stroll round your park in first person (left thumb to walk, drag to look).',
       'iPad: one finger draws or pans, two fingers pinch to zoom and twist to turn. Computer: right-drag turns, wheel zooms, WASD moves, Ctrl+Z undoes.',
+      'Rides: build coasters piece by piece (Finish closes the loop), flat rides you design, and railways, boats, flumes and go-karts on routes you draw. Ride any of them.',
+      'Guests (Tycoon or Sandbox): they come by car, need paths to rides, food, drink and toilets, and say what they think. The Park panel has fees, staff, the books and goals.',
+      'Showtime: fireworks sites (Park tab) put on a show at 9 pm; the weather changes day to day; take photos and see the map from the Park tab.',
       'VR: the park is a model on a table. Point and pull the trigger to build; squeeze both grips to move, turn and resize it; B stands you in the park at full size (and back).',
     ], buttons: [{ id: 'dlg:ok', label: 'Got it', kind: 'primary' }], on: () => {} };
   }
@@ -565,6 +587,8 @@ export class UI {
     const input = p.input !== undefined ? `<input id="dlg-input" maxlength="40" value="${esc(p.input)}" autocomplete="off" spellcheck="false">` : '';
     const html = `<div class="pcard"><div class="phead"><h2>${esc(p.title)}</h2>${p.close ? `<button class="x" data-act="${p.close}" aria-label="Close">${ICON.close}</button>` : ''}</div>
       ${p.lines.map((l) => `<p>${esc(l)}</p>`).join('')}${input}
+      ${p.image ? `<div class="pmap"><img src="${p.image.toDataURL('image/jpeg', 0.85)}" alt="">${(p.labels || []).map((L) => `<button class="maplab${L.land ? ' land' : ''}" style="left:${(L.u * 100).toFixed(1)}%;top:${(L.v * 100).toFixed(1)}%" data-act="mapgo:${L.x},${L.z}">${esc(L.text)}</button>`).join('')}</div>` : ''}
+      ${p.gallery ? `<div class="pgal">${p.gallery.map((ph, i) => `<a href="${ph.url}" download="park-photo-${i + 1}.jpg"><img src="${ph.url}" alt=""><small>Day ${ph.day} · ${esc(ph.time.split(' · ')[1] || '')}</small></a>`).join('')}</div>` : ''}
       ${(p.rows || []).map((r) => `<div class="prow">${r.label ? `<span class="plabel">${esc(r.label)}</span>` : ''}${r.buttons.map((b) => `<button class="pb ${b.kind || ''}${b.on ? ' on' : ''}${b.wide ? ' wide' : ''}${b.plain ? ' plain' : ''}${b.swatchColor && !b.label ? ' swb' : ''}" data-act="${b.id}">${b.swatchColor ? `<i class="sw" style="background:${b.swatchColor}"></i>` : ''}${esc(b.label)}</button>`).join('')}</div>`).join('')}
       <div class="pbtns">${p.buttons.map((b) => `<button class="pb ${b.kind || ''}${b.on ? ' on' : ''}${b.swatchColor && !b.label ? ' swb' : ''}" data-act="${b.id}">${b.swatchColor ? `<i class="sw" style="background:${b.swatchColor}"></i>` : ''}${esc(b.label)}</button>`).join('')}</div></div>`;
     // (don't redraw over a text box being typed in)
@@ -578,7 +602,8 @@ export class UI {
     const A = this.app, P = this.P;
     this.set('t-name', esc(P.s.name));
     const E = A.economy, G = A.guests, extra = G ? ` · ${G.summary().inPark} guests · ${P.s.rating || 0}★` + (E && E.tycoon ? ` · ${fmt(P.s.money)}` : '') : '';
-    this.set('t-time', esc(A.clockText() + extra));
+    const wx = A.show && A.park.s.weather ? (A.show.wet > 0.5 ? ' · rain' : A.park.s.weather.kind === 'cloudy' ? ' · cloudy' : '') : '';
+    this.set('t-time', esc(A.clockText() + wx + extra));
     this.set('t-speed', [[0, 'pause'], [1, 'play'], [2, 'fast'], [4, 'faster']].map(([s, i]) => `<button class="ib${A.speed === s ? ' on' : ''}" data-act="speed:${s}" aria-label="speed ${s}">${ICON[i]}</button>`).join('')
       + (A.isEvening() ? `<button class="ib morning" data-act="morning" aria-label="Skip to morning" title="Skip to morning">${ICON.sun}</button>` : ''));
     this.el('b-undo').disabled = !P.canUndo; this.el('b-redo').disabled = !P.canRedo;

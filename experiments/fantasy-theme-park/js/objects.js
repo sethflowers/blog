@@ -9,11 +9,12 @@ import { buildGate, buildArch, buildLot, buildFence, buildSign, disposeStructure
 import { spotTexture } from './materials.js';
 import { buildBuilding, groundCells, bounds, toLocal, H as STOREY } from './buildings.js';
 import { buildStall } from './shops.js';
+import { buildFireworksSite } from './showtime.js';
 import { N, CELL, HALF, cellOf, EDGE } from './park.js';
 
-const STRUCT = { gate: 1, arch: 1, lot: 1, sign: 1, building: 1, stall: 1 };
+const STRUCT = { gate: 1, arch: 1, lot: 1, sign: 1, building: 1, stall: 1, fireworks: 1 };
 export const isStructure = (t) => !!STRUCT[t] || t.startsWith('fence_');
-export const objName = (o) => o.type === 'ride' || o.type === 'coaster' ? (o.name || 'Ride') : o.type === 'building' || o.type === 'stall' ? (o.name || (o.type === 'stall' ? 'Stall' : 'Building')) : o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
+export const objName = (o) => o.type === 'fireworks' ? 'Fireworks site' : o.type === 'ride' || o.type === 'coaster' ? (o.name || 'Ride') : o.type === 'building' || o.type === 'stall' ? (o.name || (o.type === 'stall' ? 'Stall' : 'Building')) : o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
 
 export class Objects {
   constructor(scene, park){
@@ -104,6 +105,7 @@ export class Objects {
     else if (o.type === 'lot') g = buildLot(o, P);
     else if (o.type === 'sign') g = buildSign(o);
     else if (o.type === 'stall') g = buildStall(o);
+    else if (o.type === 'fireworks') g = buildFireworksSite(o);
     else if (o.type === 'building'){
       this.unindex(o.id);
       g = buildBuilding(o, P, this.cut && this.cut.id === o.id ? { cut: this.cut.level } : {});
@@ -180,7 +182,7 @@ export class Objects {
   // --- rules -----
   footprint(type, o){
     if (CATALOG[type]) return model(type).r * (o && o.s || 1);
-    if (type === 'gate') return 18; if (type === 'arch') return 1; if (type === 'sign') return 1.2; if (type === 'stall') return 1.6;
+    if (type === 'gate') return 18; if (type === 'arch') return 1; if (type === 'sign') return 1.2; if (type === 'stall') return 1.6; if (type === 'fireworks') return 2;
     if (type === 'ride' && o) return o.kind === 'wheel' ? o.size / 2 + 3 : o.size / 2 + 1.2; if (type === 'coaster') return 0;
     return 1;
   }

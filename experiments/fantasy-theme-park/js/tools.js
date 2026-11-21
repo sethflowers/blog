@@ -69,7 +69,7 @@ export class Tools {
     if (k === 'terrain' || k === 'water' || k === 'land' || k === 'bulldoze' || (k === 'path' && this.opts.mode !== 'area')){
       this.brush.set(p.x, p.z, k === 'path' ? this.opts.width * CELL / 2 : this.opts.size, 1);
     } else this.brush.w = 0;
-    if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move' || k === 'stall') this.showGhost(p);
+    if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move' || k === 'stall' || k === 'fwsite') this.showGhost(p);
     if (k === 'path' && this.opts.mode !== 'brush'){ this.previewCells(this.lineCells(p, p)); }
     if (k === 'lot') this.previewCells(this.rectCells(p, p, true), true);
   }
@@ -107,7 +107,7 @@ export class Tools {
       for (let i = 1; i <= n; i++){ const q = { x: s.prev.x + (p.x - s.prev.x) * i / n, z: s.prev.z + (p.z - s.prev.z) * i / n, y: p.y }; if (k === 'bulldoze') this.bulldozeAt(q, false); else this.brushAt(q, 0); }
     }
     if (k === 'place' && this.opts.scatter){ if (Math.hypot(p.x - s.prev.x, p.z - s.prev.z) > 2.5) this.scatter(p); else return; }
-    else if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move' || k === 'stall') this.showGhost(p);
+    else if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move' || k === 'stall' || k === 'fwsite') this.showGhost(p);
     if (k === 'coaster' || k === 'ride') this.R.hover(p);
     if (k === 'fence') this.previewFence(s.start, p);
     if (k === 'lot') this.previewCells(this.rectCells(s.start, p, true), true);
@@ -137,6 +137,7 @@ export class Tools {
     else if (k === 'building') this.B.placeUp(p);
     else if (k === 'coaster' || k === 'ride') this.R.up(p);
     else if (k === 'stall') this.placeStall(p);
+    else if (k === 'fwsite'){ const why = this.app.objects.canPlace('fireworks', p.x, p.z); if (why) this.say(why, 'bad'); else { this.P.begin('Fireworks site'); const o = this.P.addObject({ type: 'fireworks', x: round(p.x), z: round(p.z), r: 0, style: 'peony' }); this.finish(); this.app.select(o.id); this.say('Fireworks go up from here at 9 pm. Tap it to choose their style, or to try them now.', 'good'); } }
   }
   cancel(){
     if (this.kind === 'bedit') this.B.editCancel();
@@ -320,7 +321,7 @@ export class Tools {
 
   // --- placing things -----
   showGhost(p){
-    const type = this.kind === 'arch' ? 'arch' : this.kind === 'sign' ? 'sign' : this.kind === 'move' ? this.P.obj(this.opts.id)?.type : this.opts.type;
+    const type = this.kind === 'fwsite' ? 'fireworks' : this.kind === 'arch' ? 'arch' : this.kind === 'sign' ? 'sign' : this.kind === 'move' ? this.P.obj(this.opts.id)?.type : this.opts.type;
     if (!type) return;
     if (this.ghostType !== type){
       this.clearGhost();

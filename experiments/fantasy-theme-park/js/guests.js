@@ -160,6 +160,7 @@ export class Guests {
     const food = (want) => P.food.filter((pl) => this.sells(pl, want).length);
     if (g.hunger > 0.6){ const f = food('food'); if (f.length && this.go(g, this.nearest(g, f), 'eat')) return; this.think(g, 'I\'m hungry: is there anywhere to eat?', 'bad'); g.happy -= 0.05; }
     if (g.thirst > 0.6){ const f = food('drinks'); if (f.length && this.go(g, this.nearest(g, f), 'drink')) return; this.think(g, 'I\'m thirsty.', 'bad'); g.happy -= 0.04; }
+    if (this.raining && !g.umbrella){ this.think(g, 'It\'s raining!', 'bad'); g.happy -= 0.01; const shops = P.food.filter((pl) => (pl.o.menu || []).some((m) => m.id === 'umbrella')); if (shops.length && R() < 0.6 && this.go(g, this.nearest(g, shops), 'umbrella')) return; }
     if (g.energy < 0.35 && P.benches.length && R() < 0.6 && this.go(g, this.nearest(g, P.benches), 'rest')) return;
     // a ride: the one they'd like best, all things considered
     let best = null, bs = -1e9;
@@ -169,7 +170,9 @@ export class Guests {
       const times = g.ridden.get(o.id) || 0, price = o.price || 0;
       if (st.scary > g.thrill + 2.5) continue;
       const q = (pl.it.queue || []).length;
-      const score = st.fun * (1 - Math.abs(st.scary - g.thrill) / 14) - times * 2.5 - q * 0.04 - price * 0.15 + R() * 2;
+      // in the rain, open-air rides lose their charm (not the dark ride, the railway's covered carriages or glazed cabins)
+      const wet = this.raining && !(o.kind === 'dark' || (o.kind === 'wheel' && o.cabin !== 'open')) ? 2.5 : 0;
+      const score = st.fun * (1 - Math.abs(st.scary - g.thrill) / 14) - times * 2.5 - q * 0.04 - price * 0.15 - wet + R() * 2;
       if (score > bs){ bs = score; best = pl; }
     }
     if (best && R() < 0.85 && this.go(g, best, 'ride')) return;
@@ -348,6 +351,7 @@ export class Guests {
   // --- every frame (dt in game seconds) --------------------------------------------------------------------
   update(dt){
     if (this.dirty || !this.places) this.rebuild();
+    this.raining = !!(this.app.show && this.app.show.wet > 0.5);
     this.fieldsVersion = this.fields.size;
     const S = this.park.s, h = S.time / 60;
     // a game minute: needs, money, arrivals, the rating
@@ -470,7 +474,8 @@ export class Guests {
       case 'wander': return this.decideLater(g);
       default: { // buying something: eat, drink, snack, shop
         const want = G.purpose === 'eat' ? 'food' : G.purpose === 'drink' ? 'drinks' : G.purpose === 'snack' ? 'snacks' : 'gifts';
-        const items = this.sells(pl, want === 'snacks' ? 'snacks' : want).filter((m) => m.price <= g.money);
+        let items = this.sells(pl, want === 'snacks' ? 'snacks' : want).filter((m) => m.price <= g.money);
+        if (G.purpose === 'umbrella'){ items = items.filter((m) => m.id === 'umbrella'); if (items.length) g.umbrella = true; }
         if (!items.length){ this.think(g, `${pl.o.name} hasn't got anything I want.`); return this.decideLater(g); }
         const m = items[Math.floor(R() * items.length)], base = GOODS[m.id].price;
         if (m.price > base * 2){ this.think(g, `${GOODS[m.id].name} at ${fmt(m.price)}? That's too expensive.`, 'bad'); g.happy -= 0.03; return this.decideLater(g); }

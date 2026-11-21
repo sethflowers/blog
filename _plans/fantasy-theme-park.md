@@ -576,3 +576,25 @@ What's in it, and how it works.
 - Ribbons swept along routes are wound to face up (at first they faced down and vanished from above);
   the flume's trough is drawn from both sides.
 - Ratings, capacity, prices (Tycoon: by route length) and riding as for the other rides.
+
+## Version 2.0: Showtime (built)
+
+- `showtime.js`, one `Showtime` per game, run each frame right after the sky (it dims what the sky set).
+- **Weather**: each morning picks a sunny, cloudy or rainy day (from the day number and the park's seed,
+  so it's the same day after a reload); a rainy day has a spell of rain of one to three and a half hours.
+  Clouds dim the sun and sky light and grey the sky; rain falls in a box round the camera, the wind gets
+  louder and the birds quiet. Guests in the rain complain, look for an umbrella (gift shops sell them)
+  and prefer covered rides (the dark ride, glazed wheel cabins). The clock says "rain" or "cloudy".
+- **Fireworks**: Park tab → Fireworks site (a platform with mortar tubes). Its panel picks a style
+  (golden willow, rainbow peonies, rings of stars, dragon fire), Try it now, and turns the nightly show
+  on or off. At 9 pm every site takes part in a 75 s show that ends in a finale; guests cheer up. One
+  pool of 3000 additive sparks shared by every rocket; a whoosh and a bang (later and softer far away).
+- **Music**: a short tune per land theme, played softly for the land you're looking at, quieter at
+  night; Music on/off in the menu.
+- **Map**: Park tab (or the menu) → Map: the park drawn from straight above (an orthographic render into
+  a target, as the thumbnails are), with the lands' names and every ride, stall, building and the
+  entrance; tap a name to go there. Shown as HTML and on the VR tablet.
+- **Photos**: Take a photo keeps the view (960 px JPEG) in the park's album (IndexedDB, newest 30);
+  Photos shows them and saves one when tapped. (Screen only: in the headset it says so.)
+- **Headset performance**: fixed foveation 0.7 and 10 realistic people near you instead of 22.
+- Help now covers rides, guests and showtime. The fireworks site's materials are shared by every site.

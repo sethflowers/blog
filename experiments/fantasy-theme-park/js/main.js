@@ -22,6 +22,7 @@ import { Rides } from './rides.js';
 import { People } from './people.js';
 import { Guests } from './guests.js';
 import { Economy, START_MONEY, fmt } from './economy.js';
+import { Showtime } from './showtime.js';
 
 const VERSION = document.body.dataset.version || '?';
 const $ = (id) => document.getElementById(id);
@@ -52,6 +53,7 @@ class App {
     this.audio = new Audio();
     this.ui = new UI(this);
     this.people = new People(this);
+    this.show = new Showtime(this);
     this.mode = 'title'; this.speed = 1; this.timeScale = 1; this.noRender = !!window.__ftpNoRender;   // (tests: draw only for screenshots)
     this.selected = null;
     this.orbit = { x: 0, z: 200, yaw: 0, pitch: 0.75, dist: 140, ty: 0 };
@@ -291,6 +293,36 @@ class App {
     if (this.guests) for (const c of this.guests.cars) c.state = 'gone';
     if (!quiet) this.ui.toast('Good morning! Day ' + S.day + '.', 'good');
     this.ui.refresh();
+  }
+  // a photo of the view, kept in the park's album (and the newest one shown)
+  async takePhoto(){
+    if (this.inVR){ this.ui.toast('Photos are taken on the screen (not in the headset).'); return; }
+    this.renderer.render(this.scene, this.camera);
+    const src = this.renderer.domElement, c = document.createElement('canvas'); c.width = 960; c.height = Math.round(960 * src.height / src.width);
+    c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+    const url = c.toDataURL('image/jpeg', 0.8), key = 'photos:' + this.park.s.id;
+    const list = (await store.getPref(key).catch(() => null)) || []; list.unshift({ url, day: this.park.s.day, time: this.clockText() }); while (list.length > 30) list.pop();
+    await store.setPref(key, list).catch(() => {});
+    this.audio.click(); this.ui.toast('Photo taken: see it under Photos (Park tab).', 'good');
+  }
+  async photos(){ return (await store.getPref('photos:' + this.park.s.id).catch(() => null)) || []; }
+  // a map of the park: a picture from straight above, with the names of things on it
+  parkMap(){
+    const S = 1024, rt = new THREE.WebGLRenderTarget(S, S), cam = new THREE.OrthographicCamera(-300, 300, 300, -300, 1, 1200);
+    cam.position.set(0, 600, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0);
+    const xr = this.renderer.xr.enabled; this.renderer.xr.enabled = false;
+    const fog = this.scene.fog; this.scene.fog = null;
+    this.renderer.setRenderTarget(rt); this.renderer.render(this.scene, cam); const px = new Uint8Array(S * S * 4); this.renderer.readRenderTargetPixels(rt, 0, 0, S, S, px); this.renderer.setRenderTarget(null);
+    this.scene.fog = fog; this.renderer.xr.enabled = xr; rt.dispose();
+    const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d'), img = g.createImageData(S, S), lut = this.thumbs.lut;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++){ const s = ((S - 1 - y) * S + x) * 4, d = (y * S + x) * 4; img.data[d] = lut[px[s]]; img.data[d + 1] = lut[px[s + 1]]; img.data[d + 2] = lut[px[s + 2]]; img.data[d + 3] = 255; }
+    g.putImageData(img, 0, 0);
+    // lands: their names over their middles
+    const labels = [];
+    const P = this.park.s;
+    P.lands.forEach((L, i) => { let sx = 0, sz = 0, n = 0; for (let k = 0; k < P.zone.length; k += 3) if (P.zone[k] === i + 1){ sx += -300 + (k % 300) * 2 + 1; sz += -300 + Math.floor(k / 300) * 2 + 1; n++; } if (n) labels.push({ x: sx / n, z: sz / n, text: L.name, land: true }); });
+    for (const o of P.objects) if (['coaster', 'ride', 'stall', 'gate'].includes(o.type) || (o.type === 'building' && o.use)) labels.push({ x: o.x, z: o.z, text: o.type === 'gate' ? 'Entrance' : o.name || 'Ride', id: o.id });
+    return { canvas: c, labels: labels.map((l) => ({ ...l, u: (l.x + 300) / 600, v: (l.z + 300) / 600 })) };
   }
   isEvening(){ const h = this.park.s.time / 60; return h >= 19.5 || h < 7.5; }
   // --- riding a ride: on screen the camera sits in the seat (drag to look round); in VR the play space does
@@ -593,6 +625,7 @@ class App {
       if (Math.abs(span - this.sky.span) > this.sky.span * 0.15) this.sky.setShadowSpan(span);
       const camPos = this.camera.getWorldPosition(new THREE.Vector3());
       this.sky.update(hour, center, camPos);
+      if (this.mode !== 'title') this.show.frame(dt, gdt, camPos);
       this.objects.updateLights(this.sky.night); this.audio.night = this.sky.night;
       if (this.guests){ this.people.draw(this.guests.drawList(), gdt * (this.speed || 0), camPos); this.guests.drawCars(); this.guests.drawLitter(); }
       else this.people.draw([], dt, camPos);
