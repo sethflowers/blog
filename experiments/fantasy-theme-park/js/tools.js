@@ -8,6 +8,7 @@ import { CATALOG, model, resolveMat } from './models.js';
 import { objName, isStructure } from './objects.js';
 import { clamp, smooth, uid } from './util.js';
 import { FENCES } from './structures.js';
+import { BuildingTools } from './btools.js';
 
 export const TERRAIN_MODES = [['raise', 'Raise'], ['lower', 'Lower'], ['flatten', 'Level'], ['smooth', 'Smooth'], ['paint', 'Paint']];
 
@@ -16,6 +17,7 @@ export class Tools {
     this.app = app; this.park = app.park;
     this.kind = 'select'; this.opts = {};
     this.stroke = null;
+    this.B = new BuildingTools(this);
     this.rot = 0;
     // preview: cells (path lines, areas, car parks), and a ghost of the thing being placed
     const cg = new THREE.PlaneGeometry(CELL * 0.94, CELL * 0.94); cg.rotateX(-Math.PI / 2);
@@ -34,7 +36,8 @@ export class Tools {
   set(kind, opts = {}){
     this.cancel();
     this.kind = kind; this.opts = { ...this.defaults(kind), ...opts };
-    this.clearGhost(); this.cells.count = 0;
+    this.clearGhost(); this.B.clearGhost(); this.cells.count = 0;
+    this.B.updateCut();
     this.app.terrain.uniforms.gridShow.value = ['path', 'lot', 'land', 'terrain'].includes(kind) ? 1 : 0;
     this.app.terrain.uniforms.landShow.value = kind === 'land' ? 1 : 0;
     this.brush.w = 0;
@@ -42,7 +45,7 @@ export class Tools {
   }
   defaults(kind){
     return { path: { surface: 1, width: 2, mode: 'brush', queue: false }, terrain: { mode: 'raise', size: 6, ground: 0 }, water: { mode: 'add', size: 6 },
-      land: { mode: 'paint', size: 6, land: this.P.s.lands.length ? 1 : 0 }, place: { type: 'oak', scatter: false }, fence: { type: 'railing' }, bulldoze: { size: 2 } }[kind] || {};
+      land: { mode: 'paint', size: 6, land: this.P.s.lands.length ? 1 : 0 }, place: { type: 'oak', scatter: false }, fence: { type: 'railing' }, bulldoze: { size: 2 }, bedit: { mode: 'rooms', level: 0, style: 'window', extra: 'tower' } }[kind] || {};
   }
   get brushSize(){ return this.kind === 'path' ? this.opts.width : this.opts.size || 4; }
   usesDrag(){ return this.kind !== 'select'; }
@@ -50,6 +53,8 @@ export class Tools {
   // --- the pointer -----
   hover(p){
     this.last = p;
+    if (this.kind === 'building') return this.B.placeHover(p);
+    if (this.kind === 'bedit') return;
     if (!p){ this.brush.w = 0; if (this.ghost) this.ghost.visible = false; return; }
     if (this.stroke) return;
     const k = this.kind;
@@ -62,13 +67,14 @@ export class Tools {
   }
   down(p){
     this.cancel();
+    if (this.kind === 'bedit'){ this.B.editDown(p); return; }
     if (!p) return;
     this.last = p;
     const k = this.kind, P = this.P;
     if (k === 'select') return;
     this.stroke = { start: p, prev: p, moved: 0, t: 0 };
     if (k === 'path'){ P.begin(this.opts.mode === 'erase' ? 'Remove path' : this.opts.surface === ROAD ? 'Road' : this.opts.queue ? 'Queue' : 'Path'); if (this.opts.mode === 'brush' || this.opts.mode === 'erase') this.pathBrush(p, p); else this.previewCells(this.lineCells(p, p)); }
-    else if (k === 'terrain' || k === 'water' || k === 'land'){ P.begin({ terrain: 'Landscaping', water: this.opts.mode === 'add' ? 'Water' : 'Drain water', land: 'Paint land' }[k]); this.stroke.level = P.groundAt(p.x, p.z); this.brushAt(p, 1 / 30); }
+    else if (k === 'terrain' || k === 'water' || k === 'land'){ P.begin({ terrain: 'Landscaping', water: this.opts.mode === 'add' ? 'Water' : 'Drain water', land: 'Paint land' }[k]); this.stroke.level = k === 'water' ? this.lowestUnder(p) : P.groundAt(p.x, p.z); this.brushAt(p, 1 / 30); }
     else if (k === 'bulldoze'){ P.begin('Bulldoze'); this.bulldozeAt(p, true); }
     else if (k === 'fence'){ this.stroke.fence = true; }
     else if (k === 'lot'){ this.previewCells(this.rectCells(p, p, true), true); }
@@ -78,6 +84,7 @@ export class Tools {
   move(p){
     if (!p) return;
     this.last = p;
+    if (this.kind === 'bedit'){ this.B.editMove(); return; }
     const s = this.stroke;
     if (!s){ this.hover(p); return; }
     s.moved += Math.hypot(p.x - s.prev.x, p.z - s.prev.z);
@@ -100,6 +107,7 @@ export class Tools {
     if (s && this.kind === 'terrain' && this.last) this.brushAt(this.last, dt);
   }
   up(p){
+    if (this.kind === 'bedit'){ this.B.editUp(); return; }
     const s = this.stroke; if (!s) return;
     p = p || this.last || s.start;
     this.stroke = null;
@@ -114,8 +122,11 @@ export class Tools {
     else if (k === 'sign') this.placeSign(p);
     else if (k === 'fence') this.placeFence(s.start, p);
     else if (k === 'lot'){ this.placeLot(s.start, p); this.cells.count = 0; }
+    else if (k === 'building') this.B.placeUp(p);
   }
   cancel(){
+    if (this.kind === 'bedit') this.B.editCancel();
+    if (this.kind === 'building' && this.stroke){ this.stroke = null; return; }
     if (this.stroke){ this.stroke = null; this.P.cancel(); this.cells.count = 0; if (this.ghost && this.kind === 'fence') this.clearGhost(); }
   }
   finish(){ const r = this.P.commit(); this.app.ui.refresh(); return r; }
@@ -190,10 +201,11 @@ export class Tools {
       }
       void k;
     }
-    if (blocked.length && !live) this.say('The path stops at the car park and the entrance.');
+    if (blocked.length && !live) this.say('The path stops at buildings, the car park and the entrance.');
     return changed;
   }
-  inStructure(x, z){
+  inStructure(x, z, noBuildings){
+    if (!noBuildings){ const b = this.app.objects.buildingAt(x, z); if (b) return b; }
     for (const o of this.P.s.objects){
       if (o.type === 'lot' && Math.abs(x - o.x) < o.w && Math.abs(z - o.z) < o.d) return o;
       if (o.type === 'gate'){ const c = Math.cos(o.r || 0), s = Math.sin(o.r || 0), lx = (x - o.x) * c - (z - o.z) * s, lz = (x - o.x) * s + (z - o.z) * c; if (Math.abs(lz) < 2.6 && Math.abs(lx) > 3 && Math.abs(lx) < 18) return o; }
@@ -212,23 +224,32 @@ export class Tools {
       return;
     }
     if (k === 'water'){
-      const L = this.stroke.level - 0.3;
+      // water stays level: it fills to just below the lowest ground where the stroke began, and won't
+      // climb a hill (rather than carving a trench up it)
+      const L = this.stroke.level - 0.3, H = S.heights;
+      // (judged by a cell's highest corner: lowering the water's edge mustn't let the next cell up the hill in, a step at a time)
+      const highCorner = (i, j) => Math.max(H[vtx(i, j)], H[vtx(i + 1, j)], H[vtx(i, j + 1)], H[vtx(i + 1, j + 1)]);
       for (let j = cj0; j <= cj1; j++) for (let i = ci0; i <= ci1; i++){
         const d = Math.hypot(cellX(i) - p.x, cellX(j) - p.z);
         if (d > R || this.inStructure(cellX(i), cellX(j))) continue;
         if (m === 'drain'){ P.setCell('water', i, j, NaN); continue; }
-        P.setCell('water', i, j, L);
+        if (Number.isNaN(S.water[j * N + i]) && highCorner(i, j) > L + 1.2){ if (!this.stroke.told){ this.stroke.told = true; this.say('Water stays level, so it can\'t climb the hill. Lower the ground there first (Land → Lower).'); } continue; }
+        if (P.setCell('water', i, j, L)){ const cx = cellX(i), cz = cellX(j); for (const o of S.objects.slice()) if (CATALOG[o.type] && Math.abs(o.x - cx) <= 1 && Math.abs(o.z - cz) <= 1) P.removeObject(o.id); }
       }
       if (m === 'add'){
-        // dig the bed: deepest in the middle, the edges at the water's level
-        for (let j = cj0; j <= cj1 + 1; j++) for (let i = ci0; i <= ci1 + 1; i++){
+        const wet = (ii, jj) => ii >= 0 && jj >= 0 && ii < N && jj < N && !Number.isNaN(S.water[jj * N + ii]);
+        const ring = (i, j) => { let n = 0; for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) if (wet(i + di, j + dj)) n++; return n; };
+        for (let j = cj0 - 1; j <= cj1 + 2; j++) for (let i = ci0 - 1; i <= ci1 + 2; i++){
           const x = -HALF + i * CELL, z = -HALF + j * CELL, d = Math.hypot(x - p.x, z - p.z);
-          if (d > R + CELL) continue;
-          // only corners whose cells all hold water go below the surface
-          let all = true; for (const [di, dj] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]){ const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= N || jj >= N || Number.isNaN(S.water[jj * N + ii])) all = false; }
-          const target = all ? L - 0.4 - 1.4 * smooth(1 - d / (R + CELL)) : L - 0.05;
-          const h = S.heights[vtx(i, j)];
-          if (all ? h > target : (h > L - 0.05 && h < L + 0.3)) P.setHeight(i, j, Math.min(h, target));
+          if (d > R + 2 * CELL || i < 5 || j < 5 || i > N - 5 || j > N - 5) continue;
+          const n = ring(i, j), h = H[vtx(i, j)];
+          if (n === 4){ const target = L - 0.5 - 1.2 * smooth(1 - d / (R + CELL)); if (h > target) P.setHeight(i, j, target); }   // the bed
+          else if (n > 0){ if (h > L - 0.05) P.setHeight(i, j, L - 0.05); }                                                    // the water's edge, just under its surface
+          else {
+            // one corner further out: halfway down to the water, so the bank slopes instead of standing up like a wall
+            let near = false; for (const [di, dj] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) if (ring(i + di, j + dj) > 0) near = true;
+            if (near && h > L + 0.6 && !this.nearStructure(x, z)) P.setHeight(i, j, h + (L + 0.6 - h) * 0.5);
+          }
         }
       }
       return;
@@ -256,7 +277,18 @@ export class Tools {
       P.setHeight(i, j, clamp(nh, -20, 60));
     }
   }
+  // the lowest ground under the brush (where water would settle)
+  lowestUnder(p){
+    const R = this.opts.size || 4, H = this.P.s.heights; let lo = 1e9;
+    for (let j = cellOf(p.z - R); j <= cellOf(p.z + R) + 1; j++) for (let i = cellOf(p.x - R); i <= cellOf(p.x + R) + 1; i++){
+      if (i < 0 || j < 0 || i > N || j > N) continue;
+      if (Math.hypot(-HALF + i * CELL - p.x, -HALF + j * CELL - p.z) <= R) lo = Math.min(lo, H[vtx(i, j)]);
+    }
+    return lo < 1e8 ? lo : this.P.groundAt(p.x, p.z);
+  }
   nearStructure(x, z){
+    // (a ground corner: any of the four cells round it under a building)
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) if (this.app.objects.buildingAt(x + dx, z + dz)) return true;
     for (const o of this.P.s.objects){
       if (o.type === 'lot' && Math.abs(x - o.x) < o.w + 2.5 && Math.abs(z - o.z) < o.d + 2.5) return true;
       if (o.type === 'gate' && Math.abs(x - o.x) < 20 && Math.abs(z - o.z) < 5) return true;

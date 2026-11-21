@@ -6,6 +6,7 @@ export const ICON = {
   plants: s('<path d="M12 21v-6"/><path d="M12 15c-4.5 0-6.5-2.6-6.5-5.4C5.5 6.4 8.4 3 12 3s6.5 3.4 6.5 6.6c0 2.8-2 5.4-6.5 5.4z"/>'),
   decor: s('<path d="M12 21V9M9 21h6M9.5 9h5l-1-4h-3z"/><path d="M12 2.5v2.5"/>'),
   terrain: s('<path d="M2.5 19l6-9 4 5.5 3-4 6 7.5z"/><path d="M14 6.5l1.5-2 1.5 2"/>'),
+  buildings: s('<path d="M3 21h18M5 21V10l4-3 4 3v11M13 21V6l3-3 3 3v15M8 13h2M8 17h2M15 9h2M15 13h2M15 17h2"/>'),
   lands: s('<path d="M5 21V4M5 4h11l-2 3.5 2 3.5H5"/>'),
   park: s('<path d="M3 21V10l3-3 3 3v11M15 21V10l3-3 3 3v11M9 13h6M9 21v-4a3 3 0 0 1 6 0v4"/>'),
   bulldoze: s('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>'),

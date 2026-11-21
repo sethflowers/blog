@@ -65,6 +65,13 @@ check(await ev('__ftp.mode') === 'title' && await ev('__ftp.demo'), 'the title s
 check(await ev(`getComputedStyle(document.getElementById('b-continue')).display === 'none'`), 'no Continue button before there are parks');
 await shot('01-title');
 
+// (reported: the ground under the entrance flickered: a strip of the gateway's wall lay across the opening at path height)
+check(await ev(`(() => { const g = __ftp.objects.structs.get(__ftp.park.s.objects.find((o) => o.type === 'gate').id); let bad = 0;
+  g.traverse((m) => { if (!m.isMesh || !m.geometry.index) return; const p = m.geometry.attributes.position, ix = m.geometry.index.array;
+    for (let k = 0; k < ix.length; k += 3){ const ys = [0, 1, 2].map((q) => p.getY(ix[k + q])), xs = [0, 1, 2].map((q) => p.getX(ix[k + q]));
+      const zs = [0, 1, 2].map((q) => p.getZ(ix[k + q])), ux = xs[1] - xs[0], uz = zs[1] - zs[0], vx = xs[2] - xs[0], vz = zs[2] - zs[0], ny = uz * vx - ux * vz;
+      if (ny > 1e-6 && Math.max(...ys) < 0.02 && Math.min(...ys) > -0.02 && Math.max(...xs.map(Math.abs)) < 3.15) bad++; } });
+  return bad === 0; })()`), 'nothing lies across the entrance\'s opening at path height (no flicker)');
 // ---------- a new park ----------
 await pg.click('#b-new'); await wait(300);
 check(await ev(`document.getElementById('newpark').classList.contains('show')`) && (await pg.inputValue('#np-name')).length > 3, 'New park suggests a name');
@@ -106,6 +113,21 @@ check(await ev(`__ftp.park.pathHeight(-70, ${gz - 70})`) > wl + 0.5, 'a path ove
 await ev('__ftp.focus(-70, ' + (gz - 70) + ', 50); __ftp.want.pitch = 0.35; __ftp.want.yaw = 0.6');
 if (FULL) await shot('03-bridge');
 
+// (reported: painting water up a slope carved a trench with walls and no water in it)
+{
+  // raise a hill to paint up
+  await ev(`__ftp.ui.act('tab:terrain'); __ftp.ui.act('tmode:raise'); __ftp.ui.act('size:16')`);
+  await stroke([[130, gz - 170], [130, gz - 170]], 2.0);
+  const up = [130, gz - 140, gz - 172];
+  if (up){
+    await ev(`__ftp.ui.act('tab:terrain'); __ftp.ui.act('wmode:add'); __ftp.ui.act('size:6')`);
+    const pts = []; for (let k = 0; k <= 12; k++) pts.push([up[0], up[1] + (up[2] - up[1]) * k / 12]);
+    await stroke(pts);
+    const r = await ev(`(() => { const P = __ftp.park; let deep = 0, dry = 0, wet = 0; for (const [x, z] of ${JSON.stringify(pts)}){ const w = P.waterAt(x, z), g = P.groundAt(x, z); if (Number.isNaN(w)) dry++; else { wet++; deep = Math.max(deep, w - g); } } return { deep, dry, wet }; })()`);
+    check(r.wet > 0 && r.deep < 2.2, `water painted up a hill fills the low end, level (${r.wet} wet, deepest ${r.deep.toFixed(1)} m)`);
+    check(r.dry > 0 && (await ev(`document.getElementById('toasts').textContent`)).includes("can't climb"), 'and stops where the hill rises, saying why (no trench)' + (r.dry ? '' : ' ' + await ev(`${JSON.stringify(pts)}.map(([x, z]) => __ftp.park.groundAt(x, z).toFixed(1)).join(' ')`)));
+  }
+}
 // ---------- trees and things ----------
 const place = (type, x, z) => ev(([t, x, z]) => { const A = __ftp; A.tools.set('place', { type: t }); A.tools.down({ x, z, y: 0 }); A.tools.up({ x, z, y: 0 }); }, [type, x, z]);
 let n = await count('oak');
@@ -180,6 +202,72 @@ const hC = await ev(`__ftp.park.groundAt(-120, ${gz - 160})`);
 await ev(`(() => { const A = __ftp; A.ui.act('tab:terrain'); A.ui.act('tmode:raise'); A.tools.down({ x: -120, z: ${gz - 160}, y: 0 }); A.tools.frame(0.5); A.tools.cancel(); })()`);
 check(await ev(`__ftp.park.groundAt(-120, ${gz - 160})`) === hC, 'a cancelled stroke leaves no change');
 
+// ---------- buildings ----------
+// point the "pointer" straight down at (x, z), or along a direction, as a finger (or the VR laser) would
+const rayDown = (x, z) => ev(([x, z]) => { const A = __ftp; A.lastRay = new A.ray.ray.constructor(new A.rig.position.constructor(x, 300, z), new A.rig.position.constructor(0, -1, 0)); }, [x, z]);
+const rayFrom = (o, d) => ev(([o, d]) => { const A = __ftp; A.lastRay = new A.ray.ray.constructor(new A.rig.position.constructor(...o), new A.rig.position.constructor(...d).normalize()); }, [o, d]);
+await ev(`__ftp.ui.act('tab:buildings')`);
+check(await ev(`document.querySelectorAll('#tray .card').length`) >= 10, 'the Buildings tray shows the ready-made buildings (with pictures)');
+await ev(`__ftp.ui.act('btpl:tavern')`);
+await stroke([[0, gz - 60], [0, gz - 60]]);
+check(await count('building') === 0 && (await ev(`document.getElementById('toasts').textContent`)).includes('beside paths'), 'a building can\'t go on a path, and it says why');
+await stroke([[40, gz - 30], [40, gz - 30]]);
+check(await count('building') === 1, 'a tavern is built');
+const B = () => ev(`__ftp.park.s.objects.find((o) => o.type === 'building')`);
+let b = await B();
+check(b.x % 2 === 0 && b.z % 2 === 0 && b.floors.length === 2, 'it lines up with the park\'s grid, two storeys');
+check(await ev(`document.querySelector('#panel h2').textContent === 'Tavern' && !!document.querySelector('[data-act="bedit"]')`), 'its panel offers Edit');
+const fy = await ev(`__ftp.objects.structs.get(__ftp.park.s.objects.find((o) => o.type === 'building').id).userData.floorY`);
+check(Math.abs(await ev(`__ftp.park.floorAt(${b.x + 3}, ${b.z + 3})`) - fy) < 0.01, 'inside, the floor is the building\'s floor');
+await pg.click('[data-act="bedit"]');
+check(await ev('__ftp.tools.kind') === 'bedit' && await ev('!!__ftp.objects.cut'), 'Edit opens the building (the storeys above lifted off)');
+// rooms: add one on the ground floor next to it (east of the 4 x 3 footprint)
+await rayDown(b.x + 9, b.z + 1);
+await ev(`(() => { const T = __ftp.tools; T.down(null); T.up(null); })()`);
+b = await B();
+check(b.floors[0].length === 13 && b.floors[0].includes('4,0'), 'a room can be added');
+await ev(`__ftp.ui.act('blevel:1')`); await rayDown(b.x + 9, b.z + 1);
+await ev(`(() => { const T = __ftp.tools; T.down(null); T.up(null); })()`);
+check((await B()).floors[1].includes('4,0'), 'and one above it');
+await ev(`__ftp.ui.act('blevel:0')`); await rayDown(b.x + 9, b.z + 1);
+await ev(`(() => { const T = __ftp.tools; T.down(null); T.up(null); })()`);
+b = await B();
+check(!b.floors[0].includes('4,0') && !b.floors[1].includes('4,0'), 'rubbing out a room takes away the rooms above it too');
+// walls: a door on the south side of the west room
+await ev(`__ftp.ui.act('bmode:walls'); __ftp.ui.act('bstyle:arch')`);
+await rayFrom([b.x + 1, fy + 2, b.z + 15], [0, 0, -1]);
+await ev(`(() => { const T = __ftp.tools; T.down(null); T.up(null); })()`);
+check((await B()).walls['0,2,0,2'] === 'arch', 'tapping a wall gives it the chosen style (an arch)');
+await ev(`__ftp.ui.act('bstyle:door')`); await rayFrom([b.x + 1, fy + 6, b.z + 15], [0, 0, -1]);
+await ev(`(() => { const T = __ftp.tools; T.down(null); T.up(null); })()`);
+check(!(await B()).walls['0,2,1,2'] && (await ev(`document.getElementById('toasts').textContent`)).includes('ground floor'), 'doors only go on the ground floor (and it says so)');
+await ev(`__ftp.ui.act('bmode:roof'); __ftp.ui.act('broof:gable'); __ftp.ui.act('bmode:look'); __ftp.ui.act('bmat:wall:brick'); __ftp.ui.act('btimber')`);
+b = await B();
+check(b.roof === 'gable' && b.m.wall === 'brick' && !b.timber, 'the roof and materials can be changed');
+await ev(`__ftp.ui.act('bmode:extras'); __ftp.ui.act('bextra:tower')`); await rayDown(b.x + 0.3, b.z + 0.2);
+await ev(`(() => { const T = __ftp.tools; T.down(null); T.up(null); })()`);
+check((await B()).towers.length === 1, 'a round tower goes on a corner');
+await ev(`__ftp.ui.act('baddstorey')`);
+check((await B()).floors.length === 3, 'a storey can be added');
+await ev(`__ftp.ui.act('undo')`);
+check((await B()).floors.length === 2, 'and undone');
+await ev(`__ftp.ui.act('bdone')`);
+check(await ev('__ftp.tools.kind') === 'select' && await ev('!__ftp.objects.cut') && await ev(`__ftp.selected === __ftp.park.s.objects.find((o) => o.type === 'building').id`), 'Done closes the editor and puts the roof back');
+// walk in through the arch, not through a wall
+await ev(`__ftp.setMode('walk')`);
+await ev(`(() => { const W = __ftp.walker, b = __ftp.park.s.objects.find((o) => o.type === 'building'); W.x = b.x + 1; W.z = b.z + 8; for (let k = 0; k < 40; k++) __ftp.walkTo(W, W.x, W.z - 0.15); })()`);
+check(await ev(`__ftp.walker.z`) < b.z + 5.5 && Math.abs(await ev(`__ftp.park.floorAt(__ftp.walker.x, __ftp.walker.z)`) - fy) < 0.01, 'you can walk in through the arch, onto its floor');
+await ev(`(() => { const W = __ftp.walker, b = __ftp.park.s.objects.find((o) => o.type === 'building'); W.x = b.x + 5; W.z = b.z + 8; for (let k = 0; k < 40; k++) __ftp.walkTo(W, W.x, W.z - 0.15); })()`);
+check(await ev(`__ftp.walker.z`) > b.z + 6, 'but not through a wall');
+await ev(`(() => { const W = __ftp.walker, b = __ftp.park.s.objects.find((o) => o.type === 'building'); W.x = b.x + 3.2; W.z = b.z + 1.4; W.yaw = Math.PI + 0.35; W.pitch = 0.0; })()`);
+await shot('05b-inside');
+await ev(`__ftp.setMode('build')`);
+// a few more, for the picture
+await ev(`(() => { const A = __ftp; for (const [t, x, z] of [['shoprow', -30, ${gz} - 40], ['keep', -40, ${gz} - 80], ['townhouse', 30, ${gz} - 60], ['pavilion', 30, ${gz} - 90]]){ A.ui.act('btpl:' + t); A.tools.down({ x, z, y: 0 }); A.tools.up({ x, z, y: 0 }); } A.ui.act('tab:select'); })()`);
+check(await count('building') >= 4, `more buildings go up (${await count('building')})`);
+await ev(`__ftp.focus(0, ${gz} - 55, 95); __ftp.want.pitch = 0.42; __ftp.want.yaw = Math.PI + 0.3`);
+await shot('04b-buildings');
+
 // ---------- selecting, naming ----------
 await ev(`__ftp.ui.act('tab:select'); __ftp.select(__ftp.park.s.objects.find((o) => o.type === 'bench').id)`);
 check(await ev(`document.getElementById('panel').classList.contains('show') && document.querySelector('#panel h2').textContent === 'Bench'`), 'tapping a bench shows its panel');
@@ -200,6 +288,10 @@ await ev(`__ftp.walker.yaw = Math.PI; __ftp.walker.z = ${gz} - 12; __ftp.walker.
 await shot('05-walk');
 await ev(`__ftp.walker.x = 0; __ftp.walker.z = ${gz - 1}; __ftp.walker.yaw = Math.PI; for (let k = 0; k < 60; k++) __ftp.walkTo(__ftp.walker, __ftp.walker.x + 0.15, ${gz - 1})`);
 check(await ev('__ftp.walker.x') < 3.2, 'you can\'t walk through the side of the gateway');
+await ev(`(() => { const A = __ftp, P = A.park, S = P.s; for (let k = 0; k < S.water.length; k++) if (!Number.isNaN(S.water[k]) && !S.path[k] && S.water[k] > P.groundAt(-300 + (k % 300) * 2 + 1, -300 + Math.floor(k / 300) * 2 + 1) + 0.6){ A.walker.x = -300 + (k % 300) * 2 + 1; A.walker.z = -300 + Math.floor(k / 300) * 2 + 1; break; } })()`);
+const ws = await ev('[__ftp.walker.x, __ftp.walker.z]');
+await ev(`(() => { const W = __ftp.walker; for (let k = 0; k < 30; k++) __ftp.walkTo(W, W.x + 0.15, W.z); })()`);
+check(Math.abs(await ev('__ftp.walker.x') - ws[0]) > 1, 'standing in water (somehow), you can still walk out (reported: walking froze)');
 await ev(`__ftp.setMode('build')`);
 
 // ---------- night ----------
@@ -207,6 +299,17 @@ await ev(`__ftp.park.s.time = 22 * 60; __ftp.focus(0, ${gz - 20}, 70); __ftp.wan
 await wait(300);
 check(await ev('__ftp.objects.lightCount') > 8, `lamps glow at night (${await ev('__ftp.objects.lightCount')} lights)`);
 await shot('06-night');
+check(await ev(`(() => { const im = __ftp.objects.inst.get('lamp1'); const g = im && im.meshes.find((m) => m.material.name === 'lampglass'); return !!g && g.material.emissiveIntensity > 0.5; })()`), 'the lamps themselves light up at night (their glass glows)');
+{
+  // a lamp on a slope: its pool of light lies on the ground, not a flat disc above or below it
+  const sp = await ev(`(() => { const P = __ftp.park; for (let x = -200; x <= 200; x += 8) for (let z = -200; z <= 150; z += 8){ const s = Math.abs(P.groundAt(x + 3, z) - P.groundAt(x - 3, z)); if (s > 1.2 && s < 3 && !__ftp.objects.canPlace('lamp1', x, z)) return [x, z]; } return null; })()`);
+  if (sp){
+    await ev(`(() => { const P = __ftp.park; P.begin('lamp'); P.addObject({ type: 'lamp1', x: ${sp[0]}, z: ${sp[1]}, r: 0 }); P.commit(); __ftp.objects.updateLights(1); })()`);
+    const off = await ev(`(() => { const p = __ftp.objects.pools.geometry.attributes.position, P = __ftp.park; let worst = 0; for (let k = 0; k < p.count; k++){ const x = p.getX(k), z = p.getZ(k); if (Math.hypot(x - ${sp[0]}, z - ${sp[1]}) > 4) continue; worst = Math.max(worst, Math.abs(p.getY(k) - P.floorAt(x, z) - 0.05)); } return worst; })()`);
+    check(off < 0.02, `a lamp's light lies on the slope under it (within ${off.toFixed(3)} m)`);
+  }
+}
+
 await ev(`__ftp.park.s.time = 11 * 60`);
 
 // ---------- memory: things come and go, the shapes don't pile up ----------
@@ -215,7 +318,7 @@ const mem = () => ev('({ g: __ftp.renderer.info.memory.geometries, t: __ftp.rend
 const churn = () => ev(`(() => { const A = __ftp, P = A.park;
   for (let k = 0; k < 6; k++){
     P.begin('churn'); const ids = []; for (let i = 0; i < 20; i++) ids.push(P.addObject({ type: i % 2 ? 'bench' : 'lamp2', x: -40 + i, z: ${gz - 200}, r: 0 }).id); P.commit();
-    P.begin('churn'); P.addObject({ type: 'sign', x: -50, z: ${gz - 205}, r: 0, name: 'Hello' + k }); P.addObject({ type: 'lot', x: -100, z: ${gz - 210}, w: 8, d: 8, r: 0 }); P.addObject({ type: 'fence_wall', x: -60, z: ${gz - 200}, x2: -50, z2: ${gz - 190}, r: 0 }); P.commit();
+    P.begin('churn'); P.addObject({ type: 'sign', x: -50, z: ${gz - 205}, r: 0, name: 'Hello' + k }); P.addObject({ type: 'lot', x: -100, z: ${gz - 210}, w: 8, d: 8, r: 0 }); P.addObject({ type: 'fence_wall', x: -60, z: ${gz - 200}, x2: -50, z2: ${gz - 190}, r: 0 }); P.addObject({ type: 'building', x: -80, z: ${gz - 230}, r: 0, name: 'Tmp', floors: [['0,0', '1,0'], ['0,0']], walls: {}, towers: [{ i: 0, j: 0, h: 2 }], extras: [{ kind: 'sign', i: 0, j: 0, l: 0, d: 0, text: 'Hi' + k }] }); P.commit();
     P.undo(); P.undo();
   } })()`);
 await churn(); await wait(400); const m1 = await mem();
@@ -307,6 +410,10 @@ if (IWER){
   check(!(await ev('__ftp.vr.active')) && await ev('__ftp.rig.scale.x') === 1, 'leaving VR puts the screen view back');
 }
 
+// (reported: the picture froze while the clock ran on: the iPad had taken the 3D view away for lack of memory)
+await ev(`__ftp.renderer.getContext().getExtension('WEBGL_lose_context').loseContext()`);
+await pg.waitForSelector('#lost', { timeout: 10000 }).catch(() => {});
+check(await ev(`!!document.getElementById('lost') && document.getElementById('lost').textContent.includes('saved')`), 'if the 3D view is lost, it says so (the park is saved) with a Reload button');
 check(errors.length === 0, 'no errors' + (errors.length ? ': ' + errors.slice(0, 5).join(' | ') : ''));
 console.log(`${failures ? failures + ' FAILED' : 'all passed'} in ${Math.round((Date.now() - started) / 1000)} s; screenshots in ${OUT}`);
 await browser.close(); server.close();

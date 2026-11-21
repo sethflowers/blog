@@ -183,7 +183,7 @@ function flowerBed(scheme, square){
 
 // --- lights ----------------------------------------------------------------------------------------
 function lantern(b, x, y, z, s = 1){
-  b.box('glass', x, y, z, 0.32 * s, 0.44 * s, 0.32 * s);
+  b.box('lampglass', x, y, z, 0.32 * s, 0.44 * s, 0.32 * s);
   for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) b.box('iron', x + dx * 0.165 * s, y, z + dz * 0.165 * s, 0.04 * s, 0.48 * s, 0.04 * s);
   b.box('iron', x, y - 0.25 * s, z, 0.38 * s, 0.05 * s, 0.38 * s);
   b.add('iron', new THREE.ConeGeometry(0.3 * s, 0.26 * s, 4), [x, y + 0.36 * s, z], [0, Math.PI / 4, 0]);
@@ -206,7 +206,7 @@ const LIGHTS = {
     return b.build({ r: 0.25, onPath: true, light: 1 }); },
   bollard(){ const b = new MB(34);
     b.lathe('iron', [[0, 0], [0.14, 0], [0.14, 0.1], [0.1, 0.16], [0.1, 0.7], [0.13, 0.72], [0, 0.74]], 12);
-    b.box('glass', 0, 0.82, 0, 0.18, 0.14, 0.18); b.sphere('glow', 0, 0.82, 0, 0.06); b.add('iron', new THREE.ConeGeometry(0.17, 0.12, 4), [0, 0.95, 0], [0, Math.PI / 4, 0]); b.glow(0, 0.82, 0);
+    b.box('lampglass', 0, 0.82, 0, 0.18, 0.14, 0.18); b.sphere('glow', 0, 0.82, 0, 0.06); b.add('iron', new THREE.ConeGeometry(0.17, 0.12, 4), [0, 0.95, 0], [0, Math.PI / 4, 0]); b.glow(0, 0.82, 0);
     return b.build({ r: 0.2, onPath: true, light: 0.5 }); },
 };
 

@@ -7,11 +7,12 @@ import * as THREE from 'three';
 import { CATALOG, model, resolveMat } from './models.js';
 import { buildGate, buildArch, buildLot, buildFence, buildSign, disposeStructure, FENCES } from './structures.js';
 import { spotTexture } from './materials.js';
+import { buildBuilding, groundCells, bounds, toLocal, H as STOREY } from './buildings.js';
 import { N, CELL, HALF, cellOf, EDGE } from './park.js';
 
-const STRUCT = { gate: 1, arch: 1, lot: 1, sign: 1 };
+const STRUCT = { gate: 1, arch: 1, lot: 1, sign: 1, building: 1 };
 export const isStructure = (t) => !!STRUCT[t] || t.startsWith('fence_');
-export const objName = (o) => o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
+export const objName = (o) => o.type === 'building' ? (o.name || 'Building') : o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
 
 export class Objects {
   constructor(scene, park){
@@ -19,21 +20,25 @@ export class Objects {
     this.group = new THREE.Group(); this.group.name = 'objects'; scene.add(this.group);
     this.inst = new Map();       // type -> { meshes, cap, ids }
     this.structs = new Map();    // id -> group
+    this.bcells = new Map();     // park cell -> { id, floorY } for the ground floors of buildings
+    this.bkeys = new Map();      // building id -> its cells in bcells
+    this.cut = null;             // { id, level }: a building cut open while it's being edited
+    park.buildingFloor = (k) => { const b = this.bcells.get(k); return b ? b.floorY : null; };
     this.lightsDirty = true;
     // night glow: halos round bulbs and soft pools of light on the ground
     this.haloMat = new THREE.PointsMaterial({ map: spotTexture(), size: 1.6, color: 0xffd8a0, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true });
     this.halos = new THREE.Points(new THREE.BufferGeometry(), this.haloMat); this.halos.frustumCulled = false; this.halos.renderOrder = 5;
     this.poolMat = new THREE.MeshBasicMaterial({ map: spotTexture(), color: 0xffc888, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
-    const pg = new THREE.PlaneGeometry(1, 1); pg.rotateX(-Math.PI / 2);
-    this.poolGeo = pg; this.pools = null;
+    this.pools = null;
     scene.add(this.halos);
     this.rebuildAll();
   }
   rebuildAll(){
-    for (const t of Object.keys(CATALOG)) this.rebuildType(t);
     for (const g of this.structs.values()) disposeStructure(g);
     this.structs.clear();
+    // structures first: furniture inside a building stands on its floor
     for (const o of this.park.s.objects) if (isStructure(o.type)) this.buildStruct(o);
+    for (const t of Object.keys(CATALOG)) this.rebuildType(t);
     this.lightsDirty = true;
   }
   // the park changed: which objects; and whether the ground moved under some (rect, in cells)
@@ -42,6 +47,7 @@ export class Objects {
     for (const id of ids){
       const o = this.park.obj(id), had = this.structs.get(id);
       if (had){ disposeStructure(had); this.structs.delete(id); }
+      this.unindex(id);
       if (o && isStructure(o.type)) this.buildStruct(o);
       if (o && CATALOG[o.type]) types.add(o.type);
       if (this.lastType && this.lastType.has(id)) types.add(this.lastType.get(id));
@@ -49,7 +55,7 @@ export class Objects {
     if (groundRect){
       const [i0, j0, i1, j1] = groundRect, x0 = -HALF + (i0 - 2) * CELL, z0 = -HALF + (j0 - 2) * CELL, x1 = -HALF + (i1 + 3) * CELL, z1 = -HALF + (j1 + 3) * CELL;
       for (const o of this.park.s.objects){
-        const pad = o.type === 'lot' ? o.w : o.type === 'gate' ? 20 : 0;
+        const pad = o.type === 'lot' ? o.w : o.type === 'gate' ? 20 : o.type === 'building' ? 40 : 0;
         const ox2 = o.x2 ?? o.x, oz2 = o.z2 ?? o.z;
         if (Math.max(o.x, ox2) + pad < x0 || Math.min(o.x, ox2) - pad > x1 || Math.max(o.z, oz2) + pad < z0 || Math.min(o.z, oz2) - pad > z1) continue;
         if (CATALOG[o.type]) types.add(o.type);
@@ -96,6 +102,15 @@ export class Objects {
     else if (o.type === 'arch'){ const L = P.s.lands[(o.land || 1) - 1]; g = buildArch(L ? L.theme : 'main', L ? L.name : 'New land', o.w || 8); }
     else if (o.type === 'lot') g = buildLot(o, P);
     else if (o.type === 'sign') g = buildSign(o);
+    else if (o.type === 'building'){
+      this.unindex(o.id);
+      g = buildBuilding(o, P, this.cut && this.cut.id === o.id ? { cut: this.cut.level } : {});
+      g.position.set(o.x, g.userData.floorY, o.z); g.rotation.y = o.r || 0; g.name = 'building:' + o.id;
+      this.group.add(g); this.structs.set(o.id, g);
+      const keys = []; for (const [x, z] of groundCells(o)){ const k = P.cellIndex(x, z); if (k >= 0){ this.bcells.set(k, { id: o.id, floorY: g.userData.floorY }); keys.push(k); } }
+      this.bkeys.set(o.id, keys);
+      return;
+    }
     else if (o.type.startsWith('fence_')){ g = buildFence(o, P); this.group.add(g); this.structs.set(o.id, g); if (!this.lastType) this.lastType = new Map(); this.lastType.set(o.id, null); return; }
     if (!g) return;
     g.position.set(o.x, o.type === 'lot' ? g.userData.y0 : P.floorAt(o.x, o.z), o.z);
@@ -103,6 +118,11 @@ export class Objects {
     g.name = o.type + ':' + o.id;
     this.group.add(g); this.structs.set(o.id, g);
   }
+  unindex(id){ const ks = this.bkeys.get(id); if (ks){ for (const k of ks){ const b = this.bcells.get(k); if (b && b.id === id) this.bcells.delete(k); } this.bkeys.delete(id); } }
+  // the building on a park cell (its ground floor), or null
+  buildingAt(x, z){ const b = this.bcells.get(this.park.cellIndex(x, z)); return b ? this.park.obj(b.id) : null; }
+  // rebuild one building now (while it's being edited, before the edit is finished)
+  refresh(o){ const had = this.structs.get(o.id); if (had){ disposeStructure(had); this.structs.delete(o.id); } this.buildStruct(o); this.lightsDirty = true; }
   // the park was renamed / lands renamed: rebuild what shows names
   renamed(){
     for (const o of this.park.s.objects) if (o.type === 'gate' || o.type === 'arch'){ const g = this.structs.get(o.id); if (g) disposeStructure(g); this.structs.delete(o.id); this.buildStruct(o); }
@@ -121,20 +141,33 @@ export class Objects {
         else { const g = this.structs.get(o.id); if (!g || !g.userData.glows) continue; glows = g.userData.glows; base = g; }
         y0 = base ? base.position.y : this.park.floorAt(o.x, o.z);
         const rot = base ? base.rotation.y : (o.r || 0), cs = Math.cos(rot), sn = Math.sin(rot), sc = o.s || 1;
-        for (const [gx, gy, gz] of glows){
+        for (const [gx, gy, gz, fy] of glows){
           v.set(o.x + (gx * cs + gz * sn) * sc, y0 + gy * sc, o.z + (-gx * sn + gz * cs) * sc);
           halos.push(v.x, v.y, v.z);
-          pools.push([v.x, this.park.floorAt(v.x, v.z), v.z, Math.min(12, 3 + gy * 1.6) * strength]);
+          // (a lamp indoors lights its own floor, not the ground)
+          pools.push([v.x, fy !== undefined ? y0 + fy : this.park.floorAt(v.x, v.z), v.z, fy !== undefined ? 4.5 : Math.min(12, 3 + (gy - (fy || 0)) * 1.6) * strength, fy !== undefined]);
         }
       }
       this.halos.geometry.dispose();
       const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(halos, 3));
       this.halos.geometry = hg;
-      if (this.pools){ this.scene.remove(this.pools); this.pools.dispose(); }
-      this.pools = new THREE.InstancedMesh(this.poolGeo, this.poolMat, Math.max(1, pools.length));
-      const m = new THREE.Matrix4();
-      pools.forEach(([x, y, z, s], k) => this.pools.setMatrixAt(k, m.makeScale(s, 1, s).setPosition(x, y + 0.2, z)));
-      this.pools.count = pools.length; this.pools.frustumCulled = false; this.pools.renderOrder = 4;
+      // pools of light, draped over whatever is under them (ground, path or bridge), a few cm up;
+      // a lamp indoors lights its own (flat) floor
+      if (this.pools){ this.scene.remove(this.pools); this.pools.geometry.dispose(); }
+      const G = 6, pos = [], uv = [], idx = [];
+      for (const [x, y, z, s, indoor] of pools){
+        const v0 = pos.length / 3;
+        for (let j = 0; j <= G; j++) for (let i = 0; i <= G; i++){
+          const px = x + (i / G - 0.5) * s, pz = z + (j / G - 0.5) * s;
+          pos.push(px, (indoor ? y : this.park.floorAt(px, pz)) + 0.05, pz); uv.push(i / G, j / G);
+        }
+        for (let j = 0; j < G; j++) for (let i = 0; i < G; i++){ const a = v0 + j * (G + 1) + i; idx.push(a, a + G + 1, a + 1, a + 1, a + G + 1, a + G + 2); }
+      }
+      const pg = new THREE.BufferGeometry();
+      pg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); pg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      pg.setIndex(pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+      this.pools = new THREE.Mesh(pg, this.poolMat);
+      this.pools.frustumCulled = false; this.pools.renderOrder = 4;
       this.scene.add(this.pools);
       this.lightCount = halos.length / 3;
     }
@@ -155,10 +188,12 @@ export class Objects {
     const k = j * N + i, cat = CATALOG[type], r = this.footprint(type, opts);
     if (!Number.isNaN(S.water[k]) && !S.path[k]) return 'Not in the water.';
     if (S.path[k] && cat && !model(type).onPath) return 'Not on a path: trees and rocks go beside paths.';
+    const inB = this.bcells.get(k);
+    if (inB && (!cat || !model(type).onPath)) return 'Not inside a building (furniture and lamps can go inside).';
     for (const o of S.objects){
       if (o.id === opts.ignore) continue;
       if (o.type === 'lot'){ if (Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) return 'That is in the car park.'; continue; }
-      if (o.type.startsWith('fence_')) continue;
+      if (o.type.startsWith('fence_') || o.type === 'building') continue;
       const or = this.footprint(o.type, o), d = Math.hypot(o.x - x, o.z - z);
       if (o.type === 'gate'){ if (Math.abs(x - o.x) < 18 && Math.abs(z - o.z) < 3) return 'That is in the entrance.'; continue; }
       // trees can stand close together (their crowns overlap), other things need their own space
@@ -174,6 +209,14 @@ export class Objects {
     for (const o of this.park.s.objects){
       let r, h, y0;
       if (CATALOG[o.type]){ const M = model(o.type); r = Math.max(0.5, Math.min(M.canopy || M.r, 3)) * (o.s || 1); h = M.height * (o.s || 1); y0 = this.park.floorAt(o.x, o.z); }
+      else if (o.type === 'building'){
+        const g = this.structs.get(o.id); if (!g) continue;
+        const bb = bounds(o), hgt = o.floors.length * STOREY + 4;
+        const [lx, lz] = toLocal(o, o3.x, o3.z), c = Math.cos(o.r || 0), sn = Math.sin(o.r || 0), dlx = d.x * c - d.z * sn, dlz = d.x * sn + d.z * c;
+        const t = rayBox([lx, o3.y - g.position.y, lz], [dlx, d.y, dlz], [bb.i0 * CELL, -0.5, bb.j0 * CELL], [(bb.i1 + 1) * CELL, hgt, (bb.j1 + 1) * CELL]);
+        if (t !== null && t < bestT){ best = o; bestT = t; }
+        continue;
+      }
       else if (o.type === 'gate'){ r = 10; h = 14; y0 = this.park.floorAt(o.x, o.z); }
       else if (o.type === 'arch'){ r = (o.w || 8) / 2 + 1; h = 7; y0 = this.park.floorAt(o.x, o.z); }
       else if (o.type === 'lot'){
@@ -234,6 +277,15 @@ export class Objects {
     return [x, z];
   }
   stats(){ let draw = 0; this.group.traverse((o) => { if (o.isMesh) draw++; }); return { objects: this.park.s.objects.length, meshes: draw }; }
+}
+function rayBox(o, d, lo, hi){
+  let t0 = 0, t1 = 1e9;
+  for (let a = 0; a < 3; a++){
+    if (Math.abs(d[a]) < 1e-9){ if (o[a] < lo[a] || o[a] > hi[a]) return null; continue; }
+    let ta = (lo[a] - o[a]) / d[a], tb = (hi[a] - o[a]) / d[a]; if (ta > tb){ const t = ta; ta = tb; tb = t; }
+    t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); if (t0 > t1) return null;
+  }
+  return t0;
 }
 function closestT(o, d, x, y, z){ return (x - o.x) * d.x + (y - o.y) * d.y + (z - o.z) * d.z; }
 function nearestOnSeg(px, pz, ax, az, bx, bz){

@@ -10,9 +10,15 @@ import { FENCES } from './structures.js';
 import { esc } from './util.js';
 import { TERRAIN_MODES } from './tools.js';
 import { ICON } from './icons.js';
+import { TEMPLATES, STYLES, ROOFS, MATS, bounds as bBounds, H as STOREY } from './buildings.js';
+const SWATCH = { ashlar: '#d8ccb0', brick: '#a0503a', boardwall: '#9a7a60', marble: '#e8e4dc', rockface: '#8a8478', slate: '#4a5060', tiles: '#b0553a', shingles: '#7a5a40', copper: '#5fa08a',
+  darkwood: '#4a3426', wood: '#a07a52', white: '#f2efe8', iron: '#24262a', stone: '#b8b0a0', boards: '#9a7450', floortile: '#ddd5c4', pavers: '#9a4a3a', cobbles: '#8a8278' };
+const swatchOf = (k) => k.includes('#') ? '#' + k.split('#')[1] : SWATCH[k] || '#888';
+const STOREYS = ['Ground', 'First', 'Second', 'Third', 'Fourth', 'Fifth'];
+const AWNINGS = ['#1e5a3a', '#7a2a2a', '#2a3a6a', '#8a5a2a', '#5a2a6a'];
 
 export const TABS = [
-  ['select', 'Select'], ['paths', 'Paths'], ['plants', 'Trees'], ['decor', 'Decor'],
+  ['select', 'Select'], ['paths', 'Paths'], ['plants', 'Trees'], ['decor', 'Decor'], ['buildings', 'Buildings'],
   ['terrain', 'Land'], ['lands', 'Lands'], ['park', 'Park'], ['bulldoze', 'Bulldoze'],
 ];
 const SIZES = [[3, 'S'], [6, 'M'], [10, 'L'], [16, 'XL']];
@@ -34,7 +40,8 @@ export class UI {
   // --- descriptions ---------------------------------------------------------------------------
   tabs(){ return TABS.map(([id, label]) => ({ id: 'tab:' + id, label, icon: id, on: this.tab === id })); }
   tray(){
-    const T = this.T, o = T.opts, P = this.P, k = T.kind, S = [];
+    const T = this.T, o = T.opts, o_ = T.opts, P = this.P, k = T.kind, S = [];
+    const o_id = (t) => t.opts.id;
     const chips = (label, list) => S.push({ label, kind: 'chips', items: list });
     const cards = (label, list) => S.push({ label, kind: 'cards', items: list });
     switch (this.tab){
@@ -68,6 +75,32 @@ export class UI {
         if (o.land) chips('This land', [{ id: 'renameland', label: 'Rename' }, { id: 'themeland', label: 'Theme: ' + (THEMES[P.s.lands[o.land - 1]?.theme]?.name || '') }, { id: 'tool:arch', label: 'Put up an arch' }, { id: 'delland', label: 'Remove' }]);
         return { hint: !P.s.lands.length ? 'Lands are the sections of your park. Make one, then paint it on the map.' : k === 'arch' ? 'Tap a path where it goes into the land: an arch with its name goes across it.' : 'Paint where this land is. Its name goes on arches, signs and the map.', sections: S };
       }
+      case 'buildings': {
+        if (k === 'bedit'){
+          const o = P.obj(o_id(T)); if (!o){ return { hint: 'That building has gone.', sections: [] }; }
+          chips('Change', [['rooms', 'Rooms'], ['walls', 'Walls'], ['roof', 'Roof'], ['look', 'Materials'], ['extras', 'Extras']].map(([m, l]) => ({ id: 'bmode:' + m, label: l, on: o_.mode === m })).concat([{ id: 'bdone', label: 'Done' }]));
+          const om = { wall: 'plaster#efe6d4', base: 'ashlar', roof: 'slate', trim: 'darkwood', floor: 'boards', ...(o.m || {}) };
+          if (o_.mode === 'rooms'){
+            chips('Storey', o.floors.map((_, l) => ({ id: 'blevel:' + l, label: STOREYS[l], on: (o_.level || 0) === l })).concat([{ id: 'baddstorey', label: '＋ Storey' }, { id: 'bremstorey', label: '− Top storey' }]));
+            return { hint: `Drag over the grid to add rooms to the ${STOREYS[o_.level || 0].toLowerCase()} storey; drag over rooms to take them away. The storeys above are lifted off so you can see in.`, sections: S };
+          }
+          if (o_.mode === 'walls'){ chips('Wall', STYLES.map(([st, l]) => ({ id: 'bstyle:' + st, label: l, on: o_.style === st }))); return { hint: 'Choose a style, then tap the walls to change.', sections: S }; }
+          if (o_.mode === 'roof'){ chips('Roof', ROOFS.map(([r, l]) => ({ id: 'broof:' + r, label: l, on: (o.roof || 'hip') === r }))); return { hint: 'The roof fits itself over every part of the building.', sections: S }; }
+          if (o_.mode === 'look'){
+            for (const [part, label] of [['wall', 'Walls'], ['roof', 'Roof'], ['trim', 'Woodwork'], ['base', 'Stonework'], ['floor', 'Floors']]) chips(label, MATS[part].map(([mk, l]) => ({ id: `bmat:${part}:${mk}`, label: l, swatchColor: swatchOf(mk), on: om[part] === mk })));
+            chips('', [{ id: 'btimber', label: o.timber ? 'Timber framing: on' : 'Timber framing: off', on: !!o.timber }]);
+            return { hint: 'Tap to change what it\'s made of.', sections: S };
+          }
+          chips('Add', [['tower', 'Tower'], ['chimney', 'Chimney'], ['awning', 'Awning'], ['sign', 'Sign'], ['remove', 'Take away']].map(([x, l]) => ({ id: 'bextra:' + x, label: l, on: o_.extra === x })));
+          if (o_.extra === 'awning' || o_.extra === 'sign') chips('Colour', (o_.extra === 'sign' ? ['#173826', '#22305a', '#5a1a1a', '#5a3018', '#2a2a2a'] : AWNINGS).map((c) => ({ id: 'bcolor:' + c, swatchColor: c, label: '', on: o_.color === c })));
+          if (o_.extra === 'tower') chips('Tower top', [['cone', 'Spire'], ['dome', 'Dome'], ['battlement', 'Battlements']].map(([r, l]) => ({ id: 'btroof:' + r, label: l, on: (o_.towerRoof || 'cone') === r })));
+          return { hint: { tower: 'Tap a corner of the building for a round tower (tap it again to take it away).', chimney: 'Tap the roof where a chimney goes.', awning: 'Tap a ground-floor wall for an awning over it.', sign: 'Tap a wall to put a sign on it.', remove: 'Tap a tower, chimney, awning or sign to take it away.' }[o_.extra || 'tower'], sections: S };
+        }
+        const byTheme = {}; for (const [id, t] of Object.entries(TEMPLATES)) (byTheme[t.theme] = byTheme[t.theme] || []).push({ id: 'btpl:' + id, label: t.name, thumb: 'tpl:' + id, on: k === 'building' && o.tpl === id && !o.move });
+        cards('Build', Object.values(byTheme).flat());
+        if (k === 'building') chips('Turn', [{ id: 'rot:-6', label: '⟲ 90°' }, { id: 'rot:6', label: '90° ⟳' }]);
+        return { hint: k === 'building' ? 'Tap where it goes. It turns in quarter turns and lines up with the paths.' : 'Choose a building, then tap where it goes. Tap a building with Select to change it.', sections: S };
+      }
       case 'park':
         cards('Build', [{ id: 'tool:lot', label: 'Car park', thumb: 'lot', on: k === 'lot' }, { id: 'roadtool', label: 'Road', swatch: 'tarmac' }, { id: 'selectgate', label: 'Entrance', thumb: 'gate' }]);
         chips('Your park', [{ id: 'renamepark', label: 'Rename the park' }, { id: 'menu', label: 'Menu' }]);
@@ -93,6 +126,14 @@ export class UI {
     if (o.type === 'lot'){ const g = this.app.objects.structs.get(o.id); lines.push(`Car park · ${o.w * 2} × ${o.d * 2} m · room for ${g ? g.userData.bays : '?'} cars`); b.push({ id: 'renameobj', label: 'Rename' }); }
     if (o.type === 'arch'){ const L = this.P.s.lands[(o.land || 1) - 1]; lines.push('Arch into ' + (L ? L.name : 'a land')); b.push({ id: 'archland', label: 'Change land' }); }
     if (o.type === 'sign'){ title = '“' + o.name + '”'; b.push({ id: 'renameobj', label: 'Change words' }); }
+    if (o.type === 'building'){
+      const bb = bBounds(o), w = (bb.i1 - bb.i0 + 1) * 2, d = (bb.j1 - bb.j0 + 1) * 2, n = o.floors.length;
+      lines.push(`${n === 1 ? 'One storey' : n + ' storeys'} · ${w} × ${d} m · ${o.floors.reduce((a, f) => a + f.length, 0) * 4} m² of rooms`);
+      b.push({ id: 'bedit', label: 'Edit', kind: 'primary' }, { id: 'renameobj', label: 'Rename' }, { id: 'brot:-1', label: '⟲ Turn' }, { id: 'brot:1', label: 'Turn ⟳' }, { id: 'bmove', label: 'Move' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
+      const land = this.P.landAt(...(() => { const g = this.app.objects.structs.get(o.id); return g ? [g.position.x, g.position.z] : [o.x, o.z]; })());
+      if (land) lines.push('In ' + land.name);
+      return { title, lines, buttons: b, close: 'deselect' };
+    }
     const c = CATALOG[o.type];
     if (c && c.colors){ for (const col of c.colors) b.push({ id: 'objcolor:' + col, swatchColor: col, label: '', on: o.color === col }); }
     if (o.type === 'sign') for (const col of ['#173826', '#22305a', '#5a1a1a', '#3a2a1a', '#2a2a2a']) b.push({ id: 'objcolor:' + col, swatchColor: col, label: '', on: o.color === col });
@@ -148,6 +189,22 @@ export class UI {
       case 'menu': this.openMenu(); break;
       case 'dlg': { const d = this.dialog; this.dialog = null; if (d && d.on) d.on(v); break; }
       case 'key': this.keyPress(v); break;
+      case 'btpl': this.tab = 'buildings'; T.rot = 0; T.set('building', { tpl: v }); A.select(null); break;
+      case 'bedit': { const id = A.selected; if (!id) break; const o = P.obj(id); this.tab = 'buildings'; T.set('bedit', { id, mode: 'rooms', level: 0, style: 'window', extra: 'tower' }); A.select(null); const bb = bBounds(o), g = A.objects.structs.get(id); if (g){ const [cx, cz] = [g.position.x, g.position.z]; void cx; void cz; } A.focus(...A.buildingCentre(o), Math.max(30, (bb.i1 - bb.i0 + bb.j1 - bb.j0 + 2) * 5 + o.floors.length * STOREY)); break; }
+      case 'bmode': T.set('bedit', { ...T.opts, mode: v }); break;
+      case 'blevel': T.set('bedit', { ...T.opts, level: +v }); break;
+      case 'baddstorey': T.B.addStorey(); T.set('bedit', { ...T.opts }); break;
+      case 'bremstorey': T.B.removeStorey(); T.set('bedit', { ...T.opts }); break;
+      case 'bstyle': T.opts.style = v; break;
+      case 'broof': T.B.set({ roof: v }, 'Roof'); break;
+      case 'bmat': { const [part, mk] = v.split(/:(.*)/s); const o = T.B.o; if (o) T.B.set({ m: { ...(o.m || {}), [part]: mk } }, 'Materials'); break; }
+      case 'btimber': { const o = T.B.o; if (o) T.B.set({ timber: !o.timber }, 'Timber framing'); break; }
+      case 'bextra': T.opts.extra = v; break;
+      case 'bcolor': T.opts.color = v; break;
+      case 'btroof': T.opts.towerRoof = v; break;
+      case 'bdone': { const id = T.opts.id; T.set('select'); this.tab = 'select'; A.select(id); break; }
+      case 'brot': { const o = P.obj(A.selected); if (!o) break; const n = A.rotateBuilding(o, +v); if (n) this.toast(n, 'bad'); break; }
+      case 'bmove': { const o = P.obj(A.selected); if (o){ this.tab = 'buildings'; T.rot = 0; T.set('building', { move: o.id }); A.select(null); this.toast('Tap where it should go.'); } break; }
     }
     this.refresh();
   }
@@ -160,6 +217,7 @@ export class UI {
     else if (t === 'terrain') T.set('terrain', {});
     else if (t === 'lands') T.set('land', {});
     else if (t === 'park') T.set('lot', {});
+    else if (t === 'buildings') T.set('building', { tpl: 'cottage' });
     else if (t === 'bulldoze') T.set('bulldoze', { size: 3 });
     this.app.select(null);
   }
