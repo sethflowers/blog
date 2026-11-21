@@ -59,6 +59,7 @@ export class BuildingTools {
   source(){
     const opts = this.T.opts;
     if (opts.move){ const o = this.P.obj(opts.move); return o ? JSON.parse(JSON.stringify(o)) : null; }
+    if (opts.bp){ const d = (this.app.blueprints || []).find((q) => q.id === opts.bp); if (d) return { walls: {}, towers: [], extras: [], ...JSON.parse(JSON.stringify(d.data)), type: 'building' }; }
     return fromTemplate(opts.tpl || 'blank');
   }
   quarter(){ const opts = this.T.opts, base = opts.move ? Math.round(((this.P.obj(opts.move) || {}).r || 0) / (Math.PI / 2)) : 0; return (((base + Math.round(this.T.rot / (Math.PI / 2))) % 4) + 4) % 4; }

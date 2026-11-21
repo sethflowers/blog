@@ -268,6 +268,51 @@ check(await count('building') >= 4, `more buildings go up (${await count('buildi
 await ev(`__ftp.focus(0, ${gz} - 55, 95); __ftp.want.pitch = 0.42; __ftp.want.yaw = Math.PI + 0.3`);
 await shot('04b-buildings');
 
+// ---------- shops, food and facilities ----------
+await ev(`__ftp.ui.act('tab:shops')`);
+check(await ev(`document.querySelectorAll('#tray .card').length`) >= 11, 'the Shops tray shows stalls, seating and facilities');
+await stroke([[-8, gz - 124], [-8, gz - 124]]);
+check(await count('stall') === 1, 'a kiosk goes on the plaza');
+const ST = () => ev(`__ftp.park.s.objects.find((o) => o.type === 'stall')`);
+let st = await ST();
+check(st.name.length > 2 && st.menu.length >= 3 && await ev(`document.querySelector('#panel h2').textContent`) === st.name, `it gets a name (${st.name}) and a menu, and its panel opens`);
+await pg.click('[data-act="menuedit"]');
+check(await ev(`document.querySelectorAll('#panel .prow').length`) >= 8, 'Menu lists what it could sell');
+const p0 = st.menu[0].price, id0 = st.menu[0].id;
+await pg.click(`[data-act="dlg:u-${id0}"]`); await pg.click(`[data-act="dlg:u-${id0}"]`);
+check((await ST()).menu.find((m) => m.id === id0).price === p0 + 1, 'prices go up in 50 cents');
+await pg.click(`[data-act="dlg:t-${id0}"]`);
+check(!(await ST()).menu.some((m) => m.id === id0), 'tapping a thing takes it off the menu');
+await pg.click('[data-act="dlg:done"]');
+await ev(`__ftp.select(__ftp.park.s.objects.find((o) => o.type === 'stall').id)`); await pg.click('[data-act="stalldesign"]');
+await pg.click('[data-act="dlg:k-cart"]'); await pg.click('[data-act="dlg:c-#2a3a6a"]'); await pg.click('[data-act="dlg:done"]');
+st = await ST();
+check(st.kind === 'cart' && st.color === '#2a3a6a', 'its shape and colours can be changed (a blue cart)');
+// a building as a restaurant, with tables
+const bid = await ev(`__ftp.park.s.objects.find((o) => o.type === 'building').id`);
+await ev(`__ftp.select('${bid}'); __ftp.ui.act('buse')`);
+await pg.click('[data-act="dlg:restaurant"]');
+let bo = await ev(`__ftp.park.obj('${bid}')`);
+check(bo.use === 'restaurant' && bo.menu.length >= 6, `a building becomes a restaurant (${bo.name}), with a menu`);
+check(await ev(`__ftp.objects.structs.get('${bid}').userData.fit.counter`) > 0, 'its inside gets a counter (and a menu board)');
+await ev(`(() => { const A = __ftp, b = A.park.obj('${bid}'); const [x, z] = A.buildingCentre(b); A.tools.set('place', { type: 'tableset' }); A.tools.down({ x: x - 1, z: z + 1, y: 0 }); A.tools.up({ x: x - 1, z: z + 1, y: 0 }); A.select('${bid}'); })()`);
+{ const t = await ev(`__ftp.ui.panel().lines.join(' ') + ' | ' + __ftp.ui.toasts.map((x) => x.text).join(' / ') + ' | ' + __ftp.park.s.objects.filter((o) => o.type === 'tableset').length`); check(/([4-9]|\d\d) seats/.test(t), 'tables put inside give it seats' + (/([4-9]|\d\d) seats/.test(t) ? '' : ' (' + t + ')')); }
+// another as toilets
+await ev(`(() => { const A = __ftp; A.ui.act('btpl:blank'); A.tools.down({ x: -60, z: ${gz} - 20, y: 0 }); A.tools.up({ x: -60, z: ${gz} - 20, y: 0 }); A.ui.act('buse'); })()`);
+await pg.click('[data-act="dlg:toilets"]');
+check(await ev(`(() => { const o = __ftp.park.s.objects.filter((o) => o.type === 'building').pop(); return o.use === 'toilets' && __ftp.objects.structs.get(o.id).userData.fit.cubicles >= 2; })()`), 'a building can be toilets (cubicles and sinks inside)');
+// your designs
+await ev(`__ftp.select(__ftp.park.s.objects.find((o) => o.type === 'stall').id); __ftp.ui.act('savedesign')`);
+await pg.fill('#dlg-input', 'Blue Cart'); await pg.click('[data-act="dlg:ok"]'); await wait(300);
+check(await ev('__ftp.blueprints.length') === 1, 'a stall can be saved as a design');
+await ev(`__ftp.ui.act('tab:shops')`);
+check((await ev(`document.getElementById('tray').textContent`)).includes('Blue Cart'), 'it shows under Your designs');
+await ev(`__ftp.ui.act('sbp:' + __ftp.blueprints[0].id)`);
+await stroke([[8, gz - 124], [8, gz - 124]]);
+check(await count('stall') === 2 && await ev(`__ftp.park.s.objects.filter((o) => o.type === 'stall').pop().kind`) === 'cart', 'and built again from there');
+await ev(`(() => { const s = __ftp.park.s.objects.find((o) => o.type === 'stall'); __ftp.select(null); __ftp.ui.act('tab:select'); __ftp.focus(s.x, s.z + 1, 14); __ftp.want.pitch = 0.22; __ftp.want.yaw = 0.3; })()`);
+await shot('04c-stalls');
+
 // ---------- selecting, naming ----------
 await ev(`__ftp.ui.act('tab:select'); __ftp.select(__ftp.park.s.objects.find((o) => o.type === 'bench').id)`);
 check(await ev(`document.getElementById('panel').classList.contains('show') && document.querySelector('#panel h2').textContent === 'Bench'`), 'tapping a bench shows its panel');
@@ -337,6 +382,7 @@ await pg.click('#b-continue');
 await pg.waitForFunction('__ftp.mode === "build"', null, { timeout: 60000 });
 const snap2 = await ev('({ n: __ftp.park.s.objects.length, h: __ftp.park.groundAt(80, ' + (gz - 160) + '), p: __ftp.park.s.path.reduce((a, v) => a + (v ? 1 : 0), 0), name: __ftp.park.s.name })');
 check(JSON.stringify(snap) === JSON.stringify(snap2), 'it opens again exactly as it was (things, ground, paths, name)');
+check(await ev('__ftp.blueprints.length') === 1, 'your designs are still there');
 // a second park, and the list
 await ev('__ftp.toTitle(true)'); await wait(800);
 check(await ev(`document.querySelectorAll('#parks-list .pk').length`) === 1 && await ev(`!!document.querySelector('#parks-list img')`), 'Your parks lists it, with a picture');

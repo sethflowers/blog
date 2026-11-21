@@ -17,10 +17,11 @@
 // serve every side. Convex corners get quoins (or timber posts) standing 3 cm proud, so wall ends never
 // show two faces in the same place; floors, ceilings and roofs never share a plane with anything.
 import * as THREE from 'three';
-import { Batch, UNIT_BOX } from './util.js';
+import { Batch, UNIT_BOX, lathe } from './util.js';
 import { mat } from './materials.js';
 import { resolveMat } from './models.js';
 import { boardTexture } from './structures.js';
+import { menuTexture, boardPlane } from './shops.js';
 import { CELL } from './park.js';
 
 export const H = 4, SLAB = 0.2, T = 0.25, WALLH = H - SLAB;
@@ -40,6 +41,7 @@ export const parse = (k) => k.split(',').map(Number);
 
 // materials: 'plaster#e6c6aa' is plaster tinted, 'paint#2a5a3a' a painted colour
 export function bmat(k){
+  if (k.startsWith('paint') && !k.includes('#') && /^paint[0-9a-f]{6}$/.test(k)) return mat(k, { c: parseInt(k.slice(5), 16), r: 0.5 });
   // inside a building: the same material with a soft fill (as if from light bouncing in at the windows),
   // so rooms aren't black in the day
   if (k === 'interior') return mat('interior', { t: 'plaster', m: 3, r: 0.95, c: 0xf2ebe0, e: 0x40382c, ei: 0.55 });
@@ -264,6 +266,8 @@ export function buildBuilding(o, park, opts = {}){
       }
     }
   }
+  // fitted out for what it's for
+  const fit = o.use ? fitOut(B, o, sets, box, own, m) : null;
   // lamps inside: one hanging lamp to about every six cells of each storey
   for (let l = 0; l <= top; l++){
     const cells = [...sets[l]].map(parse), picked = cells.filter(([i, j]) => ((i % 3) + 3) % 3 === 1 && ((j % 3) + 3) % 3 === 1);
@@ -280,8 +284,71 @@ export function buildBuilding(o, park, opts = {}){
   body.traverse((c) => { if (c.isMesh){ c.castShadow = c.name !== 'winglass' && c.name !== 'glow'; c.receiveShadow = true; } });
   g.add(body);
   for (const p of own) g.add(p);
-  g.userData = { glows, colliders: cols, floorY, building: true };
+  g.userData = { glows, colliders: cols, floorY, building: true, fit };
   return g;
+}
+// the inside, fitted out for the building's use, along the back wall (the side away from the first door)
+export const USES = [['', 'Nothing yet'], ['food', 'Food counter'], ['restaurant', 'Restaurant'], ['shop', 'Shop'], ['toilets', 'Toilets'], ['firstaid', 'First aid']];
+function fitOut(B, o, sets, box, own, m){
+  const g0 = sets[0], all = edges({ floors: [o.floors[0]] });
+  const door = all.find((e) => ['door', 'shop', 'arch', 'open'].includes(styleOf(o, e.i, e.j, 0, e.d))) || all.find((e) => e.d === 2) || all[0];
+  if (!door) return null;
+  const back = (door.d + 2) % 4, side = [(door.d + 1) % 4, (door.d + 3) % 4];
+  const backWalls = all.filter((e) => e.d === back), frontWalls = all.filter((e) => e.d === door.d && !(e.i === door.i && e.j === door.j));
+  const W = (e) => frame(e, 0), out = { seats: 0, cubicles: 0, counter: 0, beds: 0 };
+  const R = m.trim, use = o.use;
+  if (use === 'food' || use === 'restaurant' || use === 'shop'){
+    backWalls.forEach((e, k) => {
+      const M = W(e);
+      if (use !== 'shop' || k === 0){
+        box(R, M, 0.02, 1.98, 0, 0.98, 1.0, 1.55); box('wood', M, 0, 2.0, 0.98, 1.04, 0.95, 1.6); out.counter++;
+      }
+      // shelves on the back wall, with things on them
+      for (const y of [1.3, 1.85]){
+        box('wood', M, 0.15, 1.85, y, y + 0.04, T + 0.02, T + 0.4);
+        for (let n = 0; n < 5; n++){ const c = ['#c84a3a', '#e8c040', '#4a8ac8', '#5aa05a', '#f0e8d8'][(n + k + (y > 1.5 ? 2 : 0)) % 5]; B.add(UNIT_BOX, 'paint' + c.slice(1), new THREE.Matrix4().compose(new THREE.Vector3(...localPt(M, 0.3 + n * 0.32, y + 0.14, T + 0.2)), new THREE.Quaternion(), new THREE.Vector3(0.2, 0.24, 0.2))); }
+      }
+    });
+    if (use === 'shop'){
+      // a display table in the middle of the shop
+      const mid = [...g0].map(parse).filter(([i, j]) => !backWalls.some((e) => e.i === i && e.j === j) && !(i === door.i && j === door.j))[0];
+      if (mid){ const [i, j] = mid; box('wood', null, i * CELL + 0.5, i * CELL + 1.5, 0.7, 0.76, j * CELL + 0.5, j * CELL + 1.5); box('darkwood', null, i * CELL + 0.95, i * CELL + 1.05, 0, 0.7, j * CELL + 0.95, j * CELL + 1.05); }
+    }
+    // the menu board, on the back wall in the middle
+    const mid = backWalls[Math.floor(backWalls.length / 2)];
+    if (mid && o.menu){
+      const M = W(mid), mb = boardPlane(menuTexture(o.name || '', o.menu), 1.2, 1.5);
+      mb.position.set(...localPt(M, 1, 2.75, T + 0.03));
+      const X = new THREE.Vector3().setFromMatrixColumn(M, 0), Z = new THREE.Vector3().setFromMatrixColumn(M, 2);
+      mb.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, new THREE.Vector3(0, 1, 0), Z));
+      own.push(mb);
+    }
+  } else if (use === 'toilets'){
+    for (const e of backWalls){
+      const M = W(e);
+      for (const [x0, x1] of [[0, 1], [1, 2]]){
+        // a cubicle: side panels, a front with its door open, the toilet against the wall
+        box('white', M, x0 + 0.02, x0 + 0.06, 0.15, 2.0, T + 0.02, T + 1.45);
+        box('white', M, x0 + 0.06, x0 + 0.18, 0.15, 2.0, T + 1.41, T + 1.45); box('white', M, x0 + 0.82, x1 - 0.02, 0.15, 2.0, T + 1.41, T + 1.45);
+        box('paint' + '2a3a6a', M, x0 + 0.18, x0 + 0.22, 0.15, 1.95, T + 1.45, T + 2.05);
+        B.add(lathe([[0, 0], [0.17, 0], [0.2, 0.38], [0.22, 0.42], [0, 0.42]], 14), 'white', M.clone().multiply(new THREE.Matrix4().makeTranslation(x0 + 0.5, 0, T + 0.4)));
+        box('white', M, x0 + 0.32, x0 + 0.68, 0.42, 0.85, T + 0.02, T + 0.2);
+        out.cubicles++;
+      }
+      box('white', M, 1.94, 2.0, 0.15, 2.0, T + 0.02, T + 1.45);
+    }
+    for (const e of frontWalls){
+      const M = W(e);
+      box('white', M, 0.6, 1.4, 0.8, 0.95, T + 0.02, T + 0.5); box('chrome', M, 0.95, 1.05, 0.95, 1.15, T + 0.05, T + 0.15); box('chrome', M, 0.6, 1.4, 1.3, 2.1, T + 0.02, T + 0.04);
+    }
+  } else if (use === 'firstaid'){
+    for (const e of backWalls){
+      const M = W(e);
+      box('white', M, 0.3, 1.7, 0.45, 0.6, T + 0.1, T + 2.0); box('chrome', M, 0.3, 1.7, 0.1, 0.45, T + 0.1, T + 0.14); box('chrome', M, 0.3, 1.7, 0.1, 0.45, T + 1.96, T + 2.0);
+      box('paint' + 'c8d8e8', M, 0.35, 1.65, 0.6, 0.7, T + 0.15, T + 0.5); out.beds++;
+    }
+  }
+  return out;
 }
 function topLevel(sets, i, j){ let t = -1; sets.forEach((S, l) => { if (S.has(key(i, j))) t = l; }); return t; }
 function localPt(M, x, y, z){ return new THREE.Vector3(x, y, z).applyMatrix4(M).toArray(); }

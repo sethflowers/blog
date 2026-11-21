@@ -429,3 +429,26 @@ What's in it, and how it works.
   Tests: the lost-view panel; walking out of water.
 - Interiors: inside walls, floors and ceilings have a soft fill light (they were black by day), and
   window glass is partly see-through.
+
+## Version 1.2: Shops, food and facilities (built)
+
+- **Stalls** (`shops.js`): kiosk, cart, booth and information kiosk, each with a roof (striped canopy,
+  umbrella, dome, pitched), paint and stripe colours, a name board and a menu board. They stand on
+  plazas or beside paths (not inside buildings). Placed from the new Shops tab, named from the land's
+  theme ("Ember Forge Kitchen"); "Change its look" changes shape, roof, colours and what it sells.
+- **Menus**: 26 goods in four kinds (hot food, snacks and sweets, drinks, gifts) with sensible prices.
+  The Menu dialog lists everything a place could sell: tap to put it on or take it off, − and + change
+  the price in 50 cents. Menu boards are painted from the menu (name and prices, chalk on a board).
+  Dialogs can now hold rows of buttons (drawn as rows on screen, in one or two columns on the tablet).
+- **What a building is for** (`USES` in buildings.js): food counter, restaurant, shop, toilets, first
+  aid. Its ground floor is fitted out along the back wall (the side away from the first door): a
+  counter with shelves of goods and the menu board above (food, restaurant), shelves and a display
+  table (shop), cubicles with toilets and doors, and sinks with mirrors on the front wall (toilets),
+  beds (first aid). The panel shows what it's for and its capacity (a restaurant counts the seats of
+  tables in it or on a terrace within 8 m; toilets their cubicles).
+- **Seating and facilities** (catalogue): table and chairs, café table, parasol table (any colour),
+  booth; cash machine, lockers, drinking fountain.
+- **Your designs**: any building or stall can be saved (Save design, with a name) into a library kept
+  in IndexedDB (`meta` → `pref:blueprints`), shared by all parks; they appear under "Your designs" in
+  the Buildings or Shops tab with a picture, and can be removed (Manage designs).
+- Guests come in 1.4: for now these show menus and capacity; nothing is bought yet.

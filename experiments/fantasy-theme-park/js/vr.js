@@ -360,6 +360,19 @@ export class VR {
       btn(44, y, 150, 56, 'vr:shift', A.vr.shift ? 'abc' : 'ABC', { size: 24, on: A.vr.shift }); btn(202, y, TW - 88 - 158 - 158, 56, 'key:space', 'space', { size: 24 }); btn(TW - 44 - 150, y, 150, 56, 'key:back', 'delete', { size: 24 });
       y += 72;
     }
+    // rows (menus, a stall's look): a label then its buttons; two columns when there are many
+    const rows = P.rows || [], two = rows.length > 8, colW = two ? (TW - 88 - 16) / 2 : TW - 88, rh = two ? 50 : 56;
+    rows.forEach((r, k) => {
+      const cx = 44 + (two ? (k % 2) * (colW + 16) : 0), cy = y + (two ? Math.floor(k / 2) : k) * (rh + 6);
+      let x = cx;
+      if (r.label){ g.fillStyle = '#c8a050'; g.font = '700 18px "Avenir Next", Arial, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'middle'; fitText(g, r.label.toUpperCase(), x, cy + rh / 2, 120); x += 128; }
+      for (const b of r.buttons){
+        const w = b.swatchColor && !b.label ? 52 : b.wide ? Math.max(120, colW - (x - cx) - 3 * 70 - 24) : Math.max(56, Math.min(120, g.measureText(b.label).width + 30));
+        btn(x, cy, w, rh, b.id, b.label, { on: b.on, kind: b.kind, swatch: b.swatchColor, size: two ? 20 : 22 });
+        x += w + 6;
+      }
+    });
+    if (rows.length) y += (two ? Math.ceil(rows.length / 2) : rows.length) * (rh + 6) + 10;
     let x = 44; const bh = 62;
     for (const b of P.buttons){
       g.font = '600 24px "Avenir Next", Arial, sans-serif';

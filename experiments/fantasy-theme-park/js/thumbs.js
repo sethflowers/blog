@@ -5,6 +5,7 @@ import { CATALOG, model, resolveMat } from './models.js';
 import { texture, mat } from './materials.js';
 import { buildFence, buildSign, buildLot, buildGate, disposeStructure } from './structures.js';
 import { buildBuilding, fromTemplate } from './buildings.js';
+import { buildStall, newStall } from './shops.js';
 
 const SIZE = 128;
 export class Thumbs {
@@ -26,6 +27,8 @@ export class Thumbs {
     else if (type === 'sign'){ obj = buildSign({ name: 'Welcome' }); own = true; }
     else if (type === 'lot'){ obj = buildLot({ x: 0, z: 0, w: 10, d: 8, name: 'Parking' }, fakePark); own = true; }
     else if (type === 'gate'){ obj = buildGate('Your Park'); own = true; }
+    else if (type.startsWith('stall:')){ obj = buildStall(newStall(type.slice(6))); own = true; }
+    else if (type.startsWith('bp:')){ const d = ((this.app && this.app.blueprints) || []).find((q) => q.id === type.slice(3)); if (!d) return ''; obj = d.kind === 'stall' ? buildStall(d.data) : buildBuilding({ walls: {}, towers: [], extras: [], ...d.data, x: 0, z: 0, r: 0 }, fakePark); own = true; }
     else if (type.startsWith('tpl:')){ obj = buildBuilding({ ...fromTemplate(type.slice(4)), x: 0, z: 0, r: 0 }, fakePark); own = true; }
     else return '';
     this.scene.add(obj);

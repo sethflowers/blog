@@ -2,7 +2,7 @@
 //   tabs()   the toolbar;  tray()  the options of the current tool;  panel()  the open panel
 // and every press is an action id handled by act(id). The HTML below draws that data on screen, and
 // vr.js draws the very same data on the tablet in your hand, so nothing works on only one of them.
-import { CATALOG } from './models.js';
+import { CATALOG, model } from './models.js';
 import { SURFACES, GROUNDS, ROAD, LANDS } from './park.js';
 import { THEMES, landName, parkName } from './names.js';
 import { objName } from './objects.js';
@@ -10,7 +10,9 @@ import { FENCES } from './structures.js';
 import { esc } from './util.js';
 import { TERRAIN_MODES } from './tools.js';
 import { ICON } from './icons.js';
-import { TEMPLATES, STYLES, ROOFS, MATS, bounds as bBounds, H as STOREY } from './buildings.js';
+import { TEMPLATES, STYLES, ROOFS, MATS, USES, bounds as bBounds, groundCells, H as STOREY } from './buildings.js';
+import { GOODS, SELLS, STALLS, STALL_ROOFS, STALL_COLORS, goodsFor, defaultMenu, price } from './shops.js';
+import { foodName, shopName } from './names.js';
 const SWATCH = { ashlar: '#d8ccb0', brick: '#a0503a', boardwall: '#9a7a60', marble: '#e8e4dc', rockface: '#8a8478', slate: '#4a5060', tiles: '#b0553a', shingles: '#7a5a40', copper: '#5fa08a',
   darkwood: '#4a3426', wood: '#a07a52', white: '#f2efe8', iron: '#24262a', stone: '#b8b0a0', boards: '#9a7450', floortile: '#ddd5c4', pavers: '#9a4a3a', cobbles: '#8a8278' };
 const swatchOf = (k) => k.includes('#') ? '#' + k.split('#')[1] : SWATCH[k] || '#888';
@@ -18,7 +20,7 @@ const STOREYS = ['Ground', 'First', 'Second', 'Third', 'Fourth', 'Fifth'];
 const AWNINGS = ['#1e5a3a', '#7a2a2a', '#2a3a6a', '#8a5a2a', '#5a2a6a'];
 
 export const TABS = [
-  ['select', 'Select'], ['paths', 'Paths'], ['plants', 'Trees'], ['decor', 'Decor'], ['buildings', 'Buildings'],
+  ['select', 'Select'], ['paths', 'Paths'], ['plants', 'Trees'], ['decor', 'Decor'], ['buildings', 'Buildings'], ['shops', 'Shops'],
   ['terrain', 'Land'], ['lands', 'Lands'], ['park', 'Park'], ['bulldoze', 'Bulldoze'],
 ];
 const SIZES = [[3, 'S'], [6, 'M'], [10, 'L'], [16, 'XL']];
@@ -98,8 +100,19 @@ export class UI {
         }
         const byTheme = {}; for (const [id, t] of Object.entries(TEMPLATES)) (byTheme[t.theme] = byTheme[t.theme] || []).push({ id: 'btpl:' + id, label: t.name, thumb: 'tpl:' + id, on: k === 'building' && o.tpl === id && !o.move });
         cards('Build', Object.values(byTheme).flat());
+        const mine = (this.app.blueprints || []).filter((d) => d.kind === 'building');
+        if (mine.length) cards('Your designs', mine.map((d) => ({ id: 'bbp:' + d.id, label: d.name, thumb: 'bp:' + d.id, on: k === 'building' && o.bp === d.id })).concat([{ id: 'designs', label: 'Manage designs' }]));
         if (k === 'building') chips('Turn', [{ id: 'rot:-6', label: '⟲ 90°' }, { id: 'rot:6', label: '90° ⟳' }]);
         return { hint: k === 'building' ? 'Tap where it goes. It turns in quarter turns and lines up with the paths.' : 'Choose a building, then tap where it goes. Tap a building with Select to change it.', sections: S };
+      }
+      case 'shops': {
+        cards('Stalls', Object.entries(STALLS).map(([id, st]) => ({ id: 'stall:' + id, label: st.name, thumb: 'stall:' + id, on: k === 'stall' && o.kind === id && !o.bp })));
+        cards('Seating', this.catItems('seating')); cards('Facilities', this.catItems('facilities'));
+        const mine = (this.app.blueprints || []).filter((d) => d.kind === 'stall');
+        if (mine.length) cards('Your designs', mine.map((d) => ({ id: 'sbp:' + d.id, label: d.name, thumb: 'bp:' + d.id, on: k === 'stall' && o.bp === d.id })).concat([{ id: 'designs', label: 'Manage designs' }]));
+        if (k === 'place' && CATALOG[o.type] && CATALOG[o.type].colors) chips('Colour', CATALOG[o.type].colors.map((c) => ({ id: 'color:' + c, swatchColor: c, label: '', on: (o.color || CATALOG[o.type].colors[0]) === c })));
+        if (k === 'stall' || k === 'place') chips('Turn', [{ id: 'rot:-1', label: '⟲ 15°' }, { id: 'rot:1', label: '15° ⟳' }]);
+        return { hint: k === 'stall' ? 'Tap where it goes: on a plaza or beside a path. Tap it afterwards to name it, change its menu and its look.' : 'Stalls, seating and facilities. For a café, restaurant, shop or toilets, tap a building and choose what it\'s for.', sections: S };
       }
       case 'park':
         cards('Build', [{ id: 'tool:lot', label: 'Car park', thumb: 'lot', on: k === 'lot' }, { id: 'roadtool', label: 'Road', swatch: 'tarmac' }, { id: 'selectgate', label: 'Entrance', thumb: 'gate' }]);
@@ -129,12 +142,22 @@ export class UI {
     if (o.type === 'building'){
       const bb = bBounds(o), w = (bb.i1 - bb.i0 + 1) * 2, d = (bb.j1 - bb.j0 + 1) * 2, n = o.floors.length;
       lines.push(`${n === 1 ? 'One storey' : n + ' storeys'} · ${w} × ${d} m · ${o.floors.reduce((a, f) => a + f.length, 0) * 4} m² of rooms`);
-      b.push({ id: 'bedit', label: 'Edit', kind: 'primary' }, { id: 'renameobj', label: 'Rename' }, { id: 'brot:-1', label: '⟲ Turn' }, { id: 'brot:1', label: 'Turn ⟳' }, { id: 'bmove', label: 'Move' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
+      const use = USES.find(([u]) => u === (o.use || '')), fit = (this.app.objects.structs.get(o.id) || { userData: {} }).userData.fit;
+      if (o.use) lines.push(use[1] + (o.use === 'restaurant' ? ` · ${this.seatsAt(o)} seats` : o.use === 'toilets' && fit ? ` · ${fit.cubicles} cubicles` : o.use === 'firstaid' && fit ? ` · ${fit.beds} beds` : '') + (o.menu && ['food', 'restaurant', 'shop'].includes(o.use) ? ` · ${o.menu.length} things on the menu` : ''));
+      b.push({ id: 'bedit', label: 'Edit', kind: 'primary' }, { id: 'buse', label: o.use ? 'Use: ' + use[1] : 'What is it for?' });
+      if (['food', 'restaurant', 'shop'].includes(o.use)) b.push({ id: 'menuedit', label: 'Menu' });
+      b.push({ id: 'renameobj', label: 'Rename' }, { id: 'brot:-1', label: '⟲ Turn' }, { id: 'brot:1', label: 'Turn ⟳' }, { id: 'bmove', label: 'Move' }, { id: 'savedesign', label: 'Save design' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
       const land = this.P.landAt(...(() => { const g = this.app.objects.structs.get(o.id); return g ? [g.position.x, g.position.z] : [o.x, o.z]; })());
       if (land) lines.push('In ' + land.name);
       return { title, lines, buttons: b, close: 'deselect' };
     }
+    if (o.type === 'stall'){
+      lines.push(`${STALLS[o.kind].name} · ${(SELLS.find(([k]) => k === o.sells) || [0, ''])[1]} · ${(o.menu || []).length} things on the menu`);
+      b.push({ id: 'menuedit', label: 'Menu', kind: 'primary' }, { id: 'stalldesign', label: 'Change its look' }, { id: 'renameobj', label: 'Rename' }, { id: 'objrot:-1', label: '⟲ Turn' }, { id: 'objrot:1', label: 'Turn ⟳' }, { id: 'objmove', label: 'Move' }, { id: 'savedesign', label: 'Save design' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
+      return { title, lines, buttons: b, close: 'deselect' };
+    }
     const c = CATALOG[o.type];
+    if (c && model(o.type).seats) lines.push(`Seats ${model(o.type).seats}`);
     if (c && c.colors){ for (const col of c.colors) b.push({ id: 'objcolor:' + col, swatchColor: col, label: '', on: o.color === col }); }
     if (o.type === 'sign') for (const col of ['#173826', '#22305a', '#5a1a1a', '#3a2a1a', '#2a2a2a']) b.push({ id: 'objcolor:' + col, swatchColor: col, label: '', on: o.color === col });
     if (!o.type.startsWith('fence_') && o.type !== 'lot') b.push({ id: 'objrot:-1', label: '⟲ Turn' }, { id: 'objrot:1', label: 'Turn ⟳' });
@@ -204,6 +227,14 @@ export class UI {
       case 'btroof': T.opts.towerRoof = v; break;
       case 'bdone': { const id = T.opts.id; T.set('select'); this.tab = 'select'; A.select(id); break; }
       case 'brot': { const o = P.obj(A.selected); if (!o) break; const n = A.rotateBuilding(o, +v); if (n) this.toast(n, 'bad'); break; }
+      case 'stall': this.tab = 'shops'; T.rot = 0; T.set('stall', { kind: v, type: 'stall' }); A.select(null); break;
+      case 'sbp': this.tab = 'shops'; T.rot = 0; T.set('stall', { bp: v, type: 'stall', kind: ((A.blueprints || []).find((d) => d.id === v) || { data: {} }).data.kind }); A.select(null); break;
+      case 'bbp': this.tab = 'buildings'; T.rot = 0; T.set('building', { bp: v }); A.select(null); break;
+      case 'buse': this.useDialog(); break;
+      case 'menuedit': this.menuDialog(); break;
+      case 'stalldesign': this.stallDialog(); break;
+      case 'savedesign': this.saveDesign(); break;
+      case 'designs': this.designsDialog(); break;
       case 'bmove': { const o = P.obj(A.selected); if (o){ this.tab = 'buildings'; T.rot = 0; T.set('building', { move: o.id }); A.select(null); this.toast('Tap where it should go.'); } break; }
     }
     this.refresh();
@@ -218,8 +249,95 @@ export class UI {
     else if (t === 'lands') T.set('land', {});
     else if (t === 'park') T.set('lot', {});
     else if (t === 'buildings') T.set('building', { tpl: 'cottage' });
+    else if (t === 'shops') T.set('stall', { kind: 'kiosk', type: 'stall' });
     else if (t === 'bulldoze') T.set('bulldoze', { size: 3 });
     this.app.select(null);
+  }
+
+  // seats in a restaurant: chairs inside it, or on a terrace within 8 m of it
+  seatsAt(o){
+    const cells = groundCells(o), P = this.P;
+    let n = 0;
+    for (const q of P.s.objects){ const c = CATALOG[q.type] && model(q.type); if (!c || !c.seats) continue; if (cells.some(([x, z]) => Math.abs(x - q.x) < 9 && Math.abs(z - q.z) < 9)) n += c.seats; }
+    return n;
+  }
+  // what a building is for: its inside is fitted out to match (and food places and shops get a menu)
+  useDialog(){
+    const A = this.app, P = this.P, o = P.obj(A.selected); if (!o) return;
+    this.dialog = { title: 'What is ' + o.name + ' for?', lines: ['Its inside is fitted out to match: counters and a menu board for food, shelves for a shop, cubicles and sinks for toilets, beds for first aid. Restaurants get their seats from tables you put in or around them (Shops → Seating).'],
+      buttons: USES.map(([u, l]) => ({ id: 'dlg:' + (u || 'none'), label: l, on: (o.use || '') === u })).concat([{ id: 'dlg:cancel', label: 'Cancel' }]),
+      on: (v) => {
+        if (v === 'cancel') return;
+        const use = v === 'none' ? null : v, f = { use };
+        const theme = (P.landAt(...A.buildingCentre(o)) || {}).theme || 'main';
+        if (['food', 'restaurant', 'shop'].includes(use) && (!o.menu || !o.menu.length || o.use !== use)) f.menu = defaultMenu(use);
+        if (use && (o.name === TEMPLATES[o.tpl]?.name || o.name === 'Building' || !o.name)) f.name = use === 'shop' ? shopName() : use === 'toilets' ? 'Toilets' : use === 'firstaid' ? 'First Aid' : foodName(theme);
+        P.begin('Use'); P.changeObject(o.id, f); P.commit();
+        if (use) this.toast(f.name ? `It's ${f.name} now. Tap Rename to call it something else.` : 'Fitted out.', 'good');
+      } };
+  }
+  // the menu: each thing it could sell, on or off, and its price
+  menuDialog(){
+    const A = this.app, P = this.P, id = A.selected, o = P.obj(id); if (!o) return;
+    const use = o.type === 'stall' ? o.sells : o.use;
+    const draw = () => {
+      const cur = P.obj(id); if (!cur) return;
+      const menu = cur.menu || [];
+      this.dialog = { title: 'Menu: ' + cur.name, lines: [menu.length ? `${menu.length} things on the menu. Tap one to add or take it off; − and + change its price.` : 'Nothing on the menu yet: tap things to add them.'],
+        rows: goodsFor(use).map((g) => { const m = menu.find((x) => x.id === g); return { buttons: [{ id: 'dlg:t-' + g, label: (m ? '✓ ' : '') + GOODS[g].name, on: !!m, wide: true }, { id: 'dlg:d-' + g, label: '−' }, { id: 'dlg:p-' + g, label: price(m ? m.price : GOODS[g].price), plain: true }, { id: 'dlg:u-' + g, label: '+' }] }; }),
+        buttons: [{ id: 'dlg:done', label: 'Done', kind: 'primary' }],
+        on: (v) => {
+          if (v === 'done' || v === 'cancel') return;
+          const [act, g] = [v[0], v.slice(2)], c = P.obj(id); if (!c || !GOODS[g]) return;
+          const menu = (c.menu || []).map((x) => ({ ...x })), m = menu.find((x) => x.id === g);
+          if (act === 't'){ if (m) menu.splice(menu.indexOf(m), 1); else menu.push({ id: g, price: GOODS[g].price }); }
+          else if (act === 'd' || act === 'u'){ if (!m) menu.push({ id: g, price: Math.max(0.5, GOODS[g].price + (act === 'u' ? 0.5 : -0.5)) }); else m.price = Math.min(50, Math.max(0.5, m.price + (act === 'u' ? 0.5 : -0.5))); }
+          else { draw(); return; }
+          P.begin('Menu'); P.changeObject(id, { menu }); P.commit();
+          draw();
+        } };
+    };
+    draw();
+  }
+  // a stall's look: its shape, roof, paint, stripes and what it sells
+  stallDialog(){
+    const A = this.app, P = this.P, id = A.selected;
+    const draw = () => {
+      const o = P.obj(id); if (!o) return;
+      this.dialog = { title: o.name, lines: ['Change its shape, roof and colours, and what it sells.'],
+        rows: [
+          { label: 'Shape', buttons: Object.entries(STALLS).map(([k, st]) => ({ id: 'dlg:k-' + k, label: st.name, on: o.kind === k })) },
+          { label: 'Roof', buttons: STALL_ROOFS.map(([k, l]) => ({ id: 'dlg:r-' + k, label: l, on: o.roof === k })) },
+          { label: 'Paint', buttons: STALL_COLORS.map((c) => ({ id: 'dlg:c-' + c, swatchColor: c, label: '', on: o.color === c })) },
+          { label: 'Stripes', buttons: STALL_COLORS.map((c) => ({ id: 'dlg:s-' + c, swatchColor: c, label: '', on: o.color2 === c })) },
+          { label: 'Sells', buttons: SELLS.map(([k, l]) => ({ id: 'dlg:e-' + k, label: l, on: o.sells === k })) },
+        ],
+        buttons: [{ id: 'dlg:done', label: 'Done', kind: 'primary' }],
+        on: (v) => {
+          if (v === 'done' || v === 'cancel') return;
+          const a = v[0], val = v.slice(2), f = a === 'k' ? { kind: val } : a === 'r' ? { roof: val } : a === 'c' ? { color: val } : a === 's' ? { color2: val } : a === 'e' ? { sells: val, menu: defaultMenu(val) } : null;
+          if (f){ P.begin('Stall'); P.changeObject(id, f); P.commit(); }
+          draw();
+        } };
+    };
+    draw();
+  }
+  // keep a copy of a building or stall in your designs (shared by all your parks)
+  saveDesign(){
+    const A = this.app, o = this.P.obj(A.selected); if (!o) return;
+    this.askName({ title: 'Name this design', value: o.name }).then((n) => {
+      if (!n) return;
+      const data = JSON.parse(JSON.stringify(o)); delete data.id; delete data.x; delete data.z; delete data.r;
+      A.addBlueprint({ name: n, kind: o.type === 'stall' ? 'stall' : 'building', data });
+      this.toast(`Saved to your designs: build it again from the ${o.type === 'stall' ? 'Shops' : 'Buildings'} tab, in any of your parks.`, 'good');
+    });
+  }
+  designsDialog(){
+    const A = this.app, list = A.blueprints || [];
+    this.dialog = { title: 'Your designs', lines: [list.length ? 'Designs are shared by all your parks. Remove the ones you don\'t want.' : 'No designs yet: tap a building or stall and choose Save design.'],
+      rows: list.map((d) => ({ label: d.name, buttons: [{ id: 'dlg:x-' + d.id, label: 'Remove', kind: 'danger' }] })),
+      buttons: [{ id: 'dlg:done', label: 'Done', kind: 'primary' }],
+      on: (v) => { if (v.startsWith('x-')){ A.removeBlueprint(v.slice(2)); this.designsDialog(); } } };
   }
 
   // --- dialogs: same description on screen and in VR -----
@@ -327,6 +445,7 @@ export class UI {
     const input = p.input !== undefined ? `<input id="dlg-input" maxlength="40" value="${esc(p.input)}" autocomplete="off" spellcheck="false">` : '';
     const html = `<div class="pcard"><div class="phead"><h2>${esc(p.title)}</h2>${p.close ? `<button class="x" data-act="${p.close}" aria-label="Close">${ICON.close}</button>` : ''}</div>
       ${p.lines.map((l) => `<p>${esc(l)}</p>`).join('')}${input}
+      ${(p.rows || []).map((r) => `<div class="prow">${r.label ? `<span class="plabel">${esc(r.label)}</span>` : ''}${r.buttons.map((b) => `<button class="pb ${b.kind || ''}${b.on ? ' on' : ''}${b.wide ? ' wide' : ''}${b.plain ? ' plain' : ''}${b.swatchColor && !b.label ? ' swb' : ''}" data-act="${b.id}">${b.swatchColor ? `<i class="sw" style="background:${b.swatchColor}"></i>` : ''}${esc(b.label)}</button>`).join('')}</div>`).join('')}
       <div class="pbtns">${p.buttons.map((b) => `<button class="pb ${b.kind || ''}${b.on ? ' on' : ''}${b.swatchColor && !b.label ? ' swb' : ''}" data-act="${b.id}">${b.swatchColor ? `<i class="sw" style="background:${b.swatchColor}"></i>` : ''}${esc(b.label)}</button>`).join('')}</div></div>`;
     // (don't redraw over a text box being typed in)
     if (p.input !== undefined && this.el('dlg-input') && this.lastHtml.panelTitle === p.title){ const i = this.el('dlg-input'); if (i.value !== p.input && document.activeElement !== i) i.value = p.input; return; }
