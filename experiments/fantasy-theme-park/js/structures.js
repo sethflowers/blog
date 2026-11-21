@@ -187,10 +187,11 @@ function lotRows(D){
   const last = rows.length % 2 ? rows[rows.length - 1] + 12 : rows[rows.length - 1] + 5, shift = (end - last) / 2;
   return rows.map((r) => r + shift);
 }
+const LANE = 2.4;   // a lane down each side of a car park, wide enough for a car (cars drive down it to their aisle)
 // where each bay is (in the park), and which way a car in it faces
 export function lotBays(o){
   const W = o.w * 2, D = o.d * 2, rows = lotRows(D), out = [];
-  rows.forEach((rz, ri) => { for (let x = -W / 2 + 1; x + 2.5 <= W / 2 - 1; x += 2.5) out.push({ x: o.x + x + 1.25, z: o.z + rz + 2.5, yaw: ri % 2 ? -Math.PI / 2 : Math.PI / 2,   /* nose in: the car's length along the bay (its model runs along x) */ aisle: o.z + rz + (ri % 2 ? -3.5 : 8.5) }); });
+  rows.forEach((rz, ri) => { for (let x = -W / 2 + LANE; x + 2.5 <= W / 2 - LANE; x += 2.5) out.push({ x: o.x + x + 1.25, z: o.z + rz + 2.5, yaw: ri % 2 ? -Math.PI / 2 : Math.PI / 2,   /* nose in: the car's length along the bay (its model runs along x) */ aisle: o.z + rz + (ri % 2 ? -3.5 : 8.5) }); });
   return out;
 }
 export function buildLot(o, park){
@@ -207,8 +208,8 @@ export function buildLot(o, park){
   let bays = 0;
   for (let rI = 0; rI < rows.length; rI++){
     const rz = rows[rI];
-    for (let x = -W / 2 + 1; x + 2.5 <= W / 2 - 1; x += 2.5){ line(x, rz + 2.5, 0.1, 4.8); bays++; }
-    line(-W / 2 + 1 + Math.floor((W - 2) / 2.5) * 2.5, rz + 2.5, 0.1, 4.8);
+    for (let x = -W / 2 + LANE; x + 2.5 <= W / 2 - LANE; x += 2.5){ line(x, rz + 2.5, 0.1, 4.8); bays++; }
+    line(-W / 2 + LANE + Math.floor((W - 2 * LANE) / 2.5) * 2.5, rz + 2.5, 0.1, 4.8);
   }
   // lamp posts down the middle
   const glows = [];

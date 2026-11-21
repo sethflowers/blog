@@ -523,7 +523,7 @@ export class Guests {
       // in the car park: along the aisle to the bay's mouth, then straight in, nose first
       // (along the lot's side to the bay's aisle, along the aisle, then in: never sideways across the bays)
       else {
-        if (!car.legs){ const o = L.o, ex = o.x + Math.sign(car.x - o.x || 1) * (o.w - 1.2); car.legs = [[ex, car.z], [ex, car.bay.aisle], [car.bay.x, car.bay.aisle], [car.bay.x, car.bay.z]]; }
+        if (!car.legs){ const o = L.o, ex = o.x + Math.sign(car.x - o.x || 1) * (o.w - 1.25), lz = Math.max(o.z - o.d + 1.5, Math.min(o.z + o.d - 1.5, car.z)); car.legs = [[car.x, lz], [ex, lz], [ex, car.bay.aisle], [car.bay.x, car.bay.aisle], [car.bay.x, car.bay.z]]; }
         while (car.legs.length > 1 && Math.hypot(car.legs[0][0] - car.x, car.legs[0][1] - car.z) < 0.3) car.legs.shift();
         [tx, tz] = car.legs[0];
       }

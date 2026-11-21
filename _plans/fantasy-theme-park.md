@@ -618,5 +618,7 @@ What's in it, and how it works.
   row had no aisle in front of it (its "aisle" was past the kerb), so cars for those bays drove outside
   the lot and over the other bays. Rows are now only laid where their aisle fits, and the rows are
   centred, leaving a lane at each end. (The skip-to-morning test also allows a frame's tick now.)
+- Each car park has a 2.4 m lane down each side (the bays used to start 1 m from the kerb, too narrow for
+  a car), and cars keep to the middle of the end lanes rather than riding on the kerb.
 - Cars driving in wait behind one that came earlier and is just ahead (only earlier ones, so two
   never wait for each other), instead of driving through each other.
