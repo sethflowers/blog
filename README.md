@@ -83,3 +83,7 @@ runs the game forward inside the page instead of waiting for frames, and only dr
 `_tools/alien-hunter/test.mjs` plays Alien Hunter (walking, doors and houses, the X-ray tablet, zapping aliens and people, clearing
 towns, memory, saving) on screen and then in VR (same IWER install; about a minute and a half):
 `NODE_PATH=$(npm root -g) node _tools/alien-hunter/test.mjs out/`.
+`_tools/fantasy-theme-park/test.mjs` builds in Fantasy Theme Park (a new park, paths, plazas, queues, a bridge over new water,
+trees and scenery, shaping the land, a land with its arch, a car park, undo/redo, renaming, walking, night lights, memory,
+saving and opening again) on screen and then in VR (same IWER install; about four minutes, mostly software-rendered
+screenshots; `--full` adds the other landscapes): `NODE_PATH=$(npm root -g) node _tools/fantasy-theme-park/test.mjs out/`.
