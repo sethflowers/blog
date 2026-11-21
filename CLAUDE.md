@@ -25,6 +25,20 @@ particular game.
   to the worker's file list. (Older games still name their cache by hand: bump it when their file list
   changes.)
 
+## Keep experiments out of search engines and AI
+
+Nothing under `/experiments/` should be indexed by search engines or scraped by AI crawlers. `robots.txt`
+already asks crawlers to stay out, and the site header no longer links to the list. On top of that:
+
+- **Every experiment page carries a noindex tag** in its `<head>`, right after the charset meta:
+  `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">`.
+  Put it in every new game, and add it to an existing game the next time you work on it (with its usual
+  version bump). Any other HTML page under `experiments/<name>/` gets it too.
+- Never link to an experiment from the home page, a post or the site header, and don't add a sitemap or
+  SEO plugin that would list them.
+- Keep the `/experiments` rules in `robots.txt` (and add any new AI crawler names there) rather than
+  weakening them.
+
 ## Every new game: one page, iPad and VR
 
 Unless the user says otherwise, a new game is a **PWA that plays on an iPad (touch) and in a VR headset

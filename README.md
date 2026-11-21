@@ -52,6 +52,9 @@ Standalone pages (games, toys, demos) live in `_experiments/` and are listed at 
    ---
    {% raw %}
    <!DOCTYPE html>
+   <head>
+     <meta charset="utf-8">
+     <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
    ...your whole page...
    {% endraw %}
    ```
@@ -60,6 +63,8 @@ Standalone pages (games, toys, demos) live in `_experiments/` and are listed at 
    block, so it has to step out of it). Every existing experiment has a small `build-version` tag in a corner of
    its title screen. **Bump `version` every time the game changes**, so it's easy to tell an update has arrived
    (the service workers serve the cached copy first, so an update shows on the second open).
+   Keep the `robots` meta tag above in every experiment: nothing under `/experiments/` should be indexed
+   by search engines or scraped by AI crawlers (`robots.txt` asks the same).
 4. Push. It's published at `/experiments/my-thing/` and appears on `/experiments/` automatically.
 
 ## Tests
