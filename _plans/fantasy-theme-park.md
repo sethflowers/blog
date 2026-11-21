@@ -607,3 +607,10 @@ What's in it, and how it works.
   diagonally), and leave properly: back out into the aisle, then drive forwards back along the route
   they came in by (they used to reverse all the way to the highway, straight through anything).
   Test: every parked car lies along its bay, nose in.
+
+## Version 2.2: Cars in the car park (fixed)
+
+- The screenshot of the car park still showed cars across the bays: the ones driving in. On reaching the
+  lot they made straight for their bay's aisle, sliding sideways over the rows of bays. Now they drive
+  down the lot's side (1.2 m in from the kerb) to their aisle, along it, then turn in. Test: a car inside
+  a car park heading along x is always in an aisle.

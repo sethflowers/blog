@@ -521,8 +521,12 @@ export class Guests {
       if (k < 0){ tx = cellX(car.cell % N); tz = cellX(Math.floor(car.cell / N)); }
       else if (f[k] > 0 && f[k] < FAR){ const i = k % N, j = (k - i) / N; let best = f[k], nk = k; for (const [di, dj] of DIRS){ const kk = (j + dj) * N + i + di; if (kk >= 0 && kk < N * N && f[kk] < best){ best = f[kk]; nk = kk; } } tx = cellX(nk % N); tz = cellX(Math.floor(nk / N)); }
       // in the car park: along the aisle to the bay's mouth, then straight in, nose first
-      else if (!car.atAisle){ tx = car.bay.x; tz = car.bay.aisle; if (Math.hypot(tx - car.x, tz - car.z) < 0.3) car.atAisle = true; }
-      else { tx = car.bay.x; tz = car.bay.z; }
+      // (along the lot's side to the bay's aisle, along the aisle, then in: never sideways across the bays)
+      else {
+        if (!car.legs){ const o = L.o, ex = o.x + Math.sign(car.x - o.x || 1) * (o.w - 1.2); car.legs = [[ex, car.z], [ex, car.bay.aisle], [car.bay.x, car.bay.aisle], [car.bay.x, car.bay.z]]; }
+        while (car.legs.length > 1 && Math.hypot(car.legs[0][0] - car.x, car.legs[0][1] - car.z) < 0.3) car.legs.shift();
+        [tx, tz] = car.legs[0];
+      }
       const dx = tx - car.x, dz = tz - car.z, d = Math.hypot(dx, dz);
       // (where it went, so it can leave the same way)
       if (!car.trail) car.trail = [[car.x, car.z]];

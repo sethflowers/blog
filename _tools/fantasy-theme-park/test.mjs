@@ -595,6 +595,14 @@ await ev('__ftp.park.s.time = 9 * 60; __ftp.timeScale = 8; __ftp.speed = 4');
 const arrived = await pg.waitForFunction(() => __ftp.guests.summary().inPark >= 15, null, { timeout: 90000 }).then(() => true, () => false);
 check(arrived, `guests arrive by car and come in through the gate (${await ev('__ftp.guests.summary().inPark')} in the park, ${await ev('__ftp.guests.cars.length')} cars)`);
 // (reported: parked cars were sideways) a parked car lies along its bay, nose in from the aisle
+{ let bad = 0, seen = 0;
+  for (let k = 0; k < 12; k++){
+    const r = await ev(`(() => { let bad = 0, seen = 0; for (const c of __ftp.guests.cars){ if (c.state !== 'in' || !c.legs) continue; const o = c.lot.o; if (Math.abs(c.x - o.x) > o.w - 0.5 || Math.abs(c.z - o.z) > o.d) continue;
+      seen++; const acrossX = Math.abs(Math.cos(c.yaw)) > 0.7;   // heading along x
+      if (acrossX && !c.lot.bays.some((b) => Math.abs(b.aisle - c.z) < 1.5)) bad++; } return { bad, seen }; })()`);
+    bad += r.bad; seen += r.seen; await wait(250);
+  }
+  check(bad === 0, `cars in a car park drive along the aisles, not sideways across the bays (${seen} looked at)`); }
 { const pc = await ev(`(() => { const c = __ftp.guests.cars.filter((c) => c.state === 'parked'); return c.map((c) => ({ yaw: c.yaw, nose: Math.sign(c.bay.aisle - c.bay.z) })); })()`);
   // (the car model runs along +x; turned by yaw its nose points along (cos yaw, -sin yaw))
   check(pc.length > 0 && pc.every((c) => Math.abs(Math.cos(c.yaw)) < 0.05 && Math.sign(-Math.sin(c.yaw)) === -c.nose), `parked cars lie along their bays, nose in (${pc.length} parked)`); }
