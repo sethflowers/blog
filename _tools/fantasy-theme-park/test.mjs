@@ -594,6 +594,10 @@ await ev('__ftp.park.s.money = 40000');
 await ev('__ftp.park.s.time = 9 * 60; __ftp.timeScale = 8; __ftp.speed = 4');
 const arrived = await pg.waitForFunction(() => __ftp.guests.summary().inPark >= 15, null, { timeout: 90000 }).then(() => true, () => false);
 check(arrived, `guests arrive by car and come in through the gate (${await ev('__ftp.guests.summary().inPark')} in the park, ${await ev('__ftp.guests.cars.length')} cars)`);
+// (reported: parked cars were sideways) a parked car lies along its bay, nose in from the aisle
+{ const pc = await ev(`(() => { const c = __ftp.guests.cars.filter((c) => c.state === 'parked'); return c.map((c) => ({ yaw: c.yaw, nose: Math.sign(c.bay.aisle - c.bay.z) })); })()`);
+  // (the car model runs along +x; turned by yaw its nose points along (cos yaw, -sin yaw))
+  check(pc.length > 0 && pc.every((c) => Math.abs(Math.cos(c.yaw)) < 0.05 && Math.sign(-Math.sin(c.yaw)) === -c.nose), `parked cars lie along their bays, nose in (${pc.length} parked)`); }
 const rode = await pg.waitForFunction(() => __ftp.guests.list.some((g) => g.rides > 0), null, { timeout: 90000 }).then(() => true, () => false);
 check(rode, 'they queue for the carousel and ride it');
 const spent = await pg.waitForFunction(() => { const d = __ftp.park.s.fin[__ftp.park.s.fin.length - 1]; return d.income.entry > 0 && d.income.food > 0; }, null, { timeout: 90000 }).then(() => true, () => false);

@@ -598,3 +598,12 @@ What's in it, and how it works.
   Photos shows them and saves one when tapped. (Screen only: in the headset it says so.)
 - **Headset performance**: fixed foveation 0.7 and 10 realistic people near you instead of 22.
 - Help now covers rides, guests and showtime. The fireworks site's materials are shared by every site.
+
+## Version 2.1: Parked cars (fixed)
+
+- Reported: parked cars were sideways. The car model runs along x (its heading is `yaw + π/2`), but the
+  bays gave a yaw of 0 or π, which laid each car across its bay. Bays now give ±π/2, nose in from the
+  aisle. Cars also drive along the aisle to the bay's mouth before turning in (they used to cut across
+  diagonally), and leave properly: back out into the aisle, then drive forwards back along the route
+  they came in by (they used to reverse all the way to the highway, straight through anything).
+  Test: every parked car lies along its bay, nose in.

@@ -520,15 +520,28 @@ export class Guests {
       let tx, tz;
       if (k < 0){ tx = cellX(car.cell % N); tz = cellX(Math.floor(car.cell / N)); }
       else if (f[k] > 0 && f[k] < FAR){ const i = k % N, j = (k - i) / N; let best = f[k], nk = k; for (const [di, dj] of DIRS){ const kk = (j + dj) * N + i + di; if (kk >= 0 && kk < N * N && f[kk] < best){ best = f[kk]; nk = kk; } } tx = cellX(nk % N); tz = cellX(Math.floor(nk / N)); }
+      // in the car park: along the aisle to the bay's mouth, then straight in, nose first
+      else if (!car.atAisle){ tx = car.bay.x; tz = car.bay.aisle; if (Math.hypot(tx - car.x, tz - car.z) < 0.3) car.atAisle = true; }
       else { tx = car.bay.x; tz = car.bay.z; }
       const dx = tx - car.x, dz = tz - car.z, d = Math.hypot(dx, dz);
+      // (where it went, so it can leave the same way)
+      if (!car.trail) car.trail = [[car.x, car.z]];
+      const last = car.trail[car.trail.length - 1]; if (Math.hypot(last[0] - car.x, last[1] - car.z) > 3) car.trail.push([car.x, car.z]);
       if (d < 0.3 && tx === car.bay.x && tz === car.bay.z){ car.state = 'parked'; car.yaw = car.bay.yaw; this.unpark(car); return; }
       if (d > 0.01){ car.x += dx / d * Math.min(d, sp); car.z += dz / d * Math.min(d, sp); car.yaw = Math.atan2(dx, dz) - Math.PI / 2; }
     } else if (car.state === 'out'){
       // back out to the road, then off to the highway
-      car.t += dt; car.z += sp; car.yaw = -Math.PI / 2 + Math.PI;
+      // back out of the bay into the aisle (facing the bay), then drive forward the way it came, then off up the highway
+      car.t += dt;
+      if (!car.backed){ const tz = car.bay.aisle, d = tz - car.z; car.yaw = car.bay.yaw; if (Math.abs(d) < 0.2){ car.backed = true; car.trail = car.trail || []; } else car.z += Math.sign(d) * Math.min(Math.abs(d), sp * 0.4); }
+      else {
+        const t = car.trail.length ? car.trail[car.trail.length - 1] : [car.x, HALF + 40];
+        const dx = t[0] - car.x, dz = t[1] - car.z, d = Math.hypot(dx, dz);
+        if (d < 0.5){ if (car.trail.length) car.trail.pop(); else car.state = 'gone'; }
+        else { car.x += dx / d * Math.min(d, sp); car.z += dz / d * Math.min(d, sp); car.yaw = Math.atan2(dx, dz) - Math.PI / 2; }
+      }
       if (car.t > 0.5 && car.bay.car === car) car.bay.car = null;
-      if (car.z > HALF + 30 || car.t > 40) car.state = 'gone';
+      if (car.z > HALF + 30 || car.t > 60) car.state = 'gone';
     }
     void P;
   }

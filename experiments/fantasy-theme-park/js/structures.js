@@ -181,7 +181,7 @@ function lotRows(D){ const rows = []; let z = -D / 2 + 0.4; while (z + 5 <= D / 
 // where each bay is (in the park), and which way a car in it faces
 export function lotBays(o){
   const W = o.w * 2, D = o.d * 2, rows = lotRows(D), out = [];
-  rows.forEach((rz, ri) => { for (let x = -W / 2 + 1; x + 2.5 <= W / 2 - 1; x += 2.5) out.push({ x: o.x + x + 1.25, z: o.z + rz + 2.5, yaw: ri % 2 ? Math.PI : 0, aisle: o.z + rz + (ri % 2 ? -3.5 : 8.5) }); });
+  rows.forEach((rz, ri) => { for (let x = -W / 2 + 1; x + 2.5 <= W / 2 - 1; x += 2.5) out.push({ x: o.x + x + 1.25, z: o.z + rz + 2.5, yaw: ri % 2 ? -Math.PI / 2 : Math.PI / 2,   /* nose in: the car's length along the bay (its model runs along x) */ aisle: o.z + rz + (ri % 2 ? -3.5 : 8.5) }); });
   return out;
 }
 export function buildLot(o, park){
