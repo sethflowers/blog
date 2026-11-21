@@ -487,13 +487,16 @@ await ev(`__ftp.park.s.time = 11 * 60`);
   check(await ev('__ftp.show.showT') >= 0, 'at 9 pm the nightly fireworks show starts');
   await ev('__ftp.show.showT = -1; __ftp.ui.act("deselect")');
   // weather: a wet day
-  await ev(`(() => { const S = __ftp.park.s; S.time = 12 * 60; S.weather = { day: S.day, kind: 'rain', from: 0, to: 24 }; })()`);
+  await ev(`(() => { const S = __ftp.park.s; S.time = 12 * 60; S.weather = { day: S.day, kind: 'sunny', from: 0, to: 0 }; __ftp.speed = 0; })()`);
+  await pg.waitForFunction(`__ftp.show.cloud < 0.02`, null, { timeout: 30000 }).catch(() => {});
+  const sun0 = await ev('__ftp.sky.sun.intensity');
+  await ev(`(() => { const S = __ftp.park.s; S.weather = { day: S.day, kind: 'rain', from: 0, to: 24 }; })()`);
   await pg.waitForFunction(`__ftp.show.wet > 0.6 && __ftp.show.cloud > 0.75`, null, { timeout: 30000 }).catch(() => {});
-  check(await ev("__ftp.show.rain.visible") && await ev("__ftp.sky.sun.intensity") < 1.4, `(sun ${(await ev("__ftp.sky.sun.intensity")).toFixed(2)}) ` + 'on a rainy day it rains, and the sun is dimmed');
+  check(await ev("__ftp.show.rain.visible") && await ev("__ftp.sky.sun.intensity") < sun0 * 0.6, `(sun ${sun0.toFixed(2)} → ${(await ev("__ftp.sky.sun.intensity")).toFixed(2)}) ` + 'on a rainy day it rains, and the sun is dimmed');
   await ev('__ftp.ui.drawTop()');
   check((await ev(`document.getElementById('t-time').textContent`)).includes('rain'), 'the clock says it\'s raining');
   await shot('06b-rain');
-  await ev(`(() => { const S = __ftp.park.s; S.weather = { day: S.day, kind: 'sunny', from: 0, to: 0 }; })()`);
+  await ev(`(() => { const S = __ftp.park.s; S.weather = { day: S.day, kind: 'sunny', from: 0, to: 0 }; __ftp.speed = 1; })()`);
   // the map
   await ev('__ftp.ui.act("parkmap"); __ftp.ui.refresh()');
   check(await ev(`!!document.querySelector('.pmap img') && document.querySelectorAll('.maplab').length > 3`), `the park map shows the park from above with names on it (${await ev("document.querySelectorAll('.maplab').length")})`);
