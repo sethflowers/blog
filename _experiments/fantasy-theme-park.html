@@ -1,0 +1,294 @@
+---
+title: Fantasy Theme Park
+description: Build whole theme parks of your own - lay out the land, paths, lakes and car parks, plant woods, split it into named lands with arches over the paths, name everything - then walk round it. On an iPad, a computer or in VR.
+date: 2026-11-20
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#14171c">
+<meta name="apple-mobile-web-app-title" content="Theme Park">
+<link rel="manifest" href="/experiments/fantasy-theme-park/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/fantasy-theme-park/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/fantasy-theme-park/icon-192.png">
+<title>Fantasy Theme Park</title>
+<style>
+  :root{ --gold:#e2bd6a; --gold2:#c8983a; --ink:#f3eee3; --dim:#b9b2a4; --glass:rgba(20,23,29,.78); --glass2:rgba(34,38,46,.92); --line:rgba(255,255,255,.09);
+    --serif: "New York", ui-serif, "Iowan Old Style", Georgia, "Times New Roman", serif; --sans: -apple-system, system-ui, "SF Pro Text", "Avenir Next", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --sl: env(safe-area-inset-left); --sr: env(safe-area-inset-right); --st: env(safe-area-inset-top); --sb: env(safe-area-inset-bottom); }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#14171c;color:var(--ink);font-family:var(--sans);-webkit-user-select:none;user-select:none;-webkit-font-smoothing:antialiased;}
+  canvas#view{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;}
+  button{font-family:inherit;cursor:pointer;color:inherit;}
+  svg{display:block;}
+  /* --- title --- */
+  #title{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;justify-content:flex-end;padding:calc(28px + var(--st)) calc(32px + var(--sr)) calc(34px + var(--sb)) calc(36px + var(--sl));
+    background:linear-gradient(180deg,rgba(10,12,16,.0) 0%,rgba(10,12,16,.05) 40%,rgba(10,12,16,.82) 100%);}
+  #title.hidden{display:none;}
+  .t-main{max-width:640px;}
+  .t-kicker{font:600 13px/1 var(--sans);letter-spacing:.32em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;text-shadow:0 1px 8px rgba(0,0,0,.6);}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(44px,8.2vw,96px);line-height:.95;letter-spacing:-.01em;color:#fbf6ea;text-shadow:0 2px 30px rgba(0,0,0,.55);}
+  h1 em{font-style:italic;color:var(--gold);font-weight:500;}
+  .t-sub{margin:16px 0 26px;font-size:clamp(16px,2vw,19px);line-height:1.45;color:#e8e2d4;max-width:520px;text-shadow:0 1px 10px rgba(0,0,0,.7);}
+  .t-btns{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch;}
+  .tb{border:1px solid rgba(255,255,255,.16);background:rgba(22,25,31,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:14px;padding:15px 22px;font-size:17px;font-weight:600;letter-spacing:.01em;min-height:56px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;}
+  .tb small{display:block;font-weight:500;font-size:12.5px;color:var(--dim);margin-top:3px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tb.primary{background:linear-gradient(180deg,#ecc979,#c9993c);border-color:rgba(255,230,170,.6);color:#1e1606;box-shadow:0 10px 30px rgba(200,152,58,.28);}
+  .tb.primary small{color:#4a3814;}
+  .tb:active{transform:translateY(1px);} .tb:disabled{opacity:.45;cursor:default;}
+  .t-foot{margin-top:22px;display:flex;gap:18px;align-items:center;flex-wrap:wrap;font-size:13px;color:#d8d2c4;text-shadow:0 1px 6px #000;}
+  #offline{color:#a8dca0;}
+  .t-foot label{cursor:pointer;text-decoration:underline;text-underline-offset:3px;opacity:.85;}
+  .build-version{position:fixed;right:calc(14px + var(--sr));bottom:calc(10px + var(--sb));font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.7;pointer-events:none;z-index:21;}
+  /* --- sheets over the title (parks, new park) --- */
+  .sheet{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;padding:calc(16px + var(--st)) calc(16px + var(--sr)) calc(16px + var(--sb)) calc(16px + var(--sl));background:rgba(8,10,13,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  .sheet.show{display:flex;}
+  .sh-card{width:min(880px,100%);max-height:100%;display:flex;flex-direction:column;background:var(--glass2);border:1px solid var(--line);border-radius:22px;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden;}
+  .sh-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 24px 14px;}
+  .sh-head h2{font-family:var(--serif);font-weight:600;font-size:28px;}
+  .sh-body{overflow-y:auto;padding:4px 24px 24px;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  .btn{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);border-radius:11px;padding:11px 16px;font-weight:600;font-size:15px;}
+  .btn.primary{background:linear-gradient(180deg,#ecc979,#c9993c);color:#1e1606;border-color:transparent;}
+  .btn.danger{color:#f0a090;}
+  #parks-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
+  .pk{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:16px;overflow:hidden;}
+  .pk-open{display:block;width:100%;text-align:left;border:0;background:none;padding:0 0 12px;}
+  .pk-open img,.pk-none{display:block;width:100%;aspect-ratio:5/3;object-fit:cover;background:linear-gradient(135deg,#2a3a2a,#3a4a5a);}
+  .pk-open b{display:block;font-family:var(--serif);font-size:19px;padding:12px 14px 2px;}
+  .pk-open small{display:block;padding:0 14px;color:var(--dim);font-size:13px;}
+  .pk-acts{display:flex;gap:8px;padding:0 12px 12px;}
+  .pk-acts button{flex:1;border:1px solid var(--line);background:rgba(255,255,255,.05);border-radius:9px;padding:8px;font-size:13px;font-weight:600;}
+  .pk-acts .danger{color:#f0a090;}
+  .none{color:var(--dim);}
+  .np-row{display:flex;gap:10px;margin:6px 0 18px;}
+  #np-name{flex:1;min-width:0;font:600 22px var(--serif);padding:13px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.3);color:#fff;-webkit-user-select:text;user-select:text;}
+  .lbl{font:700 12px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:4px 0 10px;}
+  #np-lands{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;}
+  .np-land{text-align:left;border:1px solid var(--line);background:rgba(255,255,255,.04);border-radius:14px;padding:14px;}
+  .np-land b{display:block;font-family:var(--serif);font-size:18px;margin-bottom:4px;} .np-land small{color:var(--dim);font-size:13px;line-height:1.35;}
+  .np-land.on{border-color:var(--gold);background:rgba(226,189,106,.14);}
+  .np-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;align-items:center;}
+  #np-msg{color:#f0a090;margin-right:auto;font-size:14px;}
+  /* --- HUD --- */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
+  body.playing #hud{display:block;}
+  .glass{background:var(--glass);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);border:1px solid var(--line);box-shadow:0 8px 30px rgba(0,0,0,.25);}
+  #top-l{position:absolute;left:calc(12px + var(--sl));top:calc(10px + var(--st));border-radius:16px;padding:10px 12px 10px 16px;display:flex;align-items:center;gap:14px;pointer-events:auto;}
+  #t-name{font-family:var(--serif);font-weight:600;font-size:19px;max-width:34vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+  #t-time{font-size:12.5px;color:var(--dim);margin-top:2px;font-variant-numeric:tabular-nums;}
+  #t-speed{display:flex;gap:2px;}
+  .ib{border:0;background:none;width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--dim);}
+  .ib svg{width:20px;height:20px;} .ib.on{background:rgba(226,189,106,.2);color:var(--gold);}
+  #top-r{position:absolute;right:calc(12px + var(--sr));top:calc(10px + var(--st));display:flex;gap:8px;pointer-events:auto;}
+  .hb{border-radius:14px;height:48px;min-width:48px;padding:0 12px;display:flex;align-items:center;gap:7px;font-size:14px;font-weight:600;color:var(--ink);}
+  .hb:disabled{opacity:.35;}
+  .hb:active{background:rgba(226,189,106,.3);}
+  #dock{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(10px + var(--sb));width:min(980px,calc(100vw - 24px - var(--sl) - var(--sr)));display:flex;flex-direction:column;gap:8px;pointer-events:none;}
+  body.walking #dock{display:none;}
+  #tray{pointer-events:auto;border-radius:18px;padding:8px 12px 10px;max-height:30vh;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  #tray.empty{display:none;}
+  .hint{font-family:var(--serif);font-style:italic;font-size:15px;color:#e6dfcf;padding:2px 2px 6px;}
+  .sec{margin-top:6px;} .sec h4{font:700 11px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin:6px 2px 6px;}
+  .items{display:flex;flex-wrap:wrap;gap:7px;}
+  .sec.cards .items{flex-wrap:nowrap;overflow-x:auto;touch-action:pan-x;padding-bottom:4px;scrollbar-width:none;}
+  .sec.cards .items::-webkit-scrollbar{display:none;}
+  .card{flex:0 0 auto;width:88px;border:1px solid var(--line);background:rgba(255,255,255,.05);border-radius:14px;padding:6px 6px 8px;text-align:center;}
+  .card img{display:block;width:74px;height:58px;object-fit:contain;margin:0 auto 4px;border-radius:9px;}
+  .card img[src^="data:image/jpeg"]{object-fit:cover;}
+  .card b{display:block;font-size:12.5px;font-weight:600;line-height:1.2;}
+  .card small{display:block;font-size:11px;color:var(--dim);margin-top:2px;}
+  .card .sw{display:block;width:74px;height:44px;margin:4px auto 8px;border-radius:9px;}
+  .card.on{border-color:var(--gold);background:rgba(226,189,106,.16);box-shadow:inset 0 0 0 1px var(--gold);}
+  .chip{border:1px solid var(--line);background:rgba(255,255,255,.06);border-radius:999px;padding:9px 15px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px;min-height:40px;}
+  .chip.on{background:var(--gold);color:#1e1606;border-color:var(--gold);}
+  .sw{display:inline-block;width:20px;height:20px;border-radius:6px;border:1px solid rgba(255,255,255,.25);}
+  #tabs{pointer-events:auto;display:flex;border-radius:18px;padding:5px;gap:2px;}
+  .tab{flex:1;border:0;background:none;border-radius:13px;padding:7px 2px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:600;color:var(--dim);min-height:52px;}
+  .tab svg{width:22px;height:22px;} .tab.on{background:rgba(226,189,106,.18);color:var(--gold);}
+  /* panel: what's selected (side card) or a dialog (centred, over a dimmed park) */
+  #panel{position:fixed;z-index:12;right:calc(12px + var(--sr));top:calc(70px + var(--st));width:min(340px,calc(100vw - 24px));display:none;}
+  #panel.show{display:block;}
+  #panel.modal{inset:0;width:auto;display:flex;align-items:center;justify-content:center;background:rgba(8,10,13,.45);padding:16px;}
+  .pcard{background:var(--glass2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:18px;padding:16px 18px 18px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:100%;max-width:520px;max-height:84vh;overflow-y:auto;}
+  .phead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px;}
+  .phead h2{font-family:var(--serif);font-weight:600;font-size:23px;line-height:1.15;}
+  .phead .x{border:0;background:rgba(255,255,255,.08);width:36px;height:36px;border-radius:10px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+  .pcard p{font-size:14.5px;line-height:1.45;color:#ddd6c8;margin:6px 0;}
+  #dlg-input{width:100%;margin:10px 0 4px;font:600 20px var(--serif);padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.3);color:#fff;-webkit-user-select:text;user-select:text;}
+  .pbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .pb{border:1px solid var(--line);background:rgba(255,255,255,.07);border-radius:11px;padding:10px 14px;font-size:14.5px;font-weight:600;display:flex;align-items:center;gap:7px;}
+  .pb.primary{background:linear-gradient(180deg,#ecc979,#c9993c);color:#1e1606;border-color:transparent;}
+  .pb.danger{color:#f4a494;border-color:rgba(240,140,120,.35);}
+  .pb.on{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
+  .pb.swb{padding:8px;} .pb.swb .sw{width:26px;height:26px;}
+  #toasts{position:absolute;left:50%;transform:translateX(-50%);top:calc(70px + var(--st));width:min(560px,80vw);display:flex;flex-direction:column;gap:6px;align-items:center;}
+  .toast{background:rgba(20,23,29,.88);border:1px solid var(--line);border-radius:12px;padding:9px 16px;font-size:14.5px;text-align:center;animation:pop .22s ease-out;box-shadow:0 8px 24px rgba(0,0,0,.3);}
+  .toast.good{border-color:rgba(140,220,140,.45);} .toast.bad{border-color:rgba(240,130,110,.55);color:#ffd8d0;}
+  @keyframes pop{from{transform:translateY(-6px);opacity:0}to{transform:none;opacity:1}}
+  #stick{position:fixed;width:120px;height:120px;border-radius:60px;border:2px solid rgba(255,255,255,.45);background:rgba(20,23,29,.3);display:none;pointer-events:none;z-index:6;}
+  #stick.on{display:block;}
+  #knob{position:absolute;left:35px;top:35px;width:50px;height:50px;border-radius:25px;background:rgba(243,238,227,.8);}
+  #stick-hint{position:absolute;left:calc(28px + var(--sl));bottom:calc(28px + var(--sb));width:112px;height:112px;border-radius:56px;border:2px dashed rgba(255,255,255,.35);font-size:12px;display:none;align-items:center;justify-content:center;text-align:center;color:#ddd;}
+  body.walking #stick-hint{display:flex;}
+  @media (hover:hover) and (pointer:fine){ body.walking #stick-hint{display:none;} }
+  @media (max-width:700px){ .tab span{display:none;} .tab{min-height:44px;} #t-speed .ib{width:32px;} #t-name{max-width:40vw;} .hb span{display:none;} #panel:not(.modal){top:auto;bottom:calc(150px + var(--sb));} }
+  @media (max-height:520px){ #tray{max-height:30vh;} }
+  /* --- loading screen (see "Loading screen" in CLAUDE.md) --- */
+  #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:radial-gradient(120% 90% at 50% 30%,#232a33 0%,#12151a 70%);color:#fff;transition:opacity .45s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .ld-box{width:min(440px,100%);text-align:center;}
+  .ld-k{font:600 12px var(--sans);letter-spacing:.32em;text-transform:uppercase;color:var(--gold);margin-bottom:10px;}
+  .ld-name{font-family:var(--serif);font-weight:600;font-size:clamp(34px,7vw,54px);line-height:1;margin-bottom:28px;}
+  .ld-spin{width:52px;height:52px;margin:0 auto 24px;border-radius:50%;border:5px solid rgba(255,255,255,.12);border-top-color:var(--gold);animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg)}}
+  .ld-bar{height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden;}
+  #ld-fill{display:block;height:100%;width:3%;background:linear-gradient(90deg,#c9993c,#ecc979);border-radius:4px;transition:width .3s;}
+  #ld-text{margin-top:14px;font-size:16px;min-height:22px;font-variant-numeric:tabular-nums;}
+  #ld-note{margin-top:6px;font-size:14px;min-height:18px;opacity:.8;}
+  #ld-retry{display:none;margin:16px auto 0;padding:12px 26px;border:0;border-radius:12px;font-weight:700;font-size:17px;background:var(--gold);color:#1e1606;}
+  .ld-ver{margin-top:22px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.55;}
+</style>
+<!-- the offline copy is saved straight away (not once the page has loaded: building the park takes a
+     while on an iPad, and closing it before then used to leave nothing saved for offline) -->
+<script>
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/fantasy-theme-park/sw.js?v={% endraw %}{{ page.version }}{% raw %}', { scope: '/experiments/fantasy-theme-park/', updateViaCache: 'none' }).catch(function(){});
+  if ((navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches)) && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+</script>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "three": "/experiments/fantasy-theme-park/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/lib/three.core.min.js": "/experiments/fantasy-theme-park/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/audio.js": "/experiments/fantasy-theme-park/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/highway.js": "/experiments/fantasy-theme-park/js/highway.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/icons.js": "/experiments/fantasy-theme-park/js/icons.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/materials.js": "/experiments/fantasy-theme-park/js/materials.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/models.js": "/experiments/fantasy-theme-park/js/models.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/names.js": "/experiments/fantasy-theme-park/js/names.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/objects.js": "/experiments/fantasy-theme-park/js/objects.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/park.js": "/experiments/fantasy-theme-park/js/park.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/paths.js": "/experiments/fantasy-theme-park/js/paths.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/sky.js": "/experiments/fantasy-theme-park/js/sky.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/store.js": "/experiments/fantasy-theme-park/js/store.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/structures.js": "/experiments/fantasy-theme-park/js/structures.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/terrain.js": "/experiments/fantasy-theme-park/js/terrain.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/thumbs.js": "/experiments/fantasy-theme-park/js/thumbs.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/tools.js": "/experiments/fantasy-theme-park/js/tools.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/ui.js": "/experiments/fantasy-theme-park/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/util.js": "/experiments/fantasy-theme-park/js/util.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/vr.js": "/experiments/fantasy-theme-park/js/vr.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<div id="loading" role="status" aria-live="polite">
+  <div class="ld-box">
+    <div class="ld-k">Welcome to</div>
+    <div class="ld-name">Fantasy Theme Park</div>
+    <div class="ld-spin"></div>
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <div id="ld-text">Loading…</div>
+    <div id="ld-note"></div>
+    <button id="ld-retry" type="button">Try again</button>
+    <div class="ld-ver">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L = document.getElementById('loading'), fill = document.getElementById('ld-fill'), txt = document.getElementById('ld-text'),
+      note = document.getElementById('ld-note'), retry = document.getElementById('ld-retry');
+  var MAIN = '/experiments/fantasy-theme-park/js/main.js', BUILD = 'Building the park…';
+  // the files to wait for: everything in the import map plus main.js (three.js counts for more: it is most of the download)
+  var want = {}, total = 0, have = 0, got = {}, bytes = 0, shown = 3, building = false, done = false, failed = false, t0 = Date.now();
+  function add(u){ var p = u.split('?')[0]; if (!want[p]){ want[p] = /\/lib\//.test(p) ? 10 : 1; total += want[p]; } }
+  try { var m = JSON.parse(document.querySelector('script[type=importmap]').textContent).imports; for (var k in m) add(m[k]); } catch (e) {}
+  add(MAIN);
+  function mb(){ return bytes > 0 ? ' · ' + (bytes / 1048576).toFixed(1) + ' MB' : ''; }
+  function show(p, t){ if (p > shown) shown = p; fill.style.width = shown + '%'; if (txt.textContent !== t) txt.textContent = t; }
+  function tick(){
+    if (done || failed) return;
+    try { performance.getEntriesByType('resource').forEach(function(e){ var p; try { p = new URL(e.name).pathname; } catch (x) { return; } if (want[p] && !got[p]){ got[p] = 1; have += want[p]; bytes += (e.encodedBodySize || e.transferSize || 0); } }); } catch (e) {}
+    var f = total ? have / total : 0;
+    if (building || f >= 1) show(Math.min(97, shown + (97 - shown) * 0.03), BUILD);
+    else { show(3 + 82 * f, ''); txt.textContent = 'Loading… ' + Math.round(shown) + '%' + mb(); }
+    if (Date.now() - t0 > 20000 && !note.textContent){ note.textContent = 'Still going: a slow connection can take a minute.'; retry.style.display = 'inline-block'; }
+  }
+  var iv = setInterval(tick, 150); tick();
+  retry.onclick = function(){ location.reload(); };
+  window.__loading = function(){
+    building = true; tick();
+    return new Promise(function(r){ setTimeout(r, 120); requestAnimationFrame(function(){ setTimeout(r, 0); }); });
+  };
+  window.__loaded = function(){
+    if (done) return; done = true; clearInterval(iv);
+    show(100, 'Ready'); note.textContent = ''; retry.style.display = 'none';
+    var hide = function(){ L.classList.add('done'); setTimeout(function(){ L.style.display = 'none'; }, 480); };
+    requestAnimationFrame(function(){ requestAnimationFrame(hide); }); setTimeout(hide, 700);
+  };
+  window.__loadFailed = function(why){
+    if (done || failed) return; failed = true; clearInterval(iv);
+    txt.textContent = 'Something went wrong while loading.'; note.textContent = why ? String(why).slice(0, 160) : '';
+    retry.style.display = 'inline-block';
+  };
+  addEventListener('error', function(e){ if (!done && e && e.message) window.__loadFailed(e.message); });
+  addEventListener('unhandledrejection', function(e){ if (!done) window.__loadFailed(e && e.reason && e.reason.message || 'The park could not be built.'); });
+})();
+</script>
+<div id="title" class="hidden">
+  <div class="t-main">
+    <div class="t-kicker">Design · Name · Explore</div>
+    <h1>Fantasy <em>Theme</em> Park</h1>
+    <p class="t-sub">Shape the land, lay the paths, plant the woods and raise the gates. Name every land and every corner of it, then walk through the park you made.</p>
+    <div class="t-btns">
+      <button id="b-continue" class="tb primary">Continue</button>
+      <button id="b-parks" class="tb">Your parks</button>
+      <button id="b-new" class="tb">New park</button>
+      <button id="b-vr" class="tb" disabled>Play in VR</button>
+    </div>
+    <div class="t-foot"><span id="offline"></span><label>Open a park file…<input id="import-file" type="file" accept=".json,application/json" hidden></label></div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="parks" class="sheet"><div class="sh-card">
+  <div class="sh-head"><h2>Your parks</h2><div style="display:flex;gap:8px"><button id="parks-new" class="btn primary">New park</button><button id="parks-close" class="btn">Close</button></div></div>
+  <div class="sh-body"><div id="parks-list"></div></div>
+</div></div>
+<div id="newpark" class="sheet"><div class="sh-card">
+  <div class="sh-head"><h2>A new park</h2></div>
+  <div class="sh-body">
+    <div class="lbl">Its name</div>
+    <div class="np-row"><input id="np-name" maxlength="40" autocomplete="off" spellcheck="false"><button id="np-dice" class="btn">Suggest a name</button></div>
+    <div class="lbl">The land</div>
+    <div id="np-lands"></div>
+    <div class="np-foot"><span id="np-msg"></span><button id="np-cancel" class="btn">Cancel</button><button id="np-go" class="btn primary">Build it</button></div>
+  </div>
+</div></div>
+<div id="hud">
+  <div id="top-l" class="glass"><div><div id="t-name" data-act="renamepark"></div><div id="t-time"></div></div><div id="t-speed"></div></div>
+  <div id="top-r">
+    <button id="b-undo" class="hb glass" aria-label="Undo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+    <button id="b-redo" class="hb glass" aria-label="Redo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
+    <button id="b-walk" class="hb glass"></button>
+    <button id="b-vrh" class="hb glass" style="display:none" aria-label="VR"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><path d="M3 8h18v9h-6l-2-3h-2l-2 3H3z"/><circle cx="7.5" cy="12" r="1.5"/><circle cx="16.5" cy="12" r="1.5"/></svg><span>VR</span></button>
+    <button id="b-menu" class="hb glass" aria-label="Menu"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  </div>
+  <div id="toasts"></div>
+  <div id="stick-hint">walk<br>here</div>
+  <div id="dock"><div id="tray" class="glass"></div><div id="tabs" class="glass"></div></div>
+</div>
+<div id="panel"></div>
+<div id="stick"><div id="knob"></div></div>
+<script type="module" src="/experiments/fantasy-theme-park/js/main.js?v={% endraw %}{{ page.version }}{% raw %}" onerror="window.__loadFailed && window.__loadFailed('A game file did not arrive. Check the connection and try again.')"></script>
+</body>
+</html>
+{% endraw %}

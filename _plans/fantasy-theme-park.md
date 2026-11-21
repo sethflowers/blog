@@ -302,3 +302,58 @@ Quick by default (about a minute), `--full` for the long play-through. Expose
 - **Order**: building before guests (milestones 1 to 3) means the first versions are a sandbox to
   build and explore in; the park comes alive at 1.3. The other order gets guests in sooner but
   with stock-looking placeholders.
+
+---
+
+## Version 1.0: Ground breaking (built)
+
+What's in it, and how it works.
+
+- **Files.** `_experiments/fantasy-theme-park.html` (loading screen, title, parks gallery, new-park
+  sheet, HUD), `experiments/fantasy-theme-park/js/`: `main.js` (start-up, frame loop, cameras, input,
+  opening/saving), `park.js` (state + the Edit/undo system + the four landscapes), `terrain.js`,
+  `paths.js`, `models.js` (catalogue), `structures.js` (gate, arches, car parks, fences, signs),
+  `objects.js` (instancing, night glow, rules, picking, collisions), `tools.js`, `ui.js` (the interface
+  described as data), `vr.js`, `sky.js`, `materials.js` (painted textures), `highway.js`, `thumbs.js`,
+  `store.js` (IndexedDB), `names.js`, `icons.js`, `audio.js`, `util.js`. Icons by
+  `_tools/fantasy-theme-park/icons.mjs` (rendered from the game).
+- **The map** is 300 × 300 cells of 2 m (600 m square), heights at the corners; ground paint, water
+  level, path surface/flags and land per cell; everything else is an object. The four cells round the
+  edge are locked. **Every change is an Edit**: it records the old value of each cell/height/object it
+  touches, so undo/redo is unlimited, a cancelled stroke (second finger) is taken back exactly, and the
+  world knows which rectangle to rebuild.
+- **Ground**: one height-field mesh, edited rows re-uploaded. A splat shader blends grass, earth, rock
+  and sand (rock by itself on slopes), two scales of each texture plus broad dry/lush patches so the
+  repeat never shows. The countryside is a ring of rays from the map's edge vertices out to 3 km, so
+  it shares the edge exactly (no cracks), with instanced woods; the south is level for the highway.
+- **Paths**: 7 surfaces + road; footpaths sit 12 cm up with edging stones 5 cm proud, roads 5 cm up
+  with a kerb 2 cm proud where they meet footpaths (nothing coplanar). Queue cells get brass posts and
+  iron rails, open where the queue meets a path. Path over water = a bridge deck 0.75 m above the
+  water, with stone parapets and piers. Rebuilt per 32-cell chunk, one mesh per material.
+- **Scenery**: 36 catalogue items (7 trees, plants and flower beds, 4 lamps, furniture, features,
+  props), instanced per type and material. Trees are alpha-tested leaf cards with normals bent out
+  from the crown, a core so they're not see-through, and wind sway in the shader. Fences/walls are
+  drawn from point to point. Signs say whatever you type.
+- **Night**: no real lights per lamp. Bulbs are an emissive material whose strength follows the dusk;
+  halos are additive points, and pools of light on the ground are instanced additive decals.
+- **Lands**: a theme (7, each with its own arch style and name lists), a colour and a name; painted
+  per cell (shown as a tint while the Lands tool is open). Arches fit themselves across the path where
+  you tap (up to 10 m), carry the land's name on both faces, and follow renames.
+- **Car parks**: drag a rectangle (≥ 12 × 12 m); the ground is levelled under it, trees cleared; bays,
+  aisles, kerbs, lamp posts and a named sign. Refused over paths/water/the entrance, with a reason.
+- **Interface**: tabs (Select, Paths, Trees, Decor, Land, Lands, Park, Bulldoze), a tray per tool with
+  3D thumbnails of the real models, a side panel for what's selected (rename, colour, turn, move,
+  remove), dialogs for names (with suggestions). All of it is data (`tabs()`, `tray()`, `panel()`,
+  `act(id)`), drawn as HTML on screen and on the VR tablet's canvas (with a keyboard for names).
+- **Cameras**: build view orbits a target (one finger pans the ground under it, two fingers pinch,
+  twist and pan, both moving up/down together tilts; right-drag/wheel/WASD/QE/RF with a mouse);
+  Walk is first person on paths and ground (stick on the left, drag to look), blocked by water,
+  cliffs, trees' trunks and structures.
+- **VR**: model mode (play space scaled 90×, the park at table height), grips to drag / turn / resize,
+  right stick turns (snap or smooth: a menu setting) and resizes, laser builds with the same tools,
+  B = life-size where the laser points (play space put back exactly when you return), A undo, X
+  tablet, Y menu. Version and clock on the tablet.
+- **Saving**: IndexedDB (`fantasy-theme-park` → `parks`, `meta`), auto-saved 1.5 s after a change,
+  every 90 s with a new picture for the parks list, and when the page is hidden. Export/import as a
+  `.park.json` file.
+- **Test**: `_tools/fantasy-theme-park/test.mjs` (quick by default; `--full` adds the other landscapes).
