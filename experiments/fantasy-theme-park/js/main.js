@@ -308,8 +308,14 @@ class App {
   async photos(){ return (await store.getPref('photos:' + this.park.s.id).catch(() => null)) || []; }
   // a map of the park: a picture from straight above, with the names of things on it
   parkMap(){
-    const S = 1024, rt = new THREE.WebGLRenderTarget(S, S), cam = new THREE.OrthographicCamera(-300, 300, 300, -300, 1, 1200);
-    cam.position.set(0, 600, 0); cam.up.set(0, 0, -1); cam.lookAt(0, 0, 0);
+    const P0 = this.park.s; let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (const o of P0.objects){ x0 = Math.min(x0, o.x); x1 = Math.max(x1, o.x); z0 = Math.min(z0, o.z); z1 = Math.max(z1, o.z); }
+    for (let k = 0; k < P0.path.length; k++) if (P0.path[k]){ const x = -300 + (k % 300) * 2 + 1, z = -300 + Math.floor(k / 300) * 2 + 1; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+    if (x0 > x1){ x0 = z0 = -100; x1 = z1 = 100; }
+    // just the built part of the park, square, with a margin
+    const half = Math.min(300, Math.max(70, Math.max(x1 - x0, z1 - z0) / 2 + 25)), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const S = 1024, rt = new THREE.WebGLRenderTarget(S, S), cam = new THREE.OrthographicCamera(-half, half, half, -half, 1, 1200);
+    cam.position.set(cx, 600, cz); cam.up.set(0, 0, -1); cam.lookAt(cx, 0, cz);
     const xr = this.renderer.xr.enabled; this.renderer.xr.enabled = false;
     const fog = this.scene.fog; this.scene.fog = null;
     this.renderer.setRenderTarget(rt); this.renderer.render(this.scene, cam); const px = new Uint8Array(S * S * 4); this.renderer.readRenderTargetPixels(rt, 0, 0, S, S, px); this.renderer.setRenderTarget(null);
@@ -322,7 +328,15 @@ class App {
     const P = this.park.s;
     P.lands.forEach((L, i) => { let sx = 0, sz = 0, n = 0; for (let k = 0; k < P.zone.length; k += 3) if (P.zone[k] === i + 1){ sx += -300 + (k % 300) * 2 + 1; sz += -300 + Math.floor(k / 300) * 2 + 1; n++; } if (n) labels.push({ x: sx / n, z: sz / n, text: L.name, land: true }); });
     for (const o of P.objects) if (['coaster', 'ride', 'stall', 'gate'].includes(o.type) || (o.type === 'building' && o.use)) labels.push({ x: o.x, z: o.z, text: o.type === 'gate' ? 'Entrance' : o.name || 'Ride', id: o.id });
-    return { canvas: c, labels: labels.map((l) => ({ ...l, u: (l.x + 300) / 600, v: (l.z + 300) / 600 })) };
+    // names that would sit on top of one already placed are left off (lands first, then the rest)
+    const kept = [];
+    for (const l of labels){
+      const u = (l.x - cx + half) / (2 * half), v = (l.z - cz + half) / (2 * half), w = l.text.length * (l.land ? 0.013 : 0.0105) + 0.02, h = l.land ? 0.05 : 0.04;
+      if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+      if (kept.some((q) => Math.abs(q.u - u) < (q.w + w) / 2 && Math.abs(q.v - v) < (q.h + h) / 2)) continue;
+      kept.push({ ...l, u, v, w, h });
+    }
+    return { canvas: c, labels: kept };
   }
   isEvening(){ const h = this.park.s.time / 60; return h >= 19.5 || h < 7.5; }
   // --- riding a ride: on screen the camera sits in the seat (drag to look round); in VR the play space does

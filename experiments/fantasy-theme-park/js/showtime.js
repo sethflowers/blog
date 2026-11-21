@@ -20,7 +20,7 @@ export class Showtime {
     const n = 2500, pos = new Float32Array(n * 3);
     for (let k = 0; k < n; k++){ pos[k * 3] = (this.r() - 0.5) * 80; pos[k * 3 + 1] = this.r() * 40; pos[k * 3 + 2] = (this.r() - 0.5) * 80; }
     const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.rain = new THREE.Points(rg, new THREE.PointsMaterial({ color: 0xb8c8d8, size: 0.08, transparent: true, opacity: 0.0, depthWrite: false }));
+    this.rain = new THREE.Points(rg, new THREE.PointsMaterial({ color: 0xc8d4e0, size: 0.14, transparent: true, opacity: 0.0, depthWrite: false }));
     this.rain.frustumCulled = false; this.rain.visible = false; this.scene.add(this.rain);
     // fireworks: one pool of sparks
     this.N = 3000; const fp = new Float32Array(this.N * 3), fc = new Float32Array(this.N * 3);
@@ -53,7 +53,7 @@ export class Showtime {
     sky.sun.intensity *= 1 - 0.65 * this.cloud; sky.hemi.intensity *= 1 - 0.25 * this.cloud;
     sky.uniforms.top.value.lerp(GREY_TOP, this.cloud * 0.7); sky.uniforms.horizon.value.lerp(GREY_HOR, this.cloud * 0.6);
     this.app.scene.fog.far = 2600 * (1 - 0.6 * this.cloud) + 200;
-    this.rain.visible = this.wet > 0.02; this.rain.material.opacity = 0.55 * this.wet;
+    this.rain.visible = this.wet > 0.02; this.rain.material.opacity = 0.7 * this.wet;
     if (this.rain.visible){
       const p = this.rain.geometry.attributes.position;
       for (let k = 0; k < p.count; k++){ let y = p.getY(k) - 22 * dt; if (y < 0) y += 40; p.setY(k, y); }
