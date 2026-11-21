@@ -331,8 +331,9 @@ class App {
     // names that would sit on top of one already placed are left off (lands first, then the rest)
     const kept = [];
     for (const l of labels){
-      const u = (l.x - cx + half) / (2 * half), v = (l.z - cz + half) / (2 * half), w = l.text.length * (l.land ? 0.013 : 0.0105) + 0.02, h = l.land ? 0.05 : 0.04;
+      let u = (l.x - cx + half) / (2 * half), v = (l.z - cz + half) / (2 * half); const w = l.text.length * (l.land ? 0.013 : 0.0105) + 0.02, h = l.land ? 0.05 : 0.04;
       if (u < 0 || u > 1 || v < 0 || v > 1) continue;
+      u = Math.min(1 - w / 2, Math.max(w / 2, u)); v = Math.min(1 - h / 2, Math.max(h / 2, v));   // (inside the edges)
       if (kept.some((q) => Math.abs(q.u - u) < (q.w + w) / 2 && Math.abs(q.v - v) < (q.h + h) / 2)) continue;
       kept.push({ ...l, u, v, w, h });
     }
