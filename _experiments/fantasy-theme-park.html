@@ -2,7 +2,7 @@
 title: Fantasy Theme Park
 description: Build whole theme parks of your own - lay out the land, paths, lakes and car parks, plant woods, split it into named lands with arches over the paths, name everything - then walk round it. On an iPad, a computer or in VR.
 date: 2026-11-20
-version: "1.1"
+version: "1.2"
 layout: null
 ---
 {% raw %}
@@ -129,6 +129,9 @@ layout: null
   .pb.danger{color:#f4a494;border-color:rgba(240,140,120,.35);}
   .pb.on{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);}
   .pb.swb{padding:8px;} .pb.swb .sw{width:26px;height:26px;}
+  .prow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;}
+  .plabel{font:700 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--gold);min-width:68px;}
+  .prow .pb{padding:8px 12px;font-size:14px;} .prow .pb.wide{flex:1;min-width:150px;justify-content:flex-start;} .prow .pb.plain{background:none;border-color:transparent;min-width:64px;justify-content:center;font-variant-numeric:tabular-nums;}
   #lost{position:fixed;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;background:rgba(8,10,13,.6);padding:16px;}
   #toasts{position:absolute;left:50%;transform:translateX(-50%);top:calc(70px + var(--st));width:min(560px,80vw);display:flex;flex-direction:column;gap:6px;align-items:center;}
   .toast{background:rgba(20,23,29,.88);border:1px solid var(--line);border-radius:12px;padding:9px 16px;font-size:14.5px;text-align:center;animation:pop .22s ease-out;box-shadow:0 8px 24px rgba(0,0,0,.3);}
@@ -181,6 +184,7 @@ if ('serviceWorker' in navigator){
     "/experiments/fantasy-theme-park/js/objects.js": "/experiments/fantasy-theme-park/js/objects.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/park.js": "/experiments/fantasy-theme-park/js/park.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/paths.js": "/experiments/fantasy-theme-park/js/paths.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/fantasy-theme-park/js/shops.js": "/experiments/fantasy-theme-park/js/shops.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/sky.js": "/experiments/fantasy-theme-park/js/sky.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/store.js": "/experiments/fantasy-theme-park/js/store.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/fantasy-theme-park/js/structures.js": "/experiments/fantasy-theme-park/js/structures.js?v={% endraw %}{{ page.version }}{% raw %}",

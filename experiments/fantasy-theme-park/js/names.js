@@ -16,3 +16,17 @@ export const THEMES = {
   sky:      { name: 'Sky Kingdom',     color: '#9a8ad8', words: [['Sky', 'Cloud', 'Aether', 'Starlight', 'Zephyr', 'Crystal', 'Aurora'], ['Kingdom', 'Isles', 'Harbour', 'Heights', 'Citadel', 'Reach']] },
 };
 export function landName(theme){ const w = (THEMES[theme] || THEMES.main).words; return pick(w[0]) + ' ' + pick(w[1]); }
+
+// names for food places and shops, by theme
+const FOOD = {
+  main: [['The Corner', 'Grand', 'Victoria', 'Lamplight', 'Market', 'Old Town'], ['Café', 'Tea Rooms', 'Diner', 'Bakery', 'Ice Cream Parlour', 'Kitchen']],
+  castle: [['The Golden', 'The Jolly', 'The King\'s', 'The Silver', 'The Red'], ['Goose', 'Stag', 'Tankard', 'Lion', 'Feast Hall', 'Kitchens']],
+  wood: [['Mossy', 'Acorn', 'Bramble', 'Toadstool', 'Honeydew'], ['Larder', 'Tea Garden', 'Bakehouse', 'Pantry', 'Kitchen']],
+  dragon: [['Dragon\'s', 'Ember', 'Firebreath', 'Cinder', 'Scorch'], ['Grill', 'Roast House', 'Smokehouse', 'Forge Kitchen', 'Spit']],
+  pirate: [['The Salty', 'Blackbeard\'s', 'The Kraken\'s', 'Captain\'s', 'The Rusty'], ['Galley', 'Chippy', 'Crab Shack', 'Fish Bar', 'Mess Hall']],
+  frontier: [['Gold Rush', 'Chuck Wagon', 'Rattlesnake', 'Dusty Boots', 'Prospector\'s'], ['BBQ', 'Grill', 'Saloon Kitchen', 'Cookhouse', 'Diner']],
+  sky: [['Cloud Nine', 'Starlight', 'Moonbeam', 'Stardust', 'Aurora'], ['Café', 'Bakery', 'Sweets', 'Tea Terrace', 'Kitchen']],
+};
+const SHOP = [['The Royal', 'Ye Olde', 'Dragonscale', 'Moonstone', 'Lucky', 'The Little'], ['Gift Shop', 'Emporium', 'Toy Shop', 'Curiosity Shop', 'Souvenirs', 'Trading Post']];
+export function foodName(theme){ const w = FOOD[theme] || FOOD.main; return pick(w[0]) + ' ' + pick(w[1]); }
+export function shopName(){ return pick(SHOP[0]) + ' ' + pick(SHOP[1]); }

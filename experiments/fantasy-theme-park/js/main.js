@@ -44,7 +44,7 @@ class App {
     this.rig = new THREE.Group(); this.rig.add(this.camera); this.scene.add(this.rig);
     this.sky = new Sky(this.scene, r);
     this.highway = new Highway(this.scene);
-    this.thumbs = new Thumbs(r);
+    this.thumbs = new Thumbs(r); this.thumbs.app = this;
     this.audio = new Audio();
     this.ui = new UI(this);
     this.mode = 'title'; this.speed = 1; this.timeScale = 1; this.noRender = !!window.__ftpNoRender;   // (tests: draw only for screenshots)
@@ -70,6 +70,7 @@ class App {
     this.ui.wire();
     this.bindInput();
     this.parks = await store.listParks().catch(() => []);
+    this.blueprints = (await store.getPref('blueprints').catch(() => null)) || [];
     // behind the title: your last park, or a fresh one that isn't saved
     let state = null;
     if (this.parks.length) state = await store.loadPark(this.parks[0].id).catch(() => null);
@@ -261,6 +262,9 @@ class App {
     return [x, z];
   }
   setSpeed(s){ this.speed = s; this.ui.refresh(); }
+  // your designs: kept on this device, shared by all your parks
+  addBlueprint(d){ d.id = Math.random().toString(36).slice(2, 10); this.blueprints = [...(this.blueprints || []), d]; store.setPref('blueprints', this.blueprints).catch(() => {}); this.ui.refresh(); return d; }
+  removeBlueprint(id){ this.blueprints = (this.blueprints || []).filter((d) => d.id !== id); store.setPref('blueprints', this.blueprints).catch(() => {}); this.thumbs.cache.delete('bp:' + id); this.ui.refresh(); }
   // a building's middle, in the park
   buildingCentre(o){ const b = bounds(o); return toWorld(o, (b.i0 + b.i1 + 1), (b.j0 + b.j1 + 1)); }
   // turn a building a quarter turn about its middle (returns why not, or nothing)

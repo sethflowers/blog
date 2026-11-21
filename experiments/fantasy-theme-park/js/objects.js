@@ -8,11 +8,12 @@ import { CATALOG, model, resolveMat } from './models.js';
 import { buildGate, buildArch, buildLot, buildFence, buildSign, disposeStructure, FENCES } from './structures.js';
 import { spotTexture } from './materials.js';
 import { buildBuilding, groundCells, bounds, toLocal, H as STOREY } from './buildings.js';
+import { buildStall } from './shops.js';
 import { N, CELL, HALF, cellOf, EDGE } from './park.js';
 
-const STRUCT = { gate: 1, arch: 1, lot: 1, sign: 1, building: 1 };
+const STRUCT = { gate: 1, arch: 1, lot: 1, sign: 1, building: 1, stall: 1 };
 export const isStructure = (t) => !!STRUCT[t] || t.startsWith('fence_');
-export const objName = (o) => o.type === 'building' ? (o.name || 'Building') : o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
+export const objName = (o) => o.type === 'building' || o.type === 'stall' ? (o.name || (o.type === 'stall' ? 'Stall' : 'Building')) : o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
 
 export class Objects {
   constructor(scene, park){
@@ -102,6 +103,7 @@ export class Objects {
     else if (o.type === 'arch'){ const L = P.s.lands[(o.land || 1) - 1]; g = buildArch(L ? L.theme : 'main', L ? L.name : 'New land', o.w || 8); }
     else if (o.type === 'lot') g = buildLot(o, P);
     else if (o.type === 'sign') g = buildSign(o);
+    else if (o.type === 'stall') g = buildStall(o);
     else if (o.type === 'building'){
       this.unindex(o.id);
       g = buildBuilding(o, P, this.cut && this.cut.id === o.id ? { cut: this.cut.level } : {});
@@ -178,7 +180,7 @@ export class Objects {
   // --- rules -----
   footprint(type, o){
     if (CATALOG[type]) return model(type).r * (o && o.s || 1);
-    if (type === 'gate') return 18; if (type === 'arch') return 1; if (type === 'sign') return 1.2;
+    if (type === 'gate') return 18; if (type === 'arch') return 1; if (type === 'sign') return 1.2; if (type === 'stall') return 1.6;
     return 1;
   }
   // can an object of this type go at (x, z)? returns null, or why not
@@ -189,7 +191,8 @@ export class Objects {
     if (!Number.isNaN(S.water[k]) && !S.path[k]) return 'Not in the water.';
     if (S.path[k] && cat && !model(type).onPath) return 'Not on a path: trees and rocks go beside paths.';
     const inB = this.bcells.get(k);
-    if (inB && (!cat || !model(type).onPath)) return 'Not inside a building (furniture and lamps can go inside).';
+    if (inB && (!cat || !model(type).onPath) && type !== 'stall') return 'Not inside a building (furniture and lamps can go inside).';
+    if (inB && type === 'stall') return 'Stalls go outside: to sell from a building, give it a use (tap it).';
     for (const o of S.objects){
       if (o.id === opts.ignore) continue;
       if (o.type === 'lot'){ if (Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) return 'That is in the car park.'; continue; }
@@ -218,6 +221,7 @@ export class Objects {
         continue;
       }
       else if (o.type === 'gate'){ r = 10; h = 14; y0 = this.park.floorAt(o.x, o.z); }
+      else if (o.type === 'stall'){ r = 1.5; h = 4; y0 = this.park.floorAt(o.x, o.z); }
       else if (o.type === 'arch'){ r = (o.w || 8) / 2 + 1; h = 7; y0 = this.park.floorAt(o.x, o.z); }
       else if (o.type === 'lot'){
         // a flat rectangle on the ground

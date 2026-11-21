@@ -9,6 +9,8 @@ import { objName, isStructure } from './objects.js';
 import { clamp, smooth, uid } from './util.js';
 import { FENCES } from './structures.js';
 import { BuildingTools } from './btools.js';
+import { newStall } from './shops.js';
+import { foodName, shopName } from './names.js';
 
 export const TERRAIN_MODES = [['raise', 'Raise'], ['lower', 'Lower'], ['flatten', 'Level'], ['smooth', 'Smooth'], ['paint', 'Paint']];
 
@@ -61,7 +63,7 @@ export class Tools {
     if (k === 'terrain' || k === 'water' || k === 'land' || k === 'bulldoze' || (k === 'path' && this.opts.mode !== 'area')){
       this.brush.set(p.x, p.z, k === 'path' ? this.opts.width * CELL / 2 : this.opts.size, 1);
     } else this.brush.w = 0;
-    if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move') this.showGhost(p);
+    if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move' || k === 'stall') this.showGhost(p);
     if (k === 'path' && this.opts.mode !== 'brush'){ this.previewCells(this.lineCells(p, p)); }
     if (k === 'lot') this.previewCells(this.rectCells(p, p, true), true);
   }
@@ -97,7 +99,7 @@ export class Tools {
       for (let i = 1; i <= n; i++){ const q = { x: s.prev.x + (p.x - s.prev.x) * i / n, z: s.prev.z + (p.z - s.prev.z) * i / n, y: p.y }; if (k === 'bulldoze') this.bulldozeAt(q, false); else this.brushAt(q, 0); }
     }
     if (k === 'place' && this.opts.scatter){ if (Math.hypot(p.x - s.prev.x, p.z - s.prev.z) > 2.5) this.scatter(p); else return; }
-    else if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move') this.showGhost(p);
+    else if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move' || k === 'stall') this.showGhost(p);
     if (k === 'fence') this.previewFence(s.start, p);
     if (k === 'lot') this.previewCells(this.rectCells(s.start, p, true), true);
     s.prev = p;
@@ -123,6 +125,7 @@ export class Tools {
     else if (k === 'fence') this.placeFence(s.start, p);
     else if (k === 'lot'){ this.placeLot(s.start, p); this.cells.count = 0; }
     else if (k === 'building') this.B.placeUp(p);
+    else if (k === 'stall') this.placeStall(p);
   }
   cancel(){
     if (this.kind === 'bedit') this.B.editCancel();
@@ -332,7 +335,7 @@ export class Tools {
     if (this.kind === 'move'){
       const o = P.obj(this.opts.id); if (!o) return this.set('select');
       if (o.type === 'gate' || o.type === 'lot' || isStructure(o.type)){ /* moved whole */ }
-      const why = CATALOG[o.type] ? this.app.objects.canPlace(o.type, p.x, p.z, { ignore: o.id, s: o.s }) : null;
+      const why = CATALOG[o.type] || o.type === 'stall' ? this.app.objects.canPlace(o.type, p.x, p.z, { ignore: o.id, s: o.s }) : null;
       if (why) return this.say(why, 'bad');
       P.begin('Move ' + objName(o).toLowerCase()); P.changeObject(o.id, { x: p.x, z: p.z, r: (o.r || 0) + this.rot }); this.finish();
       this.rot = 0;
@@ -376,6 +379,17 @@ export class Tools {
     if (!L) return this.say('Paint a land here first (Lands), then put its arch across the path into it.', 'bad');
     this.P.begin('Land arch'); const o = this.P.addObject({ type: 'arch', x: a.x, z: a.z, r: a.r, w: a.w, land: L }); this.finish();
     this.app.select(o.id);
+  }
+  placeStall(p){
+    const why = this.app.objects.canPlace('stall', p.x, p.z);
+    if (why) return this.say(why, 'bad');
+    const bp = this.opts.bp && (this.app.blueprints || []).find((d) => d.id === this.opts.bp);
+    const o = bp ? JSON.parse(JSON.stringify(bp.data)) : newStall(this.opts.kind || 'kiosk');
+    if (!bp && o.kind !== 'info'){ const th = (this.P.landAt(p.x, p.z) || {}).theme || 'main'; o.name = o.sells === 'gifts' ? shopName() : foodName(th); }
+    Object.assign(o, { type: 'stall', x: round(p.x), z: round(p.z), r: this.rot });
+    this.P.begin('Build ' + (bp ? bp.name : 'a stall')); const added = this.P.addObject(o); this.finish();
+    this.app.select(added.id);
+    this.app.audio && this.app.audio.click();
   }
   placeSign(p){
     const why = this.app.objects.canPlace('sign', p.x, p.z);
