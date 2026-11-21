@@ -2,7 +2,7 @@
 title: Fantasy Theme Park
 description: Build whole theme parks of your own - lay out the land, paths, lakes and car parks, plant woods, split it into named lands with arches over the paths, name everything - then walk round it. On an iPad, a computer or in VR.
 date: 2026-11-20
-version: "2.2"
+version: "2.3"
 layout: null
 ---
 {% raw %}
@@ -117,7 +117,7 @@ layout: null
   /* panel: what's selected (side card) or a dialog (centred, over a dimmed park) */
   #panel{position:fixed;z-index:12;right:calc(12px + var(--sr));top:calc(70px + var(--st));width:min(340px,calc(100vw - 24px));display:none;}
   #panel.show{display:block;}
-  #panel.modal{inset:0;width:auto;display:flex;align-items:center;justify-content:center;background:rgba(8,10,13,.45);padding:16px;}
+  #panel.show.modal{inset:0;width:auto;display:flex;align-items:center;justify-content:center;background:rgba(8,10,13,.45);padding:16px;}
   .pcard{background:var(--glass2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:18px;padding:16px 18px 18px;box-shadow:0 20px 60px rgba(0,0,0,.45);width:100%;max-width:520px;max-height:84vh;overflow-y:auto;}
   .phead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px;}
   .phead h2{font-family:var(--serif);font-weight:600;font-size:23px;line-height:1.15;}

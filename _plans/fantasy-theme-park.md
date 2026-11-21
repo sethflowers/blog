@@ -622,3 +622,13 @@ What's in it, and how it works.
   a car), and cars keep to the middle of the end lanes rather than riding on the kerb.
 - Cars driving in wait behind one that came earlier and is just ahead (only earlier ones, so two
   never wait for each other), instead of driving through each other.
+
+## Version 2.3: Stuck after making a land (fixed)
+
+- Reported: after making a new land (theme, then name, then OK) the screen stayed grey and couldn't be
+  painted on, panned or moved: stuck. Closing a dialog when no other panel is showing hid the panel but
+  left its `modal` class on, and `#panel.modal` alone drew a full-screen grey backdrop that took every
+  touch. Now the class goes when the panel does, and the backdrop is only drawn on a showing panel
+  (`#panel.show.modal`). It happened whenever a dialog closed with nothing selected (not only lands).
+  Test: after naming a land with real clicks, no backdrop is left and a tap in the middle reaches the
+  park's canvas.

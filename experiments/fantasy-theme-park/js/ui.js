@@ -581,7 +581,8 @@ export class UI {
   }
   drawPanel(){
     const p = this.panel(), el = this.el('panel');
-    if (!p){ el.classList.remove('show'); this.set('panel', ''); return; }
+    // (and not modal: a modal panel is a grey backdrop over the whole screen even when empty, and it swallowed every touch)
+    if (!p){ el.classList.remove('show', 'modal'); this.set('panel', ''); return; }
     const modal = !!this.dialog;
     el.classList.toggle('show', true); el.classList.toggle('modal', modal);
     const input = p.input !== undefined ? `<input id="dlg-input" maxlength="40" value="${esc(p.input)}" autocomplete="off" spellcheck="false">` : '';

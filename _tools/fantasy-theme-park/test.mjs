@@ -167,6 +167,9 @@ await ev(`__ftp.ui.act('dlg:dragon')`); await wait(100);
 check(await ev('__ftp.ui.dialog && __ftp.ui.dialog.input !== undefined') && (await pg.inputValue('#dlg-input')).length > 3, 'then its name (with a suggestion)');
 await pg.fill('#dlg-input', "Dragon's Reach"); await pg.click('[data-act="dlg:ok"]'); await wait(100);
 check(await ev('__ftp.park.s.lands.length') === 1 && await ev('__ftp.tools.opts.land') === 1, 'the land is made and ready to paint');
+// (reported: after naming a new land the screen stayed grey and nothing could be tapped: the empty panel kept its modal backdrop)
+check(await ev(`(() => { const p = document.getElementById('panel'); return getComputedStyle(p).display === 'none' || !p.classList.contains('modal'); })()`), 'after naming it, no grey backdrop is left over the park');
+check(await ev(`(() => { const r = document.querySelector('#view canvas, canvas').getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2; const e = document.elementFromPoint(x, y); return e && e.tagName === 'CANVAS'; })()`), 'a tap on the park reaches the park (to paint or move round)');
 await ev(`__ftp.ui.act('size:16')`);
 await stroke([[0, gz - 100], [0, gz - 150], [20, gz - 150]]);
 check(await ev(`__ftp.park.landAt(0, ${gz - 130}).name`) === "Dragon's Reach", 'painting puts cells in the land');
