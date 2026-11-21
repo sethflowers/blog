@@ -16,9 +16,14 @@ var CACHE = 'fantasy-theme-park-' + V;
 var BASE = '/experiments/fantasy-theme-park/';
 var READY = BASE + '__offline-ready__';
 var VERSIONED = ['lib/three.core.min.js', 'lib/three.module.min.js',
-  'js/audio.js', 'js/btools.js', 'js/buildings.js', 'js/highway.js', 'js/icons.js', 'js/main.js', 'js/materials.js', 'js/models.js', 'js/names.js', 'js/objects.js', 'js/park.js', 'js/paths.js', 'js/rides.js', 'js/ridetools.js', 'js/coaster/track.js', 'js/coaster/train.js', 'js/coaster/cutil.js', 'js/shops.js', 'js/sky.js', 'js/store.js', 'js/structures.js', 'js/terrain.js', 'js/thumbs.js', 'js/tools.js', 'js/ui.js', 'js/util.js', 'js/vr.js'];
+  'js/audio.js', 'js/btools.js', 'js/buildings.js', 'js/highway.js', 'js/icons.js', 'js/main.js', 'js/materials.js', 'js/models.js', 'js/names.js', 'js/objects.js', 'js/park.js', 'js/paths.js', 'js/rides.js', 'js/people.js', 'js/guests.js', 'js/economy.js', 'lib/addons/GLTFLoader.js', 'lib/addons/SkeletonUtils.js', 'lib/addons/BufferGeometryUtils.js', 'js/ridetools.js', 'js/coaster/track.js', 'js/coaster/train.js', 'js/coaster/cutil.js', 'js/shops.js', 'js/sky.js', 'js/store.js', 'js/structures.js', 'js/terrain.js', 'js/thumbs.js', 'js/tools.js', 'js/ui.js', 'js/util.js', 'js/vr.js'];
 var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+// the realistic people (big, and the same from version to version): kept under addresses without a
+// version, and copied from an earlier version's saved copy when there is one, so an update doesn't
+// download them again
+var MODELS = ["models/people/Female_Adult_01.glb", "models/people/Female_Adult_03.glb", "models/people/Female_Adult_04.glb", "models/people/Female_Adult_05.glb", "models/people/Female_Adult_06.glb", "models/people/Female_Adult_08.glb", "models/people/Female_Adult_10.glb", "models/people/Female_Adult_11.glb", "models/people/Female_Adult_12.glb", "models/people/Male_Adult_01.glb", "models/people/Male_Adult_02.glb", "models/people/Male_Adult_03.glb", "models/people/Male_Adult_04.glb", "models/people/Male_Adult_05.glb", "models/people/Male_Adult_06.glb", "models/people/Male_Adult_08.glb", "models/people/Male_Adult_10.glb", "models/people/Male_Adult_12.glb", "models/people/list.json"];
 var ASSETS = [BASE].concat(VERSIONED.map(function (f) { return BASE + f + '?v=' + V; }), STATIC.map(function (f) { return BASE + f; }));
+var MODEL_URLS = MODELS.map(function (f) { return BASE + f; });
 
 self.addEventListener('install', function (e) {
   e.waitUntil(
@@ -26,7 +31,12 @@ self.addEventListener('install', function (e) {
       // every file, past the browser's HTTP cache; the marker only goes in if all of them made it
       return Promise.all(ASSETS.map(function (a) {
         return fetch(a, { cache: 'reload' }).then(function (res) { if (!res.ok) throw new Error(a); return c.put(a, res); });
-      })).then(function () { return c.put(READY, new Response(V)); });
+      }).concat(MODEL_URLS.map(function (a) {
+        return caches.match(a).then(function (hit) {
+          if (hit) return c.put(a, hit);
+          return fetch(a).then(function (res) { if (!res.ok) throw new Error(a); return c.put(a, res); });
+        });
+      }))).then(function () { return c.put(READY, new Response(V)); });
     }).catch(function () { /* partly saved: the fetch handler fills in the rest as the page loads */ })
       .then(function () { return self.skipWaiting(); })
   );

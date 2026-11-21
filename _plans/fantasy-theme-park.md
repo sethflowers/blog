@@ -481,3 +481,20 @@ What's in it, and how it works.
   when you get off (B). Rides update before the cameras each frame (the eyes followed last frame's seat
   at first: caught by the test).
 - Rides block paths, buildings, car parks and other rides; walking bumps into flat rides.
+
+### 1.3.1: fixes from playing 1.3
+
+- **Carousel animals faced the middle**: each was turned a quarter turn too far; now they face the way
+  the carousel turns. Test: every animal's forward is along its direction of travel.
+- **The big wheel showed nothing when ridden**: you ride inside a glazed cabin whose glass was the
+  opaque dark glass; cabins now have clear glass. Test: the cabins' glass is see-through.
+- **A hanging coaster said "too low" for every piece**: its riders were measured as hanging a whole
+  storey below the seats (they sit where a sitting coaster's do, feet a little lower). Headroom over
+  paths is 2.4 m below the track (it was 3 m), and the message says to climb first. Test: a hanging
+  coaster's first pieces lay.
+- **Then it froze**: checking a piece walked every object in the park at every point of the piece, and
+  Finish tries thousands of pieces. Now the entrance, car parks, stations and flat rides are put on a
+  grid once (rebuilt when objects change) and looked up; Finish also gives up after 12,000 tries or
+  1.5 s. Test: Finish answers in under 4 s (88 ms in the test park).
+- The people (for 1.4) are now saved for offline too; the service worker copies them from an earlier
+  version's cache, so later updates don't download them again.

@@ -51,6 +51,7 @@ export class Rides {
   }
   // the park changed: these objects (re)build
   update(ids){
+    if (ids.size) this.block = null;
     for (const id of ids){
       const o = this.park.obj(id), it = this.items.get(id);
       if (!o){ if (it) this.remove(id); continue; }
@@ -64,22 +65,36 @@ export class Rides {
     const group = o.kind === 'carousel' ? buildCarousel(o) : buildWheel(o);
     group.position.set(o.x, this.park.groundAt(o.x, o.z), o.z); group.rotation.y = o.r || 0;
     this.scene.add(group);
-    this.items.set(o.id, { o, group, flat: true, t: 0, angle: 0, spin: 0 });
+    const capacity = o.kind === 'carousel' ? group.userData.mounts.length : (o.gondolas || 16) * 2;
+    this.items.set(o.id, { o, group, flat: true, t: 0, angle: 0, spin: 0, phase: 'loading', phaseT: 6, riders: [], capacity });
   }
   // --- coasters -----
+  // what's on each park cell that track has to keep clear of (the entrance, car parks, stations, flat
+  // rides): worked out once, then looked up (checking every tree and lamp at every point of every piece
+  // tried made Finish freeze the game)
+  blockGrid(){
+    if (this.block) return this.block;
+    const P = this.park, B = new Map(), put = (x, z, v) => { const k = P.cellIndex(x, z); if (k >= 0) B.set(k, v); };
+    for (const o of P.s.objects){
+      if (o.type === 'gate'){ const c = Math.cos(o.r || 0), s = Math.sin(o.r || 0); for (let lx = -19; lx <= 19; lx += 2) for (let lz = -4; lz <= 4; lz += 2) put(o.x + lx * c + lz * s, o.z - lx * s + lz * c, { kind: 'gate', h: 26 }); }
+      else if (o.type === 'lot') for (let x = o.x - o.w + 1; x < o.x + o.w; x += 2) for (let z = o.z - o.d + 1; z < o.z + o.d; z += 2) put(x, z, { kind: 'lot', h: 4 });
+      else if (o.type === 'coaster') for (const [x, z] of stationCells(o)) put(x, z, { kind: 'station', id: o.id, h: 7 });
+      else if (o.type === 'ride'){ const R = flatRadius(o); for (let x = -R; x <= R; x += 2) for (let z = -R; z <= R; z += 2) if (x * x + z * z <= R * R) put(o.x + x, o.z + z, { kind: 'ride', h: (o.kind === 'wheel' ? o.size + 3 : 8) + 2 }); }
+    }
+    this.block = B;
+    return B;
+  }
   env(o){
     const P = this.park, objs = this.app.objects, lift = o.hang ? HANG : 0;
     return (pos) => {
-      const g = P.groundAt(pos.x, pos.z), low = pos.y - (o.hang ? lift + 1.6 : 0.6);
-      if (low < g) return o.hang ? 'Too low: the riders hanging under it would hit the ground.' : 'That would go into the hill.';
+      // (a hanging coaster's seats are where a sitting one's are, its riders' feet a little below)
+      const g = P.groundAt(pos.x, pos.z), low = pos.y - (o.hang ? lift + 0.8 : 0.6);
+      if (low < g) return o.hang ? 'Too low: the riders\' feet would touch the ground (climb first).' : 'That would go into the hill.';
       const b = objs.buildingAt(pos.x, pos.z);
       if (b && pos.y < objs.structs.get(b.id).userData.floorY + b.floors.length * 4 + 5) return 'A building is in the way.';
-      if (P.pathAt(pos.x, pos.z) && low < P.floorAt(pos.x, pos.z) + 3) return 'Too low over the path: people need 3 m of headroom (climb first).';
-      const st = this.app.tools.inStructure(pos.x, pos.z, true, o.id);
-      if (st && st.type === 'gate' && pos.y < g + 26) return 'The entrance is in the way.';
-      if (st && st.type === 'lot' && pos.y < g + 4) return 'Too low over the car park.';
-      if (st && st.type === 'coaster' && pos.y < g + 7) return 'Another coaster\'s station is in the way.';
-      for (const it of this.items.values()) if (it.flat && Math.hypot(pos.x - it.o.x, pos.z - it.o.z) < flatRadius(it.o) && pos.y < g + it.o.size + 4) return 'Another ride is in the way.';
+      if (P.pathAt(pos.x, pos.z) && low < P.floorAt(pos.x, pos.z) + 2.4) return 'Too low over a path: people need headroom under the track. Climb first (Hill up), or move the path.';
+      const bl = this.blockGrid().get(P.cellIndex(pos.x, pos.z));
+      if (bl && bl.id !== o.id && pos.y < g + bl.h) return bl.kind === 'gate' ? 'The entrance is in the way.' : bl.kind === 'lot' ? 'Too low over the car park.' : bl.kind === 'station' ? 'Another coaster\'s station is in the way.' : 'Another ride is in the way.';
       return null;
     };
   }
@@ -130,8 +145,15 @@ export class Rides {
   frame(dt, time){
     for (const it of this.items.values()){
       const o = it.o;
-      if (it.track){ if (o.open !== false || it.riding) it.train.update(dt, SPEEDS[o.speed ?? 2].v, time); continue; }
-      const on = o.open !== false || it.riding;
+      if (it.track){ if ((o.open !== false && !it.broken) || it.riding) it.train.update(dt, SPEEDS[o.speed ?? 2].v, time); continue; }
+      // the cycle: load (6 s), run, unload; with no guests about, it just keeps going
+      it.phaseT -= dt;
+      if (it.phaseT <= 0){
+        if (it.phase === 'loading' && !it.broken){ it.phase = 'running'; it.phaseT = o.kind === 'carousel' ? 32 : 70; }
+        else if (it.phase === 'running'){ it.phase = 'loading'; it.phaseT = 7; if (this.onUnload) this.onUnload(it); }
+        else it.phaseT = 2;
+      }
+      const on = (o.open !== false && !it.broken && (it.phase === 'running' || !this.guestsOn)) || it.riding;
       if (o.kind === 'carousel'){
         it.spin = damp(it.spin, on ? 0.32 + 0.14 * (o.speed || 1) : 0, 0.6, dt);
         it.angle += it.spin * dt; const rot = it.group.userData.rotor; rot.rotation.y = it.angle;
@@ -277,7 +299,8 @@ export function buildCarousel(o){
       m.add(animal);
       const pole = new THREE.Mesh(POLE, resolveMat('brass')); pole.position.y = 0.5; m.add(pole);
       m.position.set(Math.cos(a) * ring.r, ring.y, Math.sin(a) * ring.r);
-      m.rotation.y = -a + Math.PI;     // facing the way round
+      // facing the way the carousel turns (its +x along the direction of travel), not in at the middle
+      m.rotation.y = Math.PI / 2 - a;
       m.userData = { y0: ring.y, phase: idx * 1.7 };
       rotor.add(m); mounts.push(m);
     }
@@ -286,6 +309,7 @@ export function buildCarousel(o){
   g.userData = { rotor, mounts, glows, colliders: [{ c: [0, 0], r: R + 0.4 }] };
   return g;
 }
+const CABIN_GLASS = new THREE.MeshStandardMaterial({ color: 0xd8e8f0, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.18, depthWrite: false });
 const POLE = (() => { const p = new THREE.CylinderGeometry(0.035, 0.035, 3.2, 8); p.userData.shared = true; return p; })();
 
 // --- a big wheel ----------------------------------------------------------------------------------------
@@ -327,11 +351,12 @@ export function buildWheel(o){
   } else {
     GB.box('P2', 0, -1.4, 0, 1.6, 0.25, 1.6); GB.box('P2', 0, -0.25, 0, 1.6, 0.2, 1.6);
     for (const [x, z] of [[-0.75, -0.75], [0.75, -0.75], [-0.75, 0.75], [0.75, 0.75]]) GB.box('P2', x, -0.82, z, 0.1, 1.0, 0.1);
-    GB.box('glass', 0, -0.82, 0.78, 1.4, 0.95, 0.03); GB.box('glass', 0, -0.82, -0.78, 1.4, 0.95, 0.03); GB.box('glass', 0.78, -0.82, 0, 0.03, 0.95, 1.4); GB.box('glass', -0.78, -0.82, 0, 0.03, 0.95, 1.4);
+    GB.box('CG', 0, -0.82, 0.78, 1.4, 0.95, 0.03); GB.box('CG', 0, -0.82, -0.78, 1.4, 0.95, 0.03); GB.box('CG', 0.78, -0.82, 0, 0.03, 0.95, 1.4); GB.box('CG', -0.78, -0.82, 0, 0.03, 0.95, 1.4);
     GB.add(new THREE.SphereGeometry(0.85, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), 'P2', new THREE.Matrix4().compose(new THREE.Vector3(0, -0.15, 0), new THREE.Quaternion(), new THREE.Vector3(1, 0.4, 1)));
   }
   GB.box('iron', 0, -0.05, 0, 0.06, 0.25, 0.06);
-  const gmesh = GB.build((k) => k === 'P2' ? paint(C2) : k === 'P' ? paint(C) : resolveMat(k));
+  // (cabin glass you can see out of: riding inside dark glass you saw nothing)
+  const gmesh = GB.build((k) => k === 'P2' ? paint(C2) : k === 'P' ? paint(C) : k === 'CG' ? CABIN_GLASS : resolveMat(k));
   for (let k = 0; k < n; k++){
     const a = k / n * Math.PI * 2, gp = new THREE.Group();
     const c = gmesh.clone(); c.traverse((m) => { if (m.isMesh) m.castShadow = true; }); gp.add(c);

@@ -302,11 +302,12 @@ export class Track {
     const best = new Map([[id(this.end), 0]]);
     const h = (s) => Math.round(1.5 * (Math.abs(s.i - goal.i) + Math.abs(s.j - goal.j)) + s.level);   // a guess at the cost left
     const buckets = [[{ st: this.end, chain: null, cost: 0 }]];
-    let expanded = 0;
+    let expanded = 0; const t0 = performance.now();
     for (let c = 0; c < buckets.length; c++){
       for (const item of buckets[c] || []){
         if (best.get(id(item.st)) < item.cost) continue;
-        if (++expanded > 25000) return null;
+        // (a limit on how long it looks, so it can never freeze the game)
+        if (++expanded > 12000 || (expanded % 200 === 0 && performance.now() - t0 > 1500)) return null;
         for (const m of moves){
           const r = this.check(m, item.st, item.chain || undefined);
           if (!r.ok) continue;
