@@ -209,7 +209,7 @@ export class Guests {
     const lots = P.lots.filter((L) => L.reachable && L.walk);
     for (const L of lots){
       const bay = L.bays.find((b) => !b.car); if (!bay) continue;
-      const car = { x: 0, z: HALF + 14, yaw: 0, state: 'in', bay, lot: L, group: [], color: [0xf0f0f0, 0x202224, 0x9aa0a6, 0x8a1a1a, 0x1a3a7a, 0x2a4a3a, 0xc8c0b0, 0x4a4e54, 0xd0a020][Math.floor(R() * 9)], n, t: 0 };
+      const car = { seq: this.carSeq = (this.carSeq || 0) + 1, x: 0, z: HALF + 14, yaw: 0, state: 'in', bay, lot: L, group: [], color: [0xf0f0f0, 0x202224, 0x9aa0a6, 0x8a1a1a, 0x1a3a7a, 0x2a4a3a, 0xc8c0b0, 0x4a4e54, 0xd0a020][Math.floor(R() * 9)], n, t: 0 };
       bay.car = car;
       const entry = P.roadEntry.reduce((b, k) => (L.carField[k] < (b ? L.carField[b] : FAR) ? k : b), null);
       if (entry === null){ bay.car = null; break; }
@@ -532,6 +532,8 @@ export class Guests {
       if (!car.trail) car.trail = [[car.x, car.z]];
       const last = car.trail[car.trail.length - 1]; if (Math.hypot(last[0] - car.x, last[1] - car.z) > 3) car.trail.push([car.x, car.z]);
       if (d < 0.3 && tx === car.bay.x && tz === car.bay.z){ car.state = 'parked'; car.yaw = car.bay.yaw; this.unpark(car); return; }
+      // wait behind a car that came earlier and is just ahead (only earlier ones, so two never wait for each other)
+      if (d > 0.01 && this.cars.some((o) => o !== car && o.seq < car.seq && (o.state === 'in' || o.state === 'out') && Math.hypot(o.x - car.x, o.z - car.z) < 5.5 && (o.x - car.x) * dx + (o.z - car.z) * dz > 0.5 * d * Math.hypot(o.x - car.x, o.z - car.z))) return;
       if (d > 0.01){ car.x += dx / d * Math.min(d, sp); car.z += dz / d * Math.min(d, sp); car.yaw = Math.atan2(dx, dz) - Math.PI / 2; }
     } else if (car.state === 'out'){
       // back out to the road, then off to the highway

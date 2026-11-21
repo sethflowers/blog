@@ -618,3 +618,5 @@ What's in it, and how it works.
   row had no aisle in front of it (its "aisle" was past the kerb), so cars for those bays drove outside
   the lot and over the other bays. Rows are now only laid where their aisle fits, and the rows are
   centred, leaving a lane at each end. (The skip-to-morning test also allows a frame's tick now.)
+- Cars driving in or out wait behind one that came earlier and is just ahead (only earlier ones, so two
+  never wait for each other), instead of driving through each other.
