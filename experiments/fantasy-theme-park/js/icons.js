@@ -18,6 +18,7 @@ export const ICON = {
   build: s('<path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/>'),
   vr: s('<path d="M3 8h18v9h-6l-2-3h-2l-2 3H3z"/><circle cx="7.5" cy="12" r="1.5"/><circle cx="16.5" cy="12" r="1.5"/>'),
   menu: s('<path d="M4 6h16M4 12h16M4 18h16"/>'),
+  sun: s('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'),
   close: s('<path d="M6 6l12 12M18 6L6 18"/>'),
   pause: s('<path d="M8 5v14M16 5v14"/>'),
   play: s('<path d="M7 4l12 8-12 8z"/>'),

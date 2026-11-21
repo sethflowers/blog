@@ -293,6 +293,7 @@ export class VR {
     g.fillStyle = '#d8d0c0'; g.font = '500 24px "Avenir Next", Arial, sans-serif'; g.fillText(A.clockText() + (this.life ? ' · life-size' : ' · model'), 28, 84);
     g.textAlign = 'right'; g.fillStyle = '#8a8478'; g.font = '600 20px ui-monospace, Menlo, monospace'; g.fillText('v' + A.VERSION, TW - 24, 84);
     [[0, '||'], [1, '>'], [2, '>>'], [4, '>>>']].forEach(([s, l], k) => btn(TW - 330 + k * 78, 16, 70, 48, 'speed:' + s, l, { on: A.speed === s, size: 24 }));
+    if (A.isEvening()) btn(TW - 470, 16, 132, 48, 'morning', 'Morning', { size: 22 });
     let y = 112;
     const P = UI.panel();
     if (UI.dialog){

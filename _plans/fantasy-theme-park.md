@@ -498,3 +498,41 @@ What's in it, and how it works.
   1.5 s. Test: Finish answers in under 4 s (88 ms in the test park).
 - The people (for 1.4) are now saved for offline too; the service worker copies them from an earlier
   version's cache, so later updates don't download them again.
+
+## Version 1.4: Opening day (built)
+
+- **Guests** (`guests.js`): cars come off the highway, along the park's road (a flow field over road and
+  car-park cells) to a free bay, and their 1 to 4 people walk to the gate (with no car park the road
+  reaches, a bus drops them at the gate). They pay the entry fee and come in. Each has needs (hunger,
+  thirst, the toilet, energy, nausea), money, a taste for thrills and a mood; every so often they pick
+  what's next: first aid when sick, toilets, food, drink, a bench, the ride they'd like best (fun, not
+  too scary for them, not ridden too often, short queue, fair price), a snack or a shop, or a stroll.
+  They walk the paths by flow fields (one per destination, kept until paths change), each to a spot
+  of its own off the cell's middle. They go home tired, broke, fed up, or at closing (9 pm).
+- **Rides**: guests queue (on the queue line if there is one, otherwise along the path to the ride),
+  pay, ride (a coaster's riders sit in its train; flat rides load, run and unload), feel sick after
+  rough rides (and sometimes are), and say what they thought. Rides wear and break down; a mechanic
+  walks over and mends it (or Fix it, $300). Rides show their ticket price (−/+), queue and riders.
+- **Shops and food**: guests buy from menus (refusing what's more than twice the usual price), eat in
+  restaurants, use toilets and first aid; then drop their wrapper in a bin if one is near, or on the
+  path. Janitors sweep up. Stalls face the path when put down.
+- **Thoughts**: every guest keeps their last few thoughts (tap a guest: their mood, needs, money and
+  thoughts); the Park panel shows the commonest.
+- **People** (`people.js`): the nearest 14 (iPad) or 22 guests are the realistic Rocketbox people from
+  MSB, from a pool of copies handed to whoever is nearest every half second; everyone else is one
+  instanced mesh of simple figures in matching clothes, legs and arms swinging in the shader. The
+  people load in the background after the park opens (19 MB; saved for offline once, and not again
+  on updates).
+- **Tycoon** (`economy.js`): new parks choose Tycoon ($60,000) or Sandbox. Every edit is priced when it's
+  committed (paths, landscaping, water, each thing added, changed or removed, half back for what's taken
+  away); one you can't afford is taken back with the reason; undo refunds. Hourly running costs and
+  wages; daily books (two weeks kept); the star rating from happiness, rides and variety, food, litter,
+  scenery and value; goals unlock the big wheel, coasters and hanging coasters. The Park panel (Park
+  tab → Guests, money and staff): guests, rating, money, entry fee, hire and fire janitors and
+  mechanics, open or close the park, goals, what guests are saying. The HUD shows guests, ★ and money.
+- **Days and nights** (asked for: it was nearly always night): nights are short (time runs 10× faster
+  while the park is shut, 10 pm to 6:30 am), a sun button skips to 8 am from the evening on (on screen
+  and on the VR tablet), and the menu has Nights: short / skipped / full length.
+- **Track and rising ground**: track at ground level now copes with the ground rising to within 30 cm
+  of the rails (on ordinary grass a 10 to 30 cm rise near a station refused the first piece; the test
+  caught it on one of its random landscapes).

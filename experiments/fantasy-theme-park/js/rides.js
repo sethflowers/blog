@@ -88,11 +88,12 @@ export class Rides {
     const P = this.park, objs = this.app.objects, lift = o.hang ? HANG : 0;
     return (pos) => {
       // (a hanging coaster's seats are where a sitting one's are, its riders' feet a little below)
-      const g = P.groundAt(pos.x, pos.z), low = pos.y - (o.hang ? lift + 0.8 : 0.6);
+      // (track at ground level copes with the ground rising to within 30 cm of the rails: grass isn't flat)
+      const g = P.groundAt(pos.x, pos.z), low = pos.y - (o.hang ? lift : 0) - 0.3;
       if (low < g) return o.hang ? 'Too low: the riders\' feet would touch the ground (climb first).' : 'That would go into the hill.';
       const b = objs.buildingAt(pos.x, pos.z);
       if (b && pos.y < objs.structs.get(b.id).userData.floorY + b.floors.length * 4 + 5) return 'A building is in the way.';
-      if (P.pathAt(pos.x, pos.z) && low < P.floorAt(pos.x, pos.z) + 2.4) return 'Too low over a path: people need headroom under the track. Climb first (Hill up), or move the path.';
+      if (P.pathAt(pos.x, pos.z) && low < P.floorAt(pos.x, pos.z) + 2.1) return 'Too low over a path: people need headroom under the track. Climb first (Hill up), or move the path.';
       const bl = this.blockGrid().get(P.cellIndex(pos.x, pos.z));
       if (bl && bl.id !== o.id && pos.y < g + bl.h) return bl.kind === 'gate' ? 'The entrance is in the way.' : bl.kind === 'lot' ? 'Too low over the car park.' : bl.kind === 'station' ? 'Another coaster\'s station is in the way.' : 'Another ride is in the way.';
       return null;

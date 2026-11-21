@@ -19,6 +19,9 @@ import { clamp, damp, angleDiff, esc, disposeTree } from './util.js';
 import { Audio } from './audio.js';
 import { bounds, toWorld } from './buildings.js';
 import { Rides } from './rides.js';
+import { People } from './people.js';
+import { Guests } from './guests.js';
+import { Economy, START_MONEY, fmt } from './economy.js';
 
 const VERSION = document.body.dataset.version || '?';
 const $ = (id) => document.getElementById(id);
@@ -48,6 +51,7 @@ class App {
     this.thumbs = new Thumbs(r); this.thumbs.app = this;
     this.audio = new Audio();
     this.ui = new UI(this);
+    this.people = new People(this);
     this.mode = 'title'; this.speed = 1; this.timeScale = 1; this.noRender = !!window.__ftpNoRender;   // (tests: draw only for screenshots)
     this.selected = null;
     this.orbit = { x: 0, z: 200, yaw: 0, pitch: 0.75, dist: 140, ty: 0 };
@@ -92,6 +96,10 @@ class App {
     this.objects = this.world.objects; this.terrain = this.world.terrain;
     this.tools = new Tools(this);
     this.rides = new Rides(this); this.objects.rides = this.rides;
+    this.economy = new Economy(this);
+    this.park.charge = demo ? null : (r) => this.economy.charge(r);
+    this.park.refund = demo ? null : (r, f) => this.economy.refund(r, f);
+    this.guests = demo ? null : new Guests(this);
     this.park.on((ch) => this.changed(ch));
     const gate = state.objects.find((o) => o.type === 'gate') || { x: 0, z: 0 };
     const cam = state.camera;
@@ -105,6 +113,7 @@ class App {
   closePark(){
     if (!this.world) return;
     if (this.riding) this.stopRide();
+    if (this.guests){ this.guests.dispose(); this.guests = null; }
     if (this.rides) this.rides.dispose();
     this.tools.clearGhost(); this.scene.remove(this.tools.cells); this.tools.cells.dispose();
     const W = this.world;
@@ -129,6 +138,7 @@ class App {
     const ground = ch.heights || ch.path || ch.water;
     if (ch.objects.size || ground) W.objects.update(ch.objects, ground ? union(ch.heights, ch.path, ch.water) : null);
     if (ch.objects.size) this.rides.update(ch.objects);
+    if (this.guests) this.guests.changed(ch);
     if (this.riding && !this.park.obj(this.riding.o.id)) this.stopRide();
     if (this.selected && !this.park.obj(this.selected)) this.selected = null;
     this.ui.refresh();
@@ -150,8 +160,9 @@ class App {
     try { await store.savePark(this.park.s, picture); this.park.dirty = false; }
     catch (e) { console.warn('save failed', e); this.ui.toast('Could not save on this device: ' + e.message, 'bad'); }
   }
-  async newPark(name, land){
-    const s = newParkState({ name, land });
+  async newPark(name, land, mode = 'sandbox'){
+    const s = newParkState({ name, land, mode });
+    if (mode === 'tycoon') s.money = START_MONEY;
     this.open(s);
     await this.save();
     this.parks = await store.listParks();
@@ -170,6 +181,7 @@ class App {
     $('title').classList.add('hidden'); $('parks').classList.remove('show'); $('newpark').classList.remove('show');
     this.ui.refresh();
     this.audio.start();
+    this.people.load();
   }
   // back to the title (and to your parks, if asked)
   async toTitle(showParks){
@@ -204,7 +216,8 @@ class App {
   }
   showNewPark(){
     $('np-name').value = parkName();
-    this.npLand = 'meadow';
+    this.npLand = 'meadow'; this.npMode = 'tycoon';
+    [...$('np-modes').children].forEach((c) => c.classList.toggle('on', c.dataset.mode === this.npMode));
     $('np-lands').innerHTML = Object.entries(LANDS).map(([k, l]) => `<button class="np-land${k === this.npLand ? ' on' : ''}" data-land="${k}"><b>${esc(l.name)}</b><small>${esc(l.about)}</small></button>`).join('');
     $('newpark').classList.add('show');
     setTimeout(() => $('np-name').select(), 60);
@@ -228,7 +241,8 @@ class App {
     $('np-lands').addEventListener('click', (e) => { const b = e.target.closest('[data-land]'); if (!b) return; this.npLand = b.dataset.land; [...$('np-lands').children].forEach((c) => c.classList.toggle('on', c === b)); });
     $('np-dice').onclick = () => { $('np-name').value = parkName(); };
     $('np-cancel').onclick = () => $('newpark').classList.remove('show');
-    $('np-go').onclick = () => { const n = $('np-name').value.trim(); if (!n){ $('np-msg').textContent = 'Your park needs a name.'; return; } $('np-msg').textContent = ''; this.newPark(n.slice(0, 40), this.npLand); };
+    $('np-go').onclick = () => { const n = $('np-name').value.trim(); if (!n){ $('np-msg').textContent = 'Your park needs a name.'; return; } $('np-msg').textContent = ''; this.newPark(n.slice(0, 40), this.npLand, this.npMode || 'sandbox'); };
+    $('np-modes').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (!b) return; this.npMode = b.dataset.mode; [...$('np-modes').children].forEach((c) => c.classList.toggle('on', c === b)); });
     $('np-name').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('np-go').click(); };
     $('import-file').onchange = async (e) => {
       const f = e.target.files[0]; if (!f) return;
@@ -268,8 +282,20 @@ class App {
     return [x, z];
   }
   setSpeed(s){ this.speed = s; this.ui.refresh(); }
+  // jump to 8 in the morning (the next day, unless it's before 8 already); guests still here go home
+  skipToMorning(quiet){
+    const S = this.park.s;
+    if (S.time / 60 >= 8) S.day++;
+    S.time = 8 * 60;
+    if (this.guests) for (const g of this.guests.list.slice()) g.state = 'gone';
+    if (this.guests) for (const c of this.guests.cars) c.state = 'gone';
+    if (!quiet) this.ui.toast('Good morning! Day ' + S.day + '.', 'good');
+    this.ui.refresh();
+  }
+  isEvening(){ const h = this.park.s.time / 60; return h >= 19.5 || h < 7.5; }
   // --- riding a ride: on screen the camera sits in the seat (drag to look round); in VR the play space does
   ride(o){
+    if (!o) return;
     if (this.riding) this.stopRide();
     const seat = this.rides.seat(o); if (!seat) return;
     const st = this.rides.stats(o); if (o.type === 'coaster' && st && !st.complete){ this.ui.toast('The track has to be a complete circuit first.', 'bad'); return; }
@@ -321,7 +347,8 @@ class App {
     this.park.begin('Turn building'); this.park.changeObject(o.id, { r: n.r, x: n.x, z: n.z }); this.park.commit();
     return null;
   }
-  select(id){ this.selected = id; this.ui.refresh(); }
+  select(id){ this.selected = id; this.guestSel = null; this.ui.refresh(); }
+  selectGuest(g){ this.selected = null; this.guestSel = g; this.ui.refresh(); }
   focus(x, z, dist){ this.want.x = x; this.want.z = z; if (dist) this.want.dist = dist; }
   startVR(){ this.vr.start(); }
   clockText(){
@@ -355,6 +382,8 @@ class App {
   }
   // the thing under the pointer (used by Select and Bulldoze)
   pickAt(){ const ray = this.lastRay; if (!ray) return null; const g = this.groundHit(ray); const h = this.objects.pick(ray, g ? g.t + 2 : 2000); const r = this.rides.pick(ray, h ? h.t : g ? g.t + 2 : 2000); return r ? r.o : h ? h.o : null; }
+  // a guest under the pointer (tapped with Select): their panel
+  pickGuest(){ const ray = this.lastRay; if (!ray || !this.guests) return null; const g = this.groundHit(ray); const hit = this.guests.pick(ray, g ? g.t + 1 : 400); return hit ? hit.g : null; }
 
   // --- input (screen) -----------------------------------------------------------------------------
   bindInput(){
@@ -408,7 +437,7 @@ class App {
       const tap = p.moved < 10 && performance.now() - p.t < 500;
       if (p.look && tap && e.type === 'pointerup') this.walkTap(e.clientX, e.clientY);
       if (p.tool){ if (e.type === 'pointerup') this.tools.up(this.groundHit(this.screenRay(e.clientX, e.clientY))); else this.tools.cancel(); }
-      else if (tap && e.type === 'pointerup' && this.mode === 'build' && !p.orbit){ this.lastRay = this.screenRay(e.clientX, e.clientY).clone(); const o = this.pickAt(); this.select(o ? o.id : null); if (o) this.audio.click(); }
+      else if (tap && e.type === 'pointerup' && this.mode === 'build' && !p.orbit){ this.lastRay = this.screenRay(e.clientX, e.clientY).clone(); const gu = this.pickGuest(); if (gu){ this.selectGuest(gu); return; } const o = this.pickAt(); this.select(o ? o.id : null); if (o) this.audio.click(); }
     };
     cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
     cv.addEventListener('lostpointercapture', (e) => { if (I.ptrs.has(e.pointerId)) end({ ...e, type: 'pointercancel', pointerId: e.pointerId, clientX: e.clientX, clientY: e.clientY }); });
@@ -541,9 +570,17 @@ class App {
       this.t += dt; this.time += gdt;
       const S = this.park.s;
       // the clock: one game minute a second at 1x
-      if (this.mode !== 'title' && !this.demo){ S.time += gdt * this.speed; if (S.time >= 1440){ S.time -= 1440; S.day++; } }
+      if (this.mode !== 'title' && !this.demo){
+        // nights: short (time races while the park is shut, 10 pm to 6:30 am), skipped, or real
+        const hh = S.time / 60, nights = this.settings.nights || 'short';
+        const night = hh >= 22 || hh < 6.5;
+        S.time += gdt * this.speed * (night && nights === 'short' ? 10 : 1);
+        if (nights === 'skip' && hh >= 21.5) this.skipToMorning(true);
+        if (S.time >= 1440){ S.time -= 1440; S.day++; }
+      }
       else if (this.mode === 'title'){ S.time = 18.3 * 60; }
       this.rides.frame(gdt, this.t);   // (before the cameras: a rider's eyes follow the seat this frame, not last frame's)
+      if (this.guests && this.mode !== 'title'){ this.guests.update(gdt * (this.speed || 0)); }
       if (this.mode === 'title'){ this.titleCam(dt); }
       else if (this.inVR){ this.vr.update(dt); if (this.riding) this.updateRide(); }
       else if (this.riding) this.updateRide();
@@ -557,6 +594,8 @@ class App {
       const camPos = this.camera.getWorldPosition(new THREE.Vector3());
       this.sky.update(hour, center, camPos);
       this.objects.updateLights(this.sky.night); this.audio.night = this.sky.night;
+      if (this.guests){ this.people.draw(this.guests.drawList(), gdt * (this.speed || 0), camPos); this.guests.drawCars(); this.guests.drawLitter(); }
+      else this.people.draw([], dt, camPos);
       this.terrain.animate(this.t); animateModels(this.t);
       this.highway.update(dt);
       if (this.saveTimer > 0){ this.saveTimer -= dt; if (this.saveTimer <= 0) this.save(); }

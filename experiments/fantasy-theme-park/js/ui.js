@@ -14,6 +14,7 @@ import { TEMPLATES, STYLES, ROOFS, MATS, USES, bounds as bBounds, groundCells, H
 import { GOODS, SELLS, STALLS, STALL_ROOFS, STALL_COLORS, goodsFor, defaultMenu, price } from './shops.js';
 import { foodName, shopName } from './names.js';
 import { FLAT, MOUNTS, RIDE_COLORS, COASTER_PIECES, PIECES, COLORS, CARTS, SPEEDS } from './rides.js';
+import { fmt, UNLOCKS, WAGES } from './economy.js';
 const SWATCH = { ashlar: '#d8ccb0', brick: '#a0503a', boardwall: '#9a7a60', marble: '#e8e4dc', rockface: '#8a8478', slate: '#4a5060', tiles: '#b0553a', shingles: '#7a5a40', copper: '#5fa08a',
   darkwood: '#4a3426', wood: '#a07a52', white: '#f2efe8', iron: '#24262a', stone: '#b8b0a0', boards: '#9a7450', floortile: '#ddd5c4', pavers: '#9a4a3a', cobbles: '#8a8278' };
 const swatchOf = (k) => k.includes('#') ? '#' + k.split('#')[1] : SWATCH[k] || '#888';
@@ -136,14 +137,15 @@ export class UI {
           const st = this.app.rides.stats(o);
           return { hint: st ? `${o.name}: Fun ${st.fun} · Scary ${Math.round(st.scary * 10) / 10} · Queasy ${st.queasy}` : '', sections: S };
         }
-        cards('Coasters', [{ id: 'newcoaster', label: 'Coaster', thumb: 'ride:coaster', on: k === 'coaster' && !o.hang }, { id: 'newhang', label: 'Hanging coaster', thumb: 'ride:hang', on: k === 'coaster' && o.hang }]);
-        cards('Rides', Object.entries(FLAT).map(([id, f]) => ({ id: 'newride:' + id, label: f.name, thumb: 'ride:' + id, on: k === 'ride' && o.kind === id })));
+        const E = this.app.economy, lock = (id) => E && E.locked(id) ? E.unlockText(id) : '';
+        cards('Coasters', [{ id: 'newcoaster', label: 'Coaster', thumb: 'ride:coaster', on: k === 'coaster' && !o.hang, sub: lock('coaster') || '' }, { id: 'newhang', label: 'Hanging coaster', thumb: 'ride:hang', on: k === 'coaster' && o.hang, sub: lock('hang') || '' }]);
+        cards('Rides', Object.entries(FLAT).map(([id, f]) => ({ id: 'newride:' + id, label: f.name, thumb: 'ride:' + id, on: k === 'ride' && o.kind === id, sub: lock(id) || '' })));
         if (k === 'coaster' || k === 'ride') chips('Turn', [{ id: 'rot:-6', label: '⟲ 90°' }, { id: 'rot:6', label: '90° ⟳' }]);
         return { hint: k === 'coaster' ? 'Tap where the station goes (the arrow shows which way the train leaves). Then lay the track.' : k === 'ride' ? 'Tap where it goes, beside a path.' : 'Build a ride, design it, name it, and ride it.', sections: S };
       }
       case 'park':
         cards('Build', [{ id: 'tool:lot', label: 'Car park', thumb: 'lot', on: k === 'lot' }, { id: 'roadtool', label: 'Road', swatch: 'tarmac' }, { id: 'selectgate', label: 'Entrance', thumb: 'gate' }]);
-        chips('Your park', [{ id: 'renamepark', label: 'Rename the park' }, { id: 'menu', label: 'Menu' }]);
+        chips('Your park', [{ id: 'parkinfo', label: 'Guests, money and staff' }, { id: 'renamepark', label: 'Rename the park' }, { id: 'menu', label: 'Menu' }]);
         return { hint: k === 'lot' ? 'Drag out a car park (at least 12 x 12 m). Put it by a road, with a path to the entrance.' : 'Car parks, roads and the entrance. Guests will drive in on the highway.', sections: S };
       case 'bulldoze':
         chips('Brush', SIZES.slice(0, 3).map(([s, l]) => ({ id: 'size:' + s, label: l, on: o.size === s })).concat([{ id: 'bpaths', label: o.paths === false ? 'Paths: keep' : 'Paths: remove', on: o.paths !== false }]));
@@ -158,6 +160,17 @@ export class UI {
   // the panel: a dialog, or what's selected
   panel(){
     if (this.dialog) return this.dialog;
+    const gu = this.app.guestSel;
+    if (gu){
+      if (gu.state === 'gone'){ this.app.guestSel = null; return null; }
+      const needs = [];
+      if (gu.hunger > 0.6) needs.push('hungry'); if (gu.thirst > 0.6) needs.push('thirsty'); if (gu.toilet > 0.6) needs.push('needs the toilet'); if (gu.energy < 0.35) needs.push('tired'); if (gu.nausea > 0.5) needs.push('feeling sick');
+      const mood = gu.happy > 0.8 ? 'Delighted' : gu.happy > 0.6 ? 'Happy' : gu.happy > 0.4 ? 'All right' : gu.happy > 0.25 ? 'Unhappy' : 'Miserable';
+      const lines = gu.staff ? [{ janitor: 'Janitor: sweeps up litter.', mechanic: 'Mechanic: mends rides that break down.' }[gu.staff]] : [
+        `${mood}${needs.length ? ' · ' + needs.join(', ') : ''}`, `${fmt(gu.money)} left · spent ${fmt(gu.spent)} · ${gu.rides} rides`,
+        ...gu.thoughts.slice(0, 4).map((t) => '“' + t.text + '”')];
+      return { title: gu.staff ? gu.name + ' (staff)' : gu.name, lines, buttons: [{ id: 'gfollow', label: 'Walk with them' }], close: 'deselect' };
+    }
     const id = this.app.selected, o = id && this.P.obj(id);
     if (!o) return null;
     const lines = [], b = [];
@@ -183,6 +196,10 @@ export class UI {
       if (st && st.complete) lines.push(`Fun ${st.fun} · Scary ${Math.round(st.scary * 10) / 10} · Queasy ${st.queasy}`, `Top speed ${Math.round(st.topSpeed * 2.237)} mph · ${Math.round(st.height)} m high` + (st.length ? ` · ${Math.round(st.length)} m of track` : '') + (st.inversions ? ` · ${st.inversions} upside down` : ''));
       else lines.push('The track isn\'t finished: tap Edit to lay it (Finish closes the loop).');
       if (o.open === false) lines.push('Closed');
+      const it = this.app.rides.get(o.id), G = this.app.guests, pl = G && G.places && G.places.rides.get(o.id);
+      if (G){ lines.push(`Ticket ${fmt(o.price || 0)} · ${(it.queue || []).length} queuing · ${it.ridersToday || 0} riders today`); if (!pl) lines.push('Not joined to a path: guests can\'t get to it. Lay a path (or a queue) up to it.'); }
+      if (it && it.broken){ lines.push('Broken down!'); b.push({ id: 'rfix', label: 'Fix it' + (this.app.economy.tycoon ? ' ($300)' : ''), kind: 'danger' }); }
+      if (G) b.push({ id: 'rprice:-1', label: '− 50¢' }, { id: 'rprice:1', label: '+ 50¢' });
       b.push({ id: 'cride', label: 'Ride it', kind: 'primary' }, { id: o.type === 'coaster' ? 'cedit' : 'redit', label: 'Edit' }, { id: 'ropen', label: o.open === false ? 'Open it' : 'Close it' }, { id: 'renameobj', label: 'Rename' });
       if (o.type === 'ride') b.push({ id: 'objrot:-1', label: '⟲ Turn' }, { id: 'objrot:1', label: 'Turn ⟳' }, { id: 'rmove', label: 'Move' });
       b.push({ id: 'objdel', label: 'Remove', kind: 'danger' });
@@ -190,6 +207,7 @@ export class UI {
     }
     if (o.type === 'stall'){
       lines.push(`${STALLS[o.kind].name} · ${(SELLS.find(([k]) => k === o.sells) || [0, ''])[1]} · ${(o.menu || []).length} things on the menu`);
+      if (this.app.guests) lines.push(`${o._sold || 0} sold today`);
       b.push({ id: 'menuedit', label: 'Menu', kind: 'primary' }, { id: 'stalldesign', label: 'Change its look' }, { id: 'renameobj', label: 'Rename' }, { id: 'objrot:-1', label: '⟲ Turn' }, { id: 'objrot:1', label: 'Turn ⟳' }, { id: 'objmove', label: 'Move' }, { id: 'savedesign', label: 'Save design' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
       return { title, lines, buttons: b, close: 'deselect' };
     }
@@ -234,7 +252,7 @@ export class UI {
       case 'selectgate': { const g = P.s.objects.find((o) => o.type === 'gate'); if (g){ this.tab = 'select'; T.set('select'); A.select(g.id); A.focus(g.x, g.z, 60); } break; }
       case 'renamepark': this.renamePark(); break;
       case 'bpaths': T.opts.paths = T.opts.paths === false; break;
-      case 'deselect': A.select(null); break;
+      case 'deselect': A.select(null); A.guestSel = null; break;
       case 'renameobj': { const o = P.obj(A.selected); if (o) this.askName({ title: o.type === 'sign' ? 'What should the sign say?' : 'Name this car park', value: o.name || '' }).then((n) => { if (!n) return; P.begin('Rename'); P.changeObject(o.id, { name: n }); P.commit(); }); break; }
       case 'objcolor': { const o = P.obj(A.selected); if (o){ P.begin('Colour'); P.changeObject(o.id, { color: v }); P.commit(); } break; }
       case 'objrot': { const o = P.obj(A.selected); if (o){ P.begin('Turn'); P.changeObject(o.id, { r: (o.r || 0) + (+v) * Math.PI / 12 }); P.commit(); } break; }
@@ -244,6 +262,7 @@ export class UI {
       case 'undo': { const l = P.undo(); this.toast(l ? 'Undid: ' + l : 'Nothing to undo.'); break; }
       case 'redo': { const l = P.redo(); this.toast(l ? 'Redid: ' + l : 'Nothing to redo.'); break; }
       case 'speed': A.setSpeed(+v); break;
+      case 'morning': A.skipToMorning(); break;
       case 'walk': if (A.riding) A.stopRide(); else A.setMode(A.mode === 'walk' ? 'build' : 'walk'); break;
       case 'vr': if (v === 'life') A.vr.toggleLife(); else if (v === 'shift') A.vr.shift = !A.vr.shift; else A.startVR(); break;
       case 'menu': this.openMenu(); break;
@@ -272,8 +291,8 @@ export class UI {
       case 'stalldesign': this.stallDialog(); break;
       case 'savedesign': this.saveDesign(); break;
       case 'designs': this.designsDialog(); break;
-      case 'newcoaster': case 'newhang': this.tab = 'rides'; T.rot = 0; T.set('coaster', { hang: a === 'newhang' }); A.select(null); break;
-      case 'newride': this.tab = 'rides'; T.rot = 0; T.set('ride', { kind: v }); A.select(null); break;
+      case 'newcoaster': case 'newhang': if (A.economy && A.economy.locked(a === 'newhang' ? 'hang' : 'coaster')){ this.toast('Locked: ' + A.economy.unlockText(a === 'newhang' ? 'hang' : 'coaster') + ' to unlock it.', 'bad'); break; } this.tab = 'rides'; T.rot = 0; T.set('coaster', { hang: a === 'newhang' }); A.select(null); break;
+      case 'newride': if (A.economy && A.economy.locked(v)){ this.toast('Locked: ' + A.economy.unlockText(v) + ' to unlock it.', 'bad'); break; } this.tab = 'rides'; T.rot = 0; T.set('ride', { kind: v }); A.select(null); break;
       case 'cedit': { const id = T.kind === 'cedit' ? T.opts.id : A.selected; const o = P.obj(id); if (!o) break; this.tab = 'rides'; T.set('cedit', { id }); A.select(null); const [fx, fz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][o.d]; A.focus(o.x + fx * 8, o.z + fz * 8, 90); break; }
       case 'redit': { const id = A.selected; const o = P.obj(id); if (!o) break; this.tab = 'rides'; T.set('redit', { id }); A.select(null); A.focus(o.x, o.z, o.size * 2.5 + 15); break; }
       case 'cpiece': T.R.addPiece(v); break;
@@ -290,6 +309,10 @@ export class UI {
       case 'rlights': { const o = P.obj(T.opts.id); if (o){ P.begin('Lights'); P.changeObject(o.id, { lights: o.lights === false }); P.commit(); } break; }
       case 'ropen': { const o = P.obj(A.selected); if (o){ P.begin(o.open === false ? 'Open' : 'Close'); P.changeObject(o.id, { open: o.open === false }); P.commit(); } break; }
       case 'rmove': { const o = P.obj(A.selected); if (o){ this.tab = 'rides'; T.rot = 0; T.set('ride', { kind: o.kind, move: o.id }); A.select(null); this.toast('Tap where it should go.'); } break; }
+      case 'parkinfo': this.parkDialog(); break;
+      case 'rprice': { const o = P.obj(A.selected); if (o){ P.begin('Ticket price'); P.changeObject(o.id, { price: Math.max(0, Math.min(30, (o.price || 0) + (+v) * 0.5)) }); P.commit(); } break; }
+      case 'rfix': { const o = P.obj(A.selected), it = o && A.rides.get(o.id); if (it && it.broken){ if (A.economy.tycoon && !A.economy.canAfford(300)){ this.toast('Not enough money to fix it.', 'bad'); break; } A.economy.spend('running', A.economy.tycoon ? 300 : 0); A.guests.fix(it); this.toast(o.name + ' is fixed.', 'good'); } break; }
+      case 'gfollow': { const g = A.guestSel; if (g){ A.setMode('walk'); A.walker.x = g.x; A.walker.z = g.z; A.walker.yaw = g.yaw + Math.PI; } break; }
       case 'bmove': { const o = P.obj(A.selected); if (o){ this.tab = 'buildings'; T.rot = 0; T.set('building', { move: o.id }); A.select(null); this.toast('Tap where it should go.'); } break; }
     }
     this.refresh();
@@ -310,6 +333,35 @@ export class UI {
     this.app.select(null);
   }
 
+  // the park: guests, money, fees, staff, rating, goals, what guests think
+  parkDialog(){
+    const A = this.app, S = this.P.s, E = A.economy, G = A.guests, sum = G ? G.summary() : { inPark: 0, top: [], happy: 0 };
+    const fin = S.fin || [], today = fin[fin.length - 1], prev = fin[fin.length - 2];
+    const inc = (d) => d ? Object.values(d.income).reduce((a, b) => a + b, 0) : 0, cost = (d) => d ? Object.values(d.costs).reduce((a, b) => a + b, 0) : 0;
+    const lines = [
+      `${sum.inPark} guests in the park${sum.onWay ? ` (${sum.onWay} on their way)` : ''} · ${S.rating || 0}★ · ${Math.round(sum.happy * 100)}% happy`,
+      E.tycoon ? `Money ${fmt(S.money)} · today: in ${fmt(inc(today))}, out ${fmt(cost(today))}` + (prev ? ` · yesterday: ${fmt(inc(prev) - cost(prev))}` : '') : 'Sandbox: everything is free (the takings are counted anyway: ' + fmt(inc(today)) + ' today).',
+      `Staff: ${S.staff.janitor} janitor${S.staff.janitor === 1 ? '' : 's'} (${fmt(WAGES.janitor)}/h each), ${S.staff.mechanic} mechanic${S.staff.mechanic === 1 ? '' : 's'} (${fmt(WAGES.mechanic)}/h)`,
+    ];
+    if (E.tycoon){ const next = UNLOCKS.filter((u) => !S.unlocked.includes(u.id)); lines.push(next.length ? 'Goals: ' + next.map((u) => `${u.name} at ${u.stars}★ or ${u.guests} guests`).join(' · ') : 'Every ride is unlocked.'); }
+    if (sum.top.length) lines.push('Guests are saying: ' + sum.top.slice(0, 3).map(([t, n]) => `“${t}” (${n})`).join(' · '));
+    this.dialog = { title: S.name, lines,
+      rows: [
+        { label: 'Entry', buttons: [{ id: 'dlg:fee-', label: '−' }, { id: 'dlg:x', label: fmt(S.entryFee || 0), plain: true }, { id: 'dlg:fee+', label: '+' }] },
+        { label: 'Janitors', buttons: [{ id: 'dlg:jan-', label: 'Fire' }, { id: 'dlg:x', label: String(S.staff.janitor), plain: true }, { id: 'dlg:jan+', label: 'Hire' }] },
+        { label: 'Mechanics', buttons: [{ id: 'dlg:mec-', label: 'Fire' }, { id: 'dlg:x', label: String(S.staff.mechanic), plain: true }, { id: 'dlg:mec+', label: 'Hire' }] },
+      ],
+      buttons: [{ id: 'dlg:open', label: S.parkOpen ? 'Close the park' : 'Open the park' }, { id: 'dlg:done', label: 'Done', kind: 'primary' }],
+      on: (v) => {
+        if (v === 'fee-') S.entryFee = Math.max(0, (S.entryFee || 0) - 5); if (v === 'fee+') S.entryFee = Math.min(150, (S.entryFee || 0) + 5);
+        if (v === 'jan+') S.staff.janitor++; if (v === 'jan-') S.staff.janitor = Math.max(0, S.staff.janitor - 1);
+        if (v === 'mec+') S.staff.mechanic++; if (v === 'mec-') S.staff.mechanic = Math.max(0, S.staff.mechanic - 1);
+        if (v === 'open') S.parkOpen = !S.parkOpen;
+        if (G) G.syncStaff();
+        A.saveSoon();
+        if (v !== 'done' && v !== 'cancel') this.parkDialog();
+      } };
+  }
   // seats in a restaurant: chairs inside it, or on a terrace within 8 m of it
   seatsAt(o){
     const cells = groundCells(o), P = this.P;
@@ -449,12 +501,15 @@ export class UI {
     this.dialog = { title: this.P.s.name, lines: [LANDS[this.P.s.land].name + ' · ' + this.P.s.objects.length.toLocaleString() + ' things built'], buttons: [
       { id: 'dlg:resume', label: 'Back to the park', kind: 'primary' }, { id: 'dlg:rename', label: 'Rename the park' },
       { id: 'dlg:parks', label: 'Your parks' }, A.inVR ? null : { id: 'dlg:export', label: 'Save a copy as a file' },
+      { id: 'dlg:nights', label: 'Nights: ' + ({ short: 'short', skip: 'skipped', real: 'full length' }[A.settings.nights || 'short']) }, A.isEvening() ? { id: 'dlg:morning', label: 'Skip to morning' } : null,
       { id: 'dlg:turn', label: 'VR turning: ' + (A.settings.smoothTurn ? 'smooth' : 'snap') }, { id: 'dlg:help', label: 'How to play' }].filter(Boolean),
       on: (v) => {
         if (v === 'rename') this.renamePark();
         if (v === 'parks') A.toTitle(true);
         if (v === 'export') A.exportPark();
         if (v === 'turn'){ A.settings.smoothTurn = !A.settings.smoothTurn; A.saveSettings(); this.openMenu(); }
+        if (v === 'nights'){ const o = ['short', 'skip', 'real']; A.settings.nights = o[(o.indexOf(A.settings.nights || 'short') + 1) % 3]; A.saveSettings(); this.openMenu(); }
+        if (v === 'morning') A.skipToMorning();
         if (v === 'help') this.help();
       } };
   }
@@ -513,8 +568,10 @@ export class UI {
   drawTop(){
     const A = this.app, P = this.P;
     this.set('t-name', esc(P.s.name));
-    this.set('t-time', esc(A.clockText()));
-    this.set('t-speed', [[0, 'pause'], [1, 'play'], [2, 'fast'], [4, 'faster']].map(([s, i]) => `<button class="ib${A.speed === s ? ' on' : ''}" data-act="speed:${s}" aria-label="speed ${s}">${ICON[i]}</button>`).join(''));
+    const E = A.economy, G = A.guests, extra = G ? ` · ${G.summary().inPark} guests · ${P.s.rating || 0}★` + (E && E.tycoon ? ` · ${fmt(P.s.money)}` : '') : '';
+    this.set('t-time', esc(A.clockText() + extra));
+    this.set('t-speed', [[0, 'pause'], [1, 'play'], [2, 'fast'], [4, 'faster']].map(([s, i]) => `<button class="ib${A.speed === s ? ' on' : ''}" data-act="speed:${s}" aria-label="speed ${s}">${ICON[i]}</button>`).join('')
+      + (A.isEvening() ? `<button class="ib morning" data-act="morning" aria-label="Skip to morning" title="Skip to morning">${ICON.sun}</button>` : ''));
     this.el('b-undo').disabled = !P.canUndo; this.el('b-redo').disabled = !P.canRedo;
     this.set('b-walk', A.riding ? ICON.walk + '<span>Get off</span>' : ICON[A.mode === 'walk' ? 'build' : 'walk'] + `<span>${A.mode === 'walk' ? 'Build' : 'Walk'}</span>`);
     document.body.classList.toggle('walking', A.mode === 'walk');
