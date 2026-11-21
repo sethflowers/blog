@@ -177,7 +177,16 @@ export const archThemeColor = (theme) => (THEMES[theme] || THEMES.main).color;
 
 // --- car parks: tarmac, bays, kerbs, lamp posts and a sign ---------------------------------------------
 // the rows of bays (5 m deep) with aisles (7 m) between, across the car park's depth
-function lotRows(D){ const rows = []; let z = -D / 2 + 0.4; while (z + 5 <= D / 2 - 0.4){ rows.push(z); z += 5; if (z + 7 + 5 <= D / 2 - 0.4){ z += 7; rows.push(z); z += 5; } else break; } return rows; }
+// rows of bays across the depth: pairs facing each other over a 7 m aisle (back to back between pairs);
+// a row is only laid where its aisle fits too (a lone last row once had no aisle, and cars drove over
+// the bays to reach it), and the rows are centred, leaving a lane at each end
+function lotRows(D){
+  const rows = [], end = D / 2 - 0.4; let z = -D / 2 + 0.4;
+  while (z + 12 <= end){ rows.push(z); z += 12; if (z + 5 <= end){ rows.push(z); z += 5; } else { z -= 7; break; } }
+  if (!rows.length) return [-D / 2 + 0.4];
+  const last = rows.length % 2 ? rows[rows.length - 1] + 12 : rows[rows.length - 1] + 5, shift = (end - last) / 2;
+  return rows.map((r) => r + shift);
+}
 // where each bay is (in the park), and which way a car in it faces
 export function lotBays(o){
   const W = o.w * 2, D = o.d * 2, rows = lotRows(D), out = [];

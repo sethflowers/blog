@@ -613,4 +613,8 @@ What's in it, and how it works.
 - The screenshot of the car park still showed cars across the bays: the ones driving in. On reaching the
   lot they made straight for their bay's aisle, sliding sideways over the rows of bays. Now they drive
   down the lot's side (1.2 m in from the kerb) to their aisle, along it, then turn in. Test: a car inside
-  a car park heading along x is always in an aisle.
+  a car park heading along x is never over a row of bays.
+- The real cause underneath: a car park laid its bays in rows pairing over 7 m aisles, but an odd last
+  row had no aisle in front of it (its "aisle" was past the kerb), so cars for those bays drove outside
+  the lot and over the other bays. Rows are now only laid where their aisle fits, and the rows are
+  centred, leaving a lane at each end. (The skip-to-morning test also allows a frame's tick now.)

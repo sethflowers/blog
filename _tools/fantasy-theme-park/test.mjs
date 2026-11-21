@@ -464,7 +464,7 @@ check(await ev(`(() => { const im = __ftp.objects.inst.get('lamp1'); const g = i
 const d0 = await ev('__ftp.park.s.day'); await ev('__ftp.ui.drawTop()');
 check(await ev(`!!document.querySelector('[data-act="morning"]')`), 'in the evening there\'s a Skip to morning button');
 await pg.click('[data-act="morning"]');
-check(await ev('__ftp.park.s.time') === 480 && await ev('__ftp.park.s.day') === d0 + 1, 'it skips to 8 o\'clock the next morning');
+check(await ev('__ftp.park.s.time') >= 480 && await ev('__ftp.park.s.time') < 482 && await ev('__ftp.park.s.day') === d0 + 1, 'it skips to 8 o\'clock the next morning');
 await ev('__ftp.park.s.time = 23 * 60'); const tn = await ev('__ftp.park.s.time'); await wait(1500);
 check(await ev('__ftp.park.s.time') - tn > 8, 'nights go by quickly while the park is shut');
 await ev(`__ftp.park.s.time = 11 * 60`);
@@ -597,12 +597,12 @@ check(arrived, `guests arrive by car and come in through the gate (${await ev('_
 // (reported: parked cars were sideways) a parked car lies along its bay, nose in from the aisle
 { let bad = 0, seen = 0;
   for (let k = 0; k < 12; k++){
-    const r = await ev(`(() => { let bad = 0, seen = 0; for (const c of __ftp.guests.cars){ if (c.state !== 'in' || !c.legs) continue; const o = c.lot.o; if (Math.abs(c.x - o.x) > o.w - 0.5 || Math.abs(c.z - o.z) > o.d) continue;
+    const r = await ev(`(() => { let bad = 0, seen = 0; for (const c of __ftp.guests.cars){ if (c.state !== 'in' || !c.legs) continue; const o = c.lot.o; if (Math.abs(c.x - o.x) > o.w - 2.5 || Math.abs(c.z - o.z) > o.d) continue;   // (inside, not on the side strip)
       seen++; const acrossX = Math.abs(Math.cos(c.yaw)) > 0.7;   // heading along x
-      if (acrossX && !c.lot.bays.some((b) => Math.abs(b.aisle - c.z) < 1.5)) bad++; } return { bad, seen }; })()`);
+      if (acrossX && c.lot.bays.some((b) => Math.abs(b.z - c.z) < 2.2)){   // (heading along x over a row of bays) bad++; window.__badCar = { x: c.x, z: c.z, yaw: c.yaw, legs: c.legs, o: [o.x, o.z, o.w, o.d], aisles: [...new Set(c.lot.bays.map((b) => b.aisle))] }; } } return { bad, seen }; })()`);
     bad += r.bad; seen += r.seen; await wait(250);
   }
-  check(bad === 0, `cars in a car park drive along the aisles, not sideways across the bays (${seen} looked at)`); }
+  check(bad === 0, `cars in a car park drive along the aisles, not sideways across the bays (${seen} looked at)` + (bad ? ' ' + JSON.stringify(await ev('window.__badCar')) : '')); }
 { const pc = await ev(`(() => { const c = __ftp.guests.cars.filter((c) => c.state === 'parked'); return c.map((c) => ({ yaw: c.yaw, nose: Math.sign(c.bay.aisle - c.bay.z) })); })()`);
   // (the car model runs along +x; turned by yaw its nose points along (cos yaw, -sin yaw))
   check(pc.length > 0 && pc.every((c) => Math.abs(Math.cos(c.yaw)) < 0.05 && Math.sign(-Math.sin(c.yaw)) === -c.nose), `parked cars lie along their bays, nose in (${pc.length} parked)`); }
