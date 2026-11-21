@@ -599,7 +599,7 @@ check(arrived, `guests arrive by car and come in through the gate (${await ev('_
   for (let k = 0; k < 12; k++){
     const r = await ev(`(() => { let bad = 0, seen = 0; for (const c of __ftp.guests.cars){ if (c.state !== 'in' || !c.legs) continue; const o = c.lot.o; if (Math.abs(c.x - o.x) > o.w - 2.5 || Math.abs(c.z - o.z) > o.d) continue;   // (inside, not on the side strip)
       seen++; const acrossX = Math.abs(Math.cos(c.yaw)) > 0.7;   // heading along x
-      if (acrossX && c.lot.bays.some((b) => Math.abs(b.z - c.z) < 2.2)){   // (heading along x over a row of bays) bad++; window.__badCar = { x: c.x, z: c.z, yaw: c.yaw, legs: c.legs, o: [o.x, o.z, o.w, o.d], aisles: [...new Set(c.lot.bays.map((b) => b.aisle))] }; } } return { bad, seen }; })()`);
+      if (acrossX && c.lot.bays.some((b) => Math.abs(b.z - c.z) < 2.2) /* (heading along x over a row of bays) */){ bad++; window.__badCar = { x: c.x, z: c.z, yaw: c.yaw, legs: c.legs, o: [o.x, o.z, o.w, o.d], aisles: [...new Set(c.lot.bays.map((b) => b.aisle))] }; } } return { bad, seen }; })()`);
     bad += r.bad; seen += r.seen; await wait(250);
   }
   check(bad === 0, `cars in a car park drive along the aisles, not sideways across the bays (${seen} looked at)` + (bad ? ' ' + JSON.stringify(await ev('window.__badCar')) : '')); }
