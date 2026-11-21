@@ -315,7 +315,7 @@ await shot('04c-stalls');
 
 // ---------- rides ----------
 await ev(`__ftp.ui.act('tab:rides')`);
-check(await ev(`document.querySelectorAll('#tray .card').length`) === 4, 'the Rides tray offers coasters, a carousel and a big wheel');
+check(await ev(`document.querySelectorAll('#tray .card').length`) === 10, 'the Rides tray offers three coasters and seven flat rides');
 await ev(`__ftp.ui.act('newcoaster')`);
 await stroke([[-130, gz - 170], [-130, gz - 170]]);
 check(await count('coaster') === 1 && await ev('__ftp.tools.kind') === 'cedit', 'a coaster station goes down, and the Ride Workshop opens');
@@ -359,6 +359,27 @@ await stroke([[-150, gz - 40], [-150, gz - 40]]);
 await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newride:wheel')`);
 await stroke([[-185, gz - 95], [-185, gz - 95]]);
 check(await ev(`__ftp.park.s.objects.filter((o) => o.type === 'ride').map((o) => o.kind).sort().join()`) === 'carousel,wheel', 'a carousel and a big wheel go up');
+// more rides (1.5): each goes up, animates when it runs, and can be ridden
+{
+  const spots = { drop: [-150, gz - 230], swing: [-110, gz - 240], ship: [-75, gz - 240], cups: [-40, gz - 240], scrambler: [-200, gz - 235] };
+  for (const [kind, [x, z]] of Object.entries(spots)){ await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newride:${kind}')`); await stroke([[x, z], [x, z]]); }
+  const kinds = await ev(`__ftp.park.s.objects.filter((o) => o.type === 'ride').map((o) => o.kind).sort().join()`);
+  check(['cups', 'drop', 'scrambler', 'ship', 'swing'].every((k) => kinds.includes(k)), `a drop tower, swing ride, swinging ship, teacups and scrambler go up (${kinds})`);
+  await ev('__ftp.timeScale = 3'); await wait(4000);
+  const moving = await ev(`(() => { const out = {}; for (const it of __ftp.rides.items.values()) if (it.st) out[it.o.kind] = Object.values(it.st).some((v) => v > 0.01); return out; })()`);
+  check(Object.keys(moving).length >= 5 && Object.values(moving).every(Boolean), `they all move (${JSON.stringify(moving)})`);
+  for (const kind of ['drop', 'ship']){
+    await ev(`__ftp.ride(__ftp.park.s.objects.find((o) => o.kind === '${kind}'))`); await wait(600);
+    check(await ev(`__ftp.mode === 'ride' && __ftp.camera.position.distanceTo(__ftp.riding.seat().eye) < 0.5`), `the ${kind} can be ridden`);
+    await ev('__ftp.stopRide()');
+  }
+  await ev('__ftp.timeScale = 1');
+  const sh = await ev(`__ftp.park.s.objects.find((o) => o.kind === 'ship').id`);
+  await ev(`__ftp.select('${sh}'); __ftp.ui.act('redit'); __ftp.ui.act('rstyle:viking'); __ftp.ui.act('rdone')`);
+  check(await ev(`__ftp.park.obj('${sh}').style`) === 'viking', 'the ship can be a longship');
+  await ev(`(() => { const o = __ftp.park.obj('${sh}'); __ftp.select(null); __ftp.ui.act('tab:select'); __ftp.focus(-95, ${gz} - 236, 60); __ftp.want.pitch = 0.25; __ftp.want.yaw = 0.3; })()`);
+  await shot('13b-more-rides');
+}
 const car = await ev(`__ftp.park.s.objects.find((o) => o.kind === 'carousel').id`);
 // (reported: riding the big wheel you couldn't see anything: the cabin glass was opaque)
 check(await ev(`(() => { const o = __ftp.park.s.objects.find((o) => o.kind === 'wheel'), it = __ftp.rides.get(o.id); let ok = false; it.group.userData.mounts[0].traverse((m) => { if (m.isMesh && m.material.transparent && m.material.opacity < 0.4) ok = true; }); return ok; })()`), 'the big wheel\'s cabins have glass you can see through');

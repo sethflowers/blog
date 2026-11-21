@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { N, CELL, HALF } from './park.js';
 import { CATALOG } from './models.js';
 import { TILE, PIECES, COASTER_PIECES, newCoaster, newRide, stationCells, flatRadius, buildCarousel, buildWheel } from './rides.js';
+import { FLAT_BUILD } from './flatrides.js';
 import { disposeStructure } from './structures.js';
 
 const DIRV = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -17,7 +18,7 @@ export class RideTools {
 
   // a coaster's station at the point: snapped to the 8 m grid, facing one of four ways (quarter turns)
   coasterAt(p){
-    const q = (((Math.round(this.T.rot / (Math.PI / 2)) % 4) + 4) % 4), o = newCoaster(this.T.opts.hang);
+    const q = (((Math.round(this.T.rot / (Math.PI / 2)) % 4) + 4) % 4), o = newCoaster(this.T.opts.hang, this.T.opts.spin);
     const [fx, fz] = DIRV[q];
     // the point is the middle of the station: its start is 8 m back
     o.d = q; o.x = Math.round((p.x - fx * 8) / TILE) * TILE; o.z = Math.round((p.z - fz * 8) / TILE) * TILE;
@@ -62,7 +63,7 @@ export class RideTools {
       this.ghost.position.set(o.x, o.y0 - 0.9, o.z); this.ghost.visible = true;
     } else if (k === 'ride'){
       const o = this.rideAt(p), key = 'r' + o.kind + o.size + (o.tiers || '') + (o.gondolas || '');
-      if (key !== this.ghostKey){ this.clearGhost(); this.ghostKey = key; this.ghost = o.kind === 'carousel' ? buildCarousel(o) : buildWheel(o); this.app.scene.add(this.ghost); }
+      if (key !== this.ghostKey){ this.clearGhost(); this.ghostKey = key; this.ghost = o.kind === 'carousel' ? buildCarousel(o) : o.kind === 'wheel' ? buildWheel(o) : FLAT_BUILD[o.kind](o); this.app.scene.add(this.ghost); }
       const bad = !!this.problemAt(this.rideCells(o), o.id);
       this.ghost.traverse((c) => { if (c.isMesh) c.material = bad ? this.T.ghostBad : this.T.ghostOk; });
       this.ghost.position.set(o.x, this.P.groundAt(o.x, o.z), o.z); this.ghost.rotation.y = o.r || 0; this.ghost.visible = true;

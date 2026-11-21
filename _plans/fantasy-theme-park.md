@@ -536,3 +536,19 @@ What's in it, and how it works.
 - **Track and rising ground**: track at ground level now copes with the ground rising to within 30 cm
   of the rails (on ordinary grass a 10 to 30 cm rise near a station refused the first piece; the test
   caught it on one of its random landscapes).
+
+## Version 1.5: More rides (built)
+
+- `flatrides.js`: five more flat rides, each built from its design and animating itself (its
+  `userData.animate`), with a seat to ride from (`userData.seat`, so riding and VR work unchanged):
+  - **Drop tower** (30/45/60 m): a ring of 16 seats hauled up slowly, held at the top, dropped under
+    gravity, braked; lights up the column and a beacon on top.
+  - **Swing ride** (14/16/20 m): the top turns and tilts, seats on chains flung out wide.
+  - **Swinging ship** (12/14/18 m long): a pendulum at its natural period, swinging higher as it powers
+    up; pirate ship (mast and sail), longship (shields, curled prow) or dragon boat.
+  - **Teacups**: a floor turning one way, three platforms the other, nine cups spinning on their own.
+  - **Scrambler**: three arms one way, clusters of four cars the other.
+- **Spinning coaster**: a coaster whose cars turn by themselves while running (and straighten up in the
+  station); more fun, more queasy.
+- Each has a size, two colours and a speed in the designer, ratings, a price in Tycoon, a footprint
+  and height that track and buildings keep clear of (`rideHeight`), and a capacity per cycle.

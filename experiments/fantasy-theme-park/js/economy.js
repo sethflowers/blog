@@ -31,7 +31,7 @@ export function priceOf(o){
     case 'stall': return 1100;
     case 'building': return (o.floors || []).reduce((a, f) => a + f.length, 0) * 650 + (o.towers || []).length * 2400 + (o.extras || []).length * 160 + (o.use ? 1500 : 0);
     case 'coaster': return 4000 + (o.pieces || []).reduce((a, t) => a + (PIECE_PRICE[t] || 200), 0);
-    case 'ride': return o.kind === 'carousel' ? 4000 + o.size * 200 + ((o.tiers || 1) - 1) * 3000 : 6000 + o.size * 320 + (o.gondolas || 16) * 60;
+    case 'ride': return o.kind === 'carousel' ? 4000 + o.size * 200 + ((o.tiers || 1) - 1) * 3000 : o.kind === 'wheel' ? 6000 + o.size * 320 + (o.gondolas || 16) * 60 : { drop: 9000, swing: 6500, ship: 7000, cups: 5000, scrambler: 6000 }[o.kind] + o.size * 150;
   }
   if (o.type.startsWith('fence_')) return Math.round(Math.hypot(o.x2 - o.x, o.z2 - o.z) * 22);
   return 100;
