@@ -488,8 +488,8 @@ await ev(`__ftp.park.s.time = 11 * 60`);
   await ev('__ftp.show.showT = -1; __ftp.ui.act("deselect")');
   // weather: a wet day
   await ev(`(() => { const S = __ftp.park.s; S.time = 12 * 60; S.weather = { day: S.day, kind: 'rain', from: 0, to: 24 }; })()`);
-  await pg.waitForFunction(`__ftp.show.wet > 0.6`, null, { timeout: 30000 }).catch(() => {});
-  check(await ev('__ftp.show.rain.visible') && await ev('__ftp.sky.sun.intensity') < 1.6, 'on a rainy day it rains, and the sun is dimmed');
+  await pg.waitForFunction(`__ftp.show.wet > 0.6 && __ftp.show.cloud > 0.75`, null, { timeout: 30000 }).catch(() => {});
+  check(await ev("__ftp.show.rain.visible") && await ev("__ftp.sky.sun.intensity") < 1.4, `(sun ${(await ev("__ftp.sky.sun.intensity")).toFixed(2)}) ` + 'on a rainy day it rains, and the sun is dimmed');
   await ev('__ftp.ui.drawTop()');
   check((await ev(`document.getElementById('t-time').textContent`)).includes('rain'), 'the clock says it\'s raining');
   await shot('06b-rain');
