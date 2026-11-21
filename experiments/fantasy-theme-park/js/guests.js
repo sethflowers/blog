@@ -21,7 +21,8 @@ import { lotBays } from './structures.js';
 import { carGeometry } from './highway.js';
 import { stationCells, flatRadius, SPEEDS } from './rides.js';
 import { groundCells, edges, styleOf, toWorld } from './buildings.js';
-import { mat, resolveMat } from './materials.js';
+import { mat } from './materials.js';
+import { resolveMat } from './models.js';
 import { rng, clamp, angleDiff } from './util.js';
 import { fmt } from './economy.js';
 
@@ -150,7 +151,7 @@ export class Guests {
   decide(g){
     const P = this.places, S = this.park.s, h = S.time / 60, R = this.r;
     if (!P) return;
-    const leave = h >= CLOSE_H - 0.5 || !S.parkOpen || g.energy < 0.15 || g.money < 3 || g.happy < 0.2;
+    const leave = h >= CLOSE_H - 0.5 || !S.parkOpen || g.energy < 0.12 || g.money < 3 || g.happy < 0.15;
     if (leave){ if (g.happy < 0.2) this.think(g, 'I\'m not enjoying this: I\'m going home.', 'bad'); else if (g.money < 3) this.think(g, 'I\'ve spent all my money.'); else if (g.energy < 0.15) this.think(g, 'I\'m worn out: time to go home.'); return this.goHome(g); }
     if (g.nausea > 0.75 && P.firstaid.length && this.go(g, this.nearest(g, P.firstaid), 'firstaid')) return;
     if (g.toilet > 0.7){ if (P.toilets.length && this.go(g, this.nearest(g, P.toilets), 'toilet')) return; this.think(g, 'I can\'t find a toilet!', 'bad'); g.happy -= 0.08; }
@@ -232,6 +233,8 @@ export class Guests {
     if (pl.spots && pl.spotsAt === this.fieldsVersion) return pl.spots;
     const S = this.park.s, f = this.field(pl.key, pl.cells), q = [];
     for (let k = 0; k < N * N; k++) if (S.pflags[k] & QUEUE && f[k] < 60) q.push(k);
+    // no queue line: they line up along the path leading to the ride instead (not all in a heap)
+    if (!q.length) for (let k = 0; k < N * N; k++) if (this.mask[k] === 1 && f[k] < 25) q.push(k);
     q.sort((a, b) => f[a] - f[b]);
     const spots = [];
     for (const k of q) for (const [ox, oz] of [[-0.45, -0.3], [0.45, 0.4]]) spots.push([cellX(k % N) + ox, cellX(Math.floor(k / N)) + oz]);
@@ -381,11 +384,14 @@ export class Guests {
     return Math.min(this.cap, Math.round(base * mood * fee));
   }
   minute(){
-    const S = this.park.s;
+    const S = this.park.s, h = S.time / 60;
+    // closing time (or the park closed): everyone heads home (riders when their ride ends)
+    if (h >= CLOSE_H || !S.parkOpen) for (const g of this.list){ if (g.inPark && (g.state === 'queuing' || g.state === 'idle' || (g.state === 'walking' && g.goal && g.goal.purpose !== 'exit' && g.goal.purpose !== 'home'))){ if (g.state === 'queuing'){ const it = g.goal.place.it; if (it.queue) it.queue.splice(it.queue.indexOf(g), 1); } this.goHome(g); } }
     for (const g of this.list){
       if (!g.inPark || g.staff) continue;
       g.hunger = clamp(g.hunger + 0.0045); g.thirst = clamp(g.thirst + 0.0055); g.toilet = clamp(g.toilet + 0.004); g.energy = clamp(g.energy - 0.0014); g.nausea = clamp(g.nausea - 0.015);
-      if (g.hunger > 0.85 || g.thirst > 0.85 || g.toilet > 0.9) g.happy = clamp(g.happy - 0.01);
+      if (g.hunger > 0.9 || g.thirst > 0.9 || g.toilet > 0.95) g.happy = clamp(g.happy - 0.006);
+      else if (g.happy < 0.75) g.happy = clamp(g.happy + 0.002);   // a nice day out lifts the mood a little
       // a littered path, or a pretty spot
       if (this.r() < 0.05){ const dirty = S.litter.filter((l) => Math.abs(l.x - g.x) < 6 && Math.abs(l.z - g.z) < 6).length; if (dirty >= 3){ this.think(g, 'This path is filthy.', 'bad'); g.happy -= 0.03; } }
     }
@@ -404,7 +410,7 @@ export class Guests {
         const n = pl && pl.it.queue ? pl.it.queue.indexOf(g) : -1, spot = spots[n] || null;
         if (spot) this.moveTo(g, spot[0], spot[1], dt, 0.25); else g.speed = 0;
         g.t += dt;
-        if (g.t > 240){ this.think(g, `The queue for ${pl.it.o.name} is far too long.`, 'bad'); g.happy -= 0.08; if (pl.it.queue) pl.it.queue.splice(pl.it.queue.indexOf(g), 1); this.decideLater(g); }
+        if (g.t > 300){ this.think(g, `The queue for ${pl.it.o.name} is far too long.`, 'bad'); g.happy -= 0.05; if (pl.it.queue) pl.it.queue.splice(pl.it.queue.indexOf(g), 1); this.decideLater(g); }
         return;
       }
       case 'walking': {

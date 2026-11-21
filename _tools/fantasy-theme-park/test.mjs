@@ -77,7 +77,7 @@ await pg.click('#b-new'); await wait(300);
 check(await ev(`document.getElementById('newpark').classList.contains('show')`) && (await pg.inputValue('#np-name')).length > 3, 'New park suggests a name');
 await pg.fill('#np-name', ''); await pg.click('#np-go'); await wait(200);
 check((await pg.textContent('#np-msg')).includes('name'), 'a park needs a name');
-await pg.fill('#np-name', 'Test Kingdom'); await pg.click('[data-land="meadow"]'); await pg.click('#np-go');
+await pg.fill('#np-name', 'Test Kingdom'); await pg.click('[data-land="meadow"]'); await pg.click('[data-mode="sandbox"]'); await pg.click('#np-go');
 await pg.waitForFunction('__ftp.mode === "build" && !__ftp.demo', null, { timeout: 60000 });
 check(true, 'Build it opens the new park');
 await wait(1500);
@@ -416,6 +416,13 @@ check(await ev(`(() => { const im = __ftp.objects.inst.get('lamp1'); const g = i
   }
 }
 
+// (reported: it was nearly always night) a Skip to morning button in the evening; nights race by
+const d0 = await ev('__ftp.park.s.day'); await ev('__ftp.ui.drawTop()');
+check(await ev(`!!document.querySelector('[data-act="morning"]')`), 'in the evening there\'s a Skip to morning button');
+await pg.click('[data-act="morning"]');
+check(await ev('__ftp.park.s.time') === 480 && await ev('__ftp.park.s.day') === d0 + 1, 'it skips to 8 o\'clock the next morning');
+await ev('__ftp.park.s.time = 23 * 60'); const tn = await ev('__ftp.park.s.time'); await wait(1500);
+check(await ev('__ftp.park.s.time') - tn > 8, 'nights go by quickly while the park is shut');
 await ev(`__ftp.park.s.time = 11 * 60`);
 
 // ---------- memory: things come and go, the shapes don't pile up ----------
@@ -468,6 +475,63 @@ if (FULL){
   }
 }
 
+// ---------- opening day: a Tycoon park, with guests ----------
+await ev('__ftp.toTitle(true)'); await wait(500);
+await pg.click('#parks-new'); await pg.fill('#np-name', 'Opening Day'); await pg.click('[data-land="meadow"]');
+check(await ev(`document.querySelector('[data-mode="tycoon"]').classList.contains('on')`), 'a new park can be a Tycoon park (chosen by default)');
+await pg.click('#np-go');
+await pg.waitForFunction('__ftp.mode === "build" && __ftp.park.s.name === "Opening Day"', null, { timeout: 60000 }); await wait(500);
+check(await ev('__ftp.park.s.mode') === 'tycoon' && await ev('__ftp.park.s.money') === 60000, 'it starts with $60,000');
+check(await ev(`__ftp.economy.locked('coaster') && !__ftp.economy.locked('carousel')`), 'coasters are locked at first; the carousel is not');
+const tM0 = await ev('__ftp.park.s.money');
+await ev(`(() => { const A = __ftp, T = A.tools, gz = ${gz};
+  A.ui.act('tab:paths'); A.ui.act('pmode:line'); T.down({ x: 0, z: gz - 26, y: 0 }); T.move({ x: 0, z: gz - 80, y: 0 }); T.up({ x: 0, z: gz - 80, y: 0 });
+  A.ui.act('tab:rides'); A.ui.act('newride:carousel'); T.down({ x: 12, z: gz - 50, y: 0 }); T.up({ x: 12, z: gz - 50, y: 0 });
+  A.ui.act('tab:shops'); T.down({ x: -3.5, z: gz - 40, y: 0 }); T.up({ x: -3.5, z: gz - 40, y: 0 });
+  A.ui.act('btpl:blank'); T.down({ x: -7, z: gz - 60, y: 0 }); T.up({ x: -7, z: gz - 60, y: 0 });
+  const b = A.park.s.objects.filter((o) => o.type === 'building').pop(); A.select(b.id); A.ui.act('buse'); A.ui.act('dlg:toilets'); A.ui.act('tab:select'); })()`);
+const tM1 = await ev('__ftp.park.s.money');
+check(tM1 < tM0 - 5000, `building costs money (${tM0} → ${tM1})`);
+await ev(`__ftp.ui.act('undo')`); const tM2 = await ev('__ftp.park.s.money');
+check(tM2 > tM1, 'undo gives the money back');
+await ev(`__ftp.ui.act('redo')`);
+await ev('__ftp.park.s.money = 500');
+const nb = await count('building');
+await ev(`(() => { const A = __ftp, T = A.tools; A.ui.act('btpl:keep'); T.down({ x: -60, z: ${gz} - 100, y: 0 }); T.up({ x: -60, z: ${gz} - 100, y: 0 }); })()`);
+check(await count('building') === nb && (await ev(`document.getElementById('toasts').textContent`)).includes('Not enough money'), 'something you can\'t afford isn\'t built (and it says why)');
+await ev('__ftp.park.s.money = 40000');
+// open the gates and let a day go by, fast
+await ev('__ftp.park.s.time = 9 * 60; __ftp.timeScale = 8; __ftp.speed = 4');
+const arrived = await pg.waitForFunction(() => __ftp.guests.summary().inPark >= 15, null, { timeout: 90000 }).then(() => true, () => false);
+check(arrived, `guests arrive by car and come in through the gate (${await ev('__ftp.guests.summary().inPark')} in the park, ${await ev('__ftp.guests.cars.length')} cars)`);
+const rode = await pg.waitForFunction(() => __ftp.guests.list.some((g) => g.rides > 0), null, { timeout: 90000 }).then(() => true, () => false);
+check(rode, 'they queue for the carousel and ride it');
+const spent = await pg.waitForFunction(() => { const d = __ftp.park.s.fin[__ftp.park.s.fin.length - 1]; return d.income.entry > 0 && d.income.food > 0; }, null, { timeout: 90000 }).then(() => true, () => false);
+check(spent, `they pay to get in and buy from the stall (${JSON.stringify(await ev('__ftp.park.s.fin[__ftp.park.s.fin.length - 1].income'))})`);
+check(await ev('__ftp.guests.list.some((g) => g.thoughts.length)'), `they think about it ("${await ev('(__ftp.guests.list.find((g) => g.thoughts.length) || { thoughts: [{ text: "" }] }).thoughts[0].text')}")`);
+check(await ev('__ftp.park.s.rating') > 0, `the park gets a rating (${await ev('__ftp.park.s.rating')}★)`);
+// tap a guest: their panel
+await ev(`(() => { const A = __ftp, g = A.guests.list.find((q) => !q.hidden && q.inPark); A.selectGuest(g); })()`);
+check(await ev(`document.querySelector('#panel h2') && __ftp.guestSel && document.querySelector('#panel h2').textContent === __ftp.guestSel.name`), 'tapping a guest shows their name, mood and thoughts');
+await ev(`__ftp.ui.act('deselect')`);
+// staff, a breakdown
+await ev(`__ftp.ui.act('parkinfo'); __ftp.ui.act('dlg:mec+'); __ftp.ui.act('dlg:done')`);
+check(await ev('__ftp.guests.staff.filter((s) => s.staff === "mechanic").length') === 1, 'a mechanic can be hired');
+await ev(`(() => { const it = [...__ftp.rides.items.values()].find((i) => i.flat); it.broken = true; })()`);
+const fixed = await pg.waitForFunction(() => ![...__ftp.rides.items.values()].find((i) => i.flat).broken, null, { timeout: 90000 }).then(() => true, () => false);
+check(fixed, 'a broken-down ride is mended by the mechanic');
+// a daytime look at the crowd, close up (realistic people near the camera)
+await ev(`__ftp.timeScale = 1; __ftp.speed = 1; __ftp.park.s.time = 14 * 60; __ftp.ui.act('tab:select'); __ftp.select(null); __ftp.focus(3, ${gz} - 44, 22); __ftp.want.pitch = 0.28; __ftp.want.yaw = 0.75`);
+await pg.waitForFunction(() => __ftp.people.progress === 1, null, { timeout: 60000 }).catch(() => {});
+await ev('__ftp.noRender = false'); await wait(2500);
+check(await ev('__ftp.people.stats().near') > 0, `the guests nearest you are realistic people (${JSON.stringify(await ev('__ftp.people.stats()'))})`);
+await shot('14-guests');
+// closing time: everyone goes home
+await ev('__ftp.park.s.time = 20.9 * 60; __ftp.timeScale = 8; __ftp.speed = 4');
+const home = await pg.waitForFunction(() => __ftp.guests.summary().inPark === 0, null, { timeout: 120000 }).then(() => true, () => false);
+check(home, 'at closing time the guests go home');
+await ev('__ftp.timeScale = 1; __ftp.speed = 1');
+
 // ---------- VR ----------
 const pull = async () => {
   await ev(`window.__iwer.controllers.right.updateButtonValue('trigger', 1)`); await pg.waitForFunction('__ftp.vr.trig[1]', null, { timeout: 30000 }).catch(() => {});
@@ -513,7 +577,7 @@ if (IWER){
   await pg.screenshot({ path: path.join(OUT, '11-vr-life.png') });
   await ev('__ftp.vr.toggleLife()'); await wait(500);
   check(await ev('__ftp.rig.scale.x') > 30, 'and back to the model');
-  await ev(`__ftp.ride(__ftp.park.obj('${car}'))`); await wait(1500);
+  await ev(`__ftp.ride(__ftp.park.s.objects.find((o) => o.kind === 'carousel'))`); await wait(1500);
   const seatD = await ev(`(() => { const A = __ftp, s = A.riding.seat(); return A.camera.getWorldPosition(new A.rig.position.constructor()).distanceTo(s.eye); })()`);
   check(seatD < 0.5, `riding in VR, your head is on the carousel's horse (${seatD.toFixed(2)} m)`);
   await ev('__ftp.stopRide()'); await wait(400);

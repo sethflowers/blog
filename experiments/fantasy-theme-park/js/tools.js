@@ -398,7 +398,10 @@ export class Tools {
     const bp = this.opts.bp && (this.app.blueprints || []).find((d) => d.id === this.opts.bp);
     const o = bp ? JSON.parse(JSON.stringify(bp.data)) : newStall(this.opts.kind || 'kiosk');
     if (!bp && o.kind !== 'info'){ const th = (this.P.landAt(p.x, p.z) || {}).theme || 'main'; o.name = o.sells === 'gifts' ? shopName() : foodName(th); }
-    Object.assign(o, { type: 'stall', x: round(p.x), z: round(p.z), r: this.rot });
+    // facing the nearest path (unless you've turned it yourself)
+    let r = this.rot;
+    if (!r && !this.P.pathAt(p.x, p.z)){ let best = 1e9; for (let dx = -6; dx <= 6; dx += 2) for (let dz = -6; dz <= 6; dz += 2){ if (!this.P.pathAt(p.x + dx, p.z + dz)) continue; const d = dx * dx + dz * dz; if (d < best){ best = d; r = Math.atan2(dx, dz); } } }
+    Object.assign(o, { type: 'stall', x: round(p.x), z: round(p.z), r });
     this.P.begin('Build ' + (bp ? bp.name : 'a stall')); const added = this.P.addObject(o); this.finish();
     this.app.select(added.id);
     this.app.audio && this.app.audio.click();
