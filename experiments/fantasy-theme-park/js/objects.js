@@ -13,7 +13,7 @@ import { N, CELL, HALF, cellOf, EDGE } from './park.js';
 
 const STRUCT = { gate: 1, arch: 1, lot: 1, sign: 1, building: 1, stall: 1 };
 export const isStructure = (t) => !!STRUCT[t] || t.startsWith('fence_');
-export const objName = (o) => o.type === 'building' || o.type === 'stall' ? (o.name || (o.type === 'stall' ? 'Stall' : 'Building')) : o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
+export const objName = (o) => o.type === 'ride' || o.type === 'coaster' ? (o.name || 'Ride') : o.type === 'building' || o.type === 'stall' ? (o.name || (o.type === 'stall' ? 'Stall' : 'Building')) : o.type === 'gate' ? 'Park entrance' : o.type === 'arch' ? 'Land arch' : o.type === 'lot' ? (o.name || 'Car park') : o.type === 'sign' ? 'Sign' : o.type.startsWith('fence_') ? FENCES[o.type.slice(6)].name : (CATALOG[o.type] ? CATALOG[o.type].name : o.type);
 
 export class Objects {
   constructor(scene, park){
@@ -181,6 +181,7 @@ export class Objects {
   footprint(type, o){
     if (CATALOG[type]) return model(type).r * (o && o.s || 1);
     if (type === 'gate') return 18; if (type === 'arch') return 1; if (type === 'sign') return 1.2; if (type === 'stall') return 1.6;
+    if (type === 'ride' && o) return o.kind === 'wheel' ? o.size / 2 + 3 : o.size / 2 + 1.2; if (type === 'coaster') return 0;
     return 1;
   }
   // can an object of this type go at (x, z)? returns null, or why not
@@ -196,7 +197,7 @@ export class Objects {
     for (const o of S.objects){
       if (o.id === opts.ignore) continue;
       if (o.type === 'lot'){ if (Math.abs(x - o.x) < o.w + r && Math.abs(z - o.z) < o.d + r) return 'That is in the car park.'; continue; }
-      if (o.type.startsWith('fence_') || o.type === 'building') continue;
+      if (o.type.startsWith('fence_') || o.type === 'building' || o.type === 'coaster') continue;
       const or = this.footprint(o.type, o), d = Math.hypot(o.x - x, o.z - z);
       if (o.type === 'gate'){ if (Math.abs(x - o.x) < 18 && Math.abs(z - o.z) < 3) return 'That is in the entrance.'; continue; }
       // trees can stand close together (their crowns overlap), other things need their own space
@@ -256,6 +257,24 @@ export class Objects {
   }
   // walking: push the point (x, z) with radius rad out of solid things; returns the new [x, z]
   collide(x, z, rad){
+    // rides first (their own colliders, in their own frames)
+    if (this.rides) for (const it of this.rides.items.values()){
+      if (!it.flat || Math.hypot(it.o.x - x, it.o.z - z) > it.o.size + 8) continue;
+      [x, z] = this.pushOut(it.o, it.group.userData.colliders, x, z, rad);
+    }
+    return this.collideObjects(x, z, rad);
+  }
+  pushOut(o, cols, x, z, rad){
+    const c = Math.cos(o.r || 0), s = Math.sin(o.r || 0);
+    for (const col of cols){
+      let lx = (x - o.x) * c - (z - o.z) * s, lz = (x - o.x) * s + (z - o.z) * c;
+      if (col.c){ const dx = lx - col.c[0], dz = lz - col.c[1], d = Math.hypot(dx, dz), r = col.r + rad; if (d < r && d > 1e-4){ lx = col.c[0] + dx / d * r; lz = col.c[1] + dz / d * r; } }
+      else { const [x0, z0, x1, z1] = col.box; if (lx > x0 - rad && lx < x1 + rad && lz > z0 - rad && lz < z1 + rad){ const p = [lx - (x0 - rad), (x1 + rad) - lx, lz - (z0 - rad), (z1 + rad) - lz], m = Math.min(...p); if (m === p[0]) lx = x0 - rad; else if (m === p[1]) lx = x1 + rad; else if (m === p[2]) lz = z0 - rad; else lz = z1 + rad; } }
+      x = o.x + lx * c + lz * s; z = o.z - lx * s + lz * c;
+    }
+    return [x, z];
+  }
+  collideObjects(x, z, rad){
     for (const o of this.park.s.objects){
       if (Math.abs(o.x - x) > 25 && !o.type.startsWith('fence_')) continue;
       if (CATALOG[o.type]){

@@ -13,6 +13,7 @@ import { ICON } from './icons.js';
 import { TEMPLATES, STYLES, ROOFS, MATS, USES, bounds as bBounds, groundCells, H as STOREY } from './buildings.js';
 import { GOODS, SELLS, STALLS, STALL_ROOFS, STALL_COLORS, goodsFor, defaultMenu, price } from './shops.js';
 import { foodName, shopName } from './names.js';
+import { FLAT, MOUNTS, RIDE_COLORS, COASTER_PIECES, PIECES, COLORS, CARTS, SPEEDS } from './rides.js';
 const SWATCH = { ashlar: '#d8ccb0', brick: '#a0503a', boardwall: '#9a7a60', marble: '#e8e4dc', rockface: '#8a8478', slate: '#4a5060', tiles: '#b0553a', shingles: '#7a5a40', copper: '#5fa08a',
   darkwood: '#4a3426', wood: '#a07a52', white: '#f2efe8', iron: '#24262a', stone: '#b8b0a0', boards: '#9a7450', floortile: '#ddd5c4', pavers: '#9a4a3a', cobbles: '#8a8278' };
 const swatchOf = (k) => k.includes('#') ? '#' + k.split('#')[1] : SWATCH[k] || '#888';
@@ -20,7 +21,7 @@ const STOREYS = ['Ground', 'First', 'Second', 'Third', 'Fourth', 'Fifth'];
 const AWNINGS = ['#1e5a3a', '#7a2a2a', '#2a3a6a', '#8a5a2a', '#5a2a6a'];
 
 export const TABS = [
-  ['select', 'Select'], ['paths', 'Paths'], ['plants', 'Trees'], ['decor', 'Decor'], ['buildings', 'Buildings'], ['shops', 'Shops'],
+  ['select', 'Select'], ['paths', 'Paths'], ['plants', 'Trees'], ['decor', 'Decor'], ['buildings', 'Buildings'], ['shops', 'Shops'], ['rides', 'Rides'],
   ['terrain', 'Land'], ['lands', 'Lands'], ['park', 'Park'], ['bulldoze', 'Bulldoze'],
 ];
 const SIZES = [[3, 'S'], [6, 'M'], [10, 'L'], [16, 'XL']];
@@ -114,6 +115,32 @@ export class UI {
         if (k === 'stall' || k === 'place') chips('Turn', [{ id: 'rot:-1', label: '⟲ 15°' }, { id: 'rot:1', label: '15° ⟳' }]);
         return { hint: k === 'stall' ? 'Tap where it goes: on a plaza or beside a path. Tap it afterwards to name it, change its menu and its look.' : 'Stalls, seating and facilities. For a café, restaurant, shop or toilets, tap a building and choose what it\'s for.', sections: S };
       }
+      case 'rides': {
+        if (k === 'cedit'){
+          const o = P.obj(o_.id), st = o && this.app.rides.stats(o); if (!o) return { hint: 'That ride has gone.', sections: [] };
+          cards('Track', COASTER_PIECES.map((t) => ({ id: 'cpiece:' + t, label: PIECES[t].name, thumb: 'piece:' + t })));
+          chips('', [{ id: 'cundo', label: 'Take a piece off' }, { id: 'cfinish', label: 'Finish', on: false }, { id: 'cclear', label: 'Clear' }, { id: 'cride', label: 'Ride it' }, { id: 'cdone', label: 'Done' }]);
+          chips('Train', CARTS.map((c) => ({ id: 'ccart:' + c.id, label: c.name, on: o.cart === c.id })));
+          chips('Colour', COLORS.map((c, i) => ({ id: 'ccolor:' + i, swatchColor: '#' + c.rail.toString(16).padStart(6, '0'), label: '', on: (o.color || 0) === i })));
+          chips('Speed', SPEEDS.map((sp, i) => ({ id: 'cspeed:' + i, label: sp.name, on: (o.speed ?? 2) === i })));
+          return { hint: st && st.complete ? `${o.name}: Fun ${st.fun} · Scary ${st.scary} · Queasy ${st.queasy} · ${Math.round(st.topSpeed * 2.237)} mph · ${Math.round(st.height)} m high` : `${o.pieces.length} pieces. Tap pieces to lay track from the arrow; Finish finds the way back to the station.`, sections: S };
+        }
+        if (k === 'redit'){
+          const o = P.obj(o_.id); if (!o) return { hint: 'That ride has gone.', sections: [] };
+          chips('Size', FLAT[o.kind].sizes.map((z) => ({ id: 'rsize:' + z, label: z + ' m', on: o.size === z })));
+          if (o.kind === 'carousel'){ chips('Tiers', [1, 2].map((t) => ({ id: 'rtiers:' + t, label: t === 1 ? 'One' : 'Two', on: (o.tiers || 1) === t }))); chips('Ride on', MOUNTS.map(([m, l]) => ({ id: 'rmounts:' + m, label: l, on: o.mounts === m }))); }
+          else { chips('Gondolas', [12, 16, 24, 32].map((g) => ({ id: 'rgond:' + g, label: String(g), on: o.gondolas === g }))); chips('Cars', [['cabin', 'Glazed cabins'], ['open', 'Open cars']].map(([c, l]) => ({ id: 'rcabin:' + c, label: l, on: o.cabin === c }))); chips('', [{ id: 'rlights', label: o.lights !== false ? 'Lights: on' : 'Lights: off', on: o.lights !== false }]); }
+          chips('Colour', RIDE_COLORS.map((c) => ({ id: 'rcolor:' + c, swatchColor: c, label: '', on: o.color === c })));
+          chips(o.kind === 'carousel' ? 'Canopy stripes' : 'Gondola colour', RIDE_COLORS.map((c) => ({ id: 'rcolor2:' + c, swatchColor: c, label: '', on: o.color2 === c })));
+          chips('Speed', [[0, 'Gentle'], [1, 'Lively'], [2, 'Brisk']].map(([v, l]) => ({ id: 'rspeed:' + v, label: l, on: (o.speed ?? 1) === v })).concat([{ id: 'cride', label: 'Ride it' }, { id: 'rdone', label: 'Done' }]));
+          const st = this.app.rides.stats(o);
+          return { hint: st ? `${o.name}: Fun ${st.fun} · Scary ${Math.round(st.scary * 10) / 10} · Queasy ${st.queasy}` : '', sections: S };
+        }
+        cards('Coasters', [{ id: 'newcoaster', label: 'Coaster', thumb: 'ride:coaster', on: k === 'coaster' && !o.hang }, { id: 'newhang', label: 'Hanging coaster', thumb: 'ride:hang', on: k === 'coaster' && o.hang }]);
+        cards('Rides', Object.entries(FLAT).map(([id, f]) => ({ id: 'newride:' + id, label: f.name, thumb: 'ride:' + id, on: k === 'ride' && o.kind === id })));
+        if (k === 'coaster' || k === 'ride') chips('Turn', [{ id: 'rot:-6', label: '⟲ 90°' }, { id: 'rot:6', label: '90° ⟳' }]);
+        return { hint: k === 'coaster' ? 'Tap where the station goes (the arrow shows which way the train leaves). Then lay the track.' : k === 'ride' ? 'Tap where it goes, beside a path.' : 'Build a ride, design it, name it, and ride it.', sections: S };
+      }
       case 'park':
         cards('Build', [{ id: 'tool:lot', label: 'Car park', thumb: 'lot', on: k === 'lot' }, { id: 'roadtool', label: 'Road', swatch: 'tarmac' }, { id: 'selectgate', label: 'Entrance', thumb: 'gate' }]);
         chips('Your park', [{ id: 'renamepark', label: 'Rename the park' }, { id: 'menu', label: 'Menu' }]);
@@ -149,6 +176,16 @@ export class UI {
       b.push({ id: 'renameobj', label: 'Rename' }, { id: 'brot:-1', label: '⟲ Turn' }, { id: 'brot:1', label: 'Turn ⟳' }, { id: 'bmove', label: 'Move' }, { id: 'savedesign', label: 'Save design' }, { id: 'objdel', label: 'Remove', kind: 'danger' });
       const land = this.P.landAt(...(() => { const g = this.app.objects.structs.get(o.id); return g ? [g.position.x, g.position.z] : [o.x, o.z]; })());
       if (land) lines.push('In ' + land.name);
+      return { title, lines, buttons: b, close: 'deselect' };
+    }
+    if (o.type === 'coaster' || o.type === 'ride'){
+      const st = this.app.rides.stats(o);
+      if (st && st.complete) lines.push(`Fun ${st.fun} · Scary ${Math.round(st.scary * 10) / 10} · Queasy ${st.queasy}`, `Top speed ${Math.round(st.topSpeed * 2.237)} mph · ${Math.round(st.height)} m high` + (st.length ? ` · ${Math.round(st.length)} m of track` : '') + (st.inversions ? ` · ${st.inversions} upside down` : ''));
+      else lines.push('The track isn\'t finished: tap Edit to lay it (Finish closes the loop).');
+      if (o.open === false) lines.push('Closed');
+      b.push({ id: 'cride', label: 'Ride it', kind: 'primary' }, { id: o.type === 'coaster' ? 'cedit' : 'redit', label: 'Edit' }, { id: 'ropen', label: o.open === false ? 'Open it' : 'Close it' }, { id: 'renameobj', label: 'Rename' });
+      if (o.type === 'ride') b.push({ id: 'objrot:-1', label: '⟲ Turn' }, { id: 'objrot:1', label: 'Turn ⟳' }, { id: 'rmove', label: 'Move' });
+      b.push({ id: 'objdel', label: 'Remove', kind: 'danger' });
       return { title, lines, buttons: b, close: 'deselect' };
     }
     if (o.type === 'stall'){
@@ -207,7 +244,7 @@ export class UI {
       case 'undo': { const l = P.undo(); this.toast(l ? 'Undid: ' + l : 'Nothing to undo.'); break; }
       case 'redo': { const l = P.redo(); this.toast(l ? 'Redid: ' + l : 'Nothing to redo.'); break; }
       case 'speed': A.setSpeed(+v); break;
-      case 'walk': A.setMode(A.mode === 'walk' ? 'build' : 'walk'); break;
+      case 'walk': if (A.riding) A.stopRide(); else A.setMode(A.mode === 'walk' ? 'build' : 'walk'); break;
       case 'vr': if (v === 'life') A.vr.toggleLife(); else if (v === 'shift') A.vr.shift = !A.vr.shift; else A.startVR(); break;
       case 'menu': this.openMenu(); break;
       case 'dlg': { const d = this.dialog; this.dialog = null; if (d && d.on) d.on(v); break; }
@@ -235,6 +272,24 @@ export class UI {
       case 'stalldesign': this.stallDialog(); break;
       case 'savedesign': this.saveDesign(); break;
       case 'designs': this.designsDialog(); break;
+      case 'newcoaster': case 'newhang': this.tab = 'rides'; T.rot = 0; T.set('coaster', { hang: a === 'newhang' }); A.select(null); break;
+      case 'newride': this.tab = 'rides'; T.rot = 0; T.set('ride', { kind: v }); A.select(null); break;
+      case 'cedit': { const id = T.kind === 'cedit' ? T.opts.id : A.selected; const o = P.obj(id); if (!o) break; this.tab = 'rides'; T.set('cedit', { id }); A.select(null); const [fx, fz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][o.d]; A.focus(o.x + fx * 8, o.z + fz * 8, 90); break; }
+      case 'redit': { const id = A.selected; const o = P.obj(id); if (!o) break; this.tab = 'rides'; T.set('redit', { id }); A.select(null); A.focus(o.x, o.z, o.size * 2.5 + 15); break; }
+      case 'cpiece': T.R.addPiece(v); break;
+      case 'cundo': T.R.undoPiece(); break;
+      case 'cfinish': T.R.finish(); break;
+      case 'cclear': this.confirm('Clear the track?', 'Every piece comes off (the station stays). Undo puts it back.', 'Clear', () => T.R.clear()); break;
+      case 'cdone': case 'rdone': { const id = T.opts.id; T.set('select'); this.tab = 'select'; A.select(id); break; }
+      case 'cride': { const o = P.obj(T.kind === 'cedit' || T.kind === 'redit' ? T.opts.id : A.selected); if (o) A.ride(o); break; }
+      case 'ccart': case 'ccolor': case 'cspeed': case 'rsize': case 'rtiers': case 'rmounts': case 'rgond': case 'rcabin': case 'rcolor': case 'rcolor2': case 'rspeed': {
+        const id = T.opts.id, f = { ccart: { cart: v }, ccolor: { color: +v }, cspeed: { speed: +v }, rsize: { size: +v }, rtiers: { tiers: +v }, rmounts: { mounts: v }, rgond: { gondolas: +v }, rcabin: { cabin: v }, rcolor: { color: v }, rcolor2: { color2: v }, rspeed: { speed: +v } }[a];
+        if (a === 'rsize'){ const o = P.obj(id), why = T.R.problemAt(T.R.rideCells({ ...o, size: +v }), id); if (why){ this.toast(why, 'bad'); break; } }
+        P.begin('Ride'); P.changeObject(id, f); P.commit(); break;
+      }
+      case 'rlights': { const o = P.obj(T.opts.id); if (o){ P.begin('Lights'); P.changeObject(o.id, { lights: o.lights === false }); P.commit(); } break; }
+      case 'ropen': { const o = P.obj(A.selected); if (o){ P.begin(o.open === false ? 'Open' : 'Close'); P.changeObject(o.id, { open: o.open === false }); P.commit(); } break; }
+      case 'rmove': { const o = P.obj(A.selected); if (o){ this.tab = 'rides'; T.rot = 0; T.set('ride', { kind: o.kind, move: o.id }); A.select(null); this.toast('Tap where it should go.'); } break; }
       case 'bmove': { const o = P.obj(A.selected); if (o){ this.tab = 'buildings'; T.rot = 0; T.set('building', { move: o.id }); A.select(null); this.toast('Tap where it should go.'); } break; }
     }
     this.refresh();
@@ -250,6 +305,7 @@ export class UI {
     else if (t === 'park') T.set('lot', {});
     else if (t === 'buildings') T.set('building', { tpl: 'cottage' });
     else if (t === 'shops') T.set('stall', { kind: 'kiosk', type: 'stall' });
+    else if (t === 'rides') T.set('select');
     else if (t === 'bulldoze') T.set('bulldoze', { size: 3 });
     this.app.select(null);
   }
@@ -460,7 +516,7 @@ export class UI {
     this.set('t-time', esc(A.clockText()));
     this.set('t-speed', [[0, 'pause'], [1, 'play'], [2, 'fast'], [4, 'faster']].map(([s, i]) => `<button class="ib${A.speed === s ? ' on' : ''}" data-act="speed:${s}" aria-label="speed ${s}">${ICON[i]}</button>`).join(''));
     this.el('b-undo').disabled = !P.canUndo; this.el('b-redo').disabled = !P.canRedo;
-    this.set('b-walk', ICON[A.mode === 'walk' ? 'build' : 'walk'] + `<span>${A.mode === 'walk' ? 'Build' : 'Walk'}</span>`);
+    this.set('b-walk', A.riding ? ICON.walk + '<span>Get off</span>' : ICON[A.mode === 'walk' ? 'build' : 'walk'] + `<span>${A.mode === 'walk' ? 'Build' : 'Walk'}</span>`);
     document.body.classList.toggle('walking', A.mode === 'walk');
   }
   drawToasts(){

@@ -313,6 +313,48 @@ check(await count('stall') === 2 && await ev(`__ftp.park.s.objects.filter((o) =>
 await ev(`(() => { const s = __ftp.park.s.objects.find((o) => o.type === 'stall'); __ftp.select(null); __ftp.ui.act('tab:select'); __ftp.focus(s.x, s.z + 1, 14); __ftp.want.pitch = 0.22; __ftp.want.yaw = 0.3; })()`);
 await shot('04c-stalls');
 
+// ---------- rides ----------
+await ev(`__ftp.ui.act('tab:rides')`);
+check(await ev(`document.querySelectorAll('#tray .card').length`) === 4, 'the Rides tray offers coasters, a carousel and a big wheel');
+await ev(`__ftp.ui.act('newcoaster')`);
+await stroke([[-130, gz - 170], [-130, gz - 170]]);
+check(await count('coaster') === 1 && await ev('__ftp.tools.kind') === 'cedit', 'a coaster station goes down, and the Ride Workshop opens');
+for (const t of ['straight', 'up', 'up', 'steepDown', 'loop']) await ev(`__ftp.ui.act('cpiece:${t}')`);
+const CO = () => ev(`__ftp.park.s.objects.find((o) => o.type === 'coaster')`);
+check((await CO()).pieces.length === 5, `track pieces are laid (${(await CO()).pieces.join(', ')})`);
+await ev(`__ftp.ui.act('cfinish')`);
+let cst = await ev(`__ftp.rides.stats(__ftp.park.s.objects.find((o) => o.type === 'coaster'))`);
+check(cst && cst.complete && cst.fun > 2 && cst.inversions >= 1, `Finish closes the circuit (fun ${cst && cst.fun}, scary ${cst && cst.scary}, queasy ${cst && cst.queasy})`);
+await ev(`__ftp.ui.act('cundo')`);
+check(!(await ev(`__ftp.rides.stats(__ftp.park.s.objects.find((o) => o.type === 'coaster')).complete`)), 'taking a piece off opens the circuit again');
+await ev(`__ftp.ui.act('undo')`);
+check(await ev(`__ftp.rides.stats(__ftp.park.s.objects.find((o) => o.type === 'coaster')).complete`), 'and Undo puts it back');
+await ev(`__ftp.ui.act('ccart:rocket'); __ftp.ui.act('ccolor:1'); __ftp.ui.act('cdone')`);
+check((await CO()).cart === 'rocket' && (await CO()).color === 1, 'its train and colour can be changed');
+// ride it
+await ev(`__ftp.ride(__ftp.park.s.objects.find((o) => o.type === 'coaster'))`);
+check(await ev('__ftp.mode') === 'ride', 'Ride it puts you in the front seat');
+await ev('__ftp.timeScale = 3');
+const coId = await ev(`__ftp.park.s.objects.find((o) => o.type === 'coaster').id`);
+const ran = await pg.waitForFunction((id) => { const t = __ftp.rides.get(id).train; return t.state === 'running' && t.v > 8; }, coId, { timeout: 60000 }).then(() => true, () => false);
+check(ran, 'the train sets off and picks up speed');
+check(await ev(`__ftp.camera.position.distanceTo(__ftp.rides.get('${coId}').train.seatEye(new __ftp.rig.position.constructor())) < 0.3`), 'your eyes are in the seat');
+await shot('12-riding');
+await ev(`__ftp.ui.act('walk')`);
+check(await ev('__ftp.mode') === 'build' && !(await ev('__ftp.riding')), 'Get off puts you back');
+await ev('__ftp.timeScale = 1');
+// flat rides
+await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newride:carousel')`);
+await stroke([[-150, gz - 40], [-150, gz - 40]]);
+await ev(`__ftp.ui.act('tab:rides'); __ftp.ui.act('newride:wheel')`);
+await stroke([[-185, gz - 95], [-185, gz - 95]]);
+check(await ev(`__ftp.park.s.objects.filter((o) => o.type === 'ride').map((o) => o.kind).sort().join()`) === 'carousel,wheel', 'a carousel and a big wheel go up');
+const car = await ev(`__ftp.park.s.objects.find((o) => o.kind === 'carousel').id`);
+await ev(`__ftp.select('${car}'); __ftp.ui.act('redit'); __ftp.ui.act('rmounts:mixed'); __ftp.ui.act('rtiers:2'); __ftp.ui.act('rdone')`);
+check(await ev(`__ftp.park.obj('${car}').mounts === 'mixed' && __ftp.park.obj('${car}').tiers === 2`), 'the carousel can be redesigned (two tiers of mixed animals)');
+await ev(`(() => { const o = __ftp.park.obj('${car}'); __ftp.select(null); __ftp.focus(o.x, o.z, 30); __ftp.want.pitch = 0.2; __ftp.want.yaw = 0.5; })()`);
+await shot('13-carousel');
+
 // ---------- selecting, naming ----------
 await ev(`__ftp.ui.act('tab:select'); __ftp.select(__ftp.park.s.objects.find((o) => o.type === 'bench').id)`);
 check(await ev(`document.getElementById('panel').classList.contains('show') && document.querySelector('#panel h2').textContent === 'Bench'`), 'tapping a bench shows its panel');
@@ -452,6 +494,11 @@ if (IWER){
   await pg.screenshot({ path: path.join(OUT, '11-vr-life.png') });
   await ev('__ftp.vr.toggleLife()'); await wait(500);
   check(await ev('__ftp.rig.scale.x') > 30, 'and back to the model');
+  await ev(`__ftp.ride(__ftp.park.obj('${car}'))`); await wait(1500);
+  const seatD = await ev(`(() => { const A = __ftp, s = A.riding.seat(); return A.camera.getWorldPosition(new A.rig.position.constructor()).distanceTo(s.eye); })()`);
+  check(seatD < 0.5, `riding in VR, your head is on the carousel's horse (${seatD.toFixed(2)} m)`);
+  await ev('__ftp.stopRide()'); await wait(400);
+  check(await ev('__ftp.rig.scale.x') > 30, 'getting off puts the play space back exactly (the model again)');
   await ev('__ftp.vr.end()'); await wait(800);
   check(!(await ev('__ftp.vr.active')) && await ev('__ftp.rig.scale.x') === 1, 'leaving VR puts the screen view back');
 }

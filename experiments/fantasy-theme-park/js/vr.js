@@ -120,9 +120,11 @@ export class VR {
     this.tablet.group.visible = this.tablet.visible;
     // buttons: A undo, B life-size / model, X tablet, Y menu
     if (press('a', bt(R, 4))) A.ui.act('undo');
-    if (press('b', bt(R, 5))) this.toggleLife();
+    if (press('b', bt(R, 5))){ if (A.riding) A.stopRide(); else this.toggleLife(); }
     if (press('x', bt(L, 4))){ this.tablet.visible = !this.tablet.visible; }
     if (press('y', bt(L, 5))){ if (A.ui.dialog) A.ui.act('dlg:cancel'); else A.ui.act('menu'); this.tablet.visible = true; }
+    // riding: the seat carries you (main.js), so no moving about
+    if (A.riding){ this.point(this.hand('right'), bt(R, 0), dt); if (this.tablet.visible && (A.ui.vrDirty || performance.now() - this.tablet.last > 500)) this.drawTablet(); return; }
     // grips: drag / turn / resize the world
     this.grips(bt(L, 1), bt(R, 1));
     // sticks
