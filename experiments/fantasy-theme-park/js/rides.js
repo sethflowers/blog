@@ -12,6 +12,7 @@ import { mat, glow } from './materials.js';
 import { resolveMat } from './models.js';
 import { boardTexture, disposeStructure } from './structures.js';
 import { CATALOG } from './models.js';
+import { FLAT_BUILD } from './flatrides.js';
 
 export { PIECES, COLORS, CARTS, SPEEDS, TILE };
 export const COASTER_PIECES = ['straight', 'left', 'right', 'bigLeft', 'bigRight', 'up', 'down', 'steepUp', 'steepDown', 'boost', 'loop', 'roll', 'hang', 'jump'];
@@ -19,15 +20,30 @@ const DIRV = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 export const FLAT = {
   carousel: { name: 'Carousel', sizes: [10, 12, 14], about: 'Galloping horses (or griffins, dragons and swans) round a mirrored column.' },
   wheel: { name: 'Big wheel', sizes: [20, 30, 40, 50], about: 'A great wheel of gondolas, with a view of the whole park.' },
+  drop: { name: 'Drop tower', sizes: [30, 45, 60], about: 'Hauled up slowly, held at the top... and dropped.', label: 'Height' },
+  swing: { name: 'Swing ride', sizes: [14, 16, 20], about: 'Seats on chains, flung out wide as the top turns and tilts.' },
+  ship: { name: 'Swinging ship', sizes: [12, 14, 18], about: 'A great ship swinging higher and higher.', label: 'Length' },
+  cups: { name: 'Teacups', sizes: [11, 13, 15], about: 'Cups that spin on platforms that spin on a floor that spins.' },
+  scrambler: { name: 'Scrambler', sizes: [13, 15, 17], about: 'Arms one way, cars the other: a wild, whirling ride.' },
 };
+export const SHIP_STYLES = [['pirate', 'Pirate ship'], ['viking', 'Longship'], ['dragon', 'Dragon boat']];
+const RIDE_DEF = {
+  drop: { size: 45, color: '#2a4a9a', color2: '#c8983a', name: 'Sky Drop', cap: 16, fun: 6.4, scary: 7.5, queasy: 3.5, speed: 26 },
+  swing: { size: 16, color: '#6a2a7a', color2: '#f0e8d8', name: 'Whirling Swings', cap: 32, fun: 5.2, scary: 3.2, queasy: 3.0, speed: 12 },
+  ship: { size: 14, color: '#5a3018', color2: '#c8983a', name: 'The Jolly Rover', style: 'pirate', cap: 32, fun: 5.6, scary: 4.6, queasy: 4.5, speed: 10 },
+  cups: { size: 13, color: '#c86a9a', color2: '#f0e8d8', name: 'Spinning Teacups', cap: 36, fun: 4.6, scary: 1.6, queasy: 5.2, speed: 5 },
+  scrambler: { size: 15, color: '#2a6a4a', color2: '#c8983a', name: 'The Scrambler', cap: 24, fun: 5.4, scary: 3.8, queasy: 5.8, speed: 9 },
+};
+export function rideHeight(o){ return o.kind === 'wheel' ? o.size + 3 : o.kind === 'drop' ? o.size + 6 : o.kind === 'swing' ? 13 : o.kind === 'ship' ? o.size * 0.62 + 6 : 8; }
 export const MOUNTS = [['horses', 'Horses'], ['griffins', 'Griffins'], ['dragons', 'Dragons'], ['swans', 'Swans'], ['mixed', 'A mixture']];
 export const RIDE_COLORS = ['#b02a2a', '#2a4a9a', '#c8983a', '#2a6a4a', '#6a2a7a', '#f0e8d8'];
 export function newRide(kind){
   if (kind === 'carousel') return { type: 'ride', kind, name: 'Grand Carousel', size: 12, tiers: 1, mounts: 'horses', color: '#b02a2a', color2: '#f0e8d8', speed: 1, open: true };
+  if (RIDE_DEF[kind]){ const d = RIDE_DEF[kind]; return { type: 'ride', kind, name: d.name, size: d.size, color: d.color, color2: d.color2, style: d.style, speed: 1, open: true }; }
   return { type: 'ride', kind: 'wheel', name: 'Big Wheel', size: 30, gondolas: 16, cabin: 'cabin', color: '#f0e8d8', color2: '#2a4a9a', lights: true, speed: 1, open: true };
 }
-export function newCoaster(hang){ return { type: 'coaster', name: hang ? 'The Bat' : 'Dragon\'s Fury', d: 0, hang: !!hang, pieces: [], color: hang ? 4 : 0, cart: 'classic', speed: 2, open: true }; }
-export function flatRadius(o){ return o.kind === 'wheel' ? o.size / 2 + 3 : o.size / 2 + 1.2; }
+export function newCoaster(hang, spin){ return { type: 'coaster', name: hang ? 'The Bat' : spin ? 'The Twister' : 'Dragon\'s Fury', d: 0, hang: !!hang, spin: !!spin, pieces: [], color: hang ? 4 : 0, cart: 'classic', speed: 2, open: true }; }
+export function flatRadius(o){ return o.kind === 'wheel' ? o.size / 2 + 3 : o.kind === 'drop' ? 6 : o.kind === 'swing' ? o.size / 2 + 2 : o.kind === 'ship' ? o.size / 2 + 1.5 : o.size / 2 + 1.6; }
 // the ground a coaster's station stands on: 16 m along the track, 4 m either side
 export function stationCells(o){
   const [fx, fz] = DIRV[o.d], [rx, rz] = DIRV[(o.d + 1) % 4], out = [];
@@ -62,10 +78,10 @@ export class Rides {
   }
   build(o){
     if (o.type === 'coaster') return this.buildCoaster(o);
-    const group = o.kind === 'carousel' ? buildCarousel(o) : buildWheel(o);
+    const group = o.kind === 'carousel' ? buildCarousel(o) : o.kind === 'wheel' ? buildWheel(o) : FLAT_BUILD[o.kind](o);
     group.position.set(o.x, this.park.groundAt(o.x, o.z), o.z); group.rotation.y = o.r || 0;
     this.scene.add(group);
-    const capacity = o.kind === 'carousel' ? group.userData.mounts.length : (o.gondolas || 16) * 2;
+    const capacity = o.kind === 'carousel' ? group.userData.mounts.length : o.kind === 'wheel' ? (o.gondolas || 16) * 2 : RIDE_DEF[o.kind].cap;
     this.items.set(o.id, { o, group, flat: true, t: 0, angle: 0, spin: 0, phase: 'loading', phaseT: 6, riders: [], capacity });
   }
   // --- coasters -----
@@ -79,7 +95,7 @@ export class Rides {
       if (o.type === 'gate'){ const c = Math.cos(o.r || 0), s = Math.sin(o.r || 0); for (let lx = -19; lx <= 19; lx += 2) for (let lz = -4; lz <= 4; lz += 2) put(o.x + lx * c + lz * s, o.z - lx * s + lz * c, { kind: 'gate', h: 26 }); }
       else if (o.type === 'lot') for (let x = o.x - o.w + 1; x < o.x + o.w; x += 2) for (let z = o.z - o.d + 1; z < o.z + o.d; z += 2) put(x, z, { kind: 'lot', h: 4 });
       else if (o.type === 'coaster') for (const [x, z] of stationCells(o)) put(x, z, { kind: 'station', id: o.id, h: 7 });
-      else if (o.type === 'ride'){ const R = flatRadius(o); for (let x = -R; x <= R; x += 2) for (let z = -R; z <= R; z += 2) if (x * x + z * z <= R * R) put(o.x + x, o.z + z, { kind: 'ride', h: (o.kind === 'wheel' ? o.size + 3 : 8) + 2 }); }
+      else if (o.type === 'ride'){ const R = flatRadius(o); for (let x = -R; x <= R; x += 2) for (let z = -R; z <= R; z += 2) if (x * x + z * z <= R * R) put(o.x + x, o.z + z, { kind: 'ride', h: rideHeight(o) + 2 }); }
     }
     this.block = B;
     return B;
@@ -122,7 +138,7 @@ export class Rides {
     let best = null, bt = maxT;
     for (const it of this.items.values()){
       const o = it.o; let cx, cz, r, h, y0;
-      if (o.type === 'ride'){ cx = o.x; cz = o.z; r = flatRadius(o) - 1; h = o.kind === 'wheel' ? o.size + 3 : 7; y0 = it.group.position.y; }
+      if (o.type === 'ride'){ cx = o.x; cz = o.z; r = flatRadius(o) - 1; h = rideHeight(o); y0 = it.group.position.y; }
       else { const [fx, fz] = DIRV[o.d]; cx = o.x + fx * 8; cz = o.z + fz * 8; r = 7; h = 7; y0 = o.y0 - 1; }
       const ox = ray.origin.x - cx, oz = ray.origin.z - cz, dx = ray.direction.x, dz = ray.direction.z, a = dx * dx + dz * dz, b = 2 * (ox * dx + oz * dz), c = ox * ox + oz * oz - r * r, disc = b * b - 4 * a * c;
       if (disc < 0 || a < 1e-9) continue;
@@ -137,24 +153,32 @@ export class Rides {
       const v0 = SPEEDS[o.speed ?? 2].v, r = it.track.rate(v0);
       const tight = it.track.types().filter((t) => t === 'left' || t === 'right').length;
       const queasy = Math.round(clamp(r.intensity * 0.45 + r.inversions * 0.9 + tight * 0.08 * (v0 / 12) + (o.hang ? 0.6 : 0), 0, 10) * 10) / 10;
+      if (o.spin) return { fun: Math.min(10, Math.round((r.excitement + 0.9) * 10) / 10), scary: r.intensity, queasy: Math.min(10, Math.round((queasy + 2) * 10) / 10), topSpeed: r.maxSpeed, height: r.maxHeight, length: r.length, complete: it.track.complete, pieces: r.pieces, inversions: r.inversions };
       return { fun: r.excitement, scary: r.intensity, queasy, topSpeed: r.maxSpeed, height: r.maxHeight, length: r.length, complete: it.track.complete, pieces: r.pieces, inversions: r.inversions };
     }
     if (o.kind === 'carousel') return { fun: Math.round((3.2 + o.size * 0.08 + (o.tiers - 1) * 0.8 + (o.mounts === 'mixed' ? 0.4 : 0.2)) * 10) / 10, scary: 0.4 + o.speed * 0.3, queasy: Math.round((0.8 + o.speed * 0.6 + (o.tiers - 1) * 0.2) * 10) / 10, topSpeed: (o.size / 2 - 1) * (0.5 + o.speed * 0.25), height: 3 * o.tiers, complete: true };
+    if (RIDE_DEF[o.kind]){ const d = RIDE_DEF[o.kind], k = o.size / d.size, sp = 0.85 + 0.15 * (o.speed ?? 1); return { fun: Math.round(d.fun * (0.85 + 0.15 * k) * sp * 10) / 10, scary: Math.round(Math.min(10, d.scary * k * sp) * 10) / 10, queasy: Math.round(Math.min(10, d.queasy * sp) * 10) / 10, topSpeed: d.speed * k * sp, height: rideHeight(o), complete: true }; }
     return { fun: Math.round((3 + o.size * 0.06 + (o.cabin === 'open' ? 0.6 : 0.2) + (o.lights ? 0.3 : 0)) * 10) / 10, scary: Math.round((0.6 + o.size * 0.05 + (o.cabin === 'open' ? 0.8 : 0)) * 10) / 10, queasy: 0.6, topSpeed: o.size / 2 * 0.12, height: o.size + 3, complete: true };
   }
   // every frame
   frame(dt, time){
     for (const it of this.items.values()){
       const o = it.o;
-      if (it.track){ if ((o.open !== false && !it.broken) || it.riding) it.train.update(dt, SPEEDS[o.speed ?? 2].v, time); continue; }
+      if (it.track){
+        if ((o.open !== false && !it.broken) || it.riding) it.train.update(dt, SPEEDS[o.speed ?? 2].v, time);
+        // a spinning coaster's cars turn by themselves as they go (and straighten up in the station)
+        if (o.spin) it.train.cars.forEach((c, k) => { const b = c.userData.body; if (!b) return; if (it.train.state === 'running') b.rotation.y += dt * (0.5 + it.train.v * 0.09) * (k % 2 ? 1 : -1) * (1 + 0.4 * Math.sin(time * 0.7 + k)); else b.rotation.y = damp(b.rotation.y % (Math.PI * 2), 0, 3, dt); });
+        continue;
+      }
       // the cycle: load (6 s), run, unload; with no guests about, it just keeps going
       it.phaseT -= dt;
       if (it.phaseT <= 0){
-        if (it.phase === 'loading' && !it.broken){ it.phase = 'running'; it.phaseT = o.kind === 'carousel' ? 32 : 70; }
+        if (it.phase === 'loading' && !it.broken){ it.phase = 'running'; it.phaseT = o.kind === 'carousel' ? 32 : o.kind === 'wheel' ? 70 : o.kind === 'drop' ? 30 : 40; }
         else if (it.phase === 'running'){ it.phase = 'loading'; it.phaseT = 7; if (this.onUnload) this.onUnload(it); }
         else it.phaseT = 2;
       }
       const on = (o.open !== false && !it.broken && (it.phase === 'running' || !this.guestsOn)) || it.riding;
+      if (it.group.userData.animate){ it.group.userData.animate(it.st || (it.st = {}), dt, on); continue; }
       if (o.kind === 'carousel'){
         it.spin = damp(it.spin, on ? 0.32 + 0.14 * (o.speed || 1) : 0, 0.6, dt);
         it.angle += it.spin * dt; const rot = it.group.userData.rotor; rot.rotation.y = it.angle;
@@ -173,6 +197,7 @@ export class Rides {
     if (it.track){
       return () => { it.train.seatEye(eye); fwd.copy(it.train.frontFwd || new THREE.Vector3(0, 0, -1)); up.copy(it.train.frontUp || new THREE.Vector3(0, 1, 0)); return { eye, fwd, up }; };
     }
+    if (it.group.userData.seat){ const sn = it.group.userData.seat; return () => { sn.updateWorldMatrix(true, false); sn.localToWorld(eye.set(0, 1.0, 0)); fwd.set(0, 0, 1).transformDirection(sn.matrixWorld); up.set(0, 1, 0).transformDirection(sn.matrixWorld); return { eye, fwd, up }; }; }
     const m = it.group.userData.mounts[0];
     return () => {
       if (o.kind === 'carousel'){ m.updateWorldMatrix(true, false); m.localToWorld(eye.set(0, 1.55, 0)); const c = it.group.position; fwd.set(eye.z - c.z, 0, -(eye.x - c.x)).normalize(); up.set(0, 1, 0); }

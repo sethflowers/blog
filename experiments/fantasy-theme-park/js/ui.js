@@ -13,7 +13,7 @@ import { ICON } from './icons.js';
 import { TEMPLATES, STYLES, ROOFS, MATS, USES, bounds as bBounds, groundCells, H as STOREY } from './buildings.js';
 import { GOODS, SELLS, STALLS, STALL_ROOFS, STALL_COLORS, goodsFor, defaultMenu, price } from './shops.js';
 import { foodName, shopName } from './names.js';
-import { FLAT, MOUNTS, RIDE_COLORS, COASTER_PIECES, PIECES, COLORS, CARTS, SPEEDS } from './rides.js';
+import { FLAT, MOUNTS, RIDE_COLORS, COASTER_PIECES, PIECES, COLORS, CARTS, SPEEDS, SHIP_STYLES } from './rides.js';
 import { fmt, UNLOCKS, WAGES } from './economy.js';
 const SWATCH = { ashlar: '#d8ccb0', brick: '#a0503a', boardwall: '#9a7a60', marble: '#e8e4dc', rockface: '#8a8478', slate: '#4a5060', tiles: '#b0553a', shingles: '#7a5a40', copper: '#5fa08a',
   darkwood: '#4a3426', wood: '#a07a52', white: '#f2efe8', iron: '#24262a', stone: '#b8b0a0', boards: '#9a7450', floortile: '#ddd5c4', pavers: '#9a4a3a', cobbles: '#8a8278' };
@@ -128,17 +128,18 @@ export class UI {
         }
         if (k === 'redit'){
           const o = P.obj(o_.id); if (!o) return { hint: 'That ride has gone.', sections: [] };
-          chips('Size', FLAT[o.kind].sizes.map((z) => ({ id: 'rsize:' + z, label: z + ' m', on: o.size === z })));
+          chips(FLAT[o.kind].label || 'Size', FLAT[o.kind].sizes.map((z) => ({ id: 'rsize:' + z, label: z + ' m', on: o.size === z })));
+          if (o.kind === 'ship') chips('Style', SHIP_STYLES.map(([st, l]) => ({ id: 'rstyle:' + st, label: l, on: (o.style || 'pirate') === st })));
           if (o.kind === 'carousel'){ chips('Tiers', [1, 2].map((t) => ({ id: 'rtiers:' + t, label: t === 1 ? 'One' : 'Two', on: (o.tiers || 1) === t }))); chips('Ride on', MOUNTS.map(([m, l]) => ({ id: 'rmounts:' + m, label: l, on: o.mounts === m }))); }
-          else { chips('Gondolas', [12, 16, 24, 32].map((g) => ({ id: 'rgond:' + g, label: String(g), on: o.gondolas === g }))); chips('Cars', [['cabin', 'Glazed cabins'], ['open', 'Open cars']].map(([c, l]) => ({ id: 'rcabin:' + c, label: l, on: o.cabin === c }))); chips('', [{ id: 'rlights', label: o.lights !== false ? 'Lights: on' : 'Lights: off', on: o.lights !== false }]); }
+          else if (o.kind === 'wheel'){ chips('Gondolas', [12, 16, 24, 32].map((g) => ({ id: 'rgond:' + g, label: String(g), on: o.gondolas === g }))); chips('Cars', [['cabin', 'Glazed cabins'], ['open', 'Open cars']].map(([c, l]) => ({ id: 'rcabin:' + c, label: l, on: o.cabin === c }))); chips('', [{ id: 'rlights', label: o.lights !== false ? 'Lights: on' : 'Lights: off', on: o.lights !== false }]); }
           chips('Colour', RIDE_COLORS.map((c) => ({ id: 'rcolor:' + c, swatchColor: c, label: '', on: o.color === c })));
-          chips(o.kind === 'carousel' ? 'Canopy stripes' : 'Gondola colour', RIDE_COLORS.map((c) => ({ id: 'rcolor2:' + c, swatchColor: c, label: '', on: o.color2 === c })));
+          chips(o.kind === 'carousel' || o.kind === 'swing' ? 'Stripes' : o.kind === 'wheel' ? 'Gondola colour' : 'Second colour', RIDE_COLORS.map((c) => ({ id: 'rcolor2:' + c, swatchColor: c, label: '', on: o.color2 === c })));
           chips('Speed', [[0, 'Gentle'], [1, 'Lively'], [2, 'Brisk']].map(([v, l]) => ({ id: 'rspeed:' + v, label: l, on: (o.speed ?? 1) === v })).concat([{ id: 'cride', label: 'Ride it' }, { id: 'rdone', label: 'Done' }]));
           const st = this.app.rides.stats(o);
           return { hint: st ? `${o.name}: Fun ${st.fun} · Scary ${Math.round(st.scary * 10) / 10} · Queasy ${st.queasy}` : '', sections: S };
         }
         const E = this.app.economy, lock = (id) => E && E.locked(id) ? E.unlockText(id) : '';
-        cards('Coasters', [{ id: 'newcoaster', label: 'Coaster', thumb: 'ride:coaster', on: k === 'coaster' && !o.hang, sub: lock('coaster') || '' }, { id: 'newhang', label: 'Hanging coaster', thumb: 'ride:hang', on: k === 'coaster' && o.hang, sub: lock('hang') || '' }]);
+        cards('Coasters', [{ id: 'newcoaster', label: 'Coaster', thumb: 'ride:coaster', on: k === 'coaster' && !o.hang && !o.spin, sub: lock('coaster') || '' }, { id: 'newhang', label: 'Hanging coaster', thumb: 'ride:hang', on: k === 'coaster' && o.hang, sub: lock('hang') || '' }, { id: 'newspin', label: 'Spinning coaster', thumb: 'ride:spin', on: k === 'coaster' && o.spin, sub: lock('coaster') || '' }]);
         cards('Rides', Object.entries(FLAT).map(([id, f]) => ({ id: 'newride:' + id, label: f.name, thumb: 'ride:' + id, on: k === 'ride' && o.kind === id, sub: lock(id) || '' })));
         if (k === 'coaster' || k === 'ride') chips('Turn', [{ id: 'rot:-6', label: '⟲ 90°' }, { id: 'rot:6', label: '90° ⟳' }]);
         return { hint: k === 'coaster' ? 'Tap where the station goes (the arrow shows which way the train leaves). Then lay the track.' : k === 'ride' ? 'Tap where it goes, beside a path.' : 'Build a ride, design it, name it, and ride it.', sections: S };
@@ -291,7 +292,7 @@ export class UI {
       case 'stalldesign': this.stallDialog(); break;
       case 'savedesign': this.saveDesign(); break;
       case 'designs': this.designsDialog(); break;
-      case 'newcoaster': case 'newhang': if (A.economy && A.economy.locked(a === 'newhang' ? 'hang' : 'coaster')){ this.toast('Locked: ' + A.economy.unlockText(a === 'newhang' ? 'hang' : 'coaster') + ' to unlock it.', 'bad'); break; } this.tab = 'rides'; T.rot = 0; T.set('coaster', { hang: a === 'newhang' }); A.select(null); break;
+      case 'newcoaster': case 'newhang': case 'newspin': if (A.economy && A.economy.locked(a === 'newhang' ? 'hang' : 'coaster')){ this.toast('Locked: ' + A.economy.unlockText(a === 'newhang' ? 'hang' : 'coaster') + ' to unlock it.', 'bad'); break; } this.tab = 'rides'; T.rot = 0; T.set('coaster', { hang: a === 'newhang', spin: a === 'newspin' }); A.select(null); break;
       case 'newride': if (A.economy && A.economy.locked(v)){ this.toast('Locked: ' + A.economy.unlockText(v) + ' to unlock it.', 'bad'); break; } this.tab = 'rides'; T.rot = 0; T.set('ride', { kind: v }); A.select(null); break;
       case 'cedit': { const id = T.kind === 'cedit' ? T.opts.id : A.selected; const o = P.obj(id); if (!o) break; this.tab = 'rides'; T.set('cedit', { id }); A.select(null); const [fx, fz] = [[0, -1], [1, 0], [0, 1], [-1, 0]][o.d]; A.focus(o.x + fx * 8, o.z + fz * 8, 90); break; }
       case 'redit': { const id = A.selected; const o = P.obj(id); if (!o) break; this.tab = 'rides'; T.set('redit', { id }); A.select(null); A.focus(o.x, o.z, o.size * 2.5 + 15); break; }
@@ -301,8 +302,8 @@ export class UI {
       case 'cclear': this.confirm('Clear the track?', 'Every piece comes off (the station stays). Undo puts it back.', 'Clear', () => T.R.clear()); break;
       case 'cdone': case 'rdone': { const id = T.opts.id; T.set('select'); this.tab = 'select'; A.select(id); break; }
       case 'cride': { const o = P.obj(T.kind === 'cedit' || T.kind === 'redit' ? T.opts.id : A.selected); if (o) A.ride(o); break; }
-      case 'ccart': case 'ccolor': case 'cspeed': case 'rsize': case 'rtiers': case 'rmounts': case 'rgond': case 'rcabin': case 'rcolor': case 'rcolor2': case 'rspeed': {
-        const id = T.opts.id, f = { ccart: { cart: v }, ccolor: { color: +v }, cspeed: { speed: +v }, rsize: { size: +v }, rtiers: { tiers: +v }, rmounts: { mounts: v }, rgond: { gondolas: +v }, rcabin: { cabin: v }, rcolor: { color: v }, rcolor2: { color2: v }, rspeed: { speed: +v } }[a];
+      case 'ccart': case 'ccolor': case 'cspeed': case 'rsize': case 'rstyle': case 'rtiers': case 'rmounts': case 'rgond': case 'rcabin': case 'rcolor': case 'rcolor2': case 'rspeed': {
+        const id = T.opts.id, f = { ccart: { cart: v }, ccolor: { color: +v }, cspeed: { speed: +v }, rsize: { size: +v }, rstyle: { style: v }, rtiers: { tiers: +v }, rmounts: { mounts: v }, rgond: { gondolas: +v }, rcabin: { cabin: v }, rcolor: { color: v }, rcolor2: { color2: v }, rspeed: { speed: +v } }[a];
         if (a === 'rsize'){ const o = P.obj(id), why = T.R.problemAt(T.R.rideCells({ ...o, size: +v }), id); if (why){ this.toast(why, 'bad'); break; } }
         P.begin('Ride'); P.changeObject(id, f); P.commit(); break;
       }
