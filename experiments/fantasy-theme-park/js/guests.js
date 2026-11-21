@@ -20,6 +20,7 @@ import { GOODS } from './shops.js';
 import { lotBays } from './structures.js';
 import { carGeometry } from './highway.js';
 import { stationCells, flatRadius, SPEEDS } from './rides.js';
+import { DRAWN } from './trackrides.js';
 import { groundCells, edges, styleOf, toWorld } from './buildings.js';
 import { mat } from './materials.js';
 import { resolveMat } from './models.js';
@@ -83,6 +84,7 @@ export class Guests {
     for (const it of this.app.rides.items.values()){
       const o = it.o; let cells = [];
       if (o.type === 'coaster') for (const [x, z] of stationCells(o)) cells.push(...near(x, z, 3));
+      else if (it.group.userData.station && DRAWN[o.kind]){ const st = it.group.userData.station; cells.push(...near(st.x, st.z, 6)); }
       else { const R = flatRadius(o); for (let a = 0; a < 24; a++){ const an = a / 24 * Math.PI * 2; cells.push(...near(o.x + Math.cos(an) * (R + 1.5), o.z + Math.sin(an) * (R + 1.5), 2)); } }
       cells = [...new Set(cells)];
       if (cells.length) places.rides.set(o.id, { key: 'ride:' + o.id, cells, it });

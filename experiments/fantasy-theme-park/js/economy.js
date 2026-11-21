@@ -31,7 +31,9 @@ export function priceOf(o){
     case 'stall': return 1100;
     case 'building': return (o.floors || []).reduce((a, f) => a + f.length, 0) * 650 + (o.towers || []).length * 2400 + (o.extras || []).length * 160 + (o.use ? 1500 : 0);
     case 'coaster': return 4000 + (o.pieces || []).reduce((a, t) => a + (PIECE_PRICE[t] || 200), 0);
-    case 'ride': return o.kind === 'carousel' ? 4000 + o.size * 200 + ((o.tiers || 1) - 1) * 3000 : o.kind === 'wheel' ? 6000 + o.size * 320 + (o.gondolas || 16) * 60 : { drop: 9000, swing: 6500, ship: 7000, cups: 5000, scrambler: 6000 }[o.kind] + o.size * 150;
+    case 'ride': if (o.pts && o.pts.length){ const L = o.pts.reduce((a, p, i) => { const q = o.pts[(i + 1) % o.pts.length]; return a + Math.hypot(q[0] - p[0], q[1] - p[1]); }, 0); return Math.round({ railway: 6000 + 60 * L, boats: 4000 + 30 * L, flume: 8000 + 120 * L, karts: 5000 + 40 * L }[o.kind]); }
+      if (o.kind === 'dark') return 12000 + o.size * 400;
+      return o.kind === 'carousel' ? 4000 + o.size * 200 + ((o.tiers || 1) - 1) * 3000 : o.kind === 'wheel' ? 6000 + o.size * 320 + (o.gondolas || 16) * 60 : { drop: 9000, swing: 6500, ship: 7000, cups: 5000, scrambler: 6000 }[o.kind] + o.size * 150;
   }
   if (o.type.startsWith('fence_')) return Math.round(Math.hypot(o.x2 - o.x, o.z2 - o.z) * 22);
   return 100;
