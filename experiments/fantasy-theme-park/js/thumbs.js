@@ -6,6 +6,8 @@ import { texture, mat } from './materials.js';
 import { buildFence, buildSign, buildLot, buildGate, disposeStructure } from './structures.js';
 import { buildBuilding, fromTemplate } from './buildings.js';
 import { buildStall, newStall } from './shops.js';
+import { buildCarousel, buildWheel, newRide } from './rides.js';
+import { pieceIcon } from './coaster/track.js';
 
 const SIZE = 128;
 export class Thumbs {
@@ -20,6 +22,11 @@ export class Thumbs {
   }
   get(type){
     if (this.cache.has(type)) return this.cache.get(type);
+    // drawings rather than renders: track pieces and the coasters
+    if (type.startsWith('piece:') || type === 'ride:coaster' || type === 'ride:hang'){
+      const cv = pieceIcon(type.startsWith('piece:') ? type.slice(6) : 'loop', SIZE, type === 'ride:hang' ? '#9a6ad8' : '#e8b850');
+      const url = cv.toDataURL('image/png'); this.cache.set(type, url); this.canvases.set(type, cv); return url;
+    }
     let obj, own = false;
     const fakePark = { floorAt: () => 0, groundAt: () => 0 };
     if (CATALOG[type]){ obj = new THREE.Group(); for (const p of model(type).parts) obj.add(new THREE.Mesh(p.geo, p.key === 'tint' ? mat('flagThumb', { c: 0xb02030, r: 0.7, side: THREE.DoubleSide }) : resolveMat(p.key))); }
@@ -27,6 +34,7 @@ export class Thumbs {
     else if (type === 'sign'){ obj = buildSign({ name: 'Welcome' }); own = true; }
     else if (type === 'lot'){ obj = buildLot({ x: 0, z: 0, w: 10, d: 8, name: 'Parking' }, fakePark); own = true; }
     else if (type === 'gate'){ obj = buildGate('Your Park'); own = true; }
+    else if (type === 'ride:carousel' || type === 'ride:wheel'){ const o = newRide(type.slice(5)); obj = o.kind === 'carousel' ? buildCarousel(o) : buildWheel(o); own = true; }
     else if (type.startsWith('stall:')){ obj = buildStall(newStall(type.slice(6))); own = true; }
     else if (type.startsWith('bp:')){ const d = ((this.app && this.app.blueprints) || []).find((q) => q.id === type.slice(3)); if (!d) return ''; obj = d.kind === 'stall' ? buildStall(d.data) : buildBuilding({ walls: {}, towers: [], extras: [], ...d.data, x: 0, z: 0, r: 0 }, fakePark); own = true; }
     else if (type.startsWith('tpl:')){ obj = buildBuilding({ ...fromTemplate(type.slice(4)), x: 0, z: 0, r: 0 }, fakePark); own = true; }

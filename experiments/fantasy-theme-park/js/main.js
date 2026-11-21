@@ -18,6 +18,7 @@ import * as store from './store.js';
 import { clamp, damp, angleDiff, esc, disposeTree } from './util.js';
 import { Audio } from './audio.js';
 import { bounds, toWorld } from './buildings.js';
+import { Rides } from './rides.js';
 
 const VERSION = document.body.dataset.version || '?';
 const $ = (id) => document.getElementById(id);
@@ -90,6 +91,7 @@ class App {
     this.world.objects = new Objects(this.scene, this.park);
     this.objects = this.world.objects; this.terrain = this.world.terrain;
     this.tools = new Tools(this);
+    this.rides = new Rides(this); this.objects.rides = this.rides;
     this.park.on((ch) => this.changed(ch));
     const gate = state.objects.find((o) => o.type === 'gate') || { x: 0, z: 0 };
     const cam = state.camera;
@@ -102,6 +104,8 @@ class App {
   }
   closePark(){
     if (!this.world) return;
+    if (this.riding) this.stopRide();
+    if (this.rides) this.rides.dispose();
     this.tools.clearGhost(); this.scene.remove(this.tools.cells); this.tools.cells.dispose();
     const W = this.world;
     for (const m of [W.terrain.mesh, W.terrain.ring, W.terrain.water, W.terrain.sea]) if (m) disposeTree(m);
@@ -124,6 +128,8 @@ class App {
     if (ch.landList || ch.name) W.objects.renamed();
     const ground = ch.heights || ch.path || ch.water;
     if (ch.objects.size || ground) W.objects.update(ch.objects, ground ? union(ch.heights, ch.path, ch.water) : null);
+    if (ch.objects.size) this.rides.update(ch.objects);
+    if (this.riding && !this.park.obj(this.riding.o.id)) this.stopRide();
     if (this.selected && !this.park.obj(this.selected)) this.selected = null;
     this.ui.refresh();
     this.saveSoon();
@@ -262,6 +268,45 @@ class App {
     return [x, z];
   }
   setSpeed(s){ this.speed = s; this.ui.refresh(); }
+  // --- riding a ride: on screen the camera sits in the seat (drag to look round); in VR the play space does
+  ride(o){
+    if (this.riding) this.stopRide();
+    const seat = this.rides.seat(o); if (!seat) return;
+    const st = this.rides.stats(o); if (o.type === 'coaster' && st && !st.complete){ this.ui.toast('The track has to be a complete circuit first.', 'bad'); return; }
+    this.riding = { o, seat, look: { yaw: 0, pitch: 0 }, prev: this.mode };
+    if (this.inVR) this.riding.rig = { pos: this.rig.position.clone(), quat: this.rig.quaternion.clone(), scale: this.rig.scale.x, life: this.vr.life };
+    this.rides.startRide(o);
+    this.tools.set('select'); this.select(null);
+    this.mode = 'ride'; document.body.classList.add('riding');
+    this.camera.near = 0.1; this.camera.updateProjectionMatrix();
+    this.ui.toast(this.inVR ? 'Enjoy the ride! Press B to get off.' : 'Enjoy the ride! Drag to look round; Get off when you like.');
+    this.ui.refresh();
+  }
+  stopRide(){
+    const R = this.riding; if (!R) return;
+    this.rides.endRide(R.o);
+    this.riding = null;
+    // put the play space back exactly as it was (height included)
+    if (R.rig){ this.rig.position.copy(R.rig.pos); this.rig.quaternion.copy(R.rig.quat); this.rig.scale.setScalar(R.rig.scale); this.vr.scale = R.rig.scale; this.vr.life = R.rig.life; }
+    this.mode = R.prev === 'walk' ? 'walk' : 'build';
+    if (this.mode === 'build'){ this.camera.near = 0.3; this.camera.updateProjectionMatrix(); }
+    document.body.classList.remove('riding');
+    this.ui.refresh();
+  }
+  updateRide(){
+    const R = this.riding, s = R.seat(), right = new THREE.Vector3().crossVectors(s.fwd, s.up).normalize(), up = new THREE.Vector3().crossVectors(right, s.fwd).normalize();
+    const m = new THREE.Matrix4().makeBasis(right, up, s.fwd.clone().negate()), q = new THREE.Quaternion().setFromRotationMatrix(m);
+    if (this.inVR){
+      // the play space rides in the seat: its floor turns with the car, your head at the seat
+      this.rig.quaternion.copy(q); this.rig.scale.setScalar(1);
+      const head = this.camera.position.clone().applyQuaternion(q);
+      this.rig.position.copy(s.eye).sub(head);
+      return;
+    }
+    this.rig.position.set(0, 0, 0); this.rig.rotation.set(0, 0, 0); this.rig.scale.setScalar(1);
+    const look = new THREE.Quaternion().setFromEuler(new THREE.Euler(R.look.pitch, R.look.yaw, 0, 'YXZ'));
+    this.camera.position.copy(s.eye); this.camera.quaternion.copy(q).multiply(look);
+  }
   // your designs: kept on this device, shared by all your parks
   addBlueprint(d){ d.id = Math.random().toString(36).slice(2, 10); this.blueprints = [...(this.blueprints || []), d]; store.setPref('blueprints', this.blueprints).catch(() => {}); this.ui.refresh(); return d; }
   removeBlueprint(id){ this.blueprints = (this.blueprints || []).filter((d) => d.id !== id); store.setPref('blueprints', this.blueprints).catch(() => {}); this.thumbs.cache.delete('bp:' + id); this.ui.refresh(); }
@@ -309,7 +354,7 @@ class App {
     return this.ray.ray;
   }
   // the thing under the pointer (used by Select and Bulldoze)
-  pickAt(){ const ray = this.lastRay; if (!ray) return null; const g = this.groundHit(ray); const h = this.objects.pick(ray, g ? g.t + 2 : 2000); return h ? h.o : null; }
+  pickAt(){ const ray = this.lastRay; if (!ray) return null; const g = this.groundHit(ray); const h = this.objects.pick(ray, g ? g.t + 2 : 2000); const r = this.rides.pick(ray, h ? h.t : g ? g.t + 2 : 2000); return r ? r.o : h ? h.o : null; }
 
   // --- input (screen) -----------------------------------------------------------------------------
   bindInput(){
@@ -320,6 +365,7 @@ class App {
       try { cv.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ }
       this.audio.unlock();
       const p = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), button: e.button, type: e.pointerType, moved: 0 };
+      if (this.mode === 'ride'){ I.ptrs.set(e.pointerId, { ...p, rideLook: true }); return; }
       if (this.mode === 'walk'){
         // a new touch in the stick zone always takes the stick over
         if (isStickZone(e)){ I.stick = { id: e.pointerId, cx: e.clientX, cy: e.clientY }; I.stickV = [0, 0]; this.showStick(e.clientX, e.clientY, 0, 0); I.ptrs.set(e.pointerId, { ...p, stick: true }); return; }
@@ -346,6 +392,7 @@ class App {
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
       p.moved += Math.hypot(dx, dy); p.x = e.clientX; p.y = e.clientY;
       if (p.stick){ let vx = e.clientX - I.stick.cx, vy = e.clientY - I.stick.cy; const l = Math.hypot(vx, vy); if (l > 55){ vx *= 55 / l; vy *= 55 / l; } I.stickV = [vx / 55, vy / 55]; this.showStick(I.stick.cx, I.stick.cy, vx, vy); return; }
+      if (p.rideLook && this.riding){ this.riding.look.yaw -= dx * 0.005; this.riding.look.pitch = clamp(this.riding.look.pitch - dy * 0.004, -1.2, 1.2); return; }
       if (p.look){ this.walker.yaw -= dx * 0.005; this.walker.pitch = clamp(this.walker.pitch - dy * 0.004, -1.3, 1.3); return; }
       if (I.gesture){ this.moveGesture(); return; }
       this.lastRay = this.screenRay(e.clientX, e.clientY).clone();
@@ -386,6 +433,7 @@ class App {
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && k === 'z'){ e.preventDefault(); this.ui.act(e.shiftKey ? 'redo' : 'undo'); return; }
       if ((e.ctrlKey || e.metaKey) && k === 'y'){ e.preventDefault(); this.ui.act('redo'); return; }
+      if (k === 'escape' && this.riding){ this.stopRide(); return; }
       if (k === 'escape'){ if (this.ui.dialog) this.ui.act('dlg:cancel'); else if (this.selected) this.select(null); else { this.ui.tab = 'select'; this.tools.set('select'); } return; }
       if ((k === 'delete' || k === 'backspace') && this.selected){ this.ui.act('objdel'); return; }
       if (k === '[' || k === ']'){ if (this.selected) this.ui.act('objrot:' + (k === '[' ? -1 : 1)); else this.ui.act('rot:' + (k === '[' ? -1 : 1)); return; }
@@ -495,14 +543,16 @@ class App {
       // the clock: one game minute a second at 1x
       if (this.mode !== 'title' && !this.demo){ S.time += gdt * this.speed; if (S.time >= 1440){ S.time -= 1440; S.day++; } }
       else if (this.mode === 'title'){ S.time = 18.3 * 60; }
+      this.rides.frame(gdt, this.t);   // (before the cameras: a rider's eyes follow the seat this frame, not last frame's)
       if (this.mode === 'title'){ this.titleCam(dt); }
-      else if (this.inVR) this.vr.update(dt);
+      else if (this.inVR){ this.vr.update(dt); if (this.riding) this.updateRide(); }
+      else if (this.riding) this.updateRide();
       else if (this.mode === 'walk') this.updateWalk(dt);
       else this.updateBuild(dt);
       this.tools.frame(gdt);
       const hour = S.time / 60;
-      const center = this.inVR ? this.vr.focus() : this.mode === 'walk' ? new THREE.Vector3(this.walker.x, 0, this.walker.z) : new THREE.Vector3(this.orbit.x, this.orbit.ty, this.orbit.z);
-      const span = this.inVR ? this.vr.shadowSpan() : this.mode === 'walk' ? 60 : clamp(this.orbit.dist * 0.85, 40, 260);
+      const center = this.inVR ? this.vr.focus() : this.riding ? this.camera.position.clone() : this.mode === 'walk' ? new THREE.Vector3(this.walker.x, 0, this.walker.z) : new THREE.Vector3(this.orbit.x, this.orbit.ty, this.orbit.z);
+      const span = this.inVR ? this.vr.shadowSpan() : this.mode === 'walk' || this.riding ? 60 : clamp(this.orbit.dist * 0.85, 40, 260);
       if (Math.abs(span - this.sky.span) > this.sky.span * 0.15) this.sky.setShadowSpan(span);
       const camPos = this.camera.getWorldPosition(new THREE.Vector3());
       this.sky.update(hour, center, camPos);

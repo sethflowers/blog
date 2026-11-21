@@ -1,0 +1,695 @@
+// The track: pieces joined end to end on a grid, starting and ending at the station.
+// (Brought across from Rollercoaster Bros. Changes for the theme park: the station can be anywhere on the
+// 8 m grid, facing any way, at its own height (y0); an `env` check keeps track out of hills, buildings
+// and low over paths; supports reach down to the real ground (groundAt).)
+//
+// The ground is a grid of 8 m tiles; track heights come in 4 m levels. Every piece starts and ends on a
+// grid point, level and unrolled, facing north, east, south or west, so any piece fits after any other.
+// Each piece is a path in its own frame (forward f, right r, up u, in metres) plus a roll. Placed in the
+// world it is sampled finely, given a smooth "up" (a rotation-minimising frame, so loops turn the
+// riders upside down by themselves; banking and barrel rolls are added on top), and swept into rails.
+import * as THREE from 'three';
+import { V, clamp, smooth, merge, placed } from './cutil.js';
+
+export const TILE = 8, LEVEL = 4, BASE_Y = 0.9, MAX_LEVEL = 12;
+// the park: x from -GRID_X to GRID_X tiles, z from -GRID_N (north) to GRID_S (south)
+const LIM = 290;   // metres from the middle of the park
+const inPark = (i, j) => Math.abs(i * TILE) <= LIM && Math.abs(j * TILE) <= LIM;
+const inParkXZ = (x, z) => Math.abs(x) <= LIM && Math.abs(z) <= LIM;
+export function resetWorld(){ WORLD.tracks.length = 0; WORLD.reserved.clear(); }
+// every coaster in the park, and the ground kept free for stations and queues
+export const WORLD = { tracks: [], reserved: new Map() };
+export function reserve(x0, x1, z0, z1, lo, hi){
+  for (let x = x0; x <= x1; x += TILE / 4) for (let z = z0; z <= z1; z += TILE / 4) WORLD.reserved.set(key(x, z), { lo, hi });
+}
+export const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];          // north, east, south, west (x, z)
+const PI = Math.PI;
+
+// ---------- the pieces ----------
+const turn = (R, s) => ({
+  f: R, r: s * R, du: 0, dh: s,
+  path: (t) => { const a = t * PI / 2, m = R * TILE; return [m * Math.sin(a), s * m * (1 - Math.cos(a)), 0]; },
+  roll: (t) => s * (R === 1 ? 0.55 : 0.4) * Math.sin(PI * t),
+});
+const slope = (L, H) => ({
+  f: L, r: 0, du: H, dh: 0, slope: true,
+  path: (t) => [L * TILE * t, 0, H * LEVEL * (1 - Math.cos(PI * t)) / 2],
+});
+const LOOP_R = 6.5;
+export const PIECES = {
+  straight: { name: 'Straight', group: 'starter', fun: 0.03, f: 1, r: 0, du: 0, dh: 0, path: (t) => [TILE * t, 0, 0] },
+  left: { name: 'Left turn', group: 'starter', fun: 0.12, ...turn(1, -1) },
+  right: { name: 'Right turn', group: 'starter', fun: 0.12, ...turn(1, 1) },
+  bigLeft: { name: 'Wide left', group: 'wide', fun: 0.12, ...turn(2, -1) },
+  bigRight: { name: 'Wide right', group: 'wide', fun: 0.12, ...turn(2, 1) },
+  up: { name: 'Hill up', group: 'hills', fun: 0.2, ...slope(2, 1) },
+  down: { name: 'Hill down', group: 'hills', fun: 0.35, ...slope(2, -1) },
+  steepUp: { name: 'Steep climb', group: 'steep', fun: 0.3, ...slope(2, 2) },
+  steepDown: { name: 'Big drop', group: 'steep', fun: 0.7, ...slope(2, -2) },
+  loop: {
+    name: 'Loop', group: 'loop', fun: 1.4, inversions: 1, f: 2, r: 0, du: 0, dh: 0, samples: 120,
+    // a vertical loop that drifts forward, and swings a little sideways so it misses itself
+    path: (t) => { const a = 2 * PI * t; return [2 * TILE * t + LOOP_R * Math.sin(a), 3.5 * Math.sin(a) * Math.sin(PI * t), LOOP_R * (1 - Math.cos(a))]; },
+  },
+  jump: {
+    name: 'Jump', group: 'jump', fun: 1.6, jumps: 1, f: 3, r: 0, du: 0, dh: 0, samples: 80,
+    path: (t) => [3 * TILE * t, 0, 5.5 * (1 - Math.cos(2 * PI * t)) / 2],
+    gap: (t) => t > 0.3 && t < 0.7,
+  },
+  roll: {
+    name: 'Barrel roll', group: 'roll', fun: 1.3, inversions: 1, f: 2, r: 0, du: 0, dh: 0, samples: 90,
+    // the riders' hearts stay on a straight line while the track turns round it
+    path: (t) => { const a = rollAngle(t), h = 1.1; return [2 * TILE * t, -h * Math.sin(a), h * (1 - Math.cos(a))]; },
+    roll: (t) => rollAngle(t),
+  },
+  hang: {
+    name: 'Upside down', group: 'hang', fun: 1.5, inversions: 1, f: 3, r: 0, du: 0, dh: 0, samples: 120,
+    // roll over, ride along upside down over a little hump, then roll the rest of the way round
+    path: (t) => { const a = hangAngle(t), h = 1.1; return [3 * TILE * t, -h * Math.sin(a), 2.5 * Math.sin(PI * t) ** 2 + h * (1 - Math.cos(a))]; },
+    roll: (t) => hangAngle(t),
+  },
+  boost: {
+    name: 'Booster', group: 'boost', fun: 0.5, boost: true, f: 2, r: 0, du: 0, dh: 0,
+    // a straight with spinning tyres that shoot the train forward
+    path: (t) => [2 * TILE * t, 0, 0],
+  },
+  station: { name: 'Station', group: 'none', fun: 0, f: 2, r: 0, du: 0, dh: 0, path: (t) => [2 * TILE * t, 0, 0] },
+};
+function rollAngle(t){ return 2 * PI * smooth((t - 0.12) / 0.76); }
+function hangAngle(t){ return PI * (smooth((t - 0.05) / 0.2) + smooth((t - 0.75) / 0.2)); }
+export const BUILD_ORDER = ['straight', 'left', 'right', 'bigLeft', 'bigRight', 'up', 'down', 'steepUp', 'steepDown', 'boost', 'loop', 'roll', 'hang', 'jump'];
+export const GROUPS = {
+  starter: { name: 'Starter track', price: 0, pieces: ['straight', 'left', 'right'] },
+  wide: { name: 'Wide turns', price: 150, pieces: ['bigLeft', 'bigRight'], text: 'Long sweeping curves.' },
+  hills: { name: 'Hills', price: 300, pieces: ['up', 'down'], text: 'Go up, then whoosh down.' },
+  steep: { name: 'Big drops', price: 800, pieces: ['steepUp', 'steepDown'], text: 'Climb high and drop fast!' },
+  boost: { name: 'Booster', price: 1200, pieces: ['boost'], text: 'Turbo tyres that shoot your train forward, fast!' },
+  loop: { name: 'Loop-the-loop', price: 1500, pieces: ['loop'], text: 'Go all the way round, upside down.' },
+  roll: { name: 'Barrel roll', price: 2500, pieces: ['roll'], text: 'Spin right round the track.' },
+  hang: { name: 'Upside down', price: 3200, pieces: ['hang'], text: 'Roll over and ride along upside down!' },
+  jump: { name: 'Jump', price: 4000, pieces: ['jump'], text: 'Fly off the track and land again!' },
+};
+export const COLORS = [
+  { name: 'Red', rail: 0xd8302a, spine: 0x8a1e1a }, { name: 'Blue', rail: 0x2a6ad8, spine: 0x1a3a8a },
+  { name: 'Green', rail: 0x2aa84a, spine: 0x1a6a2a }, { name: 'Yellow', rail: 0xf0c020, spine: 0xa07a10 },
+  { name: 'Purple', rail: 0x8a3ad8, spine: 0x50208a }, { name: 'Orange', rail: 0xf07a20, spine: 0x9a4a10 },
+  { name: 'Pink', rail: 0xf060a8, spine: 0xa03a70 }, { name: 'Black', rail: 0x303034, spine: 0x18181a },
+];
+
+// ---------- frames ----------
+// a hanging coaster's track is this much higher, with the train hanging under it
+export const HANG = 2.5;
+const node = (i, j, level, lift = 0, y0 = BASE_Y) => V(i * TILE, y0 + level * LEVEL + lift, j * TILE);
+// How steep the track is where two pieces join: one climb (or drop) straight after another joins into
+// one long smooth slope; anything else is flat at the join.
+function jointGrade(a, b){
+  const A = PIECES[a], B = PIECES[b];
+  if (!A || !B || !A.slope || !B.slope || Math.sign(A.du) !== Math.sign(B.du)) return 0;
+  return (A.du + B.du) * LEVEL / ((A.f + B.f) * TILE);
+}
+const key = (x, z) => Math.round(2 * x / TILE) + ',' + Math.round(2 * z / TILE);
+
+// Sample a piece placed at grid point (i, j, level) facing d. Returns points with position, tangent,
+// up, and whether the rails are drawn there.
+// opts: m0, m1 (how steep a slope starts and ends, to join up with the pieces either side), lift.
+export function samplePiece(type, i, j, level, d, opts = {}){
+  const P = PIECES[type];
+  const F = V(DIRS[d][0], 0, DIRS[d][1]), R = V(DIRS[(d + 1) % 4][0], 0, DIRS[(d + 1) % 4][1]), Y = V(0, 1, 0);
+  const O = node(i, j, level, opts.lift || 0, opts.y0 ?? BASE_Y);
+  const m0 = opts.m0 || 0, m1 = opts.m1 || 0;
+  let path = P.path;
+  if (P.slope && (m0 || m1)){
+    // a Hermite curve: right height at each end, and the steepness the neighbouring pieces want
+    const Lm = P.f * TILE, H = P.du * LEVEL;
+    path = (t) => [Lm * t, 0, H * (3 * t * t - 2 * t * t * t) + Lm * (m0 * (t * t * t - 2 * t * t + t) + m1 * (t * t * t - t * t))];
+  }
+  const at = (t) => { const [f, r, u] = path(t); return O.clone().addScaledVector(F, f).addScaledVector(R, r).addScaledVector(Y, u); };
+  const n = P.samples || Math.max(12, Math.round(P.f * 14));
+  const pts = [];
+  for (let k = 0; k <= n; k++){
+    const t = k / n, e = 1e-4;
+    const pos = at(t), tan = at(Math.min(1, t + e)).sub(at(Math.max(0, t - e))).normalize();
+    pts.push({ t, pos, tan, up: null, gap: P.gap ? P.gap(t) : false });
+  }
+  // rotation-minimising frame (double reflection), starting upright
+  pts[0].up = V(0, 1, 0);
+  for (let k = 0; k < n; k++){
+    const a = pts[k], b = pts[k + 1];
+    const v1 = b.pos.clone().sub(a.pos), c1 = v1.dot(v1);
+    if (c1 < 1e-10){ b.up = a.up.clone(); continue; }
+    const rL = a.up.clone().addScaledVector(v1, -2 / c1 * v1.dot(a.up));
+    const tL = a.tan.clone().addScaledVector(v1, -2 / c1 * v1.dot(a.tan));
+    const v2 = b.tan.clone().sub(tL), c2 = v2.dot(v2);
+    b.up = c2 < 1e-10 ? rL : rL.addScaledVector(v2, -2 / c2 * v2.dot(rL));
+    b.up.addScaledVector(b.tan, -b.up.dot(b.tan)).normalize();
+  }
+  // every piece ends upright: spread any leftover twist along it, then add banking / rolls
+  const last = pts[n], want = V(0, 1, 0).addScaledVector(last.tan, -last.tan.y).normalize();
+  const twist = Math.atan2(last.up.clone().cross(want).dot(last.tan), last.up.dot(want));
+  for (const p of pts){
+    const roll = twist * p.t + (P.roll ? P.roll(p.t) : 0);
+    // positive roll tips the top of the riders toward the right
+    if (roll) p.up.applyAxisAngle(p.tan, roll);
+    p.side = p.tan.clone().cross(p.up).normalize();
+  }
+  const ni = i + DIRS[d][0] * P.f + DIRS[(d + 1) % 4][0] * P.r, nj = j + DIRS[d][1] * P.f + DIRS[(d + 1) % 4][1] * P.r;
+  return { pts, m0, m1, end: { i: ni, j: nj, level: level + P.du, d: (d + P.dh + 4) % 4 } };
+}
+
+// Which ground cells (half a tile across) a piece passes over, and at what heights.
+function cellsOf(pts, startKey, endKey, below = 0){
+  const cells = new Map();
+  for (const p of pts){
+    if (p.t < 0.02 || p.t > 0.98) continue;
+    const k = key(p.pos.x, p.pos.z);
+    if (k === startKey || k === endKey) continue;
+    const c = cells.get(k) || { lo: 1e9, hi: -1e9 };
+    c.lo = Math.min(c.lo, p.pos.y - below); c.hi = Math.max(c.hi, p.pos.y); cells.set(k, c);
+  }
+  return cells;
+}
+const CLEAR = 3.4;
+const clash = (a, b) => a.lo - CLEAR < b.hi && b.lo - CLEAR < a.hi;
+
+// ---------- the track ----------
+export class Track {
+  // st: { i, j, d }: where the station starts (a grid point, 8 m tiles) and which way it faces
+  // y0: the height of the rails at the station; hang: a hanging coaster (the track above, the train under it)
+  // env(pos): why the track can't go there (a hill, a building...), or null; groundAt(x, z): for supports
+  constructor(scene, { st = { i: 0, j: 1, d: 0 }, y0 = BASE_Y, hang = false, env = null, groundAt = () => 0 } = {}){
+    this.scene = scene; this.st = st; this.y0 = y0; this.hang = !!hang; this.env = env; this.groundAt = groundAt;
+    WORLD.tracks.push(this);
+    this.group = new THREE.Group(); scene.add(this.group);
+    this.color = 0;
+    this.mats = {
+      rail: new THREE.MeshStandardMaterial({ color: COLORS[0].rail, metalness: 0.45, roughness: 0.35 }),
+      spine: new THREE.MeshStandardMaterial({ color: COLORS[0].spine, metalness: 0.4, roughness: 0.45 }),
+      tie: new THREE.MeshStandardMaterial({ color: 0x8a8a90, metalness: 0.5, roughness: 0.5 }),
+      support: new THREE.MeshStandardMaterial({ color: 0xe8e8ec, metalness: 0.3, roughness: 0.5 }),
+      ghost: new THREE.MeshBasicMaterial({ color: 0x40ff60, transparent: true, opacity: 0.45, depthWrite: false }),
+      bad: new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.5, depthWrite: false }),
+    };
+    this.supports = null;
+    this.pieces = [];
+    this.reset();
+    // a pulsing arrow at the end of the track, pointing where the next piece goes
+    const ag = new THREE.ConeGeometry(0.9, 2.2, 4); ag.rotateX(-PI / 2);
+    this.arrow = new THREE.Mesh(ag, new THREE.MeshBasicMaterial({ color: 0xffe040, transparent: true, opacity: 0.85 }));
+    scene.add(this.arrow);
+    this.ghost = new THREE.Group(); scene.add(this.ghost); this.ghostT = 0;
+  }
+  // take it all away (the coaster is knocked down)
+  dispose(){
+    for (const p of this.pieces) if (p.mesh){ this.group.remove(p.mesh); p.mesh.geometry.dispose(); }
+    this.clearGhost();
+    for (const o of [this.group, this.arrow, this.ghost, this.supports]) this.scene.remove(o);
+    if (this.supports) this.supports.geometry.dispose();
+    WORLD.tracks.splice(WORLD.tracks.indexOf(this), 1);
+  }
+  setColor(c){ this.color = c; this.mats.rail.color.setHex(COLORS[c].rail); this.mats.spine.color.setHex(COLORS[c].spine); }
+  reset(){
+    for (const p of this.pieces) if (p.mesh){ this.group.remove(p.mesh); p.mesh.geometry.dispose(); }
+    this.pieces = [];
+    this.place('station', this.st.i, this.st.j, 0, this.st.d);
+    this.changed();
+  }
+  get lift(){ return this.hang ? HANG : 0; }
+  get end(){ return this.pieces[this.pieces.length - 1].end; }
+  get start(){ return { i: this.st.i, j: this.st.j, level: 0, d: this.st.d }; }
+  get complete(){ const e = this.end, s = this.start; return this.pieces.length > 1 && e.i === s.i && e.j === s.j && e.level === s.level && e.d === s.d; }
+  types(){ return this.pieces.slice(1).map((p) => p.type); }
+
+  // Would this piece fit at the end of the track? (and where would it go)
+  check(type, from = this.end, extra = null){
+    // extra: a chain of pieces being tried out (linked by .prev) that aren't on the track yet
+    if (this.complete && extra === null) return { ok: false, why: 'The track is finished! Undo a piece to change it.' };
+    const { i, j, level, d } = from;
+    const P = PIECES[type];
+    if (level + P.du < 0) return { ok: false, why: 'That would go under the ground.' };
+    if (level + P.du > MAX_LEVEL) return { ok: false, why: 'That\'s too high!' };
+    // the piece before (to join slopes up smoothly)
+    const prev = extra ? extra.type : (from === this.end ? this.pieces[this.pieces.length - 1].type : null);
+    const m0 = jointGrade(prev, type);
+    const mk = type + i + ',' + j + ',' + level + ',' + d + ',' + m0;
+    const s = (this.memo && this.memo.get(mk)) || samplePiece(type, i, j, level, d, { m0, lift: this.lift, y0: this.y0 });
+    if (this.memo) this.memo.set(mk, s);
+    const e = s.end;
+    if (!inPark(e.i, e.j)) return { ok: false, why: 'That would leave the park.', s };
+    for (const p of s.pts) if (!inParkXZ(p.pos.x, p.pos.z)) return { ok: false, why: 'That would leave the park.', s };
+    if (this.env) for (const p of s.pts){ if (p.t < 0.03 || p.t > 0.97) continue; const why = this.env(p.pos, p); if (why) return { ok: false, why, s }; }
+    const sk = key(i * TILE, j * TILE), ek = key(e.i * TILE, e.j * TILE);
+    const cells = s.cells || (s.cells = cellsOf(s.pts, sk, ek, this.lift));
+    const endY = this.y0 + e.level * LEVEL, endCell = { lo: endY, hi: endY + this.lift };
+    const closing = e.i === this.start.i && e.j === this.start.j && e.level === 0 && e.d === this.start.d;
+    const hit = (k, c, isEnd) => {
+      for (const o of this.occ.get(k) || []){ if (clash(c, o) && !(isEnd && o.end && closing && o.station)) return true; }
+      for (const t of WORLD.tracks){ if (t === this || !t.occ) continue; for (const o of t.occ.get(k) || []) if (clash(c, o)) return 'other'; }
+      for (let q = extra; q; q = q.prev){ const o = q.cells.get(k) || q.ends.get(k); if (o && clash(c, o)) return true; }
+      return false;
+    };
+    const crash = (h) => ({ ok: false, why: h === 'other' ? 'That would crash into another coaster.' : 'That would crash into the track.', s });
+    for (const [k, c] of cells){ const h = hit(k, c, false); if (h) return crash(h); }
+    if (ek !== sk){ const h = hit(ek, endCell, true); if (h) return crash(h); }
+    const R = WORLD.reserved;
+    for (const [k, c] of cells){ const o = R.get(k); if (o && clash(c, o)) return { ok: false, why: 'A station is in the way.', s }; }
+    const o = R.get(ek); if (o && clash(endCell, o) && !closing) return { ok: false, why: 'A station is in the way.', s };
+    return { ok: true, s, cells, sk, ek, closing };
+  }
+  place(type, i, j, level, d, pre){
+    const s = pre ? pre.s : samplePiece(type, i, j, level, d, { lift: this.lift, y0: this.y0 });
+    const sk = key(i * TILE, j * TILE), ek = key(s.end.i * TILE, s.end.j * TILE);
+    const y0 = this.y0 + level * LEVEL, y1 = this.y0 + s.end.level * LEVEL, L = this.lift;
+    const piece = { type, i, j, level, d, pts: s.pts, end: s.end, m0: s.m0, m1: s.m1, cells: pre ? pre.cells : cellsOf(s.pts, sk, ek, L),
+      ends: new Map([[sk, { lo: y0, hi: y0 + L }], [ek, { lo: y1, hi: y1 + L }]]) };
+    piece.mesh = this.meshFor(piece.pts, false);
+    if (PIECES[type].boost) piece.mesh.add(boosterMesh(piece.pts, this.hang));
+    this.group.add(piece.mesh);
+    this.pieces.push(piece);
+    return piece;
+  }
+  add(type){
+    const c = this.check(type);
+    if (!c.ok) return c;
+    const e = this.end;
+    this.place(type, e.i, e.j, e.level, e.d, c);
+    this.changed();
+    return c;
+  }
+  undo(){
+    if (this.pieces.length <= 1) return false;
+    const p = this.pieces.pop();
+    this.group.remove(p.mesh); p.mesh.geometry.dispose();
+    this.changed();
+    return true;
+  }
+  load(types){
+    this.reset();
+    for (const t of types){ if (!PIECES[t] || this.complete) break; const c = this.check(t); if (!c.ok) break; const e = this.end; this.place(t, e.i, e.j, e.level, e.d, c); }
+    this.changed();
+  }
+
+  // Find a way back to the station with the pieces you have (breadth-first over grid points).
+  finish(owned){
+    if (this.complete) return [];
+    this.memo = new Map();
+    try { return this.search(owned); } finally { this.memo = null; }
+  }
+  search(owned){
+    const COST = { straight: 2, left: 3, right: 3, bigLeft: 4, bigRight: 4, down: 2, steepDown: 2, up: 9, steepUp: 12 };
+    const moves = Object.keys(COST).filter((t) => owned.includes(t));
+    const goal = this.start;
+    const id = (s) => s.i + ',' + s.j + ',' + s.level + ',' + s.d;
+    const best = new Map([[id(this.end), 0]]);
+    const h = (s) => Math.round(1.5 * (Math.abs(s.i - goal.i) + Math.abs(s.j - goal.j)) + s.level);   // a guess at the cost left
+    const buckets = [[{ st: this.end, chain: null, cost: 0 }]];
+    let expanded = 0;
+    for (let c = 0; c < buckets.length; c++){
+      for (const item of buckets[c] || []){
+        if (best.get(id(item.st)) < item.cost) continue;
+        if (++expanded > 25000) return null;
+        for (const m of moves){
+          const r = this.check(m, item.st, item.chain || undefined);
+          if (!r.ok) continue;
+          const e = r.s.end, k = id(e), nc = item.cost + COST[m];
+          if (best.has(k) && best.get(k) <= nc) continue;
+          best.set(k, nc);
+          const y0 = this.y0 + item.st.level * LEVEL, y1 = this.y0 + e.level * LEVEL, L = this.lift;
+          const link = { type: m, prev: item.chain, cells: r.cells, ends: new Map([[r.sk, { lo: y0, hi: y0 + L }], [r.ek, { lo: y1, hi: y1 + L }]]) };
+          if (e.i === goal.i && e.j === goal.j && e.level === goal.level && e.d === goal.d){
+            const out = []; for (let q = link; q; q = q.prev) out.unshift(q.type); return out;
+          }
+          const pr = nc + h(e);
+          (buckets[pr] || (buckets[pr] = [])).push({ st: e, chain: link, cost: nc });
+        }
+      }
+    }
+    return null;
+  }
+
+  // ---------- drawing: turn a line drawn on the ground into track pieces ----------
+  // stroke: points {x, z} along the line (any spacing). Lays flat pieces (straights and turns you own)
+  // from the end of the track, each time picking the piece (looking one more piece ahead) that stays
+  // closest to the line and moves along it. Returns { types, why } (types may be shorter than the line
+  // if something is in the way).
+  planDrawing(stroke, owned){
+    const moves = ['straight', 'left', 'right', 'bigLeft', 'bigRight'].filter((t) => owned.includes(t));
+    // even spacing, 1 m apart
+    const S = [];
+    for (const p of stroke){
+      const py = p.y || 0;
+      if (!S.length){ S.push({ x: p.x, z: p.z, y: py }); continue; }
+      let q = S[S.length - 1], d = Math.hypot(p.x - q.x, p.z - q.z);
+      while (d >= 1){ const f = 1 / d; q = { x: q.x + (p.x - q.x) * f, z: q.z + (p.z - q.z) * f, y: q.y + (py - q.y) * f }; S.push(q); d = Math.hypot(p.x - q.x, p.z - q.z); }
+    }
+    if (S.length < 6) return { types: [], why: 'Draw a longer line!' };
+    const near = (x, z, k0, k1) => {
+      let best = 1e9, bk = k0;
+      for (let k = Math.max(0, k0); k <= Math.min(S.length - 1, k1); k++){ const d = (S[k].x - x) ** 2 + (S[k].z - z) ** 2; if (d < best){ best = d; bk = k; } }
+      return { d: Math.sqrt(best), k: bk };
+    };
+    const e0 = this.endPoint();
+    const first = near(e0.x, e0.z, 0, Math.min(S.length - 1, 40));
+    if (first.d > 2.2 * TILE) return { types: [], why: 'Start drawing at the yellow arrow (the end of the track).' };
+    // how well a piece follows the line from stroke index k: average distance, and how far along it gets
+    const score = (pts, k) => {
+      let sum = 0, n = 0, kk = k;
+      for (let q = 2; q < pts.length; q += 2){ const r = near(pts[q].pos.x, pts[q].pos.z, kk, kk + 45); sum += r.d; n++; kk = Math.max(kk, r.k - 3); }
+      const e = pts[pts.length - 1].pos, r = near(e.x, e.z, k, k + 60);
+      return { cost: sum / n + r.d, k: r.k };
+    };
+    this.memo = new Map();
+    try {
+      const out = [], ks = [];
+      let st = this.end, chain = null, k = first.k, why = null;
+      for (let step = 0; step < 300; step++){
+        if (k >= S.length - 4) break;
+        let best = null;
+        for (const m of moves){
+          const r = this.check(m, st, chain || undefined);
+          if (!r.ok) continue;
+          const a = score(r.s.pts, k);
+          if (a.k <= k + 1) continue;                       // it has to go along the line
+          // one more piece ahead, so turns happen at the right time
+          const y0 = this.y0 + st.level * LEVEL, y1 = this.y0 + r.s.end.level * LEVEL, L = this.lift;
+          const link = { type: m, prev: chain, cells: r.cells, ends: new Map([[r.sk, { lo: y0, hi: y0 + L }], [r.ek, { lo: y1, hi: y1 + L }]]) };
+          let ahead = a.k >= S.length - 4 ? 0 : 1e9;
+          if (ahead) for (const m2 of moves){
+            const r2 = this.check(m2, r.s.end, link);
+            if (!r2.ok) continue;
+            const b = score(r2.s.pts, a.k);
+            if (b.k > a.k + 1) ahead = Math.min(ahead, b.cost);
+          }
+          if (ahead > 1e8) ahead = 3 * TILE;
+          const total = a.cost + 0.6 * ahead - 0.02 * (a.k - k);
+          if (!best || total < best.total) best = { m, r, a, link, total };
+        }
+        if (!best){ why = out.length ? 'Something is in the way, so I built as far as I could.' : 'Something is in the way there.'; break; }
+        if (best.a.cost > 2.5 * TILE){ why = 'I couldn\'t follow that bit of the line: try a smoother curve.'; break; }
+        out.push(best.m); ks.push(best.a.k); chain = best.link; st = best.r.s.end; k = best.a.k;
+        if (this.closes(st)) break;
+      }
+      return { types: out, why, S, ks, k0: first.k };
+    } finally { this.memo = null; }
+  }
+  // How far along the ride each piece goes (metres, measured flat): for drawing heights.
+  static pieceLength(t){ const P = PIECES[t]; return P.dh ? P.f * TILE * PI / 2 : P.f * TILE; }
+  // Give a flat run of pieces hills: target(d) is how high (metres) the track should be at a distance d
+  // along it. Pairs of straights can become climbs or drops (a slope is two tiles long); turns stay
+  // level. Finds the heights that stay closest to the line (dynamic programming over the levels).
+  heightPlan(types, target, owned){
+    const slopes = ['up', 'down', 'steepUp', 'steepDown'].filter((t) => owned.includes(t));
+    const N = types.length, L0 = this.end.level, pos = [0];
+    for (const t of types) pos.push(pos[pos.length - 1] + Track.pieceLength(t));
+    const cost = (a, b, La, Lb) => {
+      let c = 0;
+      for (let q = 0; q < 4; q++){ const f = (q + 0.5) / 4; const h = (La + (Lb - La) * f) * LEVEL, w = target(a + (b - a) * f); c += (h - w) ** 2; }
+      return c * (b - a) / 4;
+    };
+    const dp = Array.from({ length: N + 1 }, () => new Array(MAX_LEVEL + 1).fill(Infinity));
+    const how = Array.from({ length: N + 1 }, () => new Array(MAX_LEVEL + 1).fill(null));
+    dp[0][L0] = 0;
+    const relax = (i, L, c, from) => { if (c < dp[i][L]){ dp[i][L] = c; how[i][L] = from; } };
+    for (let i = 0; i < N; i++) for (let L = 0; L <= MAX_LEVEL; L++){
+      const c0 = dp[i][L]; if (c0 === Infinity) continue;
+      const t = types[i];
+      relax(i + 1, L, c0 + cost(pos[i], pos[i + 1], L, L), { i, L, t });
+      if (t === 'straight' && types[i + 1] === 'straight'){
+        for (const sl of slopes){
+          const nL = L + PIECES[sl].du;
+          if (nL < 0 || nL > MAX_LEVEL) continue;
+          relax(i + 2, nL, c0 + cost(pos[i], pos[i + 2], L, nL) + 30, { i, L, t: sl });
+        }
+      }
+    }
+    let bestL = 0; for (let L = 0; L <= MAX_LEVEL; L++) if (dp[N][L] < dp[N][bestL]) bestL = L;
+    const out = [];
+    for (let i = N, L = bestL; i > 0;){ const h = how[i][L]; out.unshift(h.t); i = h.i; L = h.L; }
+    return out;
+  }
+  // How many of these pieces would fit on the end of the track, one after another.
+  fits(types){
+    this.memo = new Map();
+    try {
+      let st = this.end, chain = null, n = 0;
+      for (const t of types){
+        const r = this.check(t, st, chain || undefined);
+        if (!r.ok) break;
+        const y0 = this.y0 + st.level * LEVEL, y1 = this.y0 + r.s.end.level * LEVEL, L = this.lift;
+        chain = { type: t, prev: chain, cells: r.cells, ends: new Map([[r.sk, { lo: y0, hi: y0 + L }], [r.ek, { lo: y1, hi: y1 + L }]]) };
+        st = r.s.end; n++;
+      }
+      return n;
+    } finally { this.memo = null; }
+  }
+  closes(e){ const s = this.start; return e.i === s.i && e.j === s.j && e.level === s.level && e.d === s.d; }
+
+  // ---------- after a change: the whole ride as one list of points ----------
+  changed(){
+    // slopes next to slopes join up into one smooth climb or drop
+    const P = this.pieces;
+    for (let k = 1; k < P.length; k++){
+      const p = P[k], m0 = jointGrade(P[k - 1].type, p.type), m1 = k + 1 < P.length ? jointGrade(p.type, P[k + 1].type) : 0;
+      if ((p.m0 || 0) === m0 && (p.m1 || 0) === m1) continue;
+      const s = samplePiece(p.type, p.i, p.j, p.level, p.d, { m0, m1, lift: this.lift, y0: this.y0 });
+      p.pts = s.pts; p.m0 = m0; p.m1 = m1;
+      p.cells = cellsOf(s.pts, key(p.i * TILE, p.j * TILE), key(s.end.i * TILE, s.end.j * TILE), this.lift);
+      this.group.remove(p.mesh); p.mesh.geometry.dispose();
+      p.mesh = this.meshFor(p.pts, false); this.group.add(p.mesh);
+    }
+    this.speedCache = new Map();
+    this.occ = new Map();
+    const put = (k, c) => { if (!this.occ.has(k)) this.occ.set(k, []); this.occ.get(k).push(c); };
+    for (const p of this.pieces){
+      for (const [k, c] of p.cells) put(k, c);
+      for (const [k, c] of p.ends) put(k, { ...c, end: true, station: p.type === 'station' });
+    }
+    this.path = [];
+    let s = 0;
+    for (const p of this.pieces){
+      for (let k = (this.path.length ? 1 : 0); k < p.pts.length; k++){
+        const q = p.pts[k];
+        if (this.path.length) s += q.pos.distanceTo(this.path[this.path.length - 1].pos);
+        this.path.push({ ...q, s, piece: p });
+      }
+    }
+    this.length = s;
+    this.buildSupports();
+    this.placeArrow();
+  }
+  // position, tangent and up at a distance along the ride (wrapping round when it's a circuit)
+  at(s, out = {}){
+    const P = this.path, L = this.length;
+    if (this.complete) s = ((s % L) + L) % L; else s = clamp(s, 0, L);
+    let lo = 0, hi = P.length - 1;
+    while (hi - lo > 1){ const m = (lo + hi) >> 1; if (P[m].s <= s) lo = m; else hi = m; }
+    const a = P[lo], b = P[hi], f = b.s > a.s ? (s - a.s) / (b.s - a.s) : 0;
+    out.pos = (out.pos || V()).copy(a.pos).lerp(b.pos, f);
+    out.tan = (out.tan || V()).copy(a.tan).lerp(b.tan, f).normalize();
+    out.up = (out.up || V()).copy(a.up).lerp(b.up, f).normalize();
+    out.gap = a.gap && b.gap;
+    out.piece = a.piece;
+    return out;
+  }
+
+  // ---------- meshes ----------
+  meshFor(pts, ghost){
+    const rails = [], spines = [], ties = [];
+    const runs = [];   // stretches where the rails are drawn
+    let cur = null;
+    for (const p of pts){ if (p.gap){ cur = null; continue; } if (!cur){ cur = []; runs.push(cur); } cur.push(p); }
+    for (const run of runs){
+      if (run.length < 2) continue;
+      for (const side of [-0.55, 0.55]) rails.push(tube(run, (p) => p.pos.clone().addScaledVector(p.side, side), 0.075, 6));
+      const sp = this.hang ? 0.42 : -0.42, ty = this.hang ? 0.18 : -0.18;
+      spines.push(tube(run, (p) => p.pos.clone().addScaledVector(p.up, sp), 0.17, 6));
+      // cross ties every metre or so
+      let acc = 1;
+      for (let k = 1; k < run.length; k++){
+        acc += run[k].pos.distanceTo(run[k - 1].pos);
+        if (acc < 1.1) continue; acc = 0;
+        const p = run[k], m = new THREE.Matrix4().makeBasis(p.side, p.up, p.tan.clone().negate()).setPosition(p.pos.clone().addScaledVector(p.up, ty));
+        const g = TIE.clone(); g.applyMatrix4(m); ties.push(g);
+      }
+    }
+    const group = new THREE.Group();
+    const add = (list, mat) => { if (!list.length) return; const m = new THREE.Mesh(merge(list), ghost || mat); m.castShadow = !ghost; m.receiveShadow = !ghost; group.add(m); };
+    add(rails, this.mats.rail); add(spines, this.mats.spine); add(ties, this.mats.tie);
+    group.geometry = { dispose(){ for (const c of group.children) c.geometry.dispose(); } };
+    return group;
+  }
+  buildSupports(){
+    if (this.supports){ this.scene.remove(this.supports); this.supports.geometry.dispose(); }
+    const geos = [];
+    const all = this.path;
+    const col = new THREE.CylinderGeometry(0.16, 0.2, 1, 8).toNonIndexed();
+    const foot = new THREE.CylinderGeometry(0.45, 0.5, 0.25, 8).toNonIndexed();
+    let acc = 3;
+    for (let k = 1; k < all.length; k++){
+      acc += all[k].pos.distanceTo(all[k - 1].pos);
+      const p = all[k];
+      if (acc < 5.5 || p.gap || p.up.y < 0.75) continue;
+      // a hanging coaster's supports stand beside it and reach over the top, clear of the train
+      const top = this.hang ? p.pos.clone().addScaledVector(p.side, 2.1).add(V(0, 0.75, 0)) : p.pos.clone().addScaledVector(p.up, -0.55);
+      const gy = this.groundAt(top.x, top.z);
+      if (top.y - gy < 0.25) { acc = 0; continue; }
+      // not through another bit of track below
+      let blocked = false;
+      for (const q of all){ if (q !== p && q.pos.y < top.y - 1.2 && Math.abs(q.pos.x - top.x) < 1.4 && Math.abs(q.pos.z - top.z) < 1.4){ blocked = true; break; } }
+      if (blocked) continue;
+      acc = 0;
+      const g = col.clone(); g.applyMatrix4(new THREE.Matrix4().compose(V(top.x, (top.y + gy - 0.3) / 2, top.z), new THREE.Quaternion(), V(1, top.y - gy + 0.3, 1))); geos.push(g);
+      geos.push(placed(foot, top.x, gy + 0.08, top.z));
+      if (this.hang){
+        const over = p.pos.clone().addScaledVector(p.up, 0.6), mid = top.clone().add(over).multiplyScalar(0.5), len = top.distanceTo(over);
+        const q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), over.clone().sub(top).normalize());
+        const arm = col.clone(); arm.applyMatrix4(new THREE.Matrix4().compose(mid, q, V(0.8, len, 0.8))); geos.push(arm);
+      }
+    }
+    this.supports = new THREE.Mesh(geos.length ? merge(geos) : new THREE.BufferGeometry(), this.mats.support);
+    this.supports.castShadow = true; this.supports.receiveShadow = true;
+    this.scene.add(this.supports);
+  }
+  placeArrow(){
+    if (!this.arrow) return;
+    const e = this.end;
+    this.arrow.visible = !this.complete;
+    this.arrow.position.copy(node(e.i, e.j, e.level, this.lift, this.y0)).add(V(DIRS[e.d][0] * 2.5, 2.2, DIRS[e.d][1] * 2.5));
+    this.arrow.rotation.set(0, Math.atan2(-DIRS[e.d][0], -DIRS[e.d][1]), 0);
+  }
+  // show what a piece would look like for a moment (green if it fits, red if not)
+  preview(type, ok, s, time = 1.2){
+    this.clearGhost();
+    if (!s) return;
+    const m = this.meshFor(s.pts, ok ? this.mats.ghost : this.mats.bad);
+    this.ghost.add(m); this.ghostT = time;
+  }
+  clearGhost(){ for (const c of [...this.ghost.children]){ this.ghost.remove(c); c.geometry.dispose(); } }
+  update(dt, time, showArrow){
+    if (this.ghostT > 0){ this.ghostT -= dt; if (this.ghostT <= 0) this.clearGhost(); }
+    this.arrow.visible = showArrow && !this.complete;
+    this.arrow.material.opacity = 0.55 + 0.35 * Math.sin(time * 5);
+  }
+  endPoint(){ const e = this.end; return node(e.i, e.j, e.level, this.lift, this.y0); }
+
+  // ---------- how good is it? ----------
+  // Speeds: the station launches the train at the speed you pick. After that it's real(ish) physics:
+  // going down makes it faster and going up slower, with a little drag. If it slows right down on a
+  // climb, a chain lift pulls it up slowly (so a tall climb then a big drop is how to go really fast). It
+  // never quite stops, so it always gets round a loop.
+  speeds(v0){
+    if (!this.speedCache) this.speedCache = new Map();
+    if (this.speedCache.has(v0)) return this.speedCache.get(v0);
+    const P = this.path, out = new Float32Array(P.length);
+    const g = 9.8, DRAG = 0.0007, LIFT = 4.5, PARK_S = 13, BOOST_A = 16, BOOST_MAX = 34;
+    let v2 = v0 * v0;
+    for (let k = 0; k < P.length; k++){
+      const p = P[k];
+      if (p.s <= PARK_S || p.piece.type === 'station'){ out[k] = v0; v2 = v0 * v0; continue; }
+      const q = P[k - 1], ds = p.s - q.s, dy = p.pos.y - q.pos.y;
+      v2 = v2 - 2 * g * dy - 2 * DRAG * v2 * ds;
+      if (p.piece.type === 'boost') v2 = Math.max(v2, Math.min(BOOST_MAX * BOOST_MAX, v2 + 2 * BOOST_A * ds));
+      if (dy > 0 && p.tan.y > 0.12 && v2 < LIFT * LIFT) v2 = LIFT * LIFT;        // the chain lift
+      v2 = clamp(v2, 9, 48 * 48);
+      out[k] = Math.sqrt(v2);
+    }
+    this.speedCache.set(v0, out);
+    return out;
+  }
+  // how fast the train wants to go at a distance along the ride
+  speedAt(s, v0){
+    const P = this.path, sp = this.speeds(v0);
+    if (!P.length) return v0;
+    s = clamp(s, 0, this.length);
+    let lo = 0, hi = P.length - 1;
+    while (hi - lo > 1){ const m = (lo + hi) >> 1; if (P[m].s <= s) lo = m; else hi = m; }
+    const a = P[lo], b = P[hi], f = b.s > a.s ? (s - a.s) / (b.s - a.s) : 0;
+    return sp[lo] + (sp[hi] - sp[lo]) * f;
+  }
+  rate(v0){
+    const types = this.types();
+    let fun = 0, inv = 0, jumps = 0, drops = 0;
+    const kinds = new Set();
+    for (const t of types){ const P = PIECES[t]; fun += P.fun; inv += P.inversions || 0; jumps += P.jumps || 0; kinds.add(t); if (t === 'steepDown') drops++; }
+    let maxY = this.y0, maxV = v0;
+    const sp = this.speeds(v0);
+    this.path.forEach((p, k) => { maxY = Math.max(maxY, p.pos.y - this.lift); maxV = Math.max(maxV, sp[k]); });
+    const tight = types.filter((t) => t === 'left' || t === 'right').length;
+    const raw = fun + kinds.size * 0.15 + (maxY - this.y0) / 10 + (v0 - 6) / 6 + (maxV - v0) / 8 + this.length / 300 + (this.hang ? 0.8 : 0);
+    const excitement = this.complete ? Math.round(100 * (1 - Math.exp(-raw / 7))) / 10 : 0;
+    const intensity = Math.round(clamp(0.5 + v0 * 0.22 + inv * 0.7 + jumps * 0.9 + drops * 0.4 + (maxV - v0) / 9 + (this.hang ? 0.4 : 0) + Math.min(1.5, tight * (v0 / 16) ** 2 * 0.15), 0, 10) * 10) / 10;
+    return { excitement, intensity, maxSpeed: maxV, maxHeight: maxY - this.y0, length: this.length, inversions: inv, jumps, pieces: types.length };
+  }
+}
+
+// the tyres on a booster: orange, glowing, in pairs every couple of metres
+const BOOST_MAT = new THREE.MeshStandardMaterial({ color: 0xff7a1a, emissive: 0xff5a00, emissiveIntensity: 0.9, roughness: 0.6 });
+const TYRE = new THREE.CylinderGeometry(0.28, 0.28, 0.18, 12).rotateZ(PI / 2);
+function boosterMesh(pts, hang){
+  const geos = [], m = new THREE.Matrix4();
+  for (let k = 2; k < pts.length - 1; k += 2){
+    const p = pts[k];
+    for (const sx of [-0.2, 0.2]){
+      m.makeBasis(p.side, p.up, p.tan.clone().negate()).setPosition(p.pos.clone().addScaledVector(p.side, sx).addScaledVector(p.up, hang ? 0.12 : -0.12));
+      const g = TYRE.clone(); g.applyMatrix4(m); geos.push(g);
+    }
+  }
+  const mesh = new THREE.Mesh(merge(geos), BOOST_MAT);
+  mesh.userData.boost = true;
+  return mesh;
+}
+
+const TIE = (() => { const g = new THREE.BoxGeometry(1.25, 0.09, 0.14).toNonIndexed(); return g; })();
+
+// sweep a circle along points
+function tube(pts, centre, r, seg){
+  const pos = [], nor = [];
+  const ring = pts.map((p) => {
+    const c = centre(p), out = [];
+    for (let k = 0; k < seg; k++){
+      const a = k / seg * PI * 2, n = p.side.clone().multiplyScalar(Math.cos(a)).addScaledVector(p.up, Math.sin(a));
+      out.push([c.clone().addScaledVector(n, r), n]);
+    }
+    return out;
+  });
+  for (let i = 0; i < ring.length - 1; i++){
+    for (let k = 0; k < seg; k++){
+      const a = ring[i][k], b = ring[i][(k + 1) % seg], c = ring[i + 1][k], d = ring[i + 1][(k + 1) % seg];
+      for (const [p, n] of [a, c, b, b, c, d]){ pos.push(p.x, p.y, p.z); nor.push(n.x, n.y, n.z); }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return g;
+}
+
+// A little picture of a piece (side view for hills, loops and jumps, top view for turns).
+export function pieceIcon(type, size = 96, color = '#ffd84a'){
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'), P = PIECES[type];
+  const pts = [];
+  const side = !!(P.du || P.inversions || P.jumps);
+  for (let k = 0; k <= 60; k++){
+    const [f, r, u] = P.path(k / 60);
+    pts.push(side ? [f, -(u + (P.roll ? r * 0.8 : 0)), P.gap && P.gap(k / 60)] : [r, -f, false]);
+  }
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const [x, y] of pts){ x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const span = Math.max(x1 - x0, y1 - y0, 6), sc = size * 0.72 / span;
+  const cx = size / 2 - (x0 + x1) / 2 * sc, cy = size / 2 - (y0 + y1) / 2 * sc;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const [w, col] of [[size * 0.13, 'rgba(0,0,0,0.35)'], [size * 0.07, color]]){
+    g.strokeStyle = col; g.lineWidth = w; g.beginPath();
+    let pen = false;
+    for (const [x, y, gap] of pts){ if (gap){ pen = false; continue; } if (pen) g.lineTo(cx + x * sc, cy + y * sc); else { g.moveTo(cx + x * sc, cy + y * sc); pen = true; } }
+    g.stroke();
+  }
+  if (P.boost){
+    g.fillStyle = '#ff7a1a';
+    for (const yy of [0.32, 0.5, 0.68]){ g.beginPath(); g.moveTo(size * 0.32, size * (yy + 0.1)); g.lineTo(size * 0.5, size * yy - size * 0.02); g.lineTo(size * 0.68, size * (yy + 0.1)); g.lineTo(size * 0.6, size * (yy + 0.13)); g.lineTo(size * 0.5, size * (yy + 0.05)); g.lineTo(size * 0.4, size * (yy + 0.13)); g.fill(); }
+  }
+  // where you come in
+  const [sx, sy] = pts[0];
+  g.fillStyle = '#ffffff'; g.beginPath(); g.arc(cx + sx * sc, cy + sy * sc, size * 0.06, 0, PI * 2); g.fill();
+  return c;
+}

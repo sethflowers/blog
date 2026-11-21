@@ -452,3 +452,32 @@ What's in it, and how it works.
   in IndexedDB (`meta` → `pref:blueprints`), shared by all parks; they appear under "Your designs" in
   the Buildings or Shops tab with a picture, and can be removed (Manage designs).
 - Guests come in 1.4: for now these show menus and capacity; nothing is bought yet.
+
+## Version 1.3: First rides (built)
+
+- **Coasters** (`coaster/track.js`, `coaster/train.js`, from Rollercoaster Bros, `rides.js`): the same
+  14 pieces (straights, turns, wide turns, hills, big drops, booster, loop, barrel roll, upside down,
+  jump), smooth joined slopes, real speeds with chain lifts, Finish (A* back to the station), trains and
+  colours, sitting and hanging coasters. Changed for the park: the station can be anywhere on the 8 m
+  grid (the map's 2 m grid lines up with it), facing any way, at its own height (`y0`, 0.9 m above the
+  highest ground under it); an `env` check keeps track out of hills (and hanging riders off the
+  ground), buildings, the entrance, other stations and flat rides, and needs 3 m of headroom over paths
+  and 4 m over car parks; supports reach down to the real ground; trees under low track are cleared.
+  Each coaster is an object (`type: 'coaster'`, its pieces as a list) so undo, saving and designs work
+  as for everything else; its track is rebuilt from the list when it changes. A station with a
+  platform, iron posts, a slate roof and the coaster's name at both ends.
+- **Flat rides you design**: a carousel (10/12/14 m, one or two tiers, horses, griffins, dragons, swans
+  or a mixture on brass poles that rise and fall, mirrored centre column, rounding boards with bulbs,
+  striped canopy in two colours, three speeds) and a big wheel (20 to 50 m, 12 to 32 gondolas, glazed
+  cabins or open cars that hang level, two colours, lights). Rides spin up and down smoothly; closed
+  rides stop.
+- **Ratings**: Fun, Scary and Queasy out of 10 for every ride (coasters from their pieces, heights and
+  speeds; flat rides from their design), with top speed, height and length.
+- **The Ride Workshop**: Rides tab → put down a station (quarter turns, a ghost) → track pieces (with
+  drawings), Take a piece off, Finish, Clear, train, colour, speed, Ride it; flat rides: their design
+  in the tray. A refused piece shows red with the reason.
+- **Riding**: Ride it from a ride's panel. On screen the camera sits in the seat (drag to look round,
+  Get off or Escape); in VR the play space rides in the seat (loops and all) and is put back exactly
+  when you get off (B). Rides update before the cameras each frame (the eyes followed last frame's seat
+  at first: caught by the test).
+- Rides block paths, buildings, car parks and other rides; walking bumps into flat rides.

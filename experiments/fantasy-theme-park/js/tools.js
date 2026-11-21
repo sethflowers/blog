@@ -9,6 +9,8 @@ import { objName, isStructure } from './objects.js';
 import { clamp, smooth, uid } from './util.js';
 import { FENCES } from './structures.js';
 import { BuildingTools } from './btools.js';
+import { RideTools } from './ridetools.js';
+import { stationCells, flatRadius } from './rides.js';
 import { newStall } from './shops.js';
 import { foodName, shopName } from './names.js';
 
@@ -20,6 +22,7 @@ export class Tools {
     this.kind = 'select'; this.opts = {};
     this.stroke = null;
     this.B = new BuildingTools(this);
+    this.R = new RideTools(this);
     this.rot = 0;
     // preview: cells (path lines, areas, car parks), and a ghost of the thing being placed
     const cg = new THREE.PlaneGeometry(CELL * 0.94, CELL * 0.94); cg.rotateX(-Math.PI / 2);
@@ -38,7 +41,7 @@ export class Tools {
   set(kind, opts = {}){
     this.cancel();
     this.kind = kind; this.opts = { ...this.defaults(kind), ...opts };
-    this.clearGhost(); this.B.clearGhost(); this.cells.count = 0;
+    this.clearGhost(); this.B.clearGhost(); this.R && this.R.clearGhost(); this.cells.count = 0;
     this.B.updateCut();
     this.app.terrain.uniforms.gridShow.value = ['path', 'lot', 'land', 'terrain'].includes(kind) ? 1 : 0;
     this.app.terrain.uniforms.landShow.value = kind === 'land' ? 1 : 0;
@@ -50,12 +53,13 @@ export class Tools {
       land: { mode: 'paint', size: 6, land: this.P.s.lands.length ? 1 : 0 }, place: { type: 'oak', scatter: false }, fence: { type: 'railing' }, bulldoze: { size: 2 }, bedit: { mode: 'rooms', level: 0, style: 'window', extra: 'tower' } }[kind] || {};
   }
   get brushSize(){ return this.kind === 'path' ? this.opts.width : this.opts.size || 4; }
-  usesDrag(){ return this.kind !== 'select'; }
+  usesDrag(){ return !['select', 'cedit', 'redit'].includes(this.kind); }
 
   // --- the pointer -----
   hover(p){
     this.last = p;
     if (this.kind === 'building') return this.B.placeHover(p);
+    if (this.kind === 'coaster' || this.kind === 'ride') return this.R.hover(p);
     if (this.kind === 'bedit') return;
     if (!p){ this.brush.w = 0; if (this.ghost) this.ghost.visible = false; return; }
     if (this.stroke) return;
@@ -100,6 +104,7 @@ export class Tools {
     }
     if (k === 'place' && this.opts.scatter){ if (Math.hypot(p.x - s.prev.x, p.z - s.prev.z) > 2.5) this.scatter(p); else return; }
     else if (k === 'place' || k === 'arch' || k === 'sign' || k === 'move' || k === 'stall') this.showGhost(p);
+    if (k === 'coaster' || k === 'ride') this.R.hover(p);
     if (k === 'fence') this.previewFence(s.start, p);
     if (k === 'lot') this.previewCells(this.rectCells(s.start, p, true), true);
     s.prev = p;
@@ -125,6 +130,7 @@ export class Tools {
     else if (k === 'fence') this.placeFence(s.start, p);
     else if (k === 'lot'){ this.placeLot(s.start, p); this.cells.count = 0; }
     else if (k === 'building') this.B.placeUp(p);
+    else if (k === 'coaster' || k === 'ride') this.R.up(p);
     else if (k === 'stall') this.placeStall(p);
   }
   cancel(){
@@ -207,8 +213,14 @@ export class Tools {
     if (blocked.length && !live) this.say('The path stops at buildings, the car park and the entrance.');
     return changed;
   }
-  inStructure(x, z, noBuildings){
-    if (!noBuildings){ const b = this.app.objects.buildingAt(x, z); if (b) return b; }
+  inStructure(x, z, noBuildings, ignore){
+    if (!noBuildings){ const b = this.app.objects.buildingAt(x, z); if (b && b.id !== ignore) return b; }
+    // rides: a flat ride's circle, a coaster's station
+    if (this.app.rides) for (const it of this.app.rides.items.values()){
+      const o = it.o; if (o.id === ignore) continue;
+      if (o.type === 'ride' && Math.hypot(x - o.x, z - o.z) < flatRadius(o)) return o;
+      if (o.type === 'coaster' && stationCells(o).some(([cx, cz]) => Math.abs(cx - x) <= 1 && Math.abs(cz - z) <= 1)) return o;
+    }
     for (const o of this.P.s.objects){
       if (o.type === 'lot' && Math.abs(x - o.x) < o.w && Math.abs(z - o.z) < o.d) return o;
       if (o.type === 'gate'){ const c = Math.cos(o.r || 0), s = Math.sin(o.r || 0), lx = (x - o.x) * c - (z - o.z) * s, lz = (x - o.x) * s + (z - o.z) * c; if (Math.abs(lz) < 2.6 && Math.abs(lx) > 3 && Math.abs(lx) < 18) return o; }
