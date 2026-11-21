@@ -620,6 +620,8 @@ await pg.waitForFunction(() => __ftp.people.progress === 1, null, { timeout: 600
 await ev('__ftp.noRender = false'); await wait(2500);
 check(await ev('__ftp.people.stats().near') > 0, `the guests nearest you are realistic people (${JSON.stringify(await ev('__ftp.people.stats()'))})`);
 await shot('14-guests');
+{ const L = await ev(`(() => { const c = __ftp.guests.cars.find((c) => c.state === 'parked'); return c ? [c.bay.x, c.bay.z] : null; })()`);
+  if (L){ await ev(`__ftp.focus(${L[0]}, ${L[1]}, 26); __ftp.want.pitch = 0.6; __ftp.want.yaw = 0.5`); await wait(1500); await shot('14b-car-park'); } }
 // closing time: everyone goes home
 await ev('__ftp.park.s.time = 20.9 * 60; __ftp.timeScale = 8; __ftp.speed = 4');
 const home = await pg.waitForFunction(() => __ftp.guests.summary().inPark === 0, null, { timeout: 120000 }).then(() => true, () => false);
