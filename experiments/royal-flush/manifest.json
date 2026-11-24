@@ -1,0 +1,16 @@
+{
+  "name": "Royal Flush",
+  "short_name": "Royal Flush",
+  "description": "The great Magic Kingdom restroom quest: find, rate and check in at every restroom in the park.",
+  "start_url": "/experiments/royal-flush/",
+  "scope": "/experiments/royal-flush/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#3a1f6e",
+  "theme_color": "#3a1f6e",
+  "icons": [
+    { "src": "/experiments/royal-flush/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/royal-flush/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/royal-flush/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

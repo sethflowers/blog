@@ -1,0 +1,322 @@
+---
+title: Royal Flush
+description: The great Magic Kingdom restroom quest. Find and check in at every restroom in the park with your phone's GPS, rate them, wash your hands for bonus points, earn badges, and hit "I need to go!" for the nearest one.
+date: 2026-11-24
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#3a1f6e">
+<meta name="apple-mobile-web-app-title" content="Royal Flush">
+<link rel="manifest" href="/experiments/royal-flush/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/royal-flush/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/royal-flush/icon-192.png">
+<title>Royal Flush</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#3a1f6e;color:#fff;-webkit-user-select:none;user-select:none;
+    font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;}
+  button{font-family:inherit;cursor:pointer;color:inherit;}
+  #map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;}
+  .emoji{font-family:"Apple Color Emoji","Noto Color Emoji","Segoe UI Emoji",sans-serif;}
+
+  /* ---- title ---- */
+  #title{position:fixed;inset:0;z-index:20;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+    background:radial-gradient(circle at 50% 18%,#6b3fc0 0%,#3a1f6e 55%,#22103f 100%);
+    padding:calc(18px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));}
+  #title.hidden{display:none;}
+  .card{max-width:480px;margin:0 auto;text-align:center;}
+  .crown{font-size:64px;line-height:1;margin-top:6px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.4));}
+  .crown span{display:inline-block;animation:bob 2.4s ease-in-out infinite;}
+  @keyframes bob{50%{transform:translateY(-6px) rotate(-4deg)}}
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(48px,14vw,76px);line-height:.95;color:#ffd75a;
+    text-shadow:0 4px 0 #8a4a10,0 10px 26px rgba(0,0,0,.5);margin-top:8px;}
+  .sub{margin:10px 0 16px;font-size:18px;line-height:1.35;opacity:.95;}
+  .parks{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px;}
+  .parks button{border:2px solid rgba(255,255,255,.35);background:rgba(255,255,255,.08);border-radius:20px;padding:8px 14px;font-size:14px;font-weight:700;}
+  .parks button.on{background:#ffd75a;color:#3a1f6e;border-color:#ffd75a;}
+  .parks button:disabled{opacity:.5;cursor:default;}
+  .parks small{display:block;font-size:10px;font-weight:600;opacity:.8;}
+  #t-progress{background:rgba(0,0,0,.22);border-radius:16px;padding:12px 14px;margin-bottom:14px;font-size:15px;line-height:1.45;min-height:20px;}
+  #t-progress b{color:#ffd75a;}
+  .tbtn{display:block;width:100%;margin:12px auto;padding:17px 18px;font-size:21px;font-weight:800;line-height:1.1;color:#3a1f6e;
+    background:#ffd75a;border:0;border-radius:16px;box-shadow:0 6px 0 #b8862a;}
+  .tbtn small{display:block;font-size:13px;font-weight:600;margin-top:4px;opacity:.75;}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 3px 0 #b8862a;}
+  .tbtn.second{background:#e9e1fb;box-shadow:0 6px 0 #9a88c8;font-size:18px;}
+  #status{font-size:14px;min-height:18px;opacity:.9;}
+  #offline{margin-top:4px;font-size:13px;min-height:16px;opacity:.8;}
+  .help{margin-top:14px;font-size:14px;line-height:1.55;opacity:.92;text-align:left;background:rgba(0,0,0,.18);border-radius:14px;padding:12px 14px;}
+  .help b{color:#ffd75a;}
+  .fine{margin-top:12px;font-size:11.5px;line-height:1.45;opacity:.65;}
+  .build-version{margin-top:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.7;}
+
+  /* ---- HUD ---- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:5;display:none;}
+  body.playing #hud{display:block;}
+  #top{position:absolute;left:0;right:0;top:0;display:flex;align-items:center;gap:8px;
+    padding:calc(8px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) 8px calc(10px + env(safe-area-inset-left));
+    background:linear-gradient(180deg,rgba(40,20,80,.92),rgba(40,20,80,.78));pointer-events:auto;box-shadow:0 2px 12px rgba(0,0,0,.25);}
+  #top-park{flex:1;min-width:0;}
+  #top-park b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #top-count{font-size:12.5px;opacity:.9;}
+  #top-bar{height:6px;border-radius:3px;background:rgba(255,255,255,.18);margin-top:4px;overflow:hidden;}
+  #top-fill{height:100%;width:0;background:#ffd75a;border-radius:3px;transition:width .5s;}
+  #score{background:#ffd75a;color:#3a1f6e;font-weight:900;font-size:17px;border-radius:12px;padding:7px 11px;white-space:nowrap;}
+  .ibtn{border:0;background:rgba(255,255,255,.16);border-radius:12px;min-width:44px;height:44px;font-size:20px;font-weight:800;}
+  .ibtn:active{background:rgba(255,215,90,.9);color:#3a1f6e;}
+  #gps{position:absolute;left:50%;transform:translateX(-50%);top:calc(70px + env(safe-area-inset-top));max-width:calc(100% - 24px);
+    background:rgba(20,20,40,.78);border-radius:14px;padding:6px 12px;font-size:13px;text-align:center;pointer-events:auto;}
+  #gps.warn{background:rgba(150,70,10,.9);}
+  #gps.practice{background:rgba(100,60,210,.9);}
+  #msgs{position:absolute;left:50%;transform:translateX(-50%);top:calc(108px + env(safe-area-inset-top));width:min(440px,calc(100% - 24px));display:flex;flex-direction:column;gap:6px;}
+  .msg{background:rgba(30,20,60,.92);border-radius:14px;padding:10px 14px;font-size:15px;text-align:center;animation:pop .25s ease-out;box-shadow:0 4px 14px rgba(0,0,0,.3);}
+  .msg.good{background:rgba(30,130,60,.94);} .msg.gold{background:rgba(190,130,10,.96);} .msg.bad{background:rgba(160,40,40,.94);}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+  #bottom{position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;justify-content:center;align-items:stretch;pointer-events:auto;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));}
+  #b-need{flex:1;max-width:460px;border:0;border-radius:18px;background:#e0283c;color:#fff;font-size:20px;font-weight:900;padding:14px 10px;box-shadow:0 5px 0 #8a1020,0 8px 20px rgba(0,0,0,.3);}
+  #b-need:active{transform:translateY(3px);box-shadow:0 2px 0 #8a1020;}
+  .bbtn{border:0;border-radius:18px;background:rgba(40,20,80,.9);color:#fff;font-weight:800;font-size:13px;padding:6px 10px;min-width:62px;box-shadow:0 4px 14px rgba(0,0,0,.3);}
+  .bbtn span{display:block;font-size:22px;line-height:1.1;}
+  .bbtn:active{background:#ffd75a;color:#3a1f6e;}
+  #b-me.on{background:#1e78ff;}
+
+  /* ---- bottom sheet: one restroom ---- */
+  #sheet{position:fixed;left:0;right:0;bottom:0;z-index:12;display:none;justify-content:center;pointer-events:none;}
+  #sheet.show{display:flex;}
+  .sh{pointer-events:auto;width:min(560px,100%);max-height:72vh;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+    background:#fffaf0;color:#2a2040;border-radius:22px 22px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.35);
+    padding:14px calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));}
+  .sh.anim{animation:up .22s ease-out;}
+  @keyframes up{from{transform:translateY(40px);opacity:.3}to{transform:none;opacity:1}}
+  .sh-head{display:flex;align-items:flex-start;gap:10px;}
+  .sh-head h2{flex:1;font-family:Georgia,serif;font-size:23px;line-height:1.15;}
+  .x{border:0;background:#ece4f6;border-radius:12px;width:42px;height:42px;font-size:18px;color:#3a1f6e;flex:none;}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+  .tag{font-size:12px;font-weight:800;border-radius:10px;padding:4px 9px;background:#ece4f6;color:#3a1f6e;}
+  .tag.found{background:#25a24a;color:#fff;} .tag.gold{background:#ffd75a;color:#5a3a00;}
+  .sh p{font-size:15.5px;line-height:1.45;margin:6px 0;}
+  .sh .fact{background:#f3ecff;border-radius:12px;padding:10px 12px;font-size:14.5px;}
+  .sh .dist{font-weight:800;color:#c0283c;font-size:16px;}
+  .row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .row button{flex:1 1 auto;border:0;border-radius:14px;padding:13px 14px;font-weight:800;font-size:16px;background:#3a1f6e;color:#fff;}
+  .row button.big{background:#25a24a;font-size:20px;padding:16px;flex-basis:100%;box-shadow:0 4px 0 #137a33;}
+  .row button.light{background:#ece4f6;color:#3a1f6e;}
+  .row button.red{background:#e0283c;}
+  .rate{display:flex;gap:4px;align-items:center;margin-top:10px;font-size:14px;font-weight:700;}
+  .rate button{border:0;background:none;font-size:28px;padding:0 2px;opacity:.28;filter:grayscale(1);}
+  .rate button.on{opacity:1;filter:none;}
+  .chips{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center;font-size:14px;font-weight:700;}
+  .chips button{border:2px solid #d8cdea;background:#fff;border-radius:12px;padding:7px 11px;font-weight:800;font-size:14px;color:#3a1f6e;}
+  .chips button.on{background:#3a1f6e;color:#fff;border-color:#3a1f6e;}
+
+  /* ---- panels (list, badges, menu) ---- */
+  #panel{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(10,5,25,.5);
+    padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));}
+  #panel.show{display:flex;}
+  .pn{width:min(560px,100%);max-height:100%;display:flex;flex-direction:column;background:#fffaf0;color:#2a2040;border-radius:22px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .pn-head{display:flex;align-items:center;gap:10px;background:#3a1f6e;color:#fff;padding:12px 14px;}
+  .pn-head h2{flex:1;font-family:Georgia,serif;font-size:22px;}
+  .pn-head .x{background:rgba(255,255,255,.18);color:#fff;}
+  .pn-body{overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:6px 14px 16px;}
+  .pn-body h3{font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:#7a5aa8;margin:14px 0 6px;}
+  .item{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:6px 0;background:#f3ecff;border-radius:14px;width:100%;border:0;text-align:left;color:inherit;}
+  .item .ic{font-size:24px;width:34px;text-align:center;flex:none;}
+  .item .tx{flex:1;min-width:0;}
+  .item b{display:block;font-size:15.5px;}
+  .item small{display:block;font-size:12.5px;color:#5a4a7a;margin-top:2px;}
+  .item .rt{font-size:13px;font-weight:800;color:#c0283c;white-space:nowrap;}
+  .item.done{background:#e3f5e6;}
+  .item.locked{opacity:.5;filter:grayscale(.8);}
+  div.item[data-go]{cursor:pointer;}
+  .item .check{flex:none;width:40px;height:40px;border-radius:12px;border:3px solid #9a88c8;background:#fff;color:#fff;font-size:24px;font-weight:900;line-height:1;}
+  .item .check.on{background:#25a24a;border-color:#25a24a;}
+  .item .go{font-size:24px;color:#9a88c8;font-weight:700;}
+  .pn-body .hint{font-size:14px;color:#5a4a7a;margin:8px 0 0;}
+  .pn-body p{font-size:15px;line-height:1.5;margin:8px 0;}
+  .lands{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:6px;}
+  .land{border-radius:14px;padding:10px;font-size:13px;font-weight:700;color:#2a2040;}
+  .land b{display:block;font-size:20px;}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px;}
+  .stat{background:#f3ecff;border-radius:14px;padding:10px 6px;text-align:center;font-size:12px;font-weight:700;color:#5a4a7a;}
+  .stat b{display:block;font-size:20px;color:#3a1f6e;}
+
+  /* ---- hand washing ---- */
+  #wash{position:fixed;inset:0;z-index:40;display:none;background:linear-gradient(180deg,#5ec8f0,#2a7ac8);touch-action:none;}
+  #wash.show{display:block;}
+  #wash-cv{position:absolute;inset:0;width:100%;height:100%;z-index:1;}
+  #wash-hands{position:absolute;left:50%;top:62%;transform:translate(-50%,-50%);font-size:min(150px,34vw);opacity:.85;animation:scrub 1.2s ease-in-out infinite;pointer-events:none;}
+  @keyframes scrub{0%,100%{transform:translate(-50%,-50%) rotate(-8deg)}50%{transform:translate(-50%,-50%) rotate(8deg) translateX(8px)}}
+  #wash-ui,#wash-skip{z-index:2;}
+  #wash-ui{position:absolute;left:0;right:0;top:0;text-align:center;pointer-events:none;padding:calc(24px + env(safe-area-inset-top)) 16px 0;}
+  #wash-ui h2{font-family:Georgia,serif;font-size:30px;text-shadow:0 3px 10px rgba(0,0,0,.3);}
+  #wash-ui p{font-size:16px;margin-top:6px;opacity:.95;}
+  #wash-time{font-size:64px;font-weight:900;margin-top:8px;text-shadow:0 4px 14px rgba(0,0,0,.3);}
+  #wash-bar{width:min(320px,80%);height:16px;border-radius:8px;background:rgba(255,255,255,.3);margin:6px auto 0;overflow:hidden;}
+  #wash-fill{height:100%;width:0;background:#fff;border-radius:8px;}
+  #wash-skip{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));border:0;border-radius:14px;background:rgba(0,0,0,.25);color:#fff;font-weight:800;font-size:16px;padding:12px 22px;}
+
+  /* ---- celebration ---- */
+  #party{position:fixed;inset:0;z-index:45;display:none;pointer-events:none;background:radial-gradient(circle at 50% 40%,rgba(30,15,60,.7) 0%,rgba(30,15,60,.35) 55%,rgba(30,15,60,0) 80%);}
+  #party.show{display:block;}
+  #party canvas{position:absolute;inset:0;width:100%;height:100%;}
+  #party-text{position:absolute;left:0;right:0;top:34%;text-align:center;padding:0 16px;}
+  #party-text b{display:block;font-family:Georgia,serif;font-size:clamp(44px,13vw,80px);color:#ffd75a;text-shadow:0 4px 0 #8a4a10,0 8px 30px rgba(0,0,0,.6);animation:boing .6s cubic-bezier(.2,1.6,.4,1);}
+  #party-text span{display:inline-block;margin-top:8px;font-size:22px;font-weight:900;background:rgba(40,20,80,.9);border-radius:14px;padding:8px 16px;}
+  @keyframes boing{from{transform:scale(.3);opacity:0}to{transform:none;opacity:1}}
+
+  /* ---- loading screen (see "Loading screen" in CLAUDE.md) ---- */
+  #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:#3a1f6e;color:#fff;transition:opacity .4s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .ld-box{width:min(420px,100%);text-align:center;}
+  .ld-name{font-family:Georgia,"Times New Roman",serif;font-weight:bold;font-size:clamp(34px,9vw,52px);line-height:1.05;margin-bottom:24px;color:#ffd75a;}
+  .ld-spin{width:56px;height:56px;margin:0 auto 22px;border-radius:50%;border:7px solid rgba(255,255,255,.18);border-top-color:#ffd75a;animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg)}}
+  .ld-bar{height:14px;border-radius:7px;background:rgba(255,255,255,.16);overflow:hidden;}
+  #ld-fill{display:block;height:100%;width:3%;background:#ffd75a;border-radius:7px;transition:width .3s;}
+  #ld-text{margin-top:12px;font-size:17px;min-height:22px;}
+  #ld-note{margin-top:6px;font-size:14px;min-height:18px;opacity:.8;}
+  #ld-retry{display:none;margin:14px auto 0;padding:12px 24px;border:0;border-radius:12px;font-family:inherit;font-weight:bold;font-size:18px;background:#ffd75a;color:#3a1f6e;}
+  .ld-ver{margin-top:20px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;}
+</style>
+<!-- the offline copy is saved straight away, not once the page has loaded -->
+<script>
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/royal-flush/sw.js?v={% endraw %}{{ page.version }}{% raw %}', { scope: '/experiments/royal-flush/', updateViaCache: 'none' }).catch(function(){});
+  if ((navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches)) && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+</script>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "/experiments/royal-flush/js/map.js": "/experiments/royal-flush/js/map.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/royal-flush/js/parks.js": "/experiments/royal-flush/js/parks.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/royal-flush/js/sound.js": "/experiments/royal-flush/js/sound.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/royal-flush/js/ui.js": "/experiments/royal-flush/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/royal-flush/js/util.js": "/experiments/royal-flush/js/util.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<div id="loading" role="status" aria-live="polite">
+  <div class="ld-box">
+    <div class="ld-name">Royal Flush</div>
+    <div class="ld-spin"></div>
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <div id="ld-text">Loading…</div>
+    <div id="ld-note"></div>
+    <button id="ld-retry" type="button">Try again</button>
+    <div class="ld-ver">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L = document.getElementById('loading'), fill = document.getElementById('ld-fill'), txt = document.getElementById('ld-text'),
+      note = document.getElementById('ld-note'), retry = document.getElementById('ld-retry');
+  var MAIN = '/experiments/royal-flush/js/main.js', BUILD = 'Drawing the map…';
+  var want = {}, total = 0, have = 0, got = {}, shown = 3, building = false, done = false, failed = false, t0 = Date.now();
+  function add(u){ var p = u.split('?')[0]; if (!want[p]){ want[p] = 1; total += 1; } }
+  try { var m = JSON.parse(document.querySelector('script[type=importmap]').textContent).imports; for (var k in m) add(m[k]); } catch (e) {}
+  add(MAIN);
+  function show(p, t){ if (p > shown) shown = p; fill.style.width = shown + '%'; if (txt.textContent !== t) txt.textContent = t; }
+  function tick(){
+    if (done || failed) return;
+    try { performance.getEntriesByType('resource').forEach(function(e){ var p; try { p = new URL(e.name).pathname; } catch (x) { return; } if (want[p] && !got[p]){ got[p] = 1; have += want[p]; } }); } catch (e) {}
+    var f = total ? have / total : 0;
+    if (building || f >= 1) show(Math.min(97, shown + (97 - shown) * 0.03), BUILD);
+    else { show(3 + 82 * f, ''); txt.textContent = 'Loading… ' + Math.round(shown) + '%'; }
+    if (Date.now() - t0 > 20000 && !note.textContent){ note.textContent = 'Still going: a slow connection can take a minute.'; retry.style.display = 'inline-block'; }
+  }
+  var iv = setInterval(tick, 150); tick();
+  retry.onclick = function(){ location.reload(); };
+  window.__loading = function(){
+    building = true; tick();
+    return new Promise(function(r){ setTimeout(r, 120); requestAnimationFrame(function(){ setTimeout(r, 0); }); });
+  };
+  window.__loaded = function(){
+    if (done) return; done = true; clearInterval(iv);
+    show(100, 'Ready!'); note.textContent = ''; retry.style.display = 'none';
+    var hide = function(){ L.classList.add('done'); setTimeout(function(){ L.style.display = 'none'; }, 450); };
+    requestAnimationFrame(function(){ requestAnimationFrame(hide); }); setTimeout(hide, 600);
+  };
+  window.__loadFailed = function(why){
+    if (done || failed) return; failed = true; clearInterval(iv);
+    txt.textContent = 'Something went wrong while loading.'; note.textContent = why ? String(why).slice(0, 160) : '';
+    retry.style.display = 'inline-block';
+  };
+  addEventListener('error', function(e){ if (!done && e && e.message) window.__loadFailed(e.message); });
+})();
+</script>
+
+<canvas id="map"></canvas>
+
+<div id="title">
+  <div class="card">
+    <div class="crown emoji"><span>👑</span><span>🚽</span></div>
+    <h1>Royal Flush</h1>
+    <p class="sub">The great Magic Kingdom restroom quest.<br>Find them all. Rate them all. Wash your hands.</p>
+    <div class="parks" id="t-parks"></div>
+    <div id="t-progress"></div>
+    <button id="b-go" class="tbtn">🗺️ Start the quest<small>I'm at the park: use my location</small></button>
+    <button id="b-practice" class="tbtn second">🛋️ Practice at home<small>Tap the map to walk around</small></button>
+    <p id="status"></p>
+    <p id="offline"></p>
+    <div class="help">
+      <b>How to play:</b> walk to a 🚻 pin and tap <b>Found it!</b> Being there with GPS on earns a
+      <b>GPS bonus</b>. Then scrub your hands for 20 seconds for more points, and rate the restroom.<br>
+      <b>🚨 I need to go!</b> shows the nearest restroom and the way there.<br>
+      Finish a land for a bonus. Find them all for a <b>Royal Flush</b>.
+    </div>
+    <p class="fine">An unofficial fan-made game, not connected with Disney. The map is a hand drawing and pins can be
+      a few steps off: when you find one, you can move its pin to where you're standing.</p>
+    <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="top">
+    <div id="top-park"><b id="top-name"></b><span id="top-count"></span><div id="top-bar"><div id="top-fill"></div></div></div>
+    <div id="score">0</div>
+    <button id="b-menu" class="ibtn" aria-label="Menu">☰</button>
+  </div>
+  <div id="gps"></div>
+  <div id="msgs"></div>
+  <div id="bottom">
+    <button id="b-list" class="bbtn"><span class="emoji">📋</span>List</button>
+    <button id="b-need">🚨 I need to go!</button>
+    <button id="b-badges" class="bbtn"><span class="emoji">🏅</span>Badges</button>
+    <button id="b-me" class="bbtn"><span>◎</span>Me</button>
+  </div>
+</div>
+
+<div id="sheet"></div>
+<div id="panel"></div>
+
+<div id="wash">
+  <div id="wash-hands" class="emoji">🙌</div>
+  <canvas id="wash-cv"></canvas>
+  <div id="wash-ui">
+    <h2>🫧 Wash your hands! 🫧</h2>
+    <p>Scrub the screen with your finger for 20 seconds<br>(that's "Happy Birthday" twice)</p>
+    <div id="wash-time">20</div>
+    <div id="wash-bar"><div id="wash-fill"></div></div>
+  </div>
+  <button id="wash-skip">Done</button>
+</div>
+
+<div id="party"><canvas id="party-cv"></canvas><div id="party-text"></div></div>
+
+<script type="module" src="/experiments/royal-flush/js/main.js?v={% endraw %}{{ page.version }}{% raw %}" onerror="window.__loadFailed && window.__loadFailed('A game file did not arrive. Check the connection and try again.')"></script>
+</body>
+</html>
+{% endraw %}
