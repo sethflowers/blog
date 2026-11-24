@@ -34,8 +34,9 @@ fan-made; no Disney artwork or logos.
 
 ## The map
 
-Network access from the build container was limited to package registries, so no OpenStreetMap data,
-tiles or pictures could be fetched. The map is drawn in code (`map.js`) from `parks.js`, which describes
+(1.x; since 2.0 the layout is traced from the guide map, and since 2.1 it is fitted to OpenStreetMap: see
+the versions below.) Network access from the build container was then limited to package registries, so
+no OpenStreetMap data, tiles or pictures could be fetched. The map is drawn in code (`map.js`) from `parks.js`, which describes
 the park in metres from Cinderella Castle (x east, y north): lands, water, walkways, the railroad,
 Main Street's buildings, landmarks and restrooms. GPS is converted with a flat projection
 (`toXY`), good to a metre or two across a park. Landmark positions come from their published
@@ -128,3 +129,64 @@ itself is **not** kept in the repo (it's Disney's); `_tools/royal-flush/trace.py
   shores, water with a glint, walkways with an edge, grey streets, shaded trees, outlined buildings, the
   railroad; procedural forest all round so the guide's rectangle doesn't show. Still in tiles.
 - The "Land Hopper" badge and the lands panel skip lands with no restrooms.
+
+### 2.1: the map lined up with OpenStreetMap
+Network access to Overpass was allowed. overpass-api.de itself reset every connection from the container
+(not a proxy refusal), so the data came from the other public Overpass servers (maps.mail.ru, kumi.systems:
+same OpenStreetMap data), fetched in small pieces because big queries timed out. It's kept in
+`_tools/royal-flush/osm/` (1.7 MB, ODbL) so the fit can be repeated exactly.
+
+**What OSM showed about 2.0:** its 7 remembered landmark coordinates were off. The game's origin
+(28.41917, −81.58111, "the castle") is 37 m south of the castle's middle in OSM, and against OSM footprints
+2.0's landmarks were off by a median 47 m (up to 82 m); restroom pins were 16–77 m from the toilets OSM maps.
+The origin is kept as it is (saved "moved" pins and added restrooms are metres from it); the castle is now
+simply at (−8, 37).
+
+**Why not just better landmarks:** the guide map isn't drawn to scale. Big show buildings at the edges are
+pulled in (Space Mountain ~60 m, TRON's building runs off the guide's edge), Tomorrowland's middle is
+stretched. Any single formula through 31 landmarks (affine, v², full quadratic, a thin-plate spline) left a
+median ~21 m, and leave-one-out tests ~23 m.
+
+**The fit (`_tools/royal-flush/osm_fit.py`):** a warp from guide pixels to metres: affine plus a smooth
+displacement grid (every 110 px, ~36 m, with a smoothness penalty), fitted like ICP over 14 rounds with a
+shrinking radius (60 → 12 m), robustly weighted:
+- every 3 m of OSM footway inside the park should be on a traced walkway or street (6,662 points);
+- OSM water edges (castle moat, Jungle Cruise, lagoon shore, Fantasyland ponds) on traced water edges;
+- the riverboat's boat channel on traced water. OSM has **no Rivers of America area** at all (only the
+  channel and lock west of it), so without this the north-west was unconstrained and the river's arm
+  ended up ~80 m north, across the railroad;
+- OSM building centroids to traced building centroids (mutual nearest, similar size; the guide merges
+  whole blocks into one shape, so only some match);
+- 17 landmarks whose drawing is unmistakable (castle, Space Mountain's dome, Carousel of Progress, the three
+  stations, teacups, Dumbo, …) to their OSM footprints, weighted heavily. Haunted Mansion, TRON, Pirates and
+  some others are left out: the guide draws a facade or queue where OSM has the show building.
+
+Results: landmarks fitted to a median 2.9 m; leaving each landmark out in turn, it lands a median 14 m from
+OSM (Space Mountain left out: 59 m: the guide squeezes it, which is why it's an anchor); 83% of in-park OSM
+footway is on a traced walkway (2.0: 54%). Debug overlay: `osm_fit.py --debug DIR`.
+
+**Restrooms vs OSM toilets** (none of these were used in the fit, so they're an independent check): the
+warped guide symbols of the 16 restrooms outside Tom Sawyer Island land 3–38 m from an OSM toilet (median
+12), each a different one. 16 pins now sit **on** the OSM toilet (mutual nearest within 45 m; `pinSource` in mk-map.js
+says which). They moved 16–77 m from 2.0's (2.0 → 2.1 distance): gate 43, townsq 30, firstaid 44, terrace 41,
+veranda 51, pirates 52, pecos 34, tiana 50, tangled 16, pinocchio 18, gaston 63, teacups 34, circus 77,
+tron 66, cosmic 59, space 72. Tom Sawyer Island's two have no OSM toilet (OSM doesn't map the island); they
+keep the warped guide positions, on the island. OSM toilets not used: one west of the railroad (backstage),
+a backstage block by the parade buildings, and a second unisex toilet 20 m from the Pecos Bill one. None of
+OSM's in-park toilets is a public restroom the guide lacks.
+
+**Other changes:**
+- The railroad is OSM's Walt Disney World Railroad loop (2.0's northern loop was a guess; the guide cuts it
+  off). OSM has an 8 m gap east of Space Mountain, bridged when joining.
+- The guide's pale east margin had been traced as a long thin building (2.0 hid it under forest along a
+  straight edge); it's dropped. The forest now grows outside the guide's frame (its rectangle minus the east
+  margin and the south-east bus lots, warped: `frame`/`frameIn` in mk-map.js) instead of outside a box.
+- Pipeline: `trace.py <pdf>` now writes `_tools/royal-flush/mk-trace.json` (shapes and places in guide
+  pixels; no GPS fit), and `osm_fit.py` writes mk-map.js (and `mk-warp.json`, the warp). The PDF still isn't
+  in the repo, so this time mk-trace.json was recovered from 2.0's mk-map.js by inverting 2.0's fit exactly
+  (round trip within 0.05 m).
+- Credits: "map data © OpenStreetMap contributors" on the title screen and in the menu's About.
+- Players with a save see "The map now lines up with OpenStreetMap…" once.
+- Test: OSM's own coordinates for the castle, Space Mountain, Big Thunder, Main Street Station and Carousel
+  of Progress go through the game's `toXY` and must land within 8 m of their drawings (1–5 m now), and every
+  OSM-sourced pin within 3 m of its OSM toilet. 2.0 would fail both (castle 38 m off).

@@ -3,9 +3,10 @@
 // Everything is in metres from the park's origin (x east, y north), so a GPS fix (latitude,
 // longitude) lands on the same drawing: toXY() converts it. Magic Kingdom's layout (water, walkways,
 // buildings, trees, the railroad) and the places of its restrooms and rides are traced from the
-// official guide map (mk-map.js, made by _tools/royal-flush/trace.py) and fitted to GPS through
-// landmarks with known positions: good to about 20 m. Players can move a pin to where they are
-// standing ("Pin is off: move it here"), which is saved on their device.
+// official guide map (_tools/royal-flush/trace.py) and fitted to OpenStreetMap (osm_fit.py writes
+// mk-map.js): footways, water, buildings and landmarks, good to about 10-15 m; the railroad and most
+// restroom pins are OpenStreetMap's own positions. Map data (c) OpenStreetMap contributors, ODbL.
+// Players can move a pin to where they are standing ("Pin is off: move it here"), saved on their device.
 //
 // To add a park (EPCOT, Hollywood Studios, Animal Kingdom): trace its guide map the same way, give it an
 // entry in PARKS with the same shape (origin, map, lands, landmarks, restrooms) and set ready: true.
@@ -26,7 +27,7 @@ const MK = {
   id: 'magic-kingdom',
   name: 'Magic Kingdom',
   ready: true,
-  origin: { lat: 28.41917, lon: -81.58111 },     // Cinderella Castle
+  origin: { lat: 28.41917, lon: -81.58111 },     // near Cinderella Castle (OSM puts its middle 37 m north); saved pins use it, so keep it
   map: MKMAP,                                    // the traced layout
   start: { ...AT('start'), zoom: 0.9 },
   bounds: MKMAP.bounds,

@@ -548,8 +548,8 @@ function menuPanel(){
     <h3>${p ? 'Practice' : 'Quest'} progress</h3>
     <div class="row"><button class="light" data-m="title">🏠 Title screen</button><button class="red" data-m="reset">Start ${p ? 'practice' : 'the quest'} over</button></div>
     <h3>About</h3>
-    <p style="font-size:13.5px">Royal Flush v${esc(VERSION)}. An unofficial fan-made game, not connected with Disney. The map is a hand drawing
-    and restroom pins are approximate: if one is off, find it and tap “Pin is off: move it here”. Restrooms change with
+    <p style="font-size:13.5px">Royal Flush v${esc(VERSION)}. An unofficial fan-made game, not connected with Disney. The map is redrawn from the park
+    guide and lined up with OpenStreetMap (map data © OpenStreetMap contributors); restroom pins can still be a few steps off: if one is off, find it and tap “Pin is off: move it here”. Restrooms change with
     refurbishments, so trust the signs in the park. Your progress is saved on this device only. Works offline once opened.</p>`;
   const body = openPanel('☰ Menu', html);
   body.onclick = (e) => {
@@ -603,8 +603,9 @@ function play(mode){
   setMode(mode);
   if (mode === 'practice') map.centerOn(G.me.x, G.me.y + 120, 1.6);
   else map.centerOn(G.park.start.x, G.park.start.y, map.startZoom(), false);
-  if (!S.seenHint){ S.seenHint = 1; S.seenMap2 = 1; save(); setTimeout(() => toast('Tap a 🚻 pin to see it. Get there, then tap <b>Found it!</b>', '', 5500), 600); }
-  else if (!S.seenMap2){ S.seenMap2 = 1; save(); setTimeout(() => toast('🗺️ New map! Traced from the official park guide, with all 18 restrooms in their real places.', 'gold', 6500), 600); }
+  if (!S.seenHint){ S.seenHint = 1; S.seenMap2 = S.seenMap21 = 1; save(); setTimeout(() => toast('Tap a 🚻 pin to see it. Get there, then tap <b>Found it!</b>', '', 5500), 600); }
+  else if (!S.seenMap2){ S.seenMap2 = S.seenMap21 = 1; save(); setTimeout(() => toast('🗺️ New map! Traced from the official park guide, with all 18 restrooms in their real places.', 'gold', 6500), 600); }
+  else if (!S.seenMap21){ S.seenMap21 = 1; save(); setTimeout(() => toast('🗺️ The map now lines up with OpenStreetMap: paths, rides and restroom pins are where your GPS says.', 'gold', 6500), 600); }
 }
 $('b-go').onclick = () => { askCompass(); play('gps'); };
 $('b-practice').onclick = () => play('practice');
@@ -630,6 +631,7 @@ window.__flush = {
   G, S, map, restrooms, byId, found, score, foundCount, landProgress, BADGES, slot, checkIn, openSheet, closeSheet,
   emergency, nearest, setMode, tick, untick, listPanel, play, showTitle, addRestroom, fixPin, walkTo, onFix,
   washScrub: (sec) => wash.scrubFor && wash.scrubFor(sec),
+  toXY: (lat, lon) => toXY(G.park, lat, lon),
   setPractice: (x, y) => { walkAnim++; G.me = { x, y, acc: 0, practice: true }; map.setMe(G.me); arrivals(); },
 };
 

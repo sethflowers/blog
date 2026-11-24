@@ -301,15 +301,14 @@ export class MapView {
   makeTrees(){
     const COLS = ['#4c8a3c', '#5a9a46', '#3f7c34', '#68a852', '#55923f'];
     this.trees = this.park.map.trees.map(([x, y, r], i) => ({ x, y, r, c: COLS[Math.abs(i * 7 + Math.round(x * 13)) % 5] }));
-    // forest around the guide map's edges (it only shows the park), so the map has no hard border
-    const B = this.park.bounds;
+    // forest around the guide map's drawing (it only shows the park), so the map has no hard border.
+    // frame: the outline of the guide's drawing, fitted to the ground (no longer a rectangle; it leaves
+    // out the guide's pale east edge and the bus and parking lots); frameIn: 30 px inside it, half forest
+    const B = this.park.bounds, F = this.park.map.frame, FI = this.park.map.frameIn;
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let y = B.y0 - 400; y < B.y1 + 400; y += 16) for (let x = B.x0 - 500; x < B.x1 + 500; x += 16){
-      const px = x + (rnd() - 0.5) * 12, py = y + (rnd() - 0.5) * 12, r = 6 + rnd() * 4;
-      const out = Math.max(B.x0 - px, px - B.x1, B.y0 - py, py - B.y1);
-      // (also along the guide's pale east edge, and the bus and parking lots it shows in the south-east)
-      const edge = px > B.x1 - 40 || (px > 140 && py < -345);
-      if (out > 6 || (out > -10 && rnd() < 0.5) || (edge && rnd() < 0.85)) this.trees.push({ x: px, y: py, r, c: COLS[(rnd() * 5) | 0] });
+      const px = x + (rnd() - 0.5) * 12, py = y + (rnd() - 0.5) * 12, r = 6 + rnd() * 4, half = rnd() < 0.5, c = COLS[(rnd() * 5) | 0];
+      if (!inPoly(px, py, F) || (half && !inPoly(px, py, FI))) this.trees.push({ x: px, y: py, r, c });
     }
     // ripples: a few points inside the bigger stretches of water
     this.ripples = [];

@@ -2,7 +2,7 @@
 title: Royal Flush
 description: The great Magic Kingdom restroom quest. Find and check in at every restroom in the park with your phone's GPS, rate them, wash your hands for bonus points, earn badges, and hit "I need to go!" for the nearest one.
 date: 2026-11-24
-version: "2.0"
+version: "2.1"
 layout: null
 ---
 {% raw %}
@@ -291,8 +291,9 @@ if ('serviceWorker' in navigator){
       <b>🚨 I need to go!</b> shows the nearest restroom and the way there.<br>
       Finish a land for a bonus. Find them all for a <b>Royal Flush</b>.
     </div>
-    <p class="fine">An unofficial fan-made game, not connected with Disney. The map is a hand drawing and pins can be
-      a few steps off: when you find one, you can move its pin to where you're standing.</p>
+    <p class="fine">An unofficial fan-made game, not connected with Disney. The map is redrawn from the park guide and
+      lined up with OpenStreetMap (map data © OpenStreetMap contributors). Pins can be a few steps off: when you find
+      one, you can move its pin to where you're standing.</p>
     <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
   </div>
 </div>

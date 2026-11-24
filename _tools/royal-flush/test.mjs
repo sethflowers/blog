@@ -4,7 +4,8 @@
 // (walking, arriving at a restroom, checking in, the celebration, washing hands, rating), ticking one off
 // from the list and unticking it, the emergency button, badges and points, GPS mode with an emulated
 // position (a GPS-verified check-in, moving a pin, being far from the park), saving and reloading, an
-// old save, no console errors. Screenshots on a phone and an iPad.
+// old save, the map lining up with GPS (OpenStreetMap's own positions of landmarks and restrooms land on
+// the drawn ones), no console errors. Screenshots on a phone and an iPad.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -216,6 +217,31 @@ await ev(pg, () => localStorage.setItem('royal-flush-save-1', JSON.stringify({ v
 await pg.reload();
 await pg.waitForFunction(() => window.__flush);
 check(await ev(pg, () => !!__flush.S.parks['magic-kingdom'].found.townsq && Array.isArray(__flush.S.parks['magic-kingdom'].custom) && __flush.S.settings.sound === true), 'an old save is upgraded, keeping what it had');
+
+// ---- the map lines up with GPS: OpenStreetMap's positions (the data osm_fit.py fitted the map to) go
+// through the game's own GPS conversion and land on the drawn landmarks and the restroom pins (as the game
+// has them, before any the player moved) ----
+{
+  const osm = (f) => JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'osm', f + '.json'))).elements;
+  const byId = new Map([...osm('attr'), ...osm('toilets')].map((e) => [e.type[0] + e.id, e]));
+  const latlon = (e) => {          // a node, or the middle (area centroid) of a way's outline
+    if (e.lat) return [e.lat, e.lon];
+    const o = e.geometry[0], g = e.geometry.slice(0, -1).map((p) => ({ lat: p.lat - o.lat, lon: p.lon - o.lon }));   // (relative: precision)
+    let A = 0, y = 0, x = 0;
+    g.forEach((p, i) => { const q = g[(i + 1) % g.length], c = p.lon * q.lat - q.lon * p.lat; A += c; x += (p.lon + q.lon) * c; y += (p.lat + q.lat) * c; });
+    return [o.lat + y / (3 * A), o.lon + x / (3 * A)];
+  };
+  const far = await ev(pg, (L) => L.map(([k, lat, lon]) => { const p = __flush.toXY(lat, lon), q = __flush.G.park.map.places[k]; return [k, Math.hypot(p.x - q[0], p.y - q[1])]; }),
+    [['L-castle', 'w121516748'], ['L-space', 'w296326395'], ['L-thunder', 'w324922684'], ['S-main', 'w296125663'], ['L-carousel', 'w296311178']].map(([k, id]) => [k, ...latlon(byId.get(id))]));
+  check(far.every(([, d]) => d < 8), 'GPS: standing at a landmark (OpenStreetMap) puts you on its drawing: ' + far.map(([k, d]) => `${k.slice(2)} ${d.toFixed(1)} m`).join(', '));
+  const src = await ev(pg, () => __flush.G.park.map.pinSource);
+  const pins = Object.entries(src).filter(([, s]) => s.startsWith('OSM ')).map(([r, s]) => {
+    const pts = s.slice(4).split('+').map((id) => latlon(byId.get(id)));
+    return [r, pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+  });
+  const off = await ev(pg, (L) => L.map(([r, lat, lon]) => { const p = __flush.toXY(lat, lon), q = __flush.G.park.restrooms.find((x) => x.id === r); return [r, Math.hypot(p.x - q.x, p.y - q.y)]; }), pins);
+  check(Object.keys(src).length === 18 && pins.length >= 16 && off.every(([, d]) => d < 3), `GPS: ${pins.length} of 18 restroom pins sit on the restroom OpenStreetMap maps there (worst ${Math.max(...off.map(([, d]) => d)).toFixed(1)} m)`);
+}
 
 check(errors.length === 0, 'no console errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 await ctx.close();

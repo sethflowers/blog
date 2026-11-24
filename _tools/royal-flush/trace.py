@@ -1,18 +1,18 @@
 """Traces Magic Kingdom's layout from the official guide map (a PDF you supply; it isn't kept in the
-repo) into experiments/royal-flush/js/mk-map.js: water, walkways, buildings and trees as shapes in metres
-from Cinderella Castle (x east, y north), so the game can draw its own map in its own style and a GPS
-fix lands in the right place.
+repo) into _tools/royal-flush/mk-trace.json: water, walkways, buildings and trees as shapes in the guide
+map's own pixels, plus the places of its restrooms, rides and lands. osm_fit.py then fits those pixels to
+OpenStreetMap and writes experiments/royal-flush/js/mk-map.js (metres, x east, y north), so the game can
+draw its own map in its own style and a GPS fix lands in the right place.
 
     python3 _tools/royal-flush/trace.py path/to/Magic-Kingdom-map.pdf [debug-dir]
+    python3 _tools/royal-flush/osm_fit.py
 
 Needs pdftoppm, numpy and opencv (pip install opencv-python-headless numpy).
 
 How: page 2 of the guide map is rendered at 150 dpi and the map part kept (2901 x 2813 px). The guide's
 number circles, icons and land-name boxes are painted out (inpainted from what's around them), then each
 pixel is sorted by colour: water (light blue), walkway (beige), lawn and trees (green), everything else
-inside the park a building. Each class becomes polygons (with holes), simplified, and is converted to
-metres with a smooth fit (quadratic in the map's up-down direction: the guide map is drawn in perspective,
-the north squashed) through landmarks whose real positions are known. Residuals are up to about 20 m.
+inside the park a building. Each class becomes polygons (with holes), simplified, kept in map pixels.
 """
 import sys, os, subprocess, json, tempfile
 import numpy as np, cv2
@@ -20,7 +20,7 @@ import numpy as np, cv2
 PDF = sys.argv[1]
 DBG = sys.argv[2] if len(sys.argv) > 2 else None
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-OUT = os.path.join(ROOT, 'experiments', 'royal-flush', 'js', 'mk-map.js')
+OUT = os.path.join(ROOT, '_tools', 'royal-flush', 'mk-trace.json')
 
 # ---------- the map image ----------
 tmp = tempfile.mkdtemp()
@@ -28,26 +28,6 @@ subprocess.run(['pdftoppm', '-r', '150', '-f', '2', '-l', '2', '-png', PDF, os.p
 page = cv2.imread(os.path.join(tmp, [f for f in os.listdir(tmp) if f.endswith('.png')][0]))
 MW, MH = 2901, 2813
 im = page[:MH, :MW].copy()
-
-# ---------- map pixels -> metres ----------
-# landmarks: (map px) -> (metres east, north of the castle at 28.41917, -81.58111)
-ANCHORS = {
-    'castle': ((1560, 1040), (0, 0)), 'station': ((1552, 2280), (0, -325)), 'space': ((2730, 1040), (383, 3)),
-    'thunder': ((270, 650), (-352, 125)), 'mansion': ((830, 600), (-195, 159)), 'smallworld': ((1300, 560), (-77, 181)),
-    'hub': ((1553, 1385), (0, -91)),
-}
-P = np.array([a[0] for a in ANCHORS.values()], float); Q = np.array([a[1] for a in ANCHORS.values()], float)
-# east-west: straight (affine); north-south: with a v^2 term for the guide's perspective (its north is
-# squashed). More terms fit the anchors closer but bend wildly away from them.
-def fx(u, v): return np.stack([np.ones_like(u), u, v], -1)
-def fy(u, v): return np.stack([np.ones_like(u), u, v, v * v], -1)
-CX = np.linalg.lstsq(fx(P[:, 0], P[:, 1]), Q[:, 0], rcond=None)[0]
-CY = np.linalg.lstsq(fy(P[:, 0], P[:, 1]), Q[:, 1], rcond=None)[0]
-def to_m(pts):
-    pts = np.asarray(pts, float).reshape(-1, 2); u, v = pts[:, 0], pts[:, 1]
-    return np.stack([fx(u, v) @ CX, fy(u, v) @ CY], -1)
-res = np.hypot(*(to_m(P) - Q).T)
-print('fit residuals (m):', dict(zip(ANCHORS, np.round(res, 1))))
 
 # ---------- paint out the guide's markers, icons and labels ----------
 hsv = cv2.cvtColor(im, cv2.COLOR_BGR2HSV); H, S, V = [hsv[..., i].astype(int) for i in range(3)]
@@ -151,7 +131,7 @@ def shapes(mask, eps, min_hole=400):
             j = hier[j][0]
         out.append([poly] + holes)
     return out
-def rings_m(rings): return [[[round(float(x), 1), round(float(y), 1)] for x, y in to_m(r)] for r in rings]
+def rings_m(rings): return [[[round(float(x), 1), round(float(y), 1)] for x, y in r] for r in rings]   # map px
 water_s = [rings_m(s) for s in shapes(W_, 2.2)]
 path_s = [rings_m(s) for s in shapes(P_, 2.0)]
 road_s = [rings_m(s) for s in shapes(R_, 2.0)]
@@ -176,11 +156,8 @@ for y in range(0, MH, 22):
         px, py = x + rng.integers(-8, 9), y + rng.integers(-8, 9)
         if 0 <= px < MW and 0 <= py < MH and T_[py, px]:
             tree_pts.append((px, py, 4.5 + rng.random() * 3.5))
-tm = to_m([(x, y) for x, y, _ in tree_pts])
-trees_out = [[round(float(a), 1), round(float(b), 1), round(r, 1)] for (a, b), (_, _, r) in zip(tm, tree_pts)]
+trees_out = [[int(x), int(y), round(r, 1)] for x, y, r in tree_pts]          # map px, radius in metres
 
-rail = [[round(float(x), 1), round(float(y), 1)] for x, y in to_m(RAIL)]
-bounds = to_m([(0, 0), (MW, 0), (0, MH), (MW, MH)])
 
 # places read off the guide map (map px): its 18 restroom symbols, the rides, stations, land names
 PLACES = {
@@ -204,7 +181,7 @@ PLACES = {
     'T-front': (330, 440), 'T-fan': (1270, 450), 'T-lib': (1170, 960), 'T-tom': (2430, 940), 'T-adv': (490, 1835), 'T-main': (1555, 1800),
     'hub': (1553, 1385), 'start': (1553, 1250),
 }
-places = {k: [round(float(a), 1), round(float(b), 1)] for k, (a, b) in zip(PLACES, to_m(list(PLACES.values())))}
+places = {k: list(v) for k, v in PLACES.items()}
 # the lands, roughly (map px), for tinting and for which land a restroom is in
 LANDS_PX = {
     'main': [(1380,1470),(1720,1470),(1760,2330),(1340,2330)],
@@ -214,18 +191,13 @@ LANDS_PX = {
     'fan': [(1080,660),(1380,820),(1440,1000),(1700,1000),(2120,980),(2200,880),(2650,480),(2650,0),(1000,0),(1000,480)],
     'tom': [(1700,1000),(2120,980),(2200,880),(2650,480),(2901,480),(2901,2050),(2500,2100),(1800,1800),(1720,1470),(1660,1300)],
 }
-lands = {k: [[round(float(a), 1), round(float(b), 1)] for a, b in to_m(v)] for k, v in LANDS_PX.items()}
+lands = {k: [list(p) for p in v] for k, v in LANDS_PX.items()}
 
 data = {
-    'source': 'Traced from the official Magic Kingdom guide map (layout only), fitted to GPS through known landmarks.',
-    'bounds': {'x0': round(float(bounds[:, 0].min())), 'x1': round(float(bounds[:, 0].max())), 'y0': round(float(bounds[:, 1].min())), 'y1': round(float(bounds[:, 1].max()))},
-    'places': places, 'lands': lands,
-    'water': water_s, 'paths': path_s, 'roads': road_s, 'sand': sand_s, 'buildings': build_s, 'trees': trees_out, 'rail': rail,
+    'source': 'Traced from the official Magic Kingdom guide map (layout only), in its own pixels (page 2 at 150 dpi).',
+    'size': [MW, MH], 'places': places, 'lands': lands,
+    'water': water_s, 'paths': path_s, 'roads': road_s, 'sand': sand_s, 'buildings': build_s, 'trees': trees_out,
 }
-js = ('// Generated by _tools/royal-flush/trace.py from the official Magic Kingdom guide map (layout only, redrawn\n'
-      '// in the game\'s own style). Metres from Cinderella Castle, x east, y north. Polygons: [outline, ...holes].\n'
-      'export default ' + json.dumps(data, separators=(',', ':')) + ';\n')
-open(OUT, 'w').write(js)
-print('roads', len(road_s), 'sand', len(sand_s), 'water', len(water_s), 'paths', len(path_s), 'buildings', len(build_s), 'trees', len(trees_out), 'size', len(js) // 1024, 'KB')
-print('bounds', data['bounds'])
-# for placing things: print any map px given on stdin? (used by the author to convert restroom/landmark points)
+open(OUT, 'w').write(json.dumps(data, separators=(',', ':')))
+print('roads', len(road_s), 'sand', len(sand_s), 'water', len(water_s), 'paths', len(path_s), 'buildings', len(build_s), 'trees', len(trees_out))
+print('now run _tools/royal-flush/osm_fit.py to fit it to OpenStreetMap and write mk-map.js')
