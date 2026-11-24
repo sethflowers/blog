@@ -66,3 +66,22 @@ First version: map, GPS and practice modes, check-in with celebration and hand w
 ticking off from the list, "I need to go!", badges and points, pin fixing and adding restrooms, saves
 (`royal-flush-save-1`, with `upgrade()`), offline service worker, loading screen, icons drawn from the
 game's castle (`_tools/royal-flush/icons.mjs`), and a quick test (`_tools/royal-flush/test.mjs`, ~20 s).
+
+### 1.1: works well on an iPhone
+- **Bug:** opening a card was meant to slide the map so the pin sits above the card, but the sign
+  was wrong: it slid ~200 m the other way, so on a phone you saw only forest behind the card. Fixed,
+  and the pin now goes just above the card's top edge (messages at the top can't cover it). Test:
+  "opening a card brings its pin into view above the card".
+- **Smooth dragging on a 3x screen:** a full map redraw (≈4,500 trees) took ~30 ms. While a finger
+  drags or pinches, or the view glides, the last picture is now slid and scaled (like map apps do)
+  and the map is redrawn properly when it stops. Test: no full redraws during a drag, one after.
+- **Which way you're facing:** a heading cone on your dot, from the compass (an iPhone asks for
+  motion permission, only from a tap: "Start the quest" and "Me" ask), or from GPS while walking.
+- The compass and scale bar stay clear of the notch when the iPhone is sideways.
+- Location-off help gives the iPhone settings path (Privacy & Security › Location Services ›
+  Safari Websites › While Using).
+- Buttons: `touch-action: manipulation` (no double-tap zoom delay).
+- Title screen fits a small iPhone (SE): parks in one sliding row, start buttons first, tighter
+  spacing on short screens.
+- "You're at …" no longer shows a message as well as opening the card.
+- Test now also runs on an emulated iPhone 13 (portrait and sideways) and an iPhone SE.

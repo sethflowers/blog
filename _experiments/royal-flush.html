@@ -2,7 +2,7 @@
 title: Royal Flush
 description: The great Magic Kingdom restroom quest. Find and check in at every restroom in the park with your phone's GPS, rate them, wash your hands for bonus points, earn badges, and hit "I need to go!" for the nearest one.
 date: 2026-11-24
-version: "1.0"
+version: "1.1"
 layout: null
 ---
 {% raw %}
@@ -25,7 +25,7 @@ layout: null
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{width:100%;height:100%;overflow:hidden;background:#3a1f6e;color:#fff;-webkit-user-select:none;user-select:none;
     font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;}
-  button{font-family:inherit;cursor:pointer;color:inherit;}
+  button{font-family:inherit;cursor:pointer;color:inherit;touch-action:manipulation;-webkit-touch-callout:none;}
   #map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;}
   .emoji{font-family:"Apple Color Emoji","Noto Color Emoji","Segoe UI Emoji",sans-serif;}
 
@@ -46,7 +46,7 @@ layout: null
   .parks button.on{background:#ffd75a;color:#3a1f6e;border-color:#ffd75a;}
   .parks button:disabled{opacity:.5;cursor:default;}
   .parks small{display:block;font-size:10px;font-weight:600;opacity:.8;}
-  #t-progress{background:rgba(0,0,0,.22);border-radius:16px;padding:12px 14px;margin-bottom:14px;font-size:15px;line-height:1.45;min-height:20px;}
+  #t-progress{background:rgba(0,0,0,.22);border-radius:16px;padding:12px 14px;margin:16px 0 10px;font-size:15px;line-height:1.45;min-height:20px;}
   #t-progress b{color:#ffd75a;}
   .tbtn{display:block;width:100%;margin:12px auto;padding:17px 18px;font-size:21px;font-weight:800;line-height:1.1;color:#3a1f6e;
     background:#ffd75a;border:0;border-radius:16px;box-shadow:0 6px 0 #b8862a;}
@@ -58,6 +58,19 @@ layout: null
   .help{margin-top:14px;font-size:14px;line-height:1.55;opacity:.92;text-align:left;background:rgba(0,0,0,.18);border-radius:14px;padding:12px 14px;}
   .help b{color:#ffd75a;}
   .fine{margin-top:12px;font-size:11.5px;line-height:1.45;opacity:.65;}
+  /* phones: the parks in one sliding row, and less above the buttons */
+  @media (max-width:600px){
+    .parks{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;margin:0 -18px 12px;padding:0 18px;scrollbar-width:none;}
+    .parks::-webkit-scrollbar{display:none;}
+    .parks button{flex:none;}
+  }
+  @media (max-height:740px){
+    .crown{font-size:44px;margin-top:0;}
+    h1{font-size:46px;margin-top:4px;}
+    .sub{font-size:15px;margin:6px 0 10px;}
+    .parks button{padding:6px 12px;font-size:13px;}
+    .tbtn{margin:9px auto;padding:13px 16px;font-size:19px;}
+  }
   .build-version{margin-top:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.7;}
 
   /* ---- HUD ---- */
@@ -266,9 +279,9 @@ if ('serviceWorker' in navigator){
     <h1>Royal Flush</h1>
     <p class="sub">The great Magic Kingdom restroom quest.<br>Find them all. Rate them all. Wash your hands.</p>
     <div class="parks" id="t-parks"></div>
-    <div id="t-progress"></div>
     <button id="b-go" class="tbtn">🗺️ Start the quest<small>I'm at the park: use my location</small></button>
     <button id="b-practice" class="tbtn second">🛋️ Practice at home<small>Tap the map to walk around</small></button>
+    <div id="t-progress"></div>
     <p id="status"></p>
     <p id="offline"></p>
     <div class="help">

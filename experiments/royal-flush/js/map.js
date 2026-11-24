@@ -7,7 +7,7 @@ import { LANDS } from './parks.js';
 export class MapView {
   constructor(canvas, handlers){
     this.cv = canvas; this.g = canvas.getContext('2d'); this.h = handlers;
-    this.park = null; this.pins = []; this.me = null; this.route = null; this.selected = null;
+    this.park = null; this.heading = null; this.safeL = 0; this.pins = []; this.me = null; this.route = null; this.selected = null;
     this.cx = 0; this.cy = 0; this.zoom = 1; this.base = 1;
     this.pad = { top: 0, bottom: 0 };
     this.W = 1; this.H = 1; this.dpr = 1;
@@ -73,12 +73,14 @@ export class MapView {
 
   centerOn(x, y, zoom, animate = true){
     const to = { cx: x, cy: y, zoom: zoom || this.zoom };
-    if (!animate){ Object.assign(this, to); this.clampView(); this.dirty(); return; }
-    const from = { cx: this.cx, cy: this.cy, zoom: this.zoom }, t0 = performance.now(), D = 450;
+    if (!animate){ this.anim = (this.anim || 0) + 1; this.animating = false; Object.assign(this, to); this.clampView(); this.dirty(); return; }
+    const from = { cx: this.cx, cy: this.cy, zoom: this.zoom }, t0 = performance.now(), D = 450, id = this.anim = (this.anim || 0) + 1;
     const step = () => {
+      if (id !== this.anim) return;
       const k = Math.min(1, (performance.now() - t0) / D), e = 1 - Math.pow(1 - k, 3);
       this.cx = from.cx + (to.cx - from.cx) * e; this.cy = from.cy + (to.cy - from.cy) * e;
       this.zoom = from.zoom * Math.pow(to.zoom / from.zoom, e);
+      this.animating = k < 1;
       this.clampView(); this.dirty();
       if (k < 1) requestAnimationFrame(step);
     };
@@ -100,6 +102,7 @@ export class MapView {
     cv.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { cv.setPointerCapture(e.pointerId); } catch (x) {}
+      this.anim = (this.anim || 0) + 1; this.animating = false;
       this.ptrs.set(e.pointerId, pos(e)); start();
       if (this.ptrs.size === 1) this.follow = false;
     });
@@ -124,6 +127,7 @@ export class MapView {
       if (!this.ptrs.has(e.pointerId)) return;
       const p = this.ptrs.get(e.pointerId), g = this.gesture;
       this.ptrs.delete(e.pointerId);
+      this.dirty();
       if (e.type === 'pointerup' && g && g.kind === 'pan' && g.moved <= 6 && performance.now() - g.t0 < 600) this.tap(p);
       start();
     };
@@ -131,7 +135,7 @@ export class MapView {
     cv.addEventListener('pointercancel', end);
     cv.addEventListener('lostpointercapture', end);
     addEventListener('pointerup', (e) => { if (this.ptrs.has(e.pointerId)) end(e); });
-    const forget = () => { this.ptrs.clear(); this.gesture = null; };
+    const forget = () => { this.ptrs.clear(); this.gesture = null; this.dirty(); };
     addEventListener('blur', forget);
     document.addEventListener('visibilitychange', forget);
     cv.addEventListener('wheel', (e) => {
@@ -187,11 +191,29 @@ export class MapView {
     // "you are here" dot and the moving route only cost a copy (it matters for a phone's battery)
     const key = [this.cx, this.cy, this.zoom, this.W, this.H, this.dpr, this.pad.top, this.pad.bottom, this.pinsV].join(',');
     if (!this.bg || this.bgKey !== key){
+      // while a finger is dragging or pinching (or the view is gliding), slide and scale the last
+      // picture instead of redrawing thousands of trees every frame; redraw properly when it stops
+      const v = this.bgView, mid = this.midY();
+      const moving = this.ptrs.size > 0 || this.animating;
+      if (moving && v && v.pinsV === this.pinsV && v.mid === mid && this.bg.width === this.cv.width && this.bg.height === this.cv.height){
+        const k = this.s / v.s, dx = (v.cx - this.cx) * this.s, dy = (this.cy - v.cy) * this.s;
+        if (k > 0.55 && k < 1.8 && Math.abs(dx) < this.W * 0.6 && Math.abs(dy) < this.H * 0.6){
+          const d = this.dpr;
+          main.setTransform(1, 0, 0, 1, 0, 0); main.fillStyle = '#5c914c'; main.fillRect(0, 0, this.cv.width, this.cv.height);
+          main.setTransform(k, 0, 0, k, d * (dx + this.W / 2 * (1 - k)), d * (dy + mid * (1 - k)));
+          main.drawImage(this.bg, 0, 0);
+          main.setTransform(d, 0, 0, d, 0, 0);
+          this.drawDynamic(t);
+          this.isDirty = true;   // come back for the proper drawing once it stops
+          return;
+        }
+      }
       if (!this.bg) this.bg = document.createElement('canvas');
       if (this.bg.width !== this.cv.width || this.bg.height !== this.cv.height){ this.bg.width = this.cv.width; this.bg.height = this.cv.height; }
       this.g = this.bg.getContext('2d');
       this.drawStatic();
       this.g = main; this.bgKey = key;
+      this.bgView = { cx: this.cx, cy: this.cy, s: this.s, mid, pinsV: this.pinsV };
     }
     main.setTransform(1, 0, 0, 1, 0, 0);
     main.drawImage(this.bg, 0, 0);
@@ -433,6 +455,12 @@ export class MapView {
     if (this.me){
       const X = this.sx(this.me.x), Y = this.sy(this.me.y), col = this.me.practice ? '124,77,255' : '30,120,255';
       if (this.me.acc){ g.beginPath(); g.arc(X, Y, Math.max(10, this.me.acc * s), 0, Math.PI * 2); g.fillStyle = `rgba(${col},.12)`; g.fill(); g.strokeStyle = `rgba(${col},.35)`; g.lineWidth = 1; g.stroke(); }
+      if (this.heading !== null && this.heading !== undefined && !this.me.practice){
+        // which way you're facing: a soft cone, like a phone's map app
+        const a = (this.heading - 90) * Math.PI / 180, cone = g.createRadialGradient(X, Y, 4, X, Y, 46);
+        cone.addColorStop(0, `rgba(${col},.55)`); cone.addColorStop(1, `rgba(${col},0)`);
+        g.fillStyle = cone; g.beginPath(); g.moveTo(X, Y); g.arc(X, Y, 46, a - 0.5, a + 0.5); g.closePath(); g.fill();
+      }
       const k = (t / 1400) % 1;
       g.beginPath(); g.arc(X, Y, 9 + k * 18, 0, Math.PI * 2); g.fillStyle = `rgba(${col},${0.35 * (1 - k)})`; g.fill();
       g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 5;
@@ -441,15 +469,15 @@ export class MapView {
       if (this.me.practice){ g.font = '700 11px "Avenir Next","Trebuchet MS",sans-serif'; this.label('you (practice)', X, Y + 22, '#fff', 'rgba(90,50,200,.88)'); }
     }
     // compass and scale, bottom left
-    const cx = 30, cy = this.H - this.pad.bottom - 34;
+    const cx = 30 + (this.safeL || 0), cy = this.H - this.pad.bottom - 34, L = cx + 24;
     g.fillStyle = 'rgba(255,252,240,.92)'; g.shadowColor = 'rgba(0,0,0,.25)'; g.shadowBlur = 4; g.beginPath(); g.arc(cx, cy, 17, 0, 7); g.fill(); g.shadowBlur = 0;
     g.fillStyle = '#e0283c'; g.beginPath(); g.moveTo(cx, cy - 13); g.lineTo(cx + 5, cy); g.lineTo(cx - 5, cy); g.closePath(); g.fill();
     g.fillStyle = '#3a1f6e'; g.beginPath(); g.moveTo(cx, cy + 13); g.lineTo(cx + 5, cy); g.lineTo(cx - 5, cy); g.closePath(); g.fill();
     g.font = '900 9px "Avenir Next",sans-serif'; g.fillStyle = '#fff'; g.fillText('N', cx, cy - 4);
     const m = [25, 50, 100, 200, 500].find((v) => v * s >= 50) || 500, len = m * s;
-    g.fillStyle = 'rgba(255,252,240,.9)'; this.rr(54, cy - 9, len + 44, 18, 9); g.fill();
-    g.strokeStyle = '#3a1f6e'; g.lineWidth = 2; g.beginPath(); g.moveTo(62, cy - 3); g.lineTo(62, cy + 3); g.lineTo(62 + len, cy + 3); g.lineTo(62 + len, cy - 3); g.stroke();
-    g.font = '800 10px "Avenir Next",sans-serif'; g.fillStyle = '#3a1f6e'; g.textAlign = 'left'; g.fillText(m + ' m', 66 + len, cy); g.textAlign = 'center';
+    g.fillStyle = 'rgba(255,252,240,.9)'; this.rr(L, cy - 9, len + 44, 18, 9); g.fill();
+    g.strokeStyle = '#3a1f6e'; g.lineWidth = 2; g.beginPath(); g.moveTo(L + 8, cy - 3); g.lineTo(L + 8, cy + 3); g.lineTo(L + 8 + len, cy + 3); g.lineTo(L + 8 + len, cy - 3); g.stroke();
+    g.font = '800 10px "Avenir Next",sans-serif'; g.fillStyle = '#3a1f6e'; g.textAlign = 'left'; g.fillText(m + ' m', L + 12 + len, cy); g.textAlign = 'center';
   }
 
   // a label on a rounded tag; with avoid, only drawn where it doesn't cover another label or a pin

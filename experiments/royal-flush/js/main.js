@@ -123,6 +123,7 @@ function refreshPins(){
 }
 function layoutPad(){
   const top = $('top').getBoundingClientRect().height || 60, bottom = $('bottom').getBoundingClientRect().height || 80;
+  map.safeL = Math.max(0, (parseFloat(getComputedStyle($('bottom')).paddingLeft) || 10) - 10);   // the notch, on an iPhone held sideways
   map.setPad(top, bottom);
 }
 addEventListener('resize', layoutPad);
@@ -154,13 +155,38 @@ function startGPS(){
   setGPS('📡 Finding you…');
   watchId = navigator.geolocation.watchPosition(onFix, onFixError, { enableHighAccuracy: true, maximumAge: 5000, timeout: 30000 });
 }
+// which way the phone is pointing. iPhones ask permission for this, and only from a tap.
+let compassOn = false, lastHeadingDraw = 0;
+function setHeading(h){
+  if (Math.abs(((h - (map.heading ?? -999)) + 540) % 360 - 180) < 3 && performance.now() - lastHeadingDraw < 1000) return;
+  map.heading = h; lastHeadingDraw = performance.now(); map.dirty();
+}
+function onOrient(e){
+  let h = null;
+  if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) h = e.webkitCompassHeading;          // iPhone
+  else if (e.absolute && typeof e.alpha === 'number') h = (360 - e.alpha) % 360;                                          // Android
+  if (h === null) return;
+  const so = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+  compassOn = true; setHeading((h + so + 360) % 360);
+}
+function askCompass(){
+  try {
+    const D = window.DeviceOrientationEvent;
+    if (!D || askCompass.done) return;
+    askCompass.done = true;
+    const listen = () => { addEventListener('deviceorientationabsolute', onOrient); addEventListener('deviceorientation', onOrient); };
+    if (typeof D.requestPermission === 'function') D.requestPermission().then((r) => { if (r === 'granted') listen(); }).catch(() => { askCompass.done = false; });
+    else listen();
+  } catch (e) {}
+}
 function stopGPS(){ if (watchId !== null){ navigator.geolocation.clearWatch(watchId); watchId = null; } }
 function onFixError(e){
   if (G.mode !== 'gps') return;
-  if (e.code === 1) setGPS('📵 Location is off for this page. Allow it in Settings › Safari › Location, or try practice mode (☰).', 'warn');
+  if (e.code === 1) setGPS('📵 Location is off for this page. On an iPhone: Settings › Privacy &amp; Security › Location Services › Safari Websites › <b>While Using</b>, then reload. Or try practice mode (☰).', 'warn');
   else setGPS('📡 Still looking for a GPS signal…', 'warn');
 }
 function onFix(p){
+  if (!compassOn && p.coords.heading !== null && !isNaN(p.coords.heading) && p.coords.speed > 0.6) setHeading(p.coords.heading);
   applyFix(toXY(G.park, p.coords.latitude, p.coords.longitude), p.coords.accuracy || 30);
 }
 function applyFix(xy, acc){
@@ -200,8 +226,9 @@ function arrivals(){
   if (!near.length) return;
   near.sort((a, b) => dist(G.me, a) - dist(G.me, b));
   const r = near[0]; G.arrived.add(r.id);
-  sound.ding(); toast(`🚻 You're at <b>${esc(r.name)}</b>! Tap <b>Found it!</b>`, 'good', 4500);
-  if (!G.sheetId && !$('panel').classList.contains('show')) openSheet(r.id);
+  sound.ding();
+  if (!G.sheetId && !$('panel').classList.contains('show')) openSheet(r.id);   // the card says "You're here!"
+  else toast(`🚻 You're at <b>${esc(r.name)}</b>! Tap it on the map, then <b>Found it!</b>`, 'good', 4500);
 }
 // practice: walk the pretend you to where you tapped
 let walkAnim = 0;
@@ -224,7 +251,7 @@ function walkTo(p){
 }
 
 function setMode(mode){
-  G.mode = mode; G.me = null; G.routeId = null; map.setRoute(null); map.setMe(null); G.arrived.clear(); lastWalk = null;
+  G.mode = mode; G.me = null; map.heading = null; compassOn = false; G.routeId = null; map.setRoute(null); map.setMe(null); G.arrived.clear(); lastWalk = null;
   closeSheet();
   if (!slot().started) { slot().started = G.now(); save(); }
   if (mode === 'gps'){
@@ -247,11 +274,12 @@ function openSheet(id){
   map.select(id);
   renderSheet();
   // bring the pin into view above the card
-  const sh = $('sheet').getBoundingClientRect().height || 300;
+  // (just above the card's top edge, so messages at the top of the screen don't cover it)
+  const card = document.querySelector('#sheet .sh'), cardTop = card ? innerHeight - card.getBoundingClientRect().height : innerHeight - 300;
   const py = map.sy(r.y), px = map.sx(r.x);
-  if (py > innerHeight - sh - 30 || py < 120 || px < 30 || px > innerWidth - 30){
-    const k = map.s, wantY = Math.max(140, (innerHeight - sh) * 0.55);
-    map.centerOn(r.x, r.y + (map.midY() - wantY) / k);
+  if (py > cardTop - 30 || py < cardTop - 220 || px < 30 || px > innerWidth - 30){
+    const k = map.s, wantY = Math.max(130, cardTop - 44);
+    map.centerOn(r.x, r.y - (map.midY() - wantY) / k);   // so the pin sits at wantY, above the card
   }
   map.follow = false;
 }
@@ -545,6 +573,7 @@ $('b-badges').onclick = () => { sound.unlock(); badgesPanel(); };
 $('b-menu').onclick = () => { sound.unlock(); menuPanel(); };
 $('b-me').onclick = () => {
   sound.unlock();
+  if (G.mode === 'gps') askCompass();
   if (!G.me){ toast(G.mode === 'gps' ? '📡 Finding you…' : 'Tap the map to say where you are.'); return; }
   map.follow = G.mode === 'gps';
   map.centerOn(G.me.x, G.me.y, Math.max(map.zoom, 2.2));
@@ -575,7 +604,7 @@ function play(mode){
   else map.centerOn(G.park.start.x, G.park.start.y, map.startZoom(), false);
   if (!S.seenHint){ S.seenHint = 1; save(); setTimeout(() => toast('Tap a 🚻 pin to see it. Get there, then tap <b>Found it!</b>', '', 5500), 600); }
 }
-$('b-go').onclick = () => play('gps');
+$('b-go').onclick = () => { askCompass(); play('gps'); };
 $('b-practice').onclick = () => play('practice');
 $('t-parks').onclick = (e) => { const b = e.target.closest('[data-park]'); if (!b || b.disabled) return; S.park = b.dataset.park; G.park = parkById(S.park); map.setPark(G.park); save(); titleProgress(); };
 

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { serve, version } from './serve.mjs';
-const { chromium } = createRequire(import.meta.url)('playwright');
+const { chromium, devices } = createRequire(import.meta.url)('playwright');
 
 const OUT = path.resolve(process.argv[2] || 'royal-flush-shots');
 fs.mkdirSync(OUT, { recursive: true });
@@ -230,6 +230,68 @@ await ctx.close();
   await p.evaluate(() => __flush.map.centerOn(0, -40, __flush.map.startZoom(), false)); await p.waitForTimeout(300);
   await shot(p, '14-ipad-map.png');
   await c.close();
+}
+
+// ---- iPhones: portrait, sideways (with the notch), a small one ----
+{
+  const c = await browser.newContext({ ...devices['iPhone 13'], permissions: ['geolocation'], serviceWorkers: 'block' });
+  const p = await c.newPage();
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto(URL); await p.waitForFunction(() => window.__flush);
+  const pin = await p.evaluate(() => __flush.byId('teacups'));
+  const ll = await p.evaluate(async ([x, y]) => { const m = await import('/experiments/royal-flush/js/parks.js'); return m.toLatLon(m.parkById('magic-kingdom'), x, y); }, [pin.x + 30, pin.y - 50]);
+  await c.setGeolocation({ latitude: ll.lat, longitude: ll.lon, accuracy: 6 });
+  await p.tap('#b-go');
+  await p.waitForFunction(() => __flush.G.me, null, { timeout: 8000 }).catch(() => {});
+  // facing north-east: the heading cone
+  await p.evaluate(() => { __flush.map.heading = 45; __flush.map.dirty(); });
+  await p.waitForTimeout(700);
+  await shot(p, '15-iphone-gps.png');
+  check(await p.evaluate(() => __flush.map.dpr === 3), 'iPhone: the map is drawn at the full 3x resolution');
+  // dragging is smooth: frames during a drag reuse the picture instead of redrawing the map
+  const cost = await p.evaluate(async () => {
+    const m = __flush.map, cv = document.getElementById('map');
+    let full = 0; const orig = m.drawStatic.bind(m); m.drawStatic = () => { full++; orig(); };
+    const fire = (type, x, y) => cv.dispatchEvent(new PointerEvent(type, { pointerId: 7, clientX: x, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true }));
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+    fire('pointerdown', 200, 400); await frame();
+    const times = [];
+    for (let i = 1; i <= 20; i++){ fire('pointermove', 200 - i * 8, 400 - i * 5); const t0 = performance.now(); m.draw(performance.now()); times.push(performance.now() - t0); }
+    const during = full;
+    fire('pointerup', 40, 300); await frame(); await frame(); await frame();
+    m.drawStatic = orig;
+    return { during, after: full - during, avg: times.reduce((a, b) => a + b) / times.length };
+  });
+  check(cost.during === 0 && cost.after >= 1, `iPhone: a drag slides the picture (${cost.during} full redraws while dragging, ${cost.after} after; ${cost.avg.toFixed(1)} ms a frame)`);
+  await p.evaluate(() => { __flush.closeSheet(); __flush.map.centerOn(-300, -150, 2.2, false); __flush.openSheet('teacups'); });
+  await p.waitForTimeout(900);
+  await shot(p, '16-iphone-card.png');
+  const where = await p.evaluate(() => { const r = __flush.byId('teacups'), m = __flush.map; return { x: m.sx(r.x), y: m.sy(r.y), top: document.querySelector('#sheet .sh').getBoundingClientRect().top }; });
+  check(where.x > 20 && where.x < 370 && where.y > 120 && where.y < where.top - 10 && where.y > where.top - 120, `iPhone: opening a card brings its pin into view above the card (pin at ${Math.round(where.x)}, ${Math.round(where.y)}; card from ${Math.round(where.top)})`);
+  const sheetH = await p.evaluate(() => document.querySelector('#sheet .sh').getBoundingClientRect().height);
+  check(sheetH < 844 * 0.75, `iPhone: the card leaves the map visible (${Math.round(sheetH)} px)`);
+  // sideways
+  await p.setViewportSize({ width: 844, height: 390 });
+  await p.evaluate(() => __flush.closeSheet());
+  await p.waitForTimeout(500);
+  await shot(p, '17-iphone-landscape.png');
+  const fits = await p.evaluate(() => { const b = document.getElementById('bottom').getBoundingClientRect(), t = document.getElementById('top').getBoundingClientRect(); return b.top - t.bottom; });
+  check(fits > 150, `iPhone sideways: room for the map between the bars (${Math.round(fits)} px)`);
+  await p.evaluate(() => __flush.openSheet('teacups'));
+  await p.waitForTimeout(400);
+  const scrollable = await p.evaluate(() => { const s = document.querySelector('#sheet .sh'); return s.getBoundingClientRect().height <= innerHeight * 0.73 && s.scrollHeight >= s.clientHeight; });
+  check(scrollable, 'iPhone sideways: the card fits and scrolls');
+  await shot(p, '18-iphone-landscape-card.png');
+  check(errs.length === 0, 'iPhone: no errors' + (errs.length ? ': ' + errs[0] : ''));
+  await c.close();
+  const c2 = await browser.newContext({ ...devices['iPhone SE'], serviceWorkers: 'block' });
+  const p2 = await c2.newPage();
+  await p2.goto(URL); await p2.waitForFunction(() => window.__flush);
+  await p2.waitForTimeout(400);
+  const btn = await p2.evaluate(() => { const r = document.getElementById('b-go').getBoundingClientRect(); return r.bottom <= innerHeight && r.width > 250; });
+  check(btn, 'small iPhone: "Start the quest" is on screen without scrolling');
+  await shot(p2, '19-iphone-se-title.png');
+  await c2.close();
 }
 
 await browser.close(); server.close();
