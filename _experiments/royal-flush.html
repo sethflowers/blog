@@ -2,7 +2,7 @@
 title: Royal Flush
 description: The great Magic Kingdom restroom quest. Find and check in at every restroom in the park with your phone's GPS, rate them, wash your hands for bonus points, earn badges, and hit "I need to go!" for the nearest one.
 date: 2026-11-24
-version: "1.2"
+version: "2.0"
 layout: null
 ---
 {% raw %}
@@ -213,6 +213,7 @@ if ('serviceWorker' in navigator){
 <script type="importmap">
 { "imports": {
     "/experiments/royal-flush/js/map.js": "/experiments/royal-flush/js/map.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/royal-flush/js/mk-map.js": "/experiments/royal-flush/js/mk-map.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/royal-flush/js/parks.js": "/experiments/royal-flush/js/parks.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/royal-flush/js/sound.js": "/experiments/royal-flush/js/sound.js?v={% endraw %}{{ page.version }}{% raw %}",
     "/experiments/royal-flush/js/ui.js": "/experiments/royal-flush/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",

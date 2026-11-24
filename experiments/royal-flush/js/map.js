@@ -297,96 +297,71 @@ export class MapView {
     return true;
   }
 
-  // trees, placed once per park (the same every time): forest outside the railroad, clumps in the lands
+  // trees, from the traced map, bucketed in cells so a tile only looks at its own
   makeTrees(){
-    const P = this.park, b = P.bounds, out = [];
-    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const nearPath = (x, y, pad) => P.paths.some(([pts, w]) => distToLine(x, y, pts) < w / 2 + pad) || Math.abs(Math.hypot(x - P.hub.x, y - P.hub.y) - P.hub.r) < 14;
-    const inWater = (x, y, pad) => P.water.some((w) => w.poly ? inPoly(x, y, w.poly) || distToLine(x, y, w.poly.concat([w.poly[0]])) < pad
-      : w.circle ? Math.hypot(x - w.circle[0], y - w.circle[1]) < w.circle[2] + pad : distToLine(x, y, w.line) < w.w / 2 + pad);
-    const nearThing = (x, y, d) => P.landmarks.some((l) => Math.hypot(x - l.x, y - l.y) < (l.drawn ? d + 30 : d)) || P.restrooms.some((r) => Math.hypot(x - r.x, y - r.y) < 18);
-    const inBuilding = (x, y) => P.buildings.some(([x0, y0, x1, y1]) => x > x0 - 6 && x < x1 + 6 && y > y0 - 6 && y < y1 + 6);
     const COLS = ['#4c8a3c', '#5a9a46', '#3f7c34', '#68a852', '#55923f'];
-    for (let y = b.y0 - 200; y < b.y1 + 200; y += 17) for (let x = b.x0 - 300; x < b.x1 + 300; x += 17){
-      const px = x + (rnd() - 0.5) * 14, py = y + (rnd() - 0.5) * 14;
-      const inside = inPoly(px, py, P.rail), r = 5 + rnd() * 4;
-      if (inPoly(px, py, P.plaza) || py < -436 || distToLine(px, py, P.rail.concat([P.rail[0]])) < 9) continue;
-      if (inside){
-        const isl = P.islands[0];
-        if (isl && inPoly(px, py, isl.poly)){ if (rnd() < 0.8) out.push({ x: px, y: py, r: r * 0.8, c: COLS[(rnd() * 5) | 0] }); continue; }
-        if (rnd() > 0.42 || nearPath(px, py, 8) || inWater(px, py, 6) || nearThing(px, py, 24) || inBuilding(px, py) || Math.hypot(px, py - 8) < 84) continue;
-        if (Math.hypot(px - P.hub.x, py - P.hub.y) < P.hub.r - 12) continue;
-        if (Math.abs(px) < 70 && py < -140 && py > -340) continue;
-        out.push({ x: px, y: py, r, c: COLS[(rnd() * 5) | 0] });
-      } else if (!inWater(px, py, 4)) out.push({ x: px, y: py, r: r + 1.5, c: COLS[(rnd() * 5) | 0] });
+    this.trees = this.park.map.trees.map(([x, y, r], i) => ({ x, y, r, c: COLS[Math.abs(i * 7 + Math.round(x * 13)) % 5] }));
+    // forest around the guide map's edges (it only shows the park), so the map has no hard border
+    const B = this.park.bounds;
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let y = B.y0 - 400; y < B.y1 + 400; y += 16) for (let x = B.x0 - 500; x < B.x1 + 500; x += 16){
+      const px = x + (rnd() - 0.5) * 12, py = y + (rnd() - 0.5) * 12, r = 6 + rnd() * 4;
+      const out = Math.max(B.x0 - px, px - B.x1, B.y0 - py, py - B.y1);
+      // (also along the guide's pale east edge, and the bus and parking lots it shows in the south-east)
+      const edge = px > B.x1 - 40 || (px > 140 && py < -345);
+      if (out > 6 || (out > -10 && rnd() < 0.5) || (edge && rnd() < 0.85)) this.trees.push({ x: px, y: py, r, c: COLS[(rnd() * 5) | 0] });
     }
-    this.trees = out;
+    // ripples: a few points inside the bigger stretches of water
+    this.ripples = [];
+    let k = 0;
+    for (const sh of this.park.map.water){
+      const o = sh[0]; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const [x, y] of o){ x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      if ((x1 - x0) * (y1 - y0) < 6000) continue;
+      for (let y = y0 + 12; y < y1; y += 34) for (let x = x0 + 12; x < x1; x += 46){
+        const px = x + ((k * 17) % 20), py = y + ((k++ * 11) % 14);
+        if (inPoly(px, py, o) && !sh.slice(1).some((h) => inPoly(px, py, h)) && k % 3 === 0) this.ripples.push([px, py]);
+      }
+    }
     this.treeGrid = new Map();
-    for (const t of out){ const k = Math.floor(t.x / CELL) + ',' + Math.floor(t.y / CELL); if (!this.treeGrid.has(k)) this.treeGrid.set(k, []); this.treeGrid.get(k).push(t); }
+    for (const t of this.trees){ const k = Math.floor(t.x / CELL) + ',' + Math.floor(t.y / CELL); if (!this.treeGrid.has(k)) this.treeGrid.set(k, []); this.treeGrid.get(k).push(t); }
+  }
+  // a traced shape: [outline, ...holes], filled even-odd so lawns and islands stay open
+  rings(rs){
+    const g = this.g; g.beginPath();
+    for (const r of rs){ r.forEach(([x, y], i) => i ? g.lineTo(this.sx(x), this.sy(y)) : g.moveTo(this.sx(x), this.sy(y))); g.closePath(); }
+  }
+  // is any of a shape's box on this tile?
+  onTile(rs){
+    if (!rs._box){ let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const [x, y] of rs[0]){ if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } rs._box = [x0, y0, x1, y1]; }
+    const [x0, y0, x1, y1] = rs._box, a = this.toMap(-8, -8), b = this.toMap(this.W + 8, this.H + 8);
+    return x1 >= a.x && x0 <= b.x && y0 <= a.y && y1 >= b.y;
   }
 
   // the ground, drawn into a tile
   drawGround(){
-    const g = this.g, P = this.park, s = this.s, z = this.zoom;
+    const g = this.g, P = this.park, M = P.map, s = this.s, z = this.zoom;
     if (this.treesFor !== P){ this.makeTrees(); this.treesFor = P; }
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     g.lineJoin = 'round'; g.lineCap = 'round';
-    g.fillStyle = '#5c914c'; g.fillRect(0, 0, this.W, this.H);
-    // inside the railroad
-    this.poly(P.rail); g.fillStyle = '#bcdc9c'; g.fill();
-    // lands, with a soft white edge between them
-    for (const [id, pts] of Object.entries(P.lands)){
-      this.poly(pts); g.fillStyle = LANDS[id].color; g.globalAlpha = 0.62; g.fill(); g.globalAlpha = 1;
+    g.fillStyle = '#a9d488'; g.fillRect(0, 0, this.W, this.H);
+    // sand, water (a sandy shore, the water, a glint along the edge)
+    for (const sh of M.sand){ if (!this.onTile(sh)) continue; this.rings(sh); g.fillStyle = '#f2dd9c'; g.fill('evenodd'); }
+    for (const sh of M.water){
+      if (!this.onTile(sh)) continue;
+      this.rings(sh); g.strokeStyle = '#e6d8a8'; g.lineWidth = Math.max(1.5, 3.5 * s); g.stroke();
+      g.fillStyle = '#6cc0ea'; g.fill('evenodd');
+      g.strokeStyle = 'rgba(255,255,255,.5)'; g.lineWidth = Math.max(1, 1.2 * s); g.stroke();
     }
-    g.save(); this.poly(P.rail); g.clip();
-    for (const pts of Object.values(P.lands)){ this.poly(pts); g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = Math.max(1, 2.5 * s); g.setLineDash([Math.max(3, 9 * s), Math.max(3, 7 * s)]); g.stroke(); }
-    g.setLineDash([]); g.restore();
-    // the entrance plaza
-    this.poly(P.plaza); g.fillStyle = '#efe6d0'; g.fill(); g.strokeStyle = '#d8c8a4'; g.lineWidth = 1.5; g.stroke();
-    // water: a sandy shore, the water with depth, a glint along the edge
-    for (const w of P.water){
-      if (w.line){
-        this.line(w.line); g.strokeStyle = '#e6d6a6'; g.lineWidth = (w.w + 6) * s; g.stroke();
-        g.strokeStyle = '#5fb2e0'; g.lineWidth = w.w * s; g.stroke();
-        g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = Math.max(1, w.w * s * 0.25); g.stroke();
-        continue;
-      }
-      this.shape(w); g.strokeStyle = '#e6d6a6'; g.lineWidth = Math.max(2, 6 * s); g.stroke();
-      this.shape(w);
-      const c = w.circle ? [this.sx(w.circle[0]), this.sy(w.circle[1])] : [this.W / 2, this.H / 2];
-      const gr = g.createRadialGradient(c[0], c[1], 0, c[0], c[1], Math.max(40, 300 * s));
-      gr.addColorStop(0, '#4aa0d8'); gr.addColorStop(1, '#78c6ec');
-      g.fillStyle = w.circle ? gr : '#62b4e4'; g.fill();
-      g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = Math.max(1, 1.5 * s); g.stroke();
+    // ripples on the open water
+    if (z > 0.9){
+      g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1.2;
+      for (const [x, y] of this.ripples){ g.beginPath(); g.arc(this.sx(x), this.sy(y), 5 * Math.sqrt(z), Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
     }
-    // ripples on the lagoon
-    if (z > 0.7){
-      g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 1.2;
-      for (let i = 0; i < 18; i++){ const x = -520 + (i * 137) % 1080, y = -470 - (i * 53) % 110; g.beginPath(); g.arc(this.sx(x), this.sy(y), 6 * Math.sqrt(z), Math.PI * 1.15, Math.PI * 1.85); g.stroke(); }
-    }
-    for (const isl of P.islands){ this.shape(isl); g.fillStyle = isl.name ? '#9cc87e' : '#f1e6cc'; g.fill(); g.strokeStyle = isl.name ? '#e6d6a6' : '#d9c9a2'; g.lineWidth = Math.max(1, 2 * s); g.stroke(); }
-    // walkways: an edge, then the paving
-    for (const pass of [0, 1]){
-      g.strokeStyle = g.fillStyle = pass ? '#fbf4e2' : '#d6c39a';
-      const extra = pass ? 0 : 2.5;
-      for (const [pts, w] of P.paths){ this.line(pts); g.lineWidth = Math.max(2.5, w * s) + extra; g.stroke(); }
-      const h = P.hub; g.beginPath(); g.arc(this.sx(h.x), this.sy(h.y), h.r * s, 0, Math.PI * 2); g.lineWidth = Math.max(2.5, 16 * s) + extra; g.stroke();
-      const q = P.townSquare, pad = extra / 2;
-      this.g.beginPath(); this.rr(this.sx(q.x - q.w / 2) - pad, this.sy(q.y + q.h / 2) - pad, q.w * s + 2 * pad, q.h * s + 2 * pad, 6 * s); g.fill();
-    }
-    // the hub's lawn and Town Square's
-    g.beginPath(); g.arc(this.sx(P.hub.x), this.sy(P.hub.y), (P.hub.r - 8) * s, 0, Math.PI * 2); g.fillStyle = '#a6d088'; g.fill();
-    g.beginPath(); this.rr(this.sx(P.townSquare.x - 24), this.sy(P.townSquare.y + 13), 48 * s, 26 * s, 8 * s); g.fill();
-    g.fillStyle = '#e8584a'; for (const [dx, dy] of [[-14, 6], [0, 8], [14, 6], [-14, -6], [14, -6]]){ g.beginPath(); g.arc(this.sx(P.townSquare.x + dx), this.sy(P.townSquare.y + dy), Math.max(0.8, 2.4 * s), 0, 7); g.fill(); }
-    // Main Street's shops: shadow, roof, a lit edge
-    for (const [x0, y0, x1, y1, col] of P.buildings){
-      const X = this.sx(x0), Y = this.sy(y1), w = (x1 - x0) * s, h = (y1 - y0) * s;
-      g.fillStyle = 'rgba(40,30,20,.25)'; g.fillRect(X + 2, Y + 2, w, h);
-      g.fillStyle = col; g.fillRect(X, Y, w, h);
-      g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(X, Y, w, Math.max(1, h * 0.35));
-      g.strokeStyle = 'rgba(60,40,20,.35)'; g.lineWidth = 1; g.strokeRect(X + 0.5, Y + 0.5, w - 1, h - 1);
-    }
-    // trees (only the ones in this tile's cells of the grid)
+    // streets (Main Street, the hub, the Speedway), then the walkways
+    for (const sh of M.roads){ if (!this.onTile(sh)) continue; this.rings(sh); g.fillStyle = '#cdc8c0'; g.fill('evenodd'); g.strokeStyle = '#aaa398'; g.lineWidth = 1; g.stroke(); }
+    for (const sh of M.paths){ if (!this.onTile(sh)) continue; this.rings(sh); g.fillStyle = '#f8eedb'; g.fill('evenodd'); g.strokeStyle = '#d9c39b'; g.lineWidth = Math.max(0.8, 0.6 * s); g.stroke(); }
+    // trees
     const W = this.W, H = this.H, a = this.toMap(-20, -20), bb = this.toMap(W + 20, H + 20), tr = [];
     for (let cy = Math.floor(bb.y / CELL); cy <= Math.floor(a.y / CELL); cy++) for (let cx = Math.floor(a.x / CELL); cx <= Math.floor(bb.x / CELL); cx++){
       const cell = this.treeGrid.get(cx + ',' + cy); if (cell) for (const t of cell) tr.push(t);
@@ -398,9 +373,17 @@ export class MapView {
       else if (pass === 1){ g.fillStyle = tt.c; g.beginPath(); g.arc(X, Y, Math.max(1, r), 0, 7); g.fill(); }
       else if (r > 3){ g.fillStyle = 'rgba(255,255,220,.18)'; g.beginPath(); g.arc(X - r * 0.3, Y - r * 0.3, r * 0.5, 0, 7); g.fill(); }
     }
+    // buildings, in their guide-map colours, with a shadow and a lit edge
+    for (const b of M.buildings){
+      const sh = b.sh || (b.sh = [b.p]);
+      if (!this.onTile(sh)) continue;
+      g.save(); g.translate(2.5, 3); this.rings(sh); g.fillStyle = 'rgba(40,30,20,.3)'; g.fill(); g.restore();
+      this.rings(sh); g.fillStyle = b.c; g.fill();
+      g.strokeStyle = b.o || 'rgba(50,35,25,.45)'; g.lineWidth = Math.max(1, Math.min(2, 0.5 * s)); g.stroke();
+    }
     // the railroad: a dark bed with ties
-    this.poly(P.rail); g.strokeStyle = '#7a5a3a'; g.lineWidth = Math.max(2, 4 * s); g.stroke();
-    if (z > 0.9){ this.poly(P.rail); g.strokeStyle = '#c8a878'; g.lineWidth = Math.max(1, 1.4 * s); g.setLineDash([Math.max(2, 3 * s), Math.max(2, 3 * s)]); g.stroke(); g.setLineDash([]); }
+    this.poly(M.rail); g.strokeStyle = '#7a5a3a'; g.lineWidth = Math.max(2, 3.5 * s); g.stroke();
+    if (z > 0.9){ this.poly(M.rail); g.strokeStyle = '#c8a878'; g.lineWidth = Math.max(1, 1.3 * s); g.setLineDash([Math.max(2, 3 * s), Math.max(2, 3 * s)]); g.stroke(); g.setLineDash([]); }
   }
 
   // names, icons and the big landmarks, over the tiles
@@ -613,14 +596,4 @@ function inPoly(x, y, pts){
     if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
   }
   return inside;
-}
-// how far a point is from a polyline
-function distToLine(x, y, pts){
-  let best = Infinity;
-  for (let i = 1; i < pts.length; i++){
-    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy || 1;
-    const k = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L));
-    best = Math.min(best, Math.hypot(x - ax - k * dx, y - ay - k * dy));
-  }
-  return best;
 }

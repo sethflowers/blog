@@ -56,7 +56,7 @@ await pg.goto(URL);
 await pg.waitForFunction(() => window.__flush);
 await pg.waitForTimeout(700);
 check((await pg.textContent('#title .build-version')).includes('v' + VERSION), `the title screen shows the version (v${VERSION})`);
-check(/21 restrooms/.test(await pg.textContent('#t-progress')), 'the title screen says how many restrooms there are');
+check(/18 restrooms/.test(await pg.textContent('#t-progress')), 'the title screen says how many restrooms there are (the 18 on the official guide map)');
 check(await pg.isDisabled('[data-park="epcot"]'), 'the other parks are listed as coming soon');
 await shot(pg, '01-title.png');
 
@@ -133,9 +133,9 @@ await pg.click('#sheet [data-act="untick"]');
 check(!(await ev(pg, () => __flush.found('pinocchio'))), 'a found restroom can be unticked from its card');
 await ev(pg, () => __flush.closeSheet());
 
-// a whole land: tick off all of Liberty Square
-await ev(pg, () => { __flush.tick('tavern'); __flush.tick('columbia'); });
-const lp = await ev(pg, () => __flush.landProgress().lib);
+// a whole land: tick off all of Main Street
+await ev(pg, () => { __flush.tick('gate'); __flush.tick('townsq'); __flush.tick('firstaid'); });
+const lp = await ev(pg, () => __flush.landProgress().main);
 check(lp.have === lp.all, 'ticking off every restroom in a land completes it');
 check((await ev(pg, () => Object.keys(__flush.slot().badges))).includes('land'), 'and earns Land Lord');
 

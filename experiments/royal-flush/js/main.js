@@ -63,7 +63,7 @@ const foundCount = () => official().filter((r) => found(r.id)).length;
 // ---------- badges ----------
 const BADGES = [
   { id: 'first', icon: '🧻', name: 'First Flush', desc: 'Find your first restroom.' },
-  { id: 'allLands', icon: '🌈', name: 'Land Hopper', desc: 'Find a restroom in all six lands.' },
+  { id: 'allLands', icon: '🌈', name: 'Land Hopper', desc: 'Find a restroom in every land that has one.' },
   { id: 'land', icon: '🗺️', name: 'Land Lord', desc: 'Find every restroom in one land.' },
   { id: 'half', icon: '🥈', name: 'Halfway There', desc: 'Find half the restrooms in the park.' },
   { id: 'royal', icon: '👑', name: 'Royal Flush', desc: 'Find every restroom in the park.' },
@@ -84,7 +84,7 @@ function checkBadges(ctx = {}){
   const f = Object.entries(sl.found);
   const lp = landProgress();
   if (f.length) give('first');
-  if (Object.values(lp).every((l) => l.have > 0)) give('allLands');
+  if (Object.values(lp).every((l) => !l.all || l.have > 0)) give('allLands');
   if (Object.values(lp).some((l) => l.all && l.have === l.all)) give('land');
   if (foundCount() >= Math.ceil(official().length / 2)) give('half');
   if (foundCount() === official().length) give('royal');
@@ -525,8 +525,9 @@ function badgesPanel(){
     <div class="stat"><b>${score().toLocaleString()}</b>points</div><div class="stat"><b>${km} km</b>walked</div>
     <div class="stat"><b>${sl.stats.washes}</b>hand washes</div><div class="stat"><b>${Object.values(sl.found).filter((f) => f.rating).length}</b>rated</div>
     <div class="stat"><b>${sl.stats.emergencies}</b>emergencies</div></div>`;
-  html += '<h3>Lands</h3><div class="lands">' + Object.entries(LANDS).map(([id, l]) =>
-    `<div class="land" style="background:${l.color}">${esc(l.short)}<b>${lp[id].have}/${lp[id].all}${lp[id].have === lp[id].all ? ' 🏆' : ''}</b></div>`).join('') + '</div>';
+  html += '<h3>Lands</h3><div class="lands">' + Object.entries(LANDS).map(([id, l]) => lp[id].all
+    ? `<div class="land" style="background:${l.color}">${esc(l.short)}<b>${lp[id].have}/${lp[id].all}${lp[id].have === lp[id].all ? ' 🏆' : ''}</b></div>`
+    : `<div class="land" style="background:${l.color}">${esc(l.short)}<b style="font-size:13px">none! 🎩</b><small>no plumbing in colonial times</small></div>`).join('') + '</div>';
   html += `<h3>Badges · ${Object.keys(sl.badges).length}/${BADGES.length}</h3>`;
   html += BADGES.map((b) => {
     const t = sl.badges[b.id];
@@ -602,7 +603,8 @@ function play(mode){
   setMode(mode);
   if (mode === 'practice') map.centerOn(G.me.x, G.me.y + 120, 1.6);
   else map.centerOn(G.park.start.x, G.park.start.y, map.startZoom(), false);
-  if (!S.seenHint){ S.seenHint = 1; save(); setTimeout(() => toast('Tap a 🚻 pin to see it. Get there, then tap <b>Found it!</b>', '', 5500), 600); }
+  if (!S.seenHint){ S.seenHint = 1; S.seenMap2 = 1; save(); setTimeout(() => toast('Tap a 🚻 pin to see it. Get there, then tap <b>Found it!</b>', '', 5500), 600); }
+  else if (!S.seenMap2){ S.seenMap2 = 1; save(); setTimeout(() => toast('🗺️ New map! Traced from the official park guide, with all 18 restrooms in their real places.', 'gold', 6500), 600); }
 }
 $('b-go').onclick = () => { askCompass(); play('gps'); };
 $('b-practice').onclick = () => play('practice');

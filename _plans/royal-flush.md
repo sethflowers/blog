@@ -101,3 +101,30 @@ game's castle (`_tools/royal-flush/icons.mjs`), and a quick test (`_tools/royal-
   1 MB each); the cache holds what the look-ahead needs (about 60 on an iPhone) and drops the least
   recently used.
 - Test: after a moment's rest, 24 frames of dragging use only finished tiles (0 missing).
+
+### 2.0: the map traced from the official guide map
+The user uploaded the official Magic Kingdom guide map (PDF) and said derivative work is fine. The PDF
+itself is **not** kept in the repo (it's Disney's); `_tools/royal-flush/trace.py <pdf>` regenerates
+`experiments/royal-flush/js/mk-map.js` from it:
+- Page 2 rendered at 150 dpi; the guide's number circles, icons and land-name boxes painted out
+  (inpainted); every pixel sorted by colour into water, walkway, grey street, sand, building, tree, lawn;
+  each class turned into simplified polygons (with holes: lawns in the walkways, islands in the water).
+  Buildings keep their guide colour (a touch brighter) with an outline in a darker shade of it.
+  Trees on a jittered grid over the guide's tree areas. The railroad traced by hand (the guide cuts off
+  its northern loop, so that part follows the park's edge).
+- Map pixels → metres: east-west affine, north-south with a v² term (the guide is drawn in perspective,
+  its north squashed), least-squares through 7 landmarks with known positions (castle, station, hub,
+  Space Mountain, Big Thunder, Haunted Mansion, small world). Residuals up to ~20 m; those landmark
+  positions are themselves from memory, so overall expect 10–30 m. A fuller fit (u·v terms) matched the
+  anchors better but flung the north-east (TRON) 100 m out, so it was dropped.
+- **The restrooms are now the guide map's 18 restroom symbols**, not guesses. That fixed a lot: Liberty
+  Square has none (the two there were wrong; its card says "no plumbing in colonial times"), the front
+  gate ones are on the right not the left, there are none at Big Thunder or Prince Eric's Village, and
+  Tom Sawyer Island has two. Companion restrooms are flagged from the guide's symbols. Old ids are kept
+  where it's the same restroom, so saves carry over; a found restroom that no longer exists just stops
+  counting. Players with a save get a "New map!" message once.
+- Rides, stations and land names placed from the guide's numbered circles (33 landmarks now).
+- The renderer draws the traced shapes in the game's own style (no guide artwork is used): lawn, sandy
+  shores, water with a glint, walkways with an edge, grey streets, shaded trees, outlined buildings, the
+  railroad; procedural forest all round so the guide's rectangle doesn't show. Still in tiles.
+- The "Land Hopper" badge and the lands panel skip lands with no restrooms.
