@@ -136,3 +136,9 @@ comments as anchors.
   top of the page as `sw.js?v=<version>`, each version gets its own cache plus a ready marker, iOS is
   asked to keep it when running from the home screen, and the title screen says "✓ Saved on this
   device: plays offline". Checked with `_tools/offline-check.mjs henrys-nightfall-2`.
+
+## v1.8: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

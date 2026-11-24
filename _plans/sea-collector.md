@@ -81,3 +81,9 @@ saves the game. Everything is kept in `localStorage` under `sea-collector-v1`.
   bag; sharks and anglerfish come back later.
 - **Dolphins** roam the Sandy Flats. Give one a shell (E) and it becomes a friend for good
   (`save.friends`). Friends swim round you and bump away anything that chases you.
+
+## v1.7: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

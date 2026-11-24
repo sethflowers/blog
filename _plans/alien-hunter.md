@@ -153,3 +153,9 @@ are slow with the new materials in software rendering, and people kept walking b
 are looked up by id (`__ah.person(id)`); bystanders are moved out of the line of fire before zapping a
 real person; the VR checks hide the buildings and freeze the shadow map (each emulated headset frame
 took 2 to 3 s with them), except for the VR screenshot. About 90 s with the loading check.
+
+## v2.1: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

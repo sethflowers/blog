@@ -158,3 +158,9 @@ villager, and saves screenshots. Headless frames are slow, so the test waits on 
   `window.__loaded()` at its end. The quick test runs `_tools/loading-check.mjs`: the screen shows
   while three.js is held back (`00-loading.png`), goes away once the game is ready, and a missing
   file shows the Try again message.
+
+## v3.3: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

@@ -226,3 +226,9 @@ their hands oddly: the wrists turned inward.
   their own rate. Rotations are about the person's own forward / right / up axes, worked out in each
   bone's parent frame. Speeds range from 0.9 to 1.4 m/s (the steps keep pace), and everyone starts at
   a random point in the walk and idle cycles, so nobody moves in step.
+
+## v3.3: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

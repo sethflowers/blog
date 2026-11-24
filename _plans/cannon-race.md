@@ -259,3 +259,9 @@ coming during each wind-up (fire 1 s, barf 1.1 s, lightning 1.5 s). Fireballs ar
 lightning is thick tapered tubes rather than 1-pixel lines (which didn't show). Heads have 300 / 200 /
 200 health, take at most 70 a hit, and weave about more as heads fall. Attacks come every 3-5 s,
 quicker with fewer heads. 30 shots.
+
+## v4.4: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

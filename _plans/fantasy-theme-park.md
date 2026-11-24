@@ -632,3 +632,9 @@ What's in it, and how it works.
   (`#panel.show.modal`). It happened whenever a dialog closed with nothing selected (not only lands).
   Test: after naming a land with real clicks, no backdrop is left and a tap in the middle reaches the
   park's canvas.
+
+## v2.4: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

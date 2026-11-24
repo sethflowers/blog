@@ -93,3 +93,9 @@ from Pip.
 First version: everything above.
 - Pip's inner ears first sat flush with the outer ears (stripy z-fighting) and the mouth was inside
   the body; both now stand proud of the surface.
+
+## v1.2: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

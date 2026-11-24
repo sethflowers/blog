@@ -115,3 +115,9 @@ The pounce steers in the air toward whatever it was aimed at, so a well-timed on
   iOS is asked to keep it from the home screen, and the title screen says "✓ Saved on this device:
   plays offline". Every script address now carries the version (the import map covers every module
   and three.js), so an update can't run old cached code. Checked with `_tools/offline-check.mjs wildcat`.
+
+## v1.4: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

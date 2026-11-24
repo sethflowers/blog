@@ -315,3 +315,9 @@ Worth writing down, because none of them were visible from reading the code:
   unfillable with a thumb. Implemented properly in section 3.
 - **Swings went the wrong way** once a villain crossed over you. Facing is automatic now.
 - Villains announce what they do as the fight starts, not only on the map screen.
+
+## v1.4: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

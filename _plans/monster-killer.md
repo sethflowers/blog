@@ -106,3 +106,9 @@ The title screen shows `v` + the front matter `version`. Bump it on every change
   wades through a flooded district.
 - Fur you can grab that makes grip last longer, and armour you can knock off.
 - A rest point between giants.
+
+## v2.2: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

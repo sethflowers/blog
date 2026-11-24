@@ -7,3 +7,9 @@ A study game for a science test on matter, copied in from a Claude chat artifact
   matter, properties, formulas, physical vs. chemical change, and a boss round mixing them). Each awards up
   to 3 stars, saved in `localStorage` (`mq-best`).
 - Questions are generated fresh each round from the content tables at the top of the script.
+
+## v1.1: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

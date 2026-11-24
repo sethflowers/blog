@@ -809,3 +809,9 @@ In this order:
    translucent copy.
 5. **Photo mode** in the garage: a button that renders the preview at 2x pixel ratio to a PNG
    the user can long-press to save (no download link, just show the image in an overlay).
+
+## v1.8: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

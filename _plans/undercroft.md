@@ -142,3 +142,9 @@ Added by request: you start with a **sword**, find **other weapons** and keep ev
 - More levels' worth of variety: different monsters, locked doors and keys, traps.
 - Photoscanned textures once Poly Haven / ambientCG are allowed in the environment's network settings.
 - If it gets too heavy for Edge on Xbox, package it as an app through Xbox Developer Mode.
+
+## v4.1: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.

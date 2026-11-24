@@ -165,3 +165,9 @@ horn. One master gain and a mute toggle.
 
 **Final check:** loads clean with no console errors, plays with keyboard and on a phone, and the
 page still works after going offline.
+
+## v1.4: kept out of search engines and AI
+
+Added a `robots` meta tag (noindex, nofollow, noai and friends) to the page's head, so search engines
+and AI crawlers leave it alone (`robots.txt` already asks them to stay out of `/experiments`). Nothing
+else changed.
