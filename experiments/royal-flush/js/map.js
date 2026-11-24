@@ -4,9 +4,14 @@
 import { clamp } from './util.js';
 import { LANDS } from './parks.js';
 
+const TILE = 256;        // tile size in CSS pixels
+const MAX_TILES = 40;    // at least this many tiles kept (1 MB each on a 2x/3x screen; more on a big screen); least recently used go first
+const CELL = 60;         // trees are bucketed in 60 m cells, so a tile only looks at its own trees
+
 export class MapView {
   constructor(canvas, handlers){
     this.cv = canvas; this.g = canvas.getContext('2d'); this.h = handlers;
+    this.tiles = new Map(); this.spare = []; this.tilesV = 0; this.tilesMade = 0; this.wantTiles = false;
     this.park = null; this.heading = null; this.safeL = 0; this.pins = []; this.me = null; this.route = null; this.selected = null;
     this.cx = 0; this.cy = 0; this.zoom = 1; this.base = 1;
     this.pad = { top: 0, bottom: 0 };
@@ -21,6 +26,10 @@ export class MapView {
       try {
         const pulse = (this.me || this.selected) && t - this.lastPulse > 50;
         if (this.isDirty || pulse){ this.lastPulse = t; this.isDirty = false; this.draw(t); }
+        // spare time: draw tiles ahead (less while a finger is on the map), then show any that were missing
+        const busy = this.ptrs.size > 0 || this.animating;
+        if (this.park) this.prefetch(busy ? 3 : 7);
+        if (this.wantTiles){ this.wantTiles = false; this.tilesV++; this.dirty(); }
       } catch (e) { console.error(e); }
     };
     requestAnimationFrame(loop);
@@ -184,41 +193,108 @@ export class MapView {
   circ(x, y, r){ this.g.beginPath(); this.g.arc(this.sx(x), this.sy(y), Math.max(0.5, r * this.s), 0, Math.PI * 2); }
   shape(w){ if (w.poly) this.poly(w.poly); else if (w.circle) this.circ(...w.circle); else if (w.line) this.line(w.line); }
 
+  // ---------- the picture: tiles + an overlay, cached until the view changes ----------
+  // The ground (lands, water, paths, trees, buildings, railroad) is drawn in 256-pixel tiles at a few
+  // zoom levels and kept, like a phone's map app. In spare moments between frames, the tiles around
+  // the screen (and a coarser level behind them) are drawn ahead of time, so dragging or pinching
+  // never shows an unfinished map. Names, icons and the big landmarks are drawn on top every time the
+  // view changes (they would be cut in half at tile edges otherwise); the pins, you and the route on
+  // top of that, every frame.
   draw(t){
     const main = this.g;
-    if (!this.park){ main.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); main.fillStyle = '#5f9450'; main.fillRect(0, 0, this.W, this.H); return; }
-    // the map itself only changes when the view does: keep it in a cached canvas, so the pulsing
-    // "you are here" dot and the moving route only cost a copy (it matters for a phone's battery)
-    const key = [this.cx, this.cy, this.zoom, this.W, this.H, this.dpr, this.pad.top, this.pad.bottom, this.pinsV].join(',');
+    if (!this.park){ main.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); main.fillStyle = '#5c914c'; main.fillRect(0, 0, this.W, this.H); return; }
+    const key = [this.cx, this.cy, this.zoom, this.W, this.H, this.dpr, this.pad.top, this.pad.bottom, this.pinsV, this.tilesV].join(',');
     if (!this.bg || this.bgKey !== key){
-      // while a finger is dragging or pinching (or the view is gliding), slide and scale the last
-      // picture instead of redrawing thousands of trees every frame; redraw properly when it stops
-      const v = this.bgView, mid = this.midY();
-      const moving = this.ptrs.size > 0 || this.animating;
-      if (moving && v && v.pinsV === this.pinsV && v.mid === mid && this.bg.width === this.cv.width && this.bg.height === this.cv.height){
-        const k = this.s / v.s, dx = (v.cx - this.cx) * this.s, dy = (this.cy - v.cy) * this.s;
-        if (k > 0.55 && k < 1.8 && Math.abs(dx) < this.W * 0.6 && Math.abs(dy) < this.H * 0.6){
-          const d = this.dpr;
-          main.setTransform(1, 0, 0, 1, 0, 0); main.fillStyle = '#5c914c'; main.fillRect(0, 0, this.cv.width, this.cv.height);
-          main.setTransform(k, 0, 0, k, d * (dx + this.W / 2 * (1 - k)), d * (dy + mid * (1 - k)));
-          main.drawImage(this.bg, 0, 0);
-          main.setTransform(d, 0, 0, d, 0, 0);
-          this.drawDynamic(t);
-          this.isDirty = true;   // come back for the proper drawing once it stops
-          return;
-        }
-      }
       if (!this.bg) this.bg = document.createElement('canvas');
       if (this.bg.width !== this.cv.width || this.bg.height !== this.cv.height){ this.bg.width = this.cv.width; this.bg.height = this.cv.height; }
       this.g = this.bg.getContext('2d');
-      this.drawStatic();
+      this.composeTiles();
+      this.g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      this.drawOverlay();
       this.g = main; this.bgKey = key;
-      this.bgView = { cx: this.cx, cy: this.cy, s: this.s, mid, pinsV: this.pinsV };
     }
     main.setTransform(1, 0, 0, 1, 0, 0);
     main.drawImage(this.bg, 0, 0);
     main.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawDynamic(t);
+  }
+
+  tileLevel(){ return Math.max(-2, Math.ceil(Math.log2(this.zoom * 1.15) - 1e-6)); }
+  tileM(L){ return TILE / (this.base * Math.pow(2, L)); }
+  tileOrigin(){ const b = this.park.bounds; return { ox: b.x0 - 600, oy: b.y1 + 600 }; }
+  // the tiles (level L) covering the screen, grown by `ring` tiles on every side
+  tileRange(L, ring){
+    const { ox, oy } = this.tileOrigin(), T = this.tileM(L);
+    const a = this.toMap(0, 0), b = this.toMap(this.W, this.H);
+    return { i0: Math.floor((a.x - ox) / T) - ring, i1: Math.floor((b.x - ox) / T) + ring, j0: Math.floor((oy - a.y) / T) - ring, j1: Math.floor((oy - b.y) / T) + ring };
+  }
+  tileKey(L, i, j){ return L + '/' + i + '/' + j; }
+  getTile(L, i, j){
+    const k = this.tileKey(L, i, j), c = this.tiles.get(k);
+    if (c){ this.tiles.delete(k); this.tiles.set(k, c); }   // most recently used last
+    return c;
+  }
+  renderTile(L, i, j){
+    const k = this.tileKey(L, i, j);
+    if (this.tiles.has(k)) return this.tiles.get(k);
+    const tdpr = Math.min(2, this.dpr), c = this.spare.pop() || document.createElement('canvas');
+    c.width = c.height = TILE * tdpr;
+    const { ox, oy } = this.tileOrigin(), T = this.tileM(L);
+    const keep = { cx: this.cx, cy: this.cy, zoom: this.zoom, W: this.W, H: this.H, pad: this.pad, dpr: this.dpr, g: this.g };
+    Object.assign(this, { cx: ox + (i + 0.5) * T, cy: oy - (j + 0.5) * T, zoom: Math.pow(2, L), W: TILE, H: TILE, pad: { top: 0, bottom: 0 }, dpr: tdpr, g: c.getContext('2d') });
+    try { this.drawGround(); } finally { Object.assign(this, keep); }
+    this.tiles.set(k, c); this.tilesMade++;
+    while (this.tiles.size > (this.maxTiles || MAX_TILES)){ const [old, oc] = this.tiles.entries().next().value; this.tiles.delete(old); if (this.spare.length < 8) this.spare.push(oc); }
+    return c;
+  }
+  // put the tiles on screen; a missing one is drawn now if it can be, or stood in for by the coarser
+  // level (blurry for a moment rather than blank) and drawn in the next spare moment
+  composeTiles(){
+    const g = this.g, d = this.dpr, L = this.tileLevel(), { ox, oy } = this.tileOrigin();
+    if (this.tilesBase !== this.base || this.tilesPark !== this.park){ this.tiles.clear(); this.tilesBase = this.base; this.tilesPark = this.park; }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = '#5c914c'; g.fillRect(0, 0, this.cv.width, this.cv.height);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    const T = this.tileM(L), r = this.tileRange(L, 0), t0 = performance.now(), busy = this.ptrs.size > 0 || this.animating;
+    let missing = 0;
+    const put = (c, x0, y0, x1, y1, sx = 0, sy = 0, sw = c.width, sh = c.height) => {
+      const X0 = Math.round(this.sx(x0) * d), Y0 = Math.round(this.sy(y0) * d), X1 = Math.round(this.sx(x1) * d), Y1 = Math.round(this.sy(y1) * d);
+      g.drawImage(c, sx, sy, sw, sh, X0, Y0, X1 - X0, Y1 - Y0);
+    };
+    for (let j = r.j0; j <= r.j1; j++) for (let i = r.i0; i <= r.i1; i++){
+      const x0 = ox + i * T, y0 = oy - j * T;
+      let c = this.getTile(L, i, j);
+      if (!c && (!busy || performance.now() - t0 < 8)) c = this.renderTile(L, i, j);
+      if (c){ put(c, x0, y0, x0 + T, y0 - T); continue; }
+      missing++;
+      // the coarser tile this one sits inside
+      const P = this.getTile(L - 1, Math.floor(i / 2), Math.floor(j / 2));
+      if (P){ const h = P.width / 2; put(P, x0, y0, x0 + T, y0 - T, (((i % 2) + 2) % 2) * h, (((j % 2) + 2) % 2) * h, h, h); }
+    }
+    this.lastMissing = missing;
+    if (missing) this.wantTiles = true;
+  }
+  // spare moments: draw the tiles the view will want next (around the screen, and a level either side)
+  prefetch(budget){
+    if (!this.park || !this.base) return;
+    const t0 = performance.now(), L = this.tileLevel();
+    // the screen, a ring of tiles around it (a drag never outruns it: a tile takes a few ms), and the
+    // coarser level a ring wide, to stand in while zooming. The cache is sized to hold all of them.
+    const want = [[L, 0], [L - 1, 1], [L, 1]];
+    let n = 0;
+    for (const [lv, ring] of want.slice(1)){ const r = this.tileRange(lv, ring); n += (r.i1 - r.i0 + 1) * (r.j1 - r.j0 + 1); }   // (the screen is inside its ring)
+    this.maxTiles = Math.max(MAX_TILES, n + 12);
+    for (const [lv, ring] of want){
+      if (lv < -2) continue;
+      const r = this.tileRange(lv, ring);
+      for (let j = r.j0; j <= r.j1; j++) for (let i = r.i0; i <= r.i1; i++){
+        if (this.tiles.has(this.tileKey(lv, i, j))) continue;
+        this.renderTile(lv, i, j);
+        if (lv === L && ring === 0) this.wantTiles = true;
+        if (performance.now() - t0 > budget) return false;
+      }
+    }
+    return true;
   }
 
   // trees, placed once per park (the same every time): forest outside the railroad, clumps in the lands
@@ -245,9 +321,12 @@ export class MapView {
       } else if (!inWater(px, py, 4)) out.push({ x: px, y: py, r: r + 1.5, c: COLS[(rnd() * 5) | 0] });
     }
     this.trees = out;
+    this.treeGrid = new Map();
+    for (const t of out){ const k = Math.floor(t.x / CELL) + ',' + Math.floor(t.y / CELL); if (!this.treeGrid.has(k)) this.treeGrid.set(k, []); this.treeGrid.get(k).push(t); }
   }
 
-  drawStatic(){
+  // the ground, drawn into a tile
+  drawGround(){
     const g = this.g, P = this.park, s = this.s, z = this.zoom;
     if (this.treesFor !== P){ this.makeTrees(); this.treesFor = P; }
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -307,8 +386,11 @@ export class MapView {
       g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(X, Y, w, Math.max(1, h * 0.35));
       g.strokeStyle = 'rgba(60,40,20,.35)'; g.lineWidth = 1; g.strokeRect(X + 0.5, Y + 0.5, w - 1, h - 1);
     }
-    // trees
-    const tr = this.trees, W = this.W, H = this.H;
+    // trees (only the ones in this tile's cells of the grid)
+    const W = this.W, H = this.H, a = this.toMap(-20, -20), bb = this.toMap(W + 20, H + 20), tr = [];
+    for (let cy = Math.floor(bb.y / CELL); cy <= Math.floor(a.y / CELL); cy++) for (let cx = Math.floor(a.x / CELL); cx <= Math.floor(bb.x / CELL); cx++){
+      const cell = this.treeGrid.get(cx + ',' + cy); if (cell) for (const t of cell) tr.push(t);
+    }
     for (const pass of [0, 1, 2]) for (const tt of tr){
       const X = this.sx(tt.x), Y = this.sy(tt.y), r = tt.r * s;
       if (X < -r - 4 || X > W + r + 4 || Y < -r - 4 || Y > H + r + 4) continue;
@@ -319,6 +401,12 @@ export class MapView {
     // the railroad: a dark bed with ties
     this.poly(P.rail); g.strokeStyle = '#7a5a3a'; g.lineWidth = Math.max(2, 4 * s); g.stroke();
     if (z > 0.9){ this.poly(P.rail); g.strokeStyle = '#c8a878'; g.lineWidth = Math.max(1, 1.4 * s); g.setLineDash([Math.max(2, 3 * s), Math.max(2, 3 * s)]); g.stroke(); g.setLineDash([]); }
+  }
+
+  // names, icons and the big landmarks, over the tiles
+  drawOverlay(){
+    const g = this.g, P = this.park, z = this.zoom, W = this.W, H = this.H;
+    g.lineJoin = 'round'; g.lineCap = 'round';
     // keep labels off the pins (and off the pins' own labels)
     this.placed = [];
     const ks = this.pinScale();

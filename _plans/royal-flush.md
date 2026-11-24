@@ -85,3 +85,19 @@ game's castle (`_tools/royal-flush/icons.mjs`), and a quick test (`_tools/royal-
   spacing on short screens.
 - "You're at …" no longer shows a message as well as opening the card.
 - Test now also runs on an emulated iPhone 13 (portrait and sideways) and an iPhone SE.
+
+### 1.2: map tiles, so dragging never shows unfinished map
+- The user saw the map "loading" at the edges while dragging: 1.1 slid one cached screen-sized
+  picture, so the area beyond it was blank until the finger lifted.
+- Now the ground (lands, water, paths, trees, buildings, railroad) is drawn in 256-px tiles at
+  power-of-two zoom levels and cached, like a phone's map app. Between frames (7 ms of spare time,
+  3 ms while a finger is down) the screen's tiles, a ring of tiles around it, and the coarser level a
+  ring wide are drawn ahead. A drag moves into tiles that are already there; a missing tile (a very
+  fast fling) shows the coarser tile, blurry for a moment, never blank.
+- Names, landmark icons and the drawn castle / Space Mountain / Big Thunder are drawn over the tiles
+  (they would be cut at tile edges otherwise), cached with the tiles until the view changes; pins,
+  you and the route on top, every frame.
+- Trees are bucketed in 60 m cells so a tile only looks at its own. Tiles are drawn at 2x (about
+  1 MB each); the cache holds what the look-ahead needs (about 60 on an iPhone) and drops the least
+  recently used.
+- Test: after a moment's rest, 24 frames of dragging use only finished tiles (0 missing).

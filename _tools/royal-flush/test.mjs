@@ -248,21 +248,25 @@ await ctx.close();
   await p.waitForTimeout(700);
   await shot(p, '15-iphone-gps.png');
   check(await p.evaluate(() => __flush.map.dpr === 3), 'iPhone: the map is drawn at the full 3x resolution');
-  // dragging is smooth: frames during a drag reuse the picture instead of redrawing the map
+  // dragging never shows unfinished map: after a moment's rest, the tiles around the screen are ready,
+  // and every frame of a drag is made from finished tiles (none missing, none drawn mid-drag)
+  await p.waitForTimeout(1200);
   const cost = await p.evaluate(async () => {
     const m = __flush.map, cv = document.getElementById('map');
-    let full = 0; const orig = m.drawStatic.bind(m); m.drawStatic = () => { full++; orig(); };
     const fire = (type, x, y) => cv.dispatchEvent(new PointerEvent(type, { pointerId: 7, clientX: x, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true }));
     const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+    const made0 = m.tilesMade;
     fire('pointerdown', 200, 400); await frame();
-    const times = [];
-    for (let i = 1; i <= 20; i++){ fire('pointermove', 200 - i * 8, 400 - i * 5); const t0 = performance.now(); m.draw(performance.now()); times.push(performance.now() - t0); }
-    const during = full;
-    fire('pointerup', 40, 300); await frame(); await frame(); await frame();
-    m.drawStatic = orig;
-    return { during, after: full - during, avg: times.reduce((a, b) => a + b) / times.length };
+    let missing = 0, worst = 0;
+    for (let i = 1; i <= 24; i++){
+      fire('pointermove', 200 - i * 9, 400 - i * 7);
+      const t0 = performance.now(); m.bgKey = null; m.draw(performance.now()); worst = Math.max(worst, performance.now() - t0);
+      missing += m.lastMissing; await frame();
+    }
+    fire('pointerup', 0, 230); await frame();
+    return { missing, worst, drawnDuringDrag: m.tilesMade - made0, tiles: m.tiles.size };
   });
-  check(cost.during === 0 && cost.after >= 1, `iPhone: a drag slides the picture (${cost.during} full redraws while dragging, ${cost.after} after; ${cost.avg.toFixed(1)} ms a frame)`);
+  check(cost.missing === 0, `iPhone: dragging shows only finished map (${cost.missing} missing tiles over 24 frames; slowest frame ${cost.worst.toFixed(1)} ms; ${cost.drawnDuringDrag} tiles drawn ahead meanwhile; ${cost.tiles} kept)`);
   await p.evaluate(() => { __flush.closeSheet(); __flush.map.centerOn(-300, -150, 2.2, false); __flush.openSheet('teacups'); });
   await p.waitForTimeout(900);
   await shot(p, '16-iphone-card.png');
