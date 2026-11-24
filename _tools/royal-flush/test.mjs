@@ -58,7 +58,7 @@ await pg.waitForFunction(() => window.__flush);
 await pg.waitForTimeout(700);
 check((await pg.textContent('#title .build-version')).includes('v' + VERSION), `the title screen shows the version (v${VERSION})`);
 check(/18 restrooms/.test(await pg.textContent('#t-progress')), 'the title screen says how many restrooms there are (the 18 on the official guide map)');
-check(await pg.isDisabled('[data-park="epcot"]'), 'the other parks are listed as coming soon');
+check(!(await pg.isDisabled('[data-park="epcot"]')) && !(await pg.isDisabled('[data-park="animal-kingdom"]')) && await pg.isDisabled('[data-park="hollywood-studios"]'), 'EPCOT and Animal Kingdom can be picked; Hollywood Studios is coming soon');
 await shot(pg, '01-title.png');
 
 // practice mode
@@ -211,6 +211,37 @@ await ev(pg, () => __flush.closeSheet());
 await ctx.setGeolocation({ latitude: 40.7, longitude: -74.0, accuracy: 20 });
 await pg.waitForFunction(() => /from Magic Kingdom/.test(document.getElementById('gps').textContent), null, { timeout: 8000 }).catch(() => {});
 check(/from Magic Kingdom/.test(await pg.textContent('#gps')), 'far from the park, it says so and offers practice mode');
+
+// ---- EPCOT and Animal Kingdom ----
+for (const [id, n, name] of [['epcot', 20, 'EPCOT'], ['animal-kingdom', 14, 'Animal Kingdom']]){
+  await ev(pg, (id) => { __flush.showTitle(); __flush.switchPark(id); __flush.play('practice'); }, id);
+  await pg.waitForTimeout(600);
+  const info = await ev(pg, () => ({ n: __flush.G.park.restrooms.length, top: document.getElementById('top-count').textContent, lands: Object.keys(__flush.G.park.landInfo), pins: __flush.map.pins.length,
+    bad: __flush.G.park.restrooms.filter((r) => !__flush.G.park.landInfo[r.land] || !isFinite(r.x)).map((r) => r.id) }));
+  check(info.n === n && info.top.includes('of ' + n) && info.pins === n && !info.bad.length, `${name}: ${n} restrooms from the official guide map, each in a land (${info.top}${info.bad.length ? '; bad: ' + info.bad : ''})`);
+  await ev(pg, () => __flush.map.centerOn(__flush.G.park.start.x, __flush.G.park.start.y, __flush.map.startZoom(), false));
+  await pg.waitForTimeout(500);
+  await shot(pg, `20-${id}-map.png`);
+  // walk to a restroom in practice and tick it off
+  const r0 = await ev(pg, () => __flush.G.park.restrooms[2]);
+  await ev(pg, ([x, y]) => { __flush.closeSheet(); __flush.setPractice(x + 4, y + 4); }, [r0.x, r0.y]);
+  await pg.waitForTimeout(500);
+  check(await ev(pg, (id) => __flush.G.sheetId === id, r0.id), `${name}: arriving at ${r0.name} opens its card`);
+  await shot(pg, `21-${id}-card.png`);
+  await ev(pg, () => __flush.closeSheet());
+}
+// GPS at an EPCOT restroom while Magic Kingdom is picked: the map switches to EPCOT
+{
+  const ll = await ev(pg, async () => { const m = await import('/experiments/royal-flush/js/parks.js'); const p = m.parkById('epcot'); const r = p.restrooms.find((q) => q.id === 'germany'); return m.toLatLon(p, r.x + 3, r.y); });
+  await ctx.setGeolocation({ latitude: ll.lat, longitude: ll.lon, accuracy: 6 });
+  await ev(pg, () => { __flush.showTitle(); __flush.switchPark('magic-kingdom'); });
+  await pg.click('#b-go');
+  const sw = await pg.waitForFunction(() => __flush.G.park.id === 'epcot' && __flush.G.me && __flush.G.sheetId === 'germany', null, { timeout: 8000 }).then(() => true, () => false);
+  check(sw, 'GPS at an EPCOT restroom with Magic Kingdom picked: switches to EPCOT and opens the Germany restroom');
+  await pg.waitForTimeout(500);
+  await shot(pg, '22-epcot-gps.png');
+  await ev(pg, () => { __flush.closeSheet(); __flush.showTitle(); __flush.switchPark('magic-kingdom'); });
+}
 
 // ---- an old save loads (never break an old save) ----
 await ev(pg, () => localStorage.setItem('royal-flush-save-1', JSON.stringify({ v: 1, parks: { 'magic-kingdom': { found: { townsq: { t: 1 } } } } })));

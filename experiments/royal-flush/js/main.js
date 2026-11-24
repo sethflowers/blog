@@ -1,6 +1,6 @@
 // Royal Flush: find, check in at, rate and wash up at every restroom in the park.
 import { $, dist, esc, fmtDist, walkMin, compass, fmtTime, loadSave, writeSave, slotOf } from './util.js';
-import { PARKS, LANDS, parkById, toXY } from './parks.js';
+import { PARKS, parkById, toXY } from './parks.js';
 import { MapView } from './map.js';
 import { toast, openPanel, closePanel, party, wash } from './ui.js';
 import * as sound from './sound.js';
@@ -22,6 +22,7 @@ const G = {
   arrived: new Set(),      // restrooms we've already said "you're here" for, this session
   now: () => Date.now(),
 };
+const LANDS_ = () => G.park.landInfo;   // this park's lands
 const slotKey = () => G.park.id + (G.mode === 'practice' ? ':practice' : '');
 const slot = () => slotOf(S, slotKey());
 const save = () => writeSave(S);
@@ -47,7 +48,7 @@ function pointsFor(r, f){
 }
 function landProgress(){
   const out = {};
-  for (const id of Object.keys(LANDS)) out[id] = { have: 0, all: 0 };
+  for (const id of Object.keys(LANDS_())) out[id] = { have: 0, all: 0 };
   for (const r of official()){ out[r.land].all++; if (found(r.id)) out[r.land].have++; }
   return out;
 }
@@ -186,6 +187,7 @@ function onFixError(e){
   else setGPS('📡 Still looking for a GPS signal…', 'warn');
 }
 function onFix(p){
+  G.ll = { lat: p.coords.latitude, lon: p.coords.longitude };
   if (!compassOn && p.coords.heading !== null && !isNaN(p.coords.heading) && p.coords.speed > 0.6) setHeading(p.coords.heading);
   applyFix(toXY(G.park, p.coords.latitude, p.coords.longitude), p.coords.accuracy || 30);
 }
@@ -194,6 +196,13 @@ function applyFix(xy, acc){
   G.fix = { x: xy.x, y: xy.y, acc, far };
   if (G.mode !== 'gps') return;
   if (far){
+    // at a different park? switch to it
+    const other = G.ll && PARKS.find((p) => p.ready && p !== G.park && Math.hypot(...Object.values(toXY(p, G.ll.lat, G.ll.lon))) < 1500);
+    if (other){
+      switchPark(other.id);
+      toast(`📍 You're at <b>${esc(other.name)}</b>! Switched the map.`, 'good', 4500);
+      const q = toXY(other, G.ll.lat, G.ll.lon); applyFix(q, acc); return;
+    }
     G.me = null; map.setMe(null);
     setGPS(`You're ${fmtDist(Math.hypot(xy.x, xy.y))} from ${G.park.name}. <u>Practice at home</u> instead?`, 'warn');
     $('gps').onclick = () => setMode('practice');
@@ -259,7 +268,7 @@ function setMode(mode){
     if (G.fix) applyFix(G.fix, G.fix.acc);
   } else {
     stopGPS();
-    const at = S.practice[G.park.id] || { x: 0, y: -300 };
+    const at = S.practice[G.park.id] || G.park.entrance;
     G.me = { ...at, acc: 0, practice: true }; map.setMe(G.me);
     setGPS('🛋️ Practice mode: tap the map to walk there', 'practice');
     $('gps').onclick = null;
@@ -299,7 +308,7 @@ function updateSheetDistance(){
 }
 function renderSheet(){
   const r = byId(G.sheetId); if (!r) return closeSheet();
-  const f = found(r.id), land = LANDS[r.land] || { name: 'Your find', color: '#ddd', ink: '#333' };
+  const f = found(r.id), land = LANDS_()[r.land] || { name: 'Your find', color: '#ddd', ink: '#333' };
   const tags = [`<span class="tag" style="background:${land.color};color:${land.ink}">${esc(land.name)}</span>`];
   if (f) tags.push(`<span class="tag found">✓ Found ${fmtTime(f.t)}${f.verified ? ' · GPS ✓' : ''}</span>`);
   if (r.themed) tags.push('<span class="tag gold">✨ Themed</span>');
@@ -421,7 +430,7 @@ async function checkIn(id, force){
   // a land finished?
   const lp = landProgress();
   for (const [k, l] of Object.entries(lp)) if (l.all && l.have === l.all && !before.has(k)){
-    sound.ding(true); await party(`${LANDS[k].short} flushed!`, `Every restroom in the land · +${PTS.land}`, 2200);
+    sound.ding(true); await party(`${LANDS_()[k].short} flushed!`, `Every restroom in the land · +${PTS.land}`, 2200);
   }
   if (foundCount() === official().length && r.land){ await party('ROYAL FLUSH! 👑', 'Every restroom in the park!', 3200); }
   await washUp(id, true);
@@ -456,7 +465,7 @@ function tick(id){
   if (G.routeId === id){ G.routeId = null; map.setRoute(null); }
   save(); sound.flush();
   toast(`✓ <b>${esc(r.name)}</b> ticked off · +${pointsFor(r, sl.found[id])}`, 'good');
-  for (const [k, l] of Object.entries(landProgress())) if (l.all && l.have === l.all && !before.has(k)) toast(`🏆 <b>${LANDS[k].short}</b> complete! +${PTS.land}`, 'gold', 4200);
+  for (const [k, l] of Object.entries(landProgress())) if (l.all && l.have === l.all && !before.has(k)) toast(`🏆 <b>${LANDS_()[k].short}</b> complete! +${PTS.land}`, 'gold', 4200);
   checkBadges(); refreshAll();
 }
 function untick(id){
@@ -489,14 +498,14 @@ function listPanel(){
     const stars = f && f.rating ? ' · ' + '🧻'.repeat(f.rating) : '';
     return `<div class="item ${f ? 'done' : ''}" data-go="${r.id}">
       <button class="check ${f ? 'on' : ''}" data-check="${r.id}" aria-label="${f ? 'Untick' : 'Tick off'} ${esc(r.name)}">${f ? '✓' : ''}</button>
-      <span class="tx"><b>${r.themed ? '✨ ' : ''}${esc(r.name)}</b><small>${r.land ? esc(LANDS[r.land].short) : 'Added by you'}${f ? ' · found ' + fmtTime(f.t) : ''}${stars}</small></span>
+      <span class="tx"><b>${r.themed ? '✨ ' : ''}${esc(r.name)}</b><small>${r.land ? esc(LANDS_()[r.land].short) : 'Added by you'}${f ? ' · found ' + fmtTime(f.t) : ''}${stars}</small></span>
       ${d !== null ? `<span class="rt">${fmtDist(d)}</span>` : ''}<span class="go">›</span></div>`;
   };
   if (G.me){
     const near = restrooms().filter((r) => !found(r.id)).sort((a, b) => dist(G.me, a) - dist(G.me, b)).slice(0, 3);
     if (near.length) html += '<h3>Nearest new ones</h3>' + near.map(row).join('');
   }
-  for (const [id, land] of Object.entries(LANDS)){
+  for (const [id, land] of Object.entries(LANDS_())){
     const list = restrooms().filter((r) => r.land === id);
     if (!list.length) continue;
     html += `<h3>${esc(land.name)} · ${lp[id].have}/${lp[id].all}${lp[id].have === lp[id].all ? ' ✓' : ''}</h3>` + list.map(row).join('');
@@ -525,9 +534,9 @@ function badgesPanel(){
     <div class="stat"><b>${score().toLocaleString()}</b>points</div><div class="stat"><b>${km} km</b>walked</div>
     <div class="stat"><b>${sl.stats.washes}</b>hand washes</div><div class="stat"><b>${Object.values(sl.found).filter((f) => f.rating).length}</b>rated</div>
     <div class="stat"><b>${sl.stats.emergencies}</b>emergencies</div></div>`;
-  html += '<h3>Lands</h3><div class="lands">' + Object.entries(LANDS).map(([id, l]) => lp[id].all
+  html += '<h3>Lands</h3><div class="lands">' + Object.entries(LANDS_()).map(([id, l]) => lp[id].all
     ? `<div class="land" style="background:${l.color}">${esc(l.short)}<b>${lp[id].have}/${lp[id].all}${lp[id].have === lp[id].all ? ' 🏆' : ''}</b></div>`
-    : `<div class="land" style="background:${l.color}">${esc(l.short)}<b style="font-size:13px">none! 🎩</b><small>no plumbing in colonial times</small></div>`).join('') + '</div>';
+    : `<div class="land" style="background:${l.color}">${esc(l.short)}<b style="font-size:13px">none! ${l.noneIcon || '🎩'}</b><small>${esc(l.none || '')}</small></div>`).join('') + '</div>';
   html += `<h3>Badges · ${Object.keys(sl.badges).length}/${BADGES.length}</h3>`;
   html += BADGES.map((b) => {
     const t = sl.badges[b.id];
@@ -539,6 +548,9 @@ function badgesPanel(){
 function menuPanel(){
   const p = G.mode === 'practice';
   const html = `
+    <h3>Park</h3>
+    <div class="row">${PARKS.filter((q) => q.ready).map((q) => `<button class="${q === G.park ? '' : 'light'}" data-m="park" data-id="${q.id}">${esc(q.name)}</button>`).join('')}</div>
+    <h3>Mode</h3>
     <div class="row"><button data-m="mode">${p ? '🗺️ Switch to the real quest (GPS)' : '🛋️ Switch to practice mode'}</button></div>
     <div class="row"><button class="light" data-m="whole">🔍 Show the whole park</button><button class="light" data-m="sound">${S.settings.sound ? '🔊 Sound on' : '🔇 Sound off'}</button></div>
     <h3>Found one that isn't on the map?</h3>
@@ -548,14 +560,16 @@ function menuPanel(){
     <h3>${p ? 'Practice' : 'Quest'} progress</h3>
     <div class="row"><button class="light" data-m="title">🏠 Title screen</button><button class="red" data-m="reset">Start ${p ? 'practice' : 'the quest'} over</button></div>
     <h3>About</h3>
-    <p style="font-size:13.5px">Royal Flush v${esc(VERSION)}. An unofficial fan-made game, not connected with Disney. The map is redrawn from the park
-    guide and lined up with OpenStreetMap (map data © OpenStreetMap contributors); restroom pins can still be a few steps off: if one is off, find it and tap “Pin is off: move it here”. Restrooms change with
+    <p style="font-size:13.5px">Royal Flush v${esc(VERSION)}. An unofficial fan-made game, not connected with Disney. Magic Kingdom's map is redrawn from
+    the park guide and lined up with OpenStreetMap; EPCOT's and Animal Kingdom's are drawn from OpenStreetMap (map data © OpenStreetMap
+    contributors). The restrooms are the ones on each park's official guide map; restroom pins can still be a few steps off: if one is off, find it and tap “Pin is off: move it here”. Restrooms change with
     refurbishments, so trust the signs in the park. Your progress is saved on this device only. Works offline once opened.</p>`;
   const body = openPanel('☰ Menu', html);
   body.onclick = (e) => {
     const b = e.target.closest('[data-m]'); if (!b) return;
     const m = b.dataset.m;
-    if (m === 'mode'){ closePanel(); setMode(p ? 'gps' : 'practice'); }
+    if (m === 'park'){ closePanel(); if (b.dataset.id !== G.park.id){ switchPark(b.dataset.id); map.centerOn(G.park.start.x, G.park.start.y, map.startZoom(), false); toast(`🗺️ ${esc(G.park.name)}: ${official().length} restrooms to find`, 'good'); } }
+    else if (m === 'mode'){ closePanel(); setMode(p ? 'gps' : 'practice'); }
     else if (m === 'whole'){ closePanel(); map.follow = false; map.centerOn(G.park.start.x, G.park.start.y, map.startZoom()); }
     else if (m === 'sound'){ S.settings.sound = !S.settings.sound; sound.setSound(S.settings.sound); save(); menuPanel(); }
     else if (m === 'add'){ const id = addRestroom(($('m-name').value || '').trim()); if (id){ closePanel(); openSheet(id); toast('📍 Added! Now tap Found it!', 'good'); } }
@@ -603,13 +617,22 @@ function play(mode){
   setMode(mode);
   if (mode === 'practice') map.centerOn(G.me.x, G.me.y + 120, 1.6);
   else map.centerOn(G.park.start.x, G.park.start.y, map.startZoom(), false);
-  if (!S.seenHint){ S.seenHint = 1; S.seenMap2 = S.seenMap21 = 1; save(); setTimeout(() => toast('Tap a 🚻 pin to see it. Get there, then tap <b>Found it!</b>', '', 5500), 600); }
+  if (!S.seenHint){ S.seenHint = 1; S.seenMap2 = S.seenMap21 = S.seenParks3 = 1; save(); setTimeout(() => toast('Tap a 🚻 pin to see it. Get there, then tap <b>Found it!</b>', '', 5500), 600); }
   else if (!S.seenMap2){ S.seenMap2 = S.seenMap21 = 1; save(); setTimeout(() => toast('🗺️ New map! Traced from the official park guide, with all 18 restrooms in their real places.', 'gold', 6500), 600); }
-  else if (!S.seenMap21){ S.seenMap21 = 1; save(); setTimeout(() => toast('🗺️ The map now lines up with OpenStreetMap: paths, rides and restroom pins are where your GPS says.', 'gold', 6500), 600); }
+  else if (!S.seenParks3){ S.seenMap2 = S.seenMap21 = S.seenParks3 = 1; save(); setTimeout(() => toast('🎉 New parks! <b>EPCOT</b> and <b>Animal Kingdom</b> are here (☰ menu › Park). At the park, the map switches by itself.', 'gold', 7000), 600); }
 }
 $('b-go').onclick = () => { askCompass(); play('gps'); };
 $('b-practice').onclick = () => play('practice');
-$('t-parks').onclick = (e) => { const b = e.target.closest('[data-park]'); if (!b || b.disabled) return; S.park = b.dataset.park; G.park = parkById(S.park); map.setPark(G.park); save(); titleProgress(); };
+// change park: its own map, restrooms and progress
+function switchPark(id){
+  S.park = id; G.park = parkById(id); save();
+  $('msgs').innerHTML = '';                 // messages about the last park don't carry over
+  closeSheet(); G.routeId = null; map.setRoute(null); G.arrived.clear(); lastWalk = null;
+  map.setPark(G.park); layoutPad();
+  if (G.mode === 'practice'){ const at = S.practice[G.park.id] || G.park.entrance; G.me = { ...at, acc: 0, practice: true }; map.setMe(G.me); }
+  hudCache = ''; refreshAll();
+}
+$('t-parks').onclick = (e) => { const b = e.target.closest('[data-park]'); if (!b || b.disabled) return; switchPark(b.dataset.park); titleProgress(); };
 
 // offline status
 (async () => {
@@ -629,7 +652,7 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 // ---------- for the tests ----------
 window.__flush = {
   G, S, map, restrooms, byId, found, score, foundCount, landProgress, BADGES, slot, checkIn, openSheet, closeSheet,
-  emergency, nearest, setMode, tick, untick, listPanel, play, showTitle, addRestroom, fixPin, walkTo, onFix,
+  emergency, nearest, setMode, switchPark, tick, untick, listPanel, play, showTitle, addRestroom, fixPin, walkTo, onFix,
   washScrub: (sec) => wash.scrubFor && wash.scrubFor(sec),
   toXY: (lat, lon) => toXY(G.park, lat, lon),
   setPractice: (x, y) => { walkAnim++; G.me = { x, y, acc: 0, practice: true }; map.setMe(G.me); arrivals(); },

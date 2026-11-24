@@ -205,3 +205,33 @@ OSM's in-park toilets is a public restroom the guide lacks.
   keeps the forest off, leaving lawn. The 🏍️ TRON icon sits on OSM's show building.
 - Test: a GPS fix at a point of OSM's covered queue walkway must be on a walkway, under the canopy, with no
   tree within 3 m (nearest is now 45 m); screenshot `15b-iphone-tron-line.png`.
+
+### 3.0: EPCOT and Animal Kingdom
+The user asked for EPCOT and Animal Kingdom "the same way" and gave the session full network access.
+- **Sources.** The official guide maps (EPCOT July 2026, Animal Kingdom May 2026) were downloaded from
+  WDWNT's mirrors (not kept in the repo). OpenStreetMap came from the OSM API's `map` call in 3x3 tiles
+  (`osm_fetch.py`; every Overpass server timed out or reset), kept gzipped in `osm-ep/`, `osm-ak/` (2.3 MB).
+- **Restrooms** (`guide-<park>-restrooms.json`): the guide legend's restroom icons (plain, accessible,
+  companion) template-matched over the map at several scales and grouped into places. EPCOT 20 (one of
+  Spaceship Earth's pair was a shared icon, added by hand), Animal Kingdom 14 (none in the old DinoLand,
+  now "Future home of Tropical Americas"; one at Conservation Station, reached by train).
+- **Lining up.** `park_match.py`: an affine fit from guide pixels to OSM metres through landmarks seen on
+  both (EPCOT median 26 m, Animal Kingdom 12 m), then a one-to-one assignment of guide restrooms to OSM
+  toilets. Each pin is put **on its OSM toilet** (EPCOT 18, Animal Kingdom 11); the rest (EPCOT's
+  International Gateway and west entrance, AK's Creature Comforts / First Aid and Satu'li) stay where the
+  guide puts them. OSM toilets with no guide symbol were left out (backstage, customers-only, and two
+  old DinoLand ones). `pinSource` in the map file says which is which.
+- **Not traced from the guide.** Unlike Magic Kingdom, these maps are drawn straight from OSM
+  (`osm_park.py`): water, walkways (footways widened by type, pedestrian areas), service roads and safari
+  tracks (grey), savanna grassland, buildings (tinted per land; EPCOT's pavilions each their own colour;
+  backstage ones grey), trees (OSM tree nodes plus a scatter, dense in woods, sparse on the savanna),
+  EPCOT's monorail beam and the Wildlife Express track. The park outline is OSM's `tourism=theme_park`.
+- **Drawn landmarks:** Spaceship Earth (geodesic ball), Tree of Life, Expedition Everest. Emoji for the
+  rest (22 EPCOT, 16 AK). Land names per park.
+- **Game:** lands are per park now (`park.landInfo`); a land with no restrooms says why (Liberty Square:
+  colonial plumbing; Tropical Americas: building site). Progress, badges and practice spots are per park.
+  The ☰ menu has a park switcher, and **with GPS on, standing in another park switches the map to it**.
+  Parks with lots of backstage (AK) open on their guest area (`view`). Practice starts at each park's
+  entrance. Existing players get a one-time "New parks!" message. Hollywood Studios is still "coming soon".
+- Test: each new park has its restroom count, every restroom in a land, arriving opens the card; GPS at
+  EPCOT's Germany restroom with Magic Kingdom picked switches to EPCOT and opens that card.

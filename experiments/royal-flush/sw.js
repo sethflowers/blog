@@ -14,7 +14,7 @@ var V = new URL(self.location.href).searchParams.get('v') || '0';
 var CACHE = 'royal-flush-' + V;
 var BASE = '/experiments/royal-flush/';
 var READY = BASE + '__offline-ready__';
-var VERSIONED = ['js/main.js', 'js/map.js', 'js/mk-map.js', 'js/parks.js', 'js/sound.js', 'js/ui.js', 'js/util.js'];
+var VERSIONED = ['js/main.js', 'js/ak-map.js', 'js/ep-map.js', 'js/map.js', 'js/mk-map.js', 'js/parks.js', 'js/sound.js', 'js/ui.js', 'js/util.js'];
 var STATIC = ['manifest.json', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 var ASSETS = [BASE].concat(VERSIONED.map(function (f) { return BASE + f + '?v=' + V; }), STATIC.map(function (f) { return BASE + f; }));
 

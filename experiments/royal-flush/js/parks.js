@@ -11,12 +11,14 @@
 // To add a park (EPCOT, Hollywood Studios, Animal Kingdom): trace its guide map the same way, give it an
 // entry in PARKS with the same shape (origin, map, lands, landmarks, restrooms) and set ready: true.
 import MKMAP from './mk-map.js';
+import EPMAP from './ep-map.js';
+import AKMAP from './ak-map.js';
 
 export const LANDS = {
   main:  { name: 'Main Street, U.S.A.', short: 'Main Street', color: '#f3c9a0', ink: '#8a4a1a' },
   adv:   { name: 'Adventureland', short: 'Adventureland', color: '#b9d98a', ink: '#3e6a1a' },
   front: { name: 'Frontierland', short: 'Frontierland', color: '#e6c48a', ink: '#7a4a12' },
-  lib:   { name: 'Liberty Square', short: 'Liberty Square', color: '#c9d2ea', ink: '#2c3f7a' },
+  lib:   { name: 'Liberty Square', short: 'Liberty Square', color: '#c9d2ea', ink: '#2c3f7a', none: 'no plumbing in colonial times' },
   fan:   { name: 'Fantasyland', short: 'Fantasyland', color: '#efc3e0', ink: '#80306a' },
   tom:   { name: 'Tomorrowland', short: 'Tomorrowland', color: '#b8dcef', ink: '#1a5a80' },
 };
@@ -30,8 +32,10 @@ const MK = {
   origin: { lat: 28.41917, lon: -81.58111 },     // near Cinderella Castle (OSM puts its middle 37 m north); saved pins use it, so keep it
   map: MKMAP,                                    // the traced layout
   start: { ...AT('start'), zoom: 0.9 },
+  entrance: { x: 0, y: -300 },
   bounds: MKMAP.bounds,
   lands: MKMAP.lands,
+  landInfo: LANDS,
   labels: { main: [...at('T-main'), -90], adv: [...at('T-adv'), -4], front: [...at('T-front'), 0], lib: [...at('T-lib'), -10], fan: [...at('T-fan'), 0], tom: [...at('T-tom'), 4] },
   drawn: { castle: at('L-castle'), spaceMountain: [...at('L-space'), 38], thunder: at('L-thunder') },
   stations: [
@@ -134,13 +138,218 @@ const MK = {
 };
 
 // the other Orlando parks, to add later
+// ---------------- EPCOT: drawn from OpenStreetMap; restrooms from the July 2026 guide map ----------------
+const EP_LANDS = {
+  celebration: { name: 'World Celebration', short: 'World Celebration', color: '#cfd6e8', ink: '#2c3f7a' },
+  discovery:   { name: 'World Discovery', short: 'World Discovery', color: '#e9c7cf', ink: '#8a2a3a' },
+  nature:      { name: 'World Nature', short: 'World Nature', color: '#c9e2c0', ink: '#2e6a2a' },
+  showcase:    { name: 'World Showcase', short: 'World Showcase', color: '#efdcb8', ink: '#8a4a12' },
+};
+const ep = (id) => ({ x: EPMAP.places[id][0], y: EPMAP.places[id][1] });
+const EP = {
+  id: 'epcot',
+  name: 'EPCOT',
+  ready: true,
+  origin: { lat: 28.375271, lon: -81.549392 },   // the middle of Spaceship Earth
+  map: EPMAP,
+  start: { x: -65, y: -380, zoom: 0.9 },
+  entrance: { x: -20, y: 100 },   // where practice mode starts you
+  view: { x0: -470, x1: 340, y0: -950, y1: 190 },
+  bounds: EPMAP.bounds,
+  landInfo: EP_LANDS,
+  labels: { celebration: [0, -125, 0], discovery: [215, -95, 0], nature: [-265, -60, 0], showcase: [0, -620, 0] },
+  drawn: { sphere: [0, -1, 25] },
+  stations: [
+    { x: -23, y: 171, name: 'EPCOT Monorail Station', icon: '🚝' },
+    { x: -395, y: -640, name: 'Skyliner: International Gateway', icon: '🚡' },
+  ],
+  landmarks: [
+    { x: 0, y: -1, name: 'Spaceship Earth', size: 30, zoom: 0, drawn: true },
+    { x: 210, y: -260, icon: '🏎️', name: 'Test Track', size: 22, zoom: 0 },
+    { x: 240, y: -153, icon: '🚀', name: 'Mission: SPACE', size: 20, zoom: 0.7 },
+    { x: 173, y: -19, icon: '🪐', name: 'Guardians of the Galaxy: Cosmic Rewind', size: 22, zoom: 0 },
+    { x: -189, y: -275, icon: '🐉', name: 'Journey Into Imagination With Figment', size: 18, zoom: 0.9 },
+    { x: -320, y: -150, icon: '🪂', name: "The Land: Soarin' & Living with the Land", size: 22, zoom: 0 },
+    { x: -143, y: -13, icon: '🐠', name: 'The Seas with Nemo & Friends', size: 20, zoom: 0.7 },
+    { x: -99, y: -68, icon: '💧', name: 'Journey of Water, Inspired by Moana', size: 16, zoom: 1.2 },
+    { x: -77, y: -170, icon: '🍽️', name: 'CommuniCore Hall', size: 16, zoom: 1.2 },
+    { x: 221, y: -401, icon: '🌮', name: 'Mexico: Gran Fiesta Tour', size: 20, zoom: 0.6 },
+    { x: 235, y: -469, icon: '❄️', name: 'Norway: Frozen Ever After', size: 20, zoom: 0.6 },
+    { x: 308, y: -582, icon: '🏮', name: 'China', size: 20, zoom: 0.6 },
+    { x: 240, y: -788, icon: '🥨', name: 'Germany', size: 20, zoom: 0.6 },
+    { x: 116, y: -843, icon: '🍝', name: 'Italy', size: 20, zoom: 0.6 },
+    { x: 10, y: -886, icon: '🦅', name: 'The American Adventure', size: 22, zoom: 0 },
+    { x: -87, y: -817, icon: '⛩️', name: 'Japan', size: 20, zoom: 0.6 },
+    { x: -233, y: -788, icon: '🕌', name: 'Morocco', size: 20, zoom: 0.6 },
+    { x: -343, y: -731, icon: '🗼', name: 'France', size: 20, zoom: 0.6 },
+    { x: -350, y: -808, icon: '🐀', name: "Remy's Ratatouille Adventure", size: 18, zoom: 1 },
+    { x: -242, y: -529, icon: '💂', name: 'United Kingdom', size: 20, zoom: 0.6 },
+    { x: -228, y: -380, icon: '🍁', name: 'Canada', size: 20, zoom: 0.6 },
+    { x: -42, y: 122, icon: '🎟️', name: 'Main Entrance', size: 18, zoom: 0 },
+  ],
+  // the 20 restrooms on the official guide map, each on the OSM toilet it matches (see pinSource in ep-map.js)
+  restrooms: [
+    { id: 'entrance-east', land: 'celebration', ...ep('entrance-east'), name: 'Main Entrance (east)',
+      where: 'Outside the main gate, on the east side by the ticket booths and the bus stops.',
+      fact: 'A good stop before the bag check: the lines inside can be long first thing.' },
+    { id: 'entrance-west', land: 'celebration', ...ep('entrance-west'), name: 'Main Entrance (west)', companion: true,
+      where: 'Outside the main gate, on the west side by the monorail and the parking trams.',
+      fact: 'The monorail from Magic Kingdom loops around Spaceship Earth before it pulls in. Look up!' },
+    { id: 'se-east', land: 'celebration', ...ep('se-east'), name: 'Spaceship Earth (east)', companion: true,
+      where: 'Just inside the gates, on the east (left) side of Spaceship Earth.',
+      fact: 'Spaceship Earth is 180 feet tall and made of 11,324 triangles. Rain runs inside it and into the lagoon: it never drips on you.' },
+    { id: 'se-west', land: 'celebration', ...ep('se-west'), name: 'Spaceship Earth (west)',
+      where: 'Just inside the gates, on the west (right) side of Spaceship Earth, by the lockers.',
+      fact: 'Ride Spaceship Earth and you travel from cave paintings to the computer age in 15 minutes.' },
+    { id: 'connections', land: 'celebration', ...ep('connections'), name: 'Connections Café',
+      where: 'World Celebration, on the east side behind Spaceship Earth, by Connections Café and Starbucks.',
+      fact: 'Connections Eatery next door does pizza, burgers and very good cookies.' },
+    { id: 'communicore', land: 'celebration', ...ep('communicore'), name: 'CommuniCore Hall',
+      where: 'World Celebration, at CommuniCore Hall and Plaza.',
+      fact: "CommuniCore is a name from EPCOT's 1982 opening day, brought back in 2024." },
+    { id: 'communicore-west', land: 'nature', ...ep('communicore-west'), name: 'CommuniCore (west)', companion: true,
+      where: 'On the west side of CommuniCore Hall, on the way to Journey of Water and The Land.',
+      fact: 'Journey of Water is right behind: the water plays with you, and you can get splashed.' },
+    { id: 'discovery', land: 'discovery', ...ep('discovery'), name: 'Mission: SPACE & Test Track', companion: true,
+      where: 'World Discovery, on the path between Mission: SPACE and Test Track.',
+      fact: 'Test Track reaches about 64 mph, the fastest ride at Walt Disney World. Go before you go!' },
+    { id: 'land', land: 'nature', ...ep('land'), name: 'The Land', companion: true,
+      where: "World Nature, inside The Land pavilion, by Sunshine Seasons on the lower floor.",
+      fact: "The Land grows real vegetables in its greenhouses (you ride through them), and some end up on your plate at the Garden Grill." },
+    { id: 'seas', land: 'nature', ...ep('seas'), name: 'The Seas', themed: true,
+      where: 'World Nature, at The Seas with Nemo & Friends.',
+      fact: 'The Seas aquarium holds 5.7 million gallons. Wave at the manatees on your way through.' },
+    { id: 'imagination', land: 'nature', ...ep('imagination'), name: 'Imagination!',
+      where: 'World Nature, at the Imagination! pavilion, by the upside-down waterfall.',
+      fact: 'Watch the fountains outside: the water "leapfrogs" over the path in arcs.' },
+    { id: 'plaza', land: 'showcase', ...ep('plaza'), name: 'Showcase Plaza (west)', companion: true,
+      where: 'Where World Celebration meets World Showcase, on the west (Canada) side of the plaza.',
+      fact: 'The plaza is a great place to watch Luminous over the lagoon at night.' },
+    { id: 'odyssey', land: 'showcase', ...ep('odyssey'), name: 'Odyssey & First Aid',
+      where: 'By the Odyssey building and First Aid, on the east (Mexico) side of Showcase Plaza.',
+      fact: 'World Showcase is 1.2 miles around. Plan your stops: there are long stretches between restrooms.' },
+    { id: 'norway', land: 'showcase', ...ep('norway'), name: 'Norway', companion: true,
+      where: 'World Showcase, between Mexico and Norway, by Kringla Bakeri og Kafe.',
+      fact: "Try the school bread at Kringla Bakeri. And go before Frozen Ever After: it's popular." },
+    { id: 'germany', land: 'showcase', ...ep('germany'), name: 'Germany', companion: true,
+      where: 'World Showcase, in Germany, on the far side of the square from the Biergarten.',
+      fact: "Look for the model railway village between Germany and Italy. It's free and always running." },
+    { id: 'amer', land: 'showcase', ...ep('amer'), name: 'The American Adventure', companion: true,
+      where: 'World Showcase, between The American Adventure and Japan.',
+      fact: 'The American Adventure building uses forced perspective: it looks five storeys tall but is really three.' },
+    { id: 'morocco', land: 'showcase', ...ep('morocco'), name: 'Morocco', companion: true,
+      where: 'World Showcase, in Morocco, by Tangierine Café.',
+      fact: "Morocco's tiles were made and laid by craftsmen sent by the King of Morocco." },
+    { id: 'france', land: 'showcase', ...ep('france'), name: 'France', companion: true,
+      where: 'World Showcase, in France, by the crêpe stand and Remy.',
+      fact: "Remy's Ratatouille Adventure shrinks you down to rat size. The restroom, happily, does not." },
+    { id: 'gateway', land: 'showcase', ...ep('gateway'), name: 'International Gateway',
+      where: 'At the International Gateway entrance between France and the UK, by the Skyliner station.',
+      fact: 'From here you can walk to the BoardWalk and the Beach Club, or fly away on the Skyliner.' },
+    { id: 'showplace', land: 'showcase', ...ep('showplace'), name: 'United Kingdom & Canada', companion: true,
+      where: 'World Showcase, between the United Kingdom and Canada, by the World ShowPlace pavilion.',
+      fact: 'Pop into the UK gardens to find the hedge maze and the Beatles tribute band.' },
+  ],
+};
+
+// ---------------- Animal Kingdom: drawn from OpenStreetMap; restrooms from the May 2026 guide map ----------------
+const AK_LANDS = {
+  oasis:     { name: 'Oasis', short: 'Oasis', color: '#bfdcaa', ink: '#2e6a2a' },
+  discovery: { name: 'Discovery Island', short: 'Discovery Island', color: '#e8d2a6', ink: '#7a4a12' },
+  pandora:   { name: 'Pandora – The World of Avatar', short: 'Pandora', color: '#b9d4ea', ink: '#1a4a80' },
+  africa:    { name: 'Africa', short: 'Africa', color: '#e7c39a', ink: '#8a4a12' },
+  asia:      { name: 'Asia', short: 'Asia', color: '#e9b9a8', ink: '#8a2a1a' },
+  tropical:  { name: 'Tropical Americas (being built)', short: 'Tropical Americas', color: '#d9d2bc', ink: '#5a5040',
+               none: 'building site: coming soon', noneIcon: '🚧' },
+};
+const ak = (id) => ({ x: AKMAP.places[id][0], y: AKMAP.places[id][1] });
+const AK = {
+  id: 'animal-kingdom',
+  name: 'Animal Kingdom',
+  ready: true,
+  origin: { lat: 28.357924, lon: -81.590615 },   // the Tree of Life
+  map: AKMAP,
+  start: { x: 50, y: -65, zoom: 0.9 },
+  entrance: { x: 55, y: -290 },
+  view: { x0: -300, x1: 400, y0: -390, y1: 260 },     // the guest area (Conservation Station is a train ride north)
+  bounds: AKMAP.bounds,
+  landInfo: AK_LANDS,
+  labels: { oasis: [-60, -240, 0], discovery: [95, -45, 0], pandora: [-240, -290, 0], africa: [-190, 120, 0], asia: [250, 120, 0], tropical: [255, -160, 0] },
+  drawn: { tree: [0, 0], everest: [370, 70] },
+  stations: [
+    { x: -77, y: 202, name: 'Wildlife Express: Africa Station', icon: '🚂' },
+    { x: 76, y: 616, name: 'Wildlife Express: Conservation Station', icon: '🚂' },
+  ],
+  landmarks: [
+    { x: 0, y: 0, name: 'Tree of Life', size: 30, zoom: 0, drawn: true },
+    { x: 370, y: 70, name: 'Expedition Everest', size: 26, zoom: 0, drawn: true },
+    { x: -175, y: 202, icon: '🦒', name: 'Kilimanjaro Safaris', size: 22, zoom: 0 },
+    { x: 233, y: 168, icon: '🛶', name: 'Kali River Rapids', size: 20, zoom: 0.6 },
+    { x: -217, y: -340, icon: '🐉', name: 'Avatar Flight of Passage', size: 22, zoom: 0 },
+    { x: -154, y: -350, icon: '🌺', name: "Na'vi River Journey", size: 18, zoom: 0.8 },
+    { x: -215, y: 55, icon: '🦁', name: 'Festival of the Lion King', size: 20, zoom: 0.6 },
+    { x: -139, y: 218, icon: '🦍', name: 'Gorilla Falls Exploration Trail', size: 18, zoom: 1 },
+    { x: 138, y: 209, icon: '🐅', name: 'Maharajah Jungle Trek', size: 18, zoom: 1 },
+    { x: 76, y: 616, icon: '🔬', name: "Conservation Station (Rafiki's Planet Watch)", size: 18, zoom: 0.6 },
+    { x: 337, y: -72, icon: '🎭', name: 'Theater in the Wild', size: 18, zoom: 0.8 },
+    { x: 13, y: -18, icon: '🐰', name: 'Zootopia: Better Zoogether!', size: 16, zoom: 1.4 },
+    { x: 109, y: 88, icon: '🍜', name: 'Yak & Yeti', size: 16, zoom: 1.2 },
+    { x: -7, y: -347, icon: '🐸', name: 'Rainforest Cafe', size: 16, zoom: 1.2 },
+    { x: 261, y: -195, icon: '🚧', name: 'Tropical Americas (being built)', size: 18, zoom: 0.6 },
+    { x: 55, y: -304, icon: '🎟️', name: 'Entrance', size: 18, zoom: 0 },
+  ],
+  // the 14 restroom symbols on the official guide map, each on the OSM toilet it matches (see pinSource in ak-map.js)
+  restrooms: [
+    { id: 'gate', land: 'oasis', ...ak('gate'), name: 'Entrance (east)',
+      where: 'By the entrance, on the east side near Garden Gate Gifts.',
+      fact: 'Every animal in the Oasis is a real one: look for the giant anteater and the babirusa on your way in.' },
+    { id: 'oasis', land: 'oasis', ...ak('oasis'), name: 'Guest Relations',
+      where: 'Just inside the entrance, by Guest Relations.',
+      fact: "The Oasis paths are planned so you can't see the Tree of Life until you walk out of the trees." },
+    { id: 'pandora', land: 'pandora', ...ak('pandora'), name: 'Pandora Entrance', companion: true,
+      where: "On the bridge path into Pandora from the Oasis, by Colors of Mo'ara.",
+      fact: "Pandora's floating mountains are held up by vines... and a lot of very clever steel." },
+    { id: 'satuli', land: 'pandora', ...ak('satuli'), name: "Satu'li Canteen", companion: true,
+      where: "Pandora, by Satu'li Canteen.",
+      fact: "At night Pandora glows: the plants light up, and some react when you touch them." },
+    { id: 'firstaid', land: 'discovery', ...ak('creature'), name: 'First Aid & Baby Care',
+      where: 'Discovery Island, on the west side by First Aid, the Baby Care Center and Creature Comforts.',
+      fact: 'The Tree of Life has more than 300 animals carved into it. How many can you find from here?' },
+    { id: 'pizzafari', land: 'discovery', ...ak('pizzafari'), name: 'Pizzafari',
+      where: 'Discovery Island, by Pizzafari.',
+      fact: "Each of Pizzafari's dining rooms has a different animal theme painted on the walls." },
+    { id: 'flametree', land: 'discovery', ...ak('flametree'), name: 'Flame Tree Barbecue', companion: true,
+      where: 'Discovery Island, on the east side by Isle of Java and Flame Tree Barbecue.',
+      fact: "Flame Tree's riverside seats are one of the prettiest lunch spots in all of Disney World." },
+    { id: 'asia-bridge', land: 'asia', ...ak('asia-bridge'), name: "Asia Bridge (Mr. Kamal's)",
+      where: "Over the bridge from Discovery Island into Asia, by Mr. Kamal's.",
+      fact: 'Mr. Kamal\'s seasoned fries are a cult favourite.' },
+    { id: 'kali', land: 'asia', ...ak('kali'), name: 'Kali River Rapids', companion: true,
+      where: 'Asia, by Kali River Rapids and the Maharajah Jungle Trek.',
+      fact: 'You WILL get wet on Kali River Rapids. Visit before, change after!' },
+    { id: 'everest', land: 'asia', ...ak('everest'), name: 'Expedition Everest', companion: true,
+      where: 'Asia, by Expedition Everest and the Anandapur ice cream truck.',
+      fact: 'The Yeti is one of the biggest animatronics Disney ever built. Expedition Everest goes backwards in the dark.' },
+    { id: 'theater', land: 'asia', ...ak('theater'), name: 'Theater in the Wild',
+      where: 'By Theater in the Wild, on the path from Discovery Island.',
+      fact: 'Theater in the Wild seats about 1,500 people. Arrive early, and go before the show!' },
+    { id: 'harambe', land: 'africa', ...ak('harambe'), name: 'Harambe Market', companion: true,
+      where: 'Africa, in Harambe village, by the Mombasa Marketplace and Tamu Tamu.',
+      fact: 'Harambe is styled on a real East African port town. The walls are painted to look a hundred years old.' },
+    { id: 'lionking', land: 'africa', ...ak('lionking'), name: 'Festival of the Lion King', companion: true,
+      where: 'Africa, on the path from Discovery Island to Harambe, near the Lion King theater.',
+      fact: 'Festival of the Lion King is a full Broadway-style show in the round, with acrobats and stilt-walkers.' },
+    { id: 'conservation', land: 'africa', ...ak('conservation'), name: 'Conservation Station', island: true,
+      where: "At Conservation Station (Rafiki's Planet Watch). Get there on the Wildlife Express train from Africa.",
+      fact: 'From the train you can see backstage animal houses where the keepers look after the animals at night.' },
+  ],
+};
+
 const COMING = [
-  { id: 'epcot', name: 'EPCOT', ready: false, origin: { lat: 28.3747, lon: -81.5494 } },
   { id: 'hollywood-studios', name: 'Hollywood Studios', ready: false, origin: { lat: 28.3575, lon: -81.5583 } },
-  { id: 'animal-kingdom', name: 'Animal Kingdom', ready: false, origin: { lat: 28.3553, lon: -81.5901 } },
 ];
 
-export const PARKS = [MK, ...COMING];
+export const PARKS = [MK, EP, AK, ...COMING];
 export const parkById = (id) => PARKS.find((p) => p.id === id) || MK;
 
 // GPS → map metres (a flat projection is plenty for a park a kilometre across)

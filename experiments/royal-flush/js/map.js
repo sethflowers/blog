@@ -2,7 +2,6 @@
 // the way to the next restroom, on a 2D canvas. Drag to pan, pinch or scroll to zoom, tap a pin.
 // It only redraws when something changed (or to pulse the "you are here" dot).
 import { clamp } from './util.js';
-import { LANDS } from './parks.js';
 
 const TILE = 256;        // tile size in CSS pixels
 const MAX_TILES = 40;    // at least this many tiles kept (1 MB each on a 2x/3x screen; more on a big screen); least recently used go first
@@ -59,6 +58,9 @@ export class MapView {
   // the whole park across a wide screen; on a tall phone, fill its height and let you pan sideways
   startZoom(){
     const b = this.park.bounds, h = this.H - this.pad.top - this.pad.bottom;
+    // a park with a lot of backstage (Animal Kingdom's safari and woods) opens on its guest area (view)
+    const v = this.park.view;
+    if (v){ const s = Math.min(this.W / (v.x1 - v.x0), h / (v.y1 - v.y0)); return clamp(s / this.base, 0.8, 4); }
     const fitH = (h / (b.y1 - b.y0)) / (this.W / (b.x1 - b.x0));
     return clamp(Math.max(this.park.start.zoom || 1, fitH * 0.7), 0.8, 2.4);
   }
@@ -346,6 +348,7 @@ export class MapView {
     g.lineJoin = 'round'; g.lineCap = 'round';
     g.fillStyle = '#a9d488'; g.fillRect(0, 0, this.W, this.H);
     // sand, water (a sandy shore, the water, a glint along the edge)
+    for (const sh of M.dry || []){ if (!this.onTile(sh)) continue; this.rings(sh); g.fillStyle = '#d6d08c'; g.fill('evenodd'); }   // savanna grass
     for (const sh of M.sand){ if (!this.onTile(sh)) continue; this.rings(sh); g.fillStyle = '#f2dd9c'; g.fill('evenodd'); }
     for (const sh of M.water){
       if (!this.onTile(sh)) continue;
@@ -382,9 +385,15 @@ export class MapView {
       this.rings(sh); g.fillStyle = b.c; g.fill();
       g.strokeStyle = b.o || 'rgba(50,35,25,.45)'; g.lineWidth = Math.max(1, Math.min(2, 0.5 * s)); g.stroke();
     }
+    // railway lines: EPCOT's monorail beam (grey, on pillars), Animal Kingdom's Wildlife Express (track)
+    for (const r of M.rails || []){
+      this.line(r.p);
+      if (r.k === 'monorail'){ g.strokeStyle = 'rgba(40,40,50,.25)'; g.lineWidth = Math.max(2, 2.6 * s) + 2; g.stroke(); g.strokeStyle = '#e8e8ee'; g.lineWidth = Math.max(1.5, 2.6 * s); g.stroke(); }
+      else { g.strokeStyle = '#7a5a3a'; g.lineWidth = Math.max(2, 3 * s); g.stroke(); if (z > 0.9){ g.strokeStyle = '#c8a878'; g.lineWidth = Math.max(1, 1.2 * s); g.setLineDash([Math.max(2, 3 * s), Math.max(2, 3 * s)]); g.stroke(); g.setLineDash([]); } }
+    }
     // the railroad: a dark bed with ties
-    this.poly(M.rail); g.strokeStyle = '#7a5a3a'; g.lineWidth = Math.max(2, 3.5 * s); g.stroke();
-    if (z > 0.9){ this.poly(M.rail); g.strokeStyle = '#c8a878'; g.lineWidth = Math.max(1, 1.3 * s); g.setLineDash([Math.max(2, 3 * s), Math.max(2, 3 * s)]); g.stroke(); g.setLineDash([]); }
+    if (M.rail.length) this.poly(M.rail); g.strokeStyle = '#7a5a3a'; g.lineWidth = Math.max(2, 3.5 * s); g.stroke();
+    if (z > 0.9 && M.rail.length){ this.poly(M.rail); g.strokeStyle = '#c8a878'; g.lineWidth = Math.max(1, 1.3 * s); g.setLineDash([Math.max(2, 3 * s), Math.max(2, 3 * s)]); g.stroke(); g.setLineDash([]); }
   }
 
   // names, icons and the big landmarks, over the tiles
@@ -406,9 +415,9 @@ export class MapView {
     for (const [id, [x, y, rot]] of Object.entries(P.labels)){
       g.save(); g.translate(this.sx(x), this.sy(y)); g.rotate(rot * Math.PI / 180);
       g.font = `italic 700 ${fs}px Georgia,"Times New Roman",serif`;
-      const text = LANDS[id].short;
+      const text = P.landInfo[id].short;
       g.lineWidth = 4; g.strokeStyle = 'rgba(255,255,255,.8)'; g.strokeText(text, 0, 0);
-      g.fillStyle = LANDS[id].ink; g.fillText(text, 0, 0);
+      g.fillStyle = P.landInfo[id].ink; g.fillText(text, 0, 0);
       g.restore();
     }
     // landmarks
@@ -426,9 +435,9 @@ export class MapView {
       this.placed.push([X - px * 0.7, Y - px * 0.7, px * 1.4, px * 1.4]);
       if (showLabel(l)) l._lab = [X, Y + px * 0.7 + 9]; else l._lab = null;
     }
-    this.drawThunder(P.drawn.thunder);
-    this.drawSpace(P.drawn.spaceMountain);
-    this.drawCastle(P.drawn.castle);
+    // the park's big landmarks, drawn standing up (the ones further north first, so nearer ones overlap them)
+    const DRAW = { castle: 'drawCastle', spaceMountain: 'drawSpace', thunder: 'drawThunder', sphere: 'drawSphere', tree: 'drawTreeOfLife', everest: 'drawEverest' };
+    for (const [kind, at] of Object.entries(P.drawn).sort((a, b) => b[1][1] - a[1][1])) this[DRAW[kind]](at);
     // labels: the big drawn landmarks first, then the rest where they fit
     g.font = labelFont;
     for (const l of P.landmarks) if (l.drawn && showLabel(l)){
@@ -442,7 +451,7 @@ export class MapView {
       const X = this.sx(st.x), Y = this.sy(st.y), px = clamp(13 * Math.pow(z, 0.5), 12, 22);
       g.fillStyle = 'rgba(255,253,245,.95)'; g.beginPath(); g.arc(X, Y, px * 0.72, 0, 7); g.fill();
       g.strokeStyle = '#7a5a3a'; g.lineWidth = 2; g.stroke();
-      g.font = `${px * 0.85}px "Apple Color Emoji","Noto Color Emoji",sans-serif`; g.fillText('🚂', X, Y + 1);
+      g.font = `${px * 0.85}px "Apple Color Emoji","Noto Color Emoji",sans-serif`; g.fillText(st.icon || '🚂', X, Y + 1);
       if (z >= 1.7){ g.font = labelFont; this.label(st.name, X, Y + px + 6, '#2a2418', 'rgba(255,250,236,.92)', true); }
     }
   }
@@ -507,6 +516,53 @@ export class MapView {
     spire(16, 15, 30, '#d8743a', '#ac4e26');
     spire(0, 16, 40, '#e88c50', '#c0602e');
     g.strokeStyle = '#f2d04a'; g.lineWidth = Math.max(1, 1.2 * u); g.beginPath(); g.moveTo(X - 30 * u, Y - 4 * u); g.bezierCurveTo(X - 10 * u, Y - 14 * u, X + 10 * u, Y + 2 * u, X + 30 * u, Y - 8 * u); g.stroke();
+  }
+
+  // Spaceship Earth: a silver geodesic ball on its legs
+  drawSphere([x, y, R]){
+    const g = this.g, u = this.unit(R * 2.4), X = this.sx(x), Y = this.sy(y) + R * 0.5 * u, r = R * u;
+    g.fillStyle = 'rgba(30,40,60,.25)'; g.beginPath(); g.ellipse(X + 4 * u, Y + 2 * u, r * 0.95, r * 0.25, 0, 0, 7); g.fill();
+    g.strokeStyle = '#8a92a0'; g.lineWidth = Math.max(1.5, 2 * u);
+    for (const dx of [-0.5, 0, 0.5]){ g.beginPath(); g.moveTo(X + dx * r, Y); g.lineTo(X + dx * r * 0.7, Y - r * 0.6); g.stroke(); }
+    const cy = Y - r * 1.25, gr = g.createRadialGradient(X - r * 0.35, cy - r * 0.35, r * 0.1, X, cy, r);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.55, '#d6dbe4'); gr.addColorStop(1, '#8e97a8');
+    g.fillStyle = gr; g.beginPath(); g.arc(X, cy, r, 0, 7); g.fill();
+    // the triangles
+    g.save(); g.beginPath(); g.arc(X, cy, r, 0, 7); g.clip();
+    g.strokeStyle = 'rgba(90,100,120,.45)'; g.lineWidth = Math.max(0.5, 0.35 * u);
+    const n = 7, st = (2 * r) / n;
+    for (let i = -n; i <= n; i++){
+      g.beginPath(); g.moveTo(X - r, cy + i * st); g.lineTo(X + r, cy + i * st); g.stroke();
+      g.beginPath(); g.moveTo(X + i * st - r, cy - r); g.lineTo(X + i * st + r, cy + r); g.stroke();
+      g.beginPath(); g.moveTo(X + i * st + r, cy - r); g.lineTo(X + i * st - r, cy + r); g.stroke();
+    }
+    g.restore();
+    g.strokeStyle = 'rgba(70,80,100,.6)'; g.lineWidth = 1; g.beginPath(); g.arc(X, cy, r, 0, 7); g.stroke();
+  }
+  // the Tree of Life: a gnarled trunk and a wide canopy
+  drawTreeOfLife([x, y]){
+    const g = this.g, u = this.unit(60), X = this.sx(x), Y = this.sy(y) + 10 * u;
+    g.fillStyle = 'rgba(30,40,20,.28)'; g.beginPath(); g.ellipse(X + 5 * u, Y + 2 * u, 34 * u, 8 * u, 0, 0, 7); g.fill();
+    g.fillStyle = '#8a6a4a'; g.beginPath();
+    g.moveTo(X - 16 * u, Y); g.bezierCurveTo(X - 8 * u, Y - 10 * u, X - 9 * u, Y - 22 * u, X - 6 * u, Y - 32 * u);
+    g.lineTo(X + 6 * u, Y - 32 * u); g.bezierCurveTo(X + 9 * u, Y - 22 * u, X + 8 * u, Y - 10 * u, X + 16 * u, Y); g.closePath(); g.fill();
+    g.strokeStyle = '#6a4a30'; g.lineWidth = Math.max(0.6, 0.6 * u);
+    for (const k of [-4, 0, 4]){ g.beginPath(); g.moveTo(X + k * u, Y - 2 * u); g.bezierCurveTo(X + (k + 3) * u, Y - 12 * u, X + (k - 3) * u, Y - 22 * u, X + k * 0.6 * u, Y - 31 * u); g.stroke(); }
+    const blobs = [[0, -50, 20], [-18, -42, 14], [18, -42, 14], [-28, -34, 10], [28, -34, 10], [-10, -58, 12], [11, -57, 12], [0, -38, 12]];
+    for (const [dx, dy, r] of blobs){ g.fillStyle = '#3f7c34'; g.beginPath(); g.arc(X + dx * u, Y + dy * u, r * u, 0, 7); g.fill(); }
+    for (const [dx, dy, r] of blobs){ g.fillStyle = 'rgba(160,210,110,.35)'; g.beginPath(); g.arc(X + (dx - r * 0.3) * u, Y + (dy - r * 0.3) * u, r * 0.55 * u, 0, 7); g.fill(); }
+  }
+  // Expedition Everest: grey peaks with snow
+  drawEverest([x, y]){
+    const g = this.g, u = this.unit(50), X = this.sx(x), Y = this.sy(y) + 12 * u;
+    g.fillStyle = 'rgba(30,30,40,.25)'; g.beginPath(); g.ellipse(X + 4 * u, Y + 1 * u, 38 * u, 8 * u, 0, 0, 7); g.fill();
+    const peak = (cx, w, h, c1, c2) => {
+      g.fillStyle = c1; g.beginPath(); g.moveTo(X + (cx - w) * u, Y); g.lineTo(X + (cx - w * 0.35) * u, Y - h * 0.6 * u); g.lineTo(X + cx * u, Y - h * u); g.lineTo(X + (cx + w * 0.4) * u, Y - h * 0.55 * u); g.lineTo(X + (cx + w) * u, Y); g.closePath(); g.fill();
+      g.fillStyle = c2; g.beginPath(); g.moveTo(X + cx * u, Y - h * u); g.lineTo(X + (cx + w * 0.4) * u, Y - h * 0.55 * u); g.lineTo(X + (cx + w) * u, Y); g.lineTo(X + (cx + w * 0.15) * u, Y); g.closePath(); g.fill();
+      g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(X + cx * u, Y - h * u); g.lineTo(X + (cx - w * 0.22) * u, Y - h * 0.72 * u); g.lineTo(X + (cx - w * 0.05) * u, Y - h * 0.78 * u); g.lineTo(X + (cx + w * 0.1) * u, Y - h * 0.7 * u); g.lineTo(X + (cx + w * 0.25) * u, Y - h * 0.74 * u); g.closePath(); g.fill();
+    };
+    peak(-20, 16, 30, '#8f8a84', '#6f6a66'); peak(20, 17, 34, '#8a857f', '#6a6560'); peak(0, 20, 48, '#9a958e', '#77716b');
+    g.strokeStyle = '#c8462e'; g.lineWidth = Math.max(1, 1.2 * u); g.beginPath(); g.moveTo(X - 34 * u, Y - 5 * u); g.bezierCurveTo(X - 12 * u, Y - 18 * u, X + 12 * u, Y + 2 * u, X + 34 * u, Y - 10 * u); g.stroke();
   }
 
   drawDynamic(t){
