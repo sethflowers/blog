@@ -190,3 +190,18 @@ OSM's in-park toilets is a public restroom the guide lacks.
 - Test: OSM's own coordinates for the castle, Space Mountain, Big Thunder, Main Street Station and Carousel
   of Progress go through the game's `toXY` and must land within 8 m of their drawings (1–5 m now), and every
   OSM-sourced pin within 3 m of its OSM toilet. 2.0 would fail both (castle 38 m off).
+
+### 2.2: TRON drawn (it was in the woods)
+- **Bug (user, in TRON's line):** "I'm missing all the area where TRON exists. I'm in line but off in the
+  woods on the map." The guide map's drawing stops at the railroad; TRON's queue crosses over the tracks and
+  its canopy, show building and restroom are past them, so the guide only squeezes a sketch of it against
+  its edge. 2.1 grows forest outside the guide's frame, so the whole TRON area (and its restroom pin) was
+  forest.
+- Now `osm_fit.py` draws TRON from OpenStreetMap (box x 288–520, y 40–230 m): the public walkways and the
+  queue (footways buffered to 3.2 m, pedestrian areas as mapped), the canopy (`building=roof`, drawn
+  see-through with a blue edge and no shadow: `a: 1` on the building), the show building (Tomorrowland's
+  violet) and the restroom building. The traced shapes and trees are cut away (shapely) where OSM's are,
+  east of x 282 m, so the guide's squashed sketch doesn't show under them; `clear` (OSM's area + 14 m)
+  keeps the forest off, leaving lawn. The 🏍️ TRON icon sits on OSM's show building.
+- Test: a GPS fix at a point of OSM's covered queue walkway must be on a walkway, under the canopy, with no
+  tree within 3 m (nearest is now 45 m); screenshot `15b-iphone-tron-line.png`.

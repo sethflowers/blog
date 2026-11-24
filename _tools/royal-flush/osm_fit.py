@@ -2,7 +2,7 @@
 OpenStreetMap, and writes experiments/royal-flush/js/mk-map.js in metres (x east, y north of the game's
 origin, 28.41917 -81.58111, about 37 m south of Cinderella Castle's middle).
 
-    pip install opencv-python-headless numpy scipy
+    pip install opencv-python-headless numpy scipy shapely
     python3 _tools/royal-flush/osm_fit.py [--refresh] [--loo] [--debug DIR]
 
 OSM data (footways, water, buildings, toilets, attractions, the railroad, the park outline) is fetched
@@ -280,16 +280,70 @@ fr = np.array(frame(0))
 trees = W(np.array([[x, y] for x, y, _ in TRACE['trees']], float))
 places = {k: rnd(W(v))[0] for k, v in PLACES.items()}
 for r in RR: places[r] = rnd([pins[r]])[0]
+
+# ---------- TRON: drawn from OSM ----------
+# The guide map's drawing stops at the railroad, and TRON (its queue crosses over the tracks, its show
+# building and restroom are past them) is only squeezed against the guide's edge, so in 2.1 the GPS dot of
+# someone in its line was in the forest. There, everything comes from OSM: the walkways and queue
+# (footways 3.2 m wide, pedestrian areas as mapped), the canopy (see-through), the show building, the
+# restroom building. The traced shapes are cut away (east of x 282 m) where OSM's are, and no forest grows
+# within 14 m of them (`clear`).
+from shapely.geometry import Polygon, LineString, Point, box as sbox
+from shapely.ops import unary_union
+TRON_BOX = sbox(288, 40, 520, 230)
+def sh_parts(g):
+    gs = [g] if g.geom_type == 'Polygon' else list(getattr(g, 'geoms', []))
+    return [p for p in gs if p.geom_type == 'Polygon' and p.area > 2]
+def sh_rings(p):
+    p = p.simplify(0.4); return [rnd(np.array(p.exterior.coords)[:-1])] + [rnd(np.array(i.coords)[:-1]) for i in p.interiors if Polygon(i).area > 4]
+walk_osm, bld_osm = [], []
+for e in WAYS:
+    t = e['tags']
+    if t.get('highway') not in WALK or t.get('access') in ('private', 'no'): continue
+    g = geom(e['geometry'])
+    if not TRON_BOX.intersects(LineString(g)): continue
+    closed = len(g) > 3 and np.allclose(g[0], g[-1])
+    walk_osm.append(Polygon(g).buffer(0) if closed and t.get('area') == 'yes' else LineString(g).buffer(1.6, cap_style=2))
+TRON_COL = next((b['c'], b['o']) for b in TRACE['buildings'] if b['c'] == '#a3a3d5')   # Tomorrowland's violet
+for e in BUILD:
+    if e['type'] != 'way' or e['id'] == 296326395: continue                           # (Space Mountain is traced)
+    g = geom(e['geometry']); pg = Polygon(g).buffer(0)
+    if pg.area < 30 or not TRON_BOX.contains(pg.centroid) or pg.centroid.x < 300: continue
+    roof = e['tags'].get('building') == 'roof'
+    bld_osm.append((pg, ('rgba(214,228,250,.55)', '#4f86d8', 1) if roof else (TRON_COL[0], TRON_COL[1], 0)))
+EAST = sbox(282, -1000, 2000, 1000)
+osm_area = unary_union(walk_osm + [p for p, _ in bld_osm])
+cut = osm_area.buffer(3).intersection(EAST)
+def minus(shapes):
+    out = []
+    for s in shapes:
+        p = Polygon(s[0], s[1:]).buffer(0)
+        if not p.intersects(cut): out.append([rnd(r) for r in s]); continue
+        out += [sh_rings(q) for q in sh_parts(p.difference(cut))]
+    return out
+WS = {k: [[W(r) for r in s] for s in SH[k]] for k in SH}
+cut_bld = []
+for b in TRACE['buildings']:
+    p = Polygon(W(np.array(b['p'], float))).buffer(0)
+    for q in (sh_parts(p.difference(cut)) if p.intersects(cut) else [p]): cut_bld.append({'c': b['c'], 'o': b['o'], 'p': sh_rings(q)[0]})
+tron_paths = [sh_rings(q) for q in sh_parts(unary_union(walk_osm).intersection(sbox(278, -1000, 2000, 1000)))]
+tron_blds = [dict({'c': c, 'o': o, 'p': sh_rings(q)[0]}, **({'a': 1} if roof else {})) for p, (c, o, roof) in sorted(bld_osm, key=lambda x: x[1][2]) for q in sh_parts(p)]
+# roofs last: the canopy over the queue is see-through
+tron_blds = [b for b in tron_blds if 'a' not in b] + [b for b in tron_blds if 'a' in b]
+clear = [sh_rings(q)[0] for q in sh_parts(osm_area.buffer(14).simplify(2))]
+keep_tree = np.array([not cut.contains(Point(x, y)) for x, y in trees])
+places['L-tron'] = rnd([centre(BYID[804994339])[0]])[0]
+print(f'TRON from OSM: {len(tron_paths)} walkway shapes, {len(tron_blds)} buildings and roofs; {int((~keep_tree).sum())} traced trees and the traced shapes there cut away')
 data = {
     'source': 'Layout traced from the official Magic Kingdom guide map, redrawn; fitted to OpenStreetMap '
               '(footways, water, buildings, landmarks; the railroad and restroom positions are OSM\'s). '
               'Map data (c) OpenStreetMap contributors, ODbL.',
     'bounds': {'x0': round(float(fr[:, 0].min())), 'x1': round(float(fr[:, 0].max())), 'y0': round(float(fr[:, 1].min())), 'y1': round(float(fr[:, 1].max()))},
-    'frame': frame(0), 'frameIn': frame(30),
+    'frame': frame(0), 'frameIn': frame(30), 'clear': clear,
     'places': places, 'pinSource': pin_src, 'lands': {k: rnd(W(np.array(v, float))) for k, v in TRACE['lands'].items()},
-    'water': rings(SH['water']), 'paths': rings(SH['paths']), 'roads': rings(SH['roads']), 'sand': rings(SH['sand']),
-    'buildings': [{'c': b['c'], 'o': b['o'], 'p': rnd(W(np.array(b['p'], float)))} for b in TRACE['buildings']],
-    'trees': [[round(float(x), 1), round(float(y), 1), r] for (x, y), (_, _, r) in zip(trees, TRACE['trees'])],
+    'water': minus(WS['water']), 'paths': minus(WS['paths']) + tron_paths, 'roads': minus(WS['roads']), 'sand': minus(WS['sand']),
+    'buildings': cut_bld + tron_blds,
+    'trees': [[round(float(x), 1), round(float(y), 1), r] for (x, y), (_, _, r), k in zip(trees, TRACE['trees'], keep_tree) if k],
     'rail': rnd(rail),
 }
 js = ('// Generated by _tools/royal-flush/osm_fit.py: the official Magic Kingdom guide map\'s layout (traced by trace.py,\n'

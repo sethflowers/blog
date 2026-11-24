@@ -304,11 +304,12 @@ export class MapView {
     // forest around the guide map's drawing (it only shows the park), so the map has no hard border.
     // frame: the outline of the guide's drawing, fitted to the ground (no longer a rectangle; it leaves
     // out the guide's pale east edge and the bus and parking lots); frameIn: 30 px inside it, half forest
-    const B = this.park.bounds, F = this.park.map.frame, FI = this.park.map.frameIn;
+    // clear: where the map is drawn from OpenStreetMap past the guide's edge (TRON), no forest
+    const B = this.park.bounds, F = this.park.map.frame, FI = this.park.map.frameIn, CL = this.park.map.clear || [];
     let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     for (let y = B.y0 - 400; y < B.y1 + 400; y += 16) for (let x = B.x0 - 500; x < B.x1 + 500; x += 16){
       const px = x + (rnd() - 0.5) * 12, py = y + (rnd() - 0.5) * 12, r = 6 + rnd() * 4, half = rnd() < 0.5, c = COLS[(rnd() * 5) | 0];
-      if (!inPoly(px, py, F) || (half && !inPoly(px, py, FI))) this.trees.push({ x: px, y: py, r, c });
+      if ((!inPoly(px, py, F) || (half && !inPoly(px, py, FI))) && !CL.some((o) => inPoly(px, py, o))) this.trees.push({ x: px, y: py, r, c });
     }
     // ripples: a few points inside the bigger stretches of water
     this.ripples = [];
@@ -376,7 +377,8 @@ export class MapView {
     for (const b of M.buildings){
       const sh = b.sh || (b.sh = [b.p]);
       if (!this.onTile(sh)) continue;
-      g.save(); g.translate(2.5, 3); this.rings(sh); g.fillStyle = 'rgba(40,30,20,.3)'; g.fill(); g.restore();
+      // (a: a see-through canopy, like TRON's over its queue: no shadow)
+      if (!b.a){ g.save(); g.translate(2.5, 3); this.rings(sh); g.fillStyle = 'rgba(40,30,20,.3)'; g.fill(); g.restore(); }
       this.rings(sh); g.fillStyle = b.c; g.fill();
       g.strokeStyle = b.o || 'rgba(50,35,25,.45)'; g.lineWidth = Math.max(1, Math.min(2, 0.5 * s)); g.stroke();
     }

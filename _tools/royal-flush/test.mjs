@@ -273,6 +273,28 @@ await ctx.close();
   await p.evaluate(() => { __flush.map.heading = 45; __flush.map.dirty(); });
   await p.waitForTimeout(700);
   await shot(p, '15-iphone-gps.png');
+  // in TRON's line (the user's report on 2.1: "I'm in line but off in the woods on the map"). The guide map
+  // stops at the railroad, so TRON is drawn from OpenStreetMap: a GPS fix in its covered queue (a point
+  // of OSM's queue walkway) must be on a walkway or under the canopy, with no tree there.
+  {
+    const q = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'osm', 'ways.json'))).elements.find((e) => e.id === 1351675216).geometry;
+    const at = q[Math.floor(q.length / 2)];
+    await c.setGeolocation({ latitude: at.lat, longitude: at.lon, accuracy: 5 });
+    await p.waitForFunction((x) => __flush.G.me && Math.abs(__flush.G.me.x - x) < 1, (await p.evaluate(([a, b]) => __flush.toXY(a, b).x, [at.lat, at.lon])), { timeout: 8000 }).catch(() => {});
+    const r = await p.evaluate(() => {
+      const M = __flush.G.park.map, me = __flush.G.me;
+      const inP = (x, y, o) => { let c = false; for (let i = 0, j = o.length - 1; i < o.length; j = i++){ const [xi, yi] = o[i], [xj, yj] = o[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+      const onWalk = M.paths.some((sh) => inP(me.x, me.y, sh[0]) && !sh.slice(1).some((h) => inP(me.x, me.y, h)));
+      const underRoof = M.buildings.some((b) => b.a && inP(me.x, me.y, b.p));
+      __flush.map.makeTrees();
+      const tree = Math.min(...__flush.map.trees.map((t) => Math.hypot(t.x - me.x, t.y - me.y) - t.r));
+      __flush.map.centerOn(me.x, me.y + 20, 3.2, false);
+      return { onWalk, underRoof, tree, me };
+    });
+    await p.waitForTimeout(800);
+    await shot(p, '15b-iphone-tron-line.png');
+    check(r.onWalk && r.tree > 3, `iPhone: in TRON's line you're on the queue walkway${r.underRoof ? ', under the canopy' : ''}, not in the woods (nearest tree ${r.tree.toFixed(0)} m away)`);
+  }
   check(await p.evaluate(() => __flush.map.dpr === 3), 'iPhone: the map is drawn at the full 3x resolution');
   // dragging never shows unfinished map: after a moment's rest, the tiles around the screen are ready,
   // and every frame of a drag is made from finished tiles (none missing, none drawn mid-drag)
