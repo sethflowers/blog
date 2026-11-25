@@ -60,6 +60,37 @@ evidence points to:
 5. Check by a solver that the clues rule out every innocent person and leave only the murderer; if
    not, add a clue. Difficulty sets how many clues you need to put together.
 
+## Your own people (photo characters)
+
+Put real people (family, friends) into the game as guests.
+
+- **Add a person** (a "Cast" page from the title screen): a name, then three photos: the front of
+  the face, the left side and the right side. Each photo is taken with the camera or picked from the
+  camera roll. On the iPad an `<input type="file" accept="image/*">` gives the system's "Take Photo /
+  Photo Library" choice, so there's no camera permission to manage. On a computer, a live camera view
+  (`getUserMedia`) or a file.
+- **Lining the face up:** the camera view shows an outline to fit the face into (an oval with eye and
+  chin lines for the front, a side-on outline for the profiles). For a photo from the roll, you drag
+  and pinch it to fit the same outline. Because the face is always in the same place in the picture,
+  no face-recognition is needed.
+- **Making the head:** each character's head is a 3D head shape with the front photo projected onto
+  the face and the side photos onto the sides, blended where they meet. The skin colour is sampled from
+  the cheeks so the neck and hands match, and the hair colour from the top of the side photos covers
+  the back of the head. The result is a stylised character with the person's real face, not a
+  realistic 3D scan.
+- **The rest of them:** pick (or let the game pick) a profession, height and clothes colours. Shoe
+  size and fingerprints are generated.
+- **In a game:** custom people are mixed in with made-up guests to make up the numbers (or "only my
+  people" if there are enough). A setting per person, **"Never the victim"**, which is on by default:
+  it can be upsetting to find someone you know lying dead. They can still be the murderer or a
+  suspect.
+- **Privacy:** photos never leave the device. They are shrunk to small face textures (512 px) and
+  stored in the browser's IndexedDB with the game (too big for `localStorage`). Delete a person and
+  their photos are gone.
+- **The headset:** a Quest can't easily take or pick these photos, and its storage is separate from
+  the iPad's. Two ways to get the cast across: an "Export cast" file (download on the iPad, open on
+  the Quest) or, simpler for kids, add people on the Quest from its own photo files. To decide.
+
 ## What you do
 
 - **Examine the body:** cause (hit, stabbed, poisoned, strangled), time of death from the clock that
@@ -100,4 +131,6 @@ evidence points to:
 - Setting: country manor (planned), or a train, a ship, a hotel?
 - How many suspects, and should there be a difficulty choice?
 - Who's it for (age)? Sets how dark the crime is and how hard the puzzles are.
+- Photo characters: is "never the victim" on by default right? How should the cast reach the
+  headset (an export file, or add them there too)?
 - One lost accusation ends the game (planned, as asked), or one or two warnings first on Easy?
