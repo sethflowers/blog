@@ -92,3 +92,7 @@ towns, memory, saving) on screen and then in VR (same IWER install; about a minu
 trees and scenery, shaping the land, a land with its arch, a car park, undo/redo, renaming, walking, night lights, memory,
 saving and opening again) on screen and then in VR (same IWER install; about four minutes, mostly software-rendered
 screenshots; `--full` adds the other landscapes): `NODE_PATH=$(npm root -g) node _tools/fantasy-theme-park/test.mjs out/`.
+`_tools/sherlock/test.mjs` plays Sherlock (thousands of generated mysteries checked for exactly one answer, the story and the
+blackout, examining clues, questioning, the notebook, accusing right and wrong, saving, your own photo people, memory) on
+screen and then in VR (same IWER install; under a minute; `--full` checks more cases):
+`NODE_PATH=$(npm root -g) node _tools/sherlock/test.mjs out/`. `_tools/sherlock/icons.mjs` renders its icons from the game.

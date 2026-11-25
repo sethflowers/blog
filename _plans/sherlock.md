@@ -1,136 +1,193 @@
 # Sherlock
 
-A murder-mystery detective game. You arrive at a dinner party in an old country house on a stormy
-night with a handful of other guests. The lights go out; there is a crash; when they come back on,
-one of the guests is lying dead. Nobody may leave until the detective (you) has found out who did it.
-You walk round the house in first person, examine the body and the rooms, take everyone's fingerprints
-and shoe prints, question them, and when you're sure, gather everyone in the drawing room and accuse
-one of them. Right person: you win. Wrong person: the murderer gets away and you lose.
+A murder-mystery detective game on a night train. You're a famous detective travelling home on the
+Midnight Express on a stormy night. The lights go out; there is a crash and a scream; when the lights
+come back on, one of the passengers is lying dead. Nobody can get off until the morning. You examine
+the crime scene, take everyone's fingerprints, measure footprints, question the six suspects, and
+when you're sure, accuse one of them. Right person: case solved. Wrong person: the murderer gets
+away and the case is lost (on Easy you get one warning first).
 
-Same shape as the other games (see CLAUDE.md): one page, plays on an iPad (touch), in a VR headset
-(WebXR) and with mouse and keyboard; offline PWA; version on the title screen.
+For ages 8 to 13: realistic people and a proper mystery, but nothing gory (the victim is "hit on the
+head with something heavy", lying still on the floor; no blood).
 
-Status: design only (nothing built yet). Open questions at the bottom.
+Same shape as the other games (see CLAUDE.md): one page (`_experiments/sherlock.html`), ES modules in
+`experiments/sherlock/js/`, three.js r180 and its loaders in `lib/`, the 18 Rocketbox people in
+`models/people/`, a manifest, a service worker and icons rendered from the game
+(`_tools/sherlock/icons.mjs`). Plays on an iPad (touch), a computer and in VR (WebXR), offline once
+opened online.
 
-## The setup
+## The train (train.js)
 
-- **Where:** Blackwood Manor, a two-floor country house: hall, drawing room, dining room, library,
-  kitchen, study, conservatory, a garage/workshop, a garden with a muddy path (good for footprints),
-  and a few bedrooms upstairs. Rain on the windows, thunder, candles and lamps once the power is back.
-- **Who:** 7 people besides you: 1 victim and 6 suspects. Enough that it isn't obvious, few enough to
-  remember everyone. (Could scale: Easy 4 suspects, Normal 6, Hard 8.)
-- **Each person has a profession** that shapes the clues they leave and what they know:
+Six carriages you walk through, front to back, joined by gangways, with the car's name in brass over
+every door:
 
-  | Profession | Trace they leave | Their thing |
-  |---|---|---|
-  | Baker | flour (white dust on prints, floury shoe prints) | rolling pin |
-  | Mechanic | engine oil (black smudged fingerprints) | wrench |
-  | Gardener | soil and grass (muddy boot prints) | garden shears, rope |
-  | Painter | paint flecks (coloured prints) | palette knife, turpentine |
-  | Doctor | latex gloves (no prints at all!) | medical bag, poison |
-  | Chef | grease, a strong garlic smell | kitchen knife |
-  | Chemist | chemical stains | a vial of poison |
-  | Butler | white gloves | the keys to every room |
-  | Fisherman | sand, a fishhook in the cuff | fishing line |
-  | Librarian | ink stains | heavy book, letter opener |
+- **Baggage car**: crates, trunks and mailbags, the workbench (where the big spanner hangs), an oil
+  drum, and the locked door to the engine.
+- **Kitchen car**: a counter, the stove with pans hanging over it, the sink, shelves of jars (and the
+  rolling pin), sacks of flour, an icebox.
+- **Dining car**: tables by every window with white cloths and little shaded lamps, velvet chairs, the
+  bar. **The Coke**: a glass contour bottle, half drunk, red label and cap, always on the third table
+  on the left. It can be dusted for prints (lots of people had some at dinner) and sipped.
+- **Lounge car**: armchairs, the card table, the piano (with a ring in the dust where the candlestick
+  stood), the bookcase, a rug, a little table with a glass.
+- **Sleeping car**: a side corridor and seven cabins (one for each passenger), each with a bunk, a
+  suitcase, a window and its number over the door; a fire-extinguisher bracket in the corridor.
+- **Observation car**: big windows, benches down the middle, plants, the umbrella stand, and the open
+  **back platform** with brass railings (louder rain out there).
 
-  Each game picks a random 7 of them, with random names, faces, clothes, heights and shoe sizes, so
-  no two games are the same.
+Outside: night, storm clouds and lightning (a flash, then thunder), mountains far off, dark pines and
+telegraph poles rushing past, the track's sleepers going by underneath, rain falling outside and running
+down every window. The train stands still in its own coordinates; the countryside moves.
 
-- **The Coke:** there is always a bottle of Coke on a table (the dining room, a different table each
-  game is fine). It's an object like any other: you can pick it up and dust it for fingerprints, and
-  sometimes it matters (someone's prints on it place them in that room; in a few cases the victim's
-  drink was the poison).
+Everything static is merged into one mesh per material (`Batch`, about 80 draw calls in all). Walls and
+furniture are rectangles for walking into: tall ones (walls) stop your real head in VR, low ones
+(tables, beds) only stop the stick. Lights: a dim warm hemisphere, a moon light (which lightning
+brightens) and four point lights that follow you to the nearest lamps; the lamps' glow is one shared
+material, so the blackout turns every lamp off at once.
 
-## How a mystery is made (so it's always solvable)
+## The people (people.js)
 
-The game generates the crime first, then the clues from it, so there is always exactly one person the
-evidence points to:
+The same 18 Rocketbox avatars as MSB, Alien Hunter and Fantasy Theme Park (realistic, rigged, with idle,
+walk, nod and head-shake animations). A mystery loads only the eight it needs (seven passengers and the
+conductor); the service worker saves all 18 for playing offline. People are shorter or taller than their
+avatar (a clue), wear their job's hat (a chef's toque, a baker's cap, a mechanic's flat cap, a
+gardener's straw hat, a fisher's bucket hat, a painter's beret, a beekeeper's veiled hat, the
+conductor's peaked cap), turn to look at you when you come near, nod when they answer and shake their
+heads when they deny something. The victim lies on the floor, face up.
 
-1. Pick the victim, the murderer, the room, the weapon and the motive (owed money, a stolen recipe,
-   an inheritance, a secret...).
-2. Write the true timeline: where every guest was during the blackout. The murderer was in the crime
-   room; everyone else was somewhere else (and most can be confirmed by another guest or a clue).
-3. Lay down the **real clues** that follow from it: the murderer's fingerprints on the weapon or the
-   door handle, their shoe prints from the body to where they went, their profession's trace (flour,
-   oil, mud) on or near the body, a torn button from their clothes, a witness who heard their voice.
-4. Lay down **red herrings**: innocent people's prints on things they really did touch before the
-   blackout (everyone held the Coke!), a second person with a motive, someone who lies about where
-   they were for a harmless reason (sneaking a cake from the kitchen).
-5. Check by a solver that the clues rule out every innocent person and leave only the murderer; if
-   not, add a clue. Difficulty sets how many clues you need to put together.
+The notebook shows everyone's face: each person is drawn once into a small picture (a camera that only
+sees layer 5, with its own lights), done before the victim falls.
 
-## Your own people (photo characters)
+## The mystery (mystery.js): always exactly one answer
 
-Put real people (family, friends) into the game as guests.
+The crime is made first and the clues follow from it:
 
-- **Add a person** (a "Cast" page from the title screen): a name, then three photos: the front of
-  the face, the left side and the right side. Each photo is taken with the camera or picked from the
-  camera roll. On the iPad an `<input type="file" accept="image/*">` gives the system's "Take Photo /
-  Photo Library" choice, so there's no camera permission to manage. On a computer, a live camera view
-  (`getUserMedia`) or a file.
-- **Lining the face up:** the camera view shows an outline to fit the face into (an oval with eye and
-  chin lines for the front, a side-on outline for the profiles). For a photo from the roll, you drag
-  and pinch it to fit the same outline. Because the face is always in the same place in the picture,
-  no face-recognition is needed.
-- **Making the head:** each character's head is a 3D head shape with the front photo projected onto
-  the face and the side photos onto the sides, blended where they meet. The skin colour is sampled from
-  the cheeks so the neck and hands match, and the hair colour from the top of the side photos covers
-  the back of the head. The result is a stylised character with the person's real face, not a
-  realistic 3D scan.
-- **The rest of them:** pick (or let the game pick) a profession, height and clothes colours. Shoe
-  size and fingerprints are generated.
-- **In a game:** custom people are mixed in with made-up guests to make up the numbers (or "only my
-  people" if there are enough). A setting per person, **"Never the victim"**, which is on by default:
-  it can be upsetting to find someone you know lying dead. They can still be the murderer or a
-  suspect.
-- **Privacy:** photos never leave the device. They are shrunk to small face textures (512 px) and
-  stored in the browser's IndexedDB with the game (too big for `localStorage`). Delete a person and
-  their photos are gone.
-- **The headset:** a Quest can't easily take or pick these photos, and its storage is separate from
-  the iPad's. Two ways to get the cast across: an "Export cast" file (download on the iPad, open on
-  the Quest) or, simpler for kids, add people on the Quest from its own photo files. To decide.
+1. Seven passengers (your own photo people first, then made-up ones with names, avatars and one of 15
+   professions: baker, doctor, teacher, mechanic, author, blacksmith, gardener, fisher, potter, painter,
+   jeweller, tailor, beekeeper, chef, candle maker). Each has fingerprints (a loop, a whorl or an arch,
+   and details of their own), shoes (a size and a sole: work boots, wellies, trainers, smooth leather,
+   small heels, clogs), hair and clothes colour (from their avatar) and a height.
+2. One is the victim, one the murderer. The scene is the lounge, observation, baggage or kitchen car or
+   the sleeping car's corridor; the weapon something heavy that belongs somewhere on the train (a brass
+   candlestick, a heavy book, a lion bookend, a walking stick, a spanner, a rolling pin, a frying pan, a
+   fire extinguisher). Its usual place shows it's missing.
+3. Where everyone was when the lights went out: two were together (they vouch for each other); on Easy
+   the conductor also heard someone in their cabin; the rest were alone. The murderer says they were
+   alone somewhere else.
+4. The clues: the fingerprint on the weapon, footprints through a spill by the body (lemonade, flour,
+   oil, cocoa or rainwater) heading off one way, a trace of the murderer's work on the victim's coat, a
+   hair on the collar or a thread on the door frame, footsteps someone heard hurrying towards the front
+   or back, a figure seen in a flash of lightning (tall, short or in between).
+5. Each innocent person nobody can vouch for is like the murderer in most ways, and differs in their
+   own share of the clues. So putting all the clues together leaves only the murderer, but on Medium no
+   single clue does it, and on Hard no two clues do. A solver checks this for every mystery.
 
-## What you do
+| | Easy | Medium | Hard |
+|---|---|---|---|
+| People who can't prove where they were | 3 | 4 | 4 |
+| Fingerprint on the weapon | whole: matches one person | part: only the pattern | part: only the pattern |
+| Footprints | size and sole | size and sole | smudged: size *or* sole |
+| Trace on the coat | exact (e.g. flour: a baker) | its kind (a white powder: flour, talc or chalk) | its kind |
+| Also | a hair | footsteps' direction, a hair or a thread | direction, height, a hair or a thread |
+| Red herrings | none | someone's prints on the door handle (they went in before dinner) | that, and a glass |
+| Sparkles over clues | all of them | when you're close | none |
+| Suspect board | says why each person fits or not | says who has an alibi | blank |
+| Wrong accusation | one warning, then lost | lost | lost |
 
-- **Examine the body:** cause (hit, stabbed, poisoned, strangled), time of death from the clock that
-  stopped when it fell, things in the victim's pockets (a note, a key).
-- **Fingerprints:** pick up the dusting kit, brush an object (weapon, door handle, glass, the Coke),
-  lift the print onto a card. Take each suspect's prints on the fingerprint card (ink pad). Matching
-  is a small puzzle: compare the pattern (loop, whorl, arch) and a couple of marked details side by
-  side; partial or smudged prints only narrow it down. Glove-wearers (doctor, butler) leave none,
-  which is itself a clue.
-- **Footprints:** in the mud, flour, spilled drink or blood-free "dark stains" (to keep it family
-  friendly). Measure the size and look at the tread (boots, trainers, heels, smooth soles); follow the
-  trail. Compare with each suspect's shoes.
-- **Trace evidence:** a magnifying glass shows flour, oil, soil, paint, ink, chemicals, hairs (colour)
-  and fibres (matching someone's clothes).
-- **Question people:** each suspect has a panel: who they are, their job, where they say they were,
-  what they heard and saw, how they knew the victim. Show them a clue ("why is there oil on the
-  door handle?") and they react; liars change their story when caught.
-- **The notebook:** everything you've found is kept automatically: clues, prints, statements, a
-  map of who says they were where, and a suspect board where you can cross people off (a guess you
-  can change, not the accusation).
-- **Accuse:** gather everyone in the drawing room (a button, or ring the dinner gong), point at one
-  person and say "It was you!". An "Are you sure?" check, then the reveal: a short scene where they
-  confess (or protest their innocence), and the true story told back with the clues that proved it, so
-  even a loss teaches you what you missed. Then play again with a new mystery.
-- **Score:** win or lose, plus a rank (time taken, clues found, how many wrong crossings-out).
+Motives come from a note in the victim's pocket: the murderer and one or two innocent people all had a
+reason (money owed, a stolen idea, an award, a secret, a shop to be closed), so a motive alone proves
+nothing.
 
-## On iPad, computer and VR
+## Playing (game.js, case.js)
 
-- iPad: stick on the left to walk, drag to look, tap things to examine them; big buttons for
-  Dust, Magnify, Measure, Notebook, Talk, Accuse.
-- VR: walk with the left stick, pick things up with your hands, hold the magnifying glass up to them,
-  brush prints with the brush in your hand, the notebook on your wrist. Same panels drawn as
-  canvas textures in VR.
-- Saves the current mystery so you can stop and come back.
+- **The story**: a card about the night, then the lights flicker and go out, a crash, a scream,
+  footsteps in the dark, thunder... and the lights come back on. The conductor says where the scream came
+  from and an arrow points the way. Walking into the scene shows the body and how to investigate.
+- **Examining**: tap a thing (or the big button for whatever is in front of you; E on a computer;
+  point and pull the trigger in VR). Its panel says what it is and offers the right tools: 🔍 look
+  closely (the body, the door frame), 👛 check the pockets, 🖌 dust for fingerprints (the weapon, the
+  door handle, a glass, the Coke), 📏 measure the footprints. You have to be within about 3 m. Each find
+  goes into the notebook with a chime and puts a numbered yellow evidence marker on the floor.
+- **People**: each has a panel with their face: ask where they were when the lights went out, what
+  they heard or saw, and what they thought of the victim; take their fingerprints; look at their shoes;
+  look at them carefully (height, hair, clothes, the trace of their work on their hands). Cross them off
+  the suspect list (and put them back).
+- **The conductor** (in the dining car): what they did during the blackout, and a hint for what to do
+  next.
+- **The notebook**: To do (the jobs list, which also shows on the left of the screen), Clues (with
+  pictures of the prints), People (everything you know about each of them), Suspects (faces to cross
+  off). Compare the weapon's print with everyone's, and the footprints with everyone's shoes.
+- **Accusing**: choose a face, confirm, and everyone gathers in the lounge car in front of you. Then the
+  ending: solved (the murderer is taken away, with a rank by difficulty and time: Detective, Inspector,
+  Chief Inspector, Sherlock!) or lost (they slip off the back of the train). Either way it explains what
+  really happened, the clues that proved it and who couldn't have done it.
+- **Saving**: the mystery is saved as its seed, the difficulty and your people (so it can be made again
+  exactly), plus what you've found, every 10 seconds and on every find (`sherlock-save-1`, with an
+  `upgrade()` for later versions). A solved or lost case is cleared.
 
-## Open questions
+## Your own people (cast.js)
 
-- Setting: country manor (planned), or a train, a ship, a hotel?
-- How many suspects, and should there be a difficulty choice?
-- Who's it for (age)? Sets how dark the crime is and how hard the puzzles are.
-- Photo characters: is "never the victim" on by default right? How should the cast reach the
-  headset (an export file, or add them there too)?
-- One lost accusation ends the game (planned, as asked), or one or two warnings first on Easy?
+From the title screen (on a screen, not in VR): **Add your own people**. A name, three photos (the
+front of the face, their left side, their right side), taken with the camera or picked from the photo
+library (a file input: the iPad offers both, with no camera permission to manage), a body and clothes
+(any of the 18 avatars), hair colour, height, a job (or any), and **Never the victim** (on by default;
+they can still be a suspect or the murderer).
+
+Each photo is lined up with an outline (an oval with an eye line for the front; for the sides an outline
+with an arrow for the nose and a Flip button): drag to move, pinch / the buttons / the mouse wheel to zoom.
+That puts every face in the same place, so no face-recognition is needed. The game then paints a 3D head:
+a sphere pushed into a head shape (narrower jaw, nose, brow, chin, ears), the front photo projected onto
+the face, the side photos onto the sides, blended where they meet, hair colour behind and skin colour
+under the chin and on the neck. It rides on the avatar's head bone in place of the avatar's own head and
+hair (hidden), under their job's hat.
+
+Photos are stored small (384 px JPEGs) in this browser's IndexedDB and never leave the device. Up to
+seven of your people join a new mystery when "Use my people" is ticked; if all seven are "never the
+victim", the victim is a made-up passenger.
+
+## VR
+
+Left stick walks (where you look), right stick turns (snap or smooth, in the menu). The notebook is in
+your left hand: every panel appears on it; point with the right controller and pull the trigger
+(right stick scrolls; B / Y hides it). Point at people and things to examine them (a laser and their
+name; checked 20 times a second against simple shapes, and walls stop the ray). Messages appear on a
+board in front of you once the headset has reported where your head is. Fading for the gathering is a
+black bubble round your head (the same on screen). Everyone stays exactly where they are, so nothing
+moves your play space except the gathering, which puts you in the lounge facing everyone. The
+notebook's home page shows the version.
+
+## Tests
+
+`_tools/sherlock/test.mjs` (under a minute): 4,500 generated mysteries (exactly one answer, hard enough,
+alibis consistent), your own people in the generator, the scenery's boxes checked for flicker, the
+loading screen, then a whole Easy case (story, blackout, body, every clue, questioning everyone, the
+conductor, the Coke, the notebook and comparisons, the warning, solving it), a Medium case (save and
+load half way, a wrong accusation loses), adding a person from three drawn photos and seeing their
+photo head on the train, the notebook's reasoning agreeing with the answer once everything is known,
+memory flat over several cases, draw calls, then VR (the notebook in your hand, pointing at a button).
+`--full` checks more cases.
+
+## Version 1.0
+
+First version, built from the design above (the train instead of the country house we first talked
+about; six suspects; Easy, Medium and Hard; realistic people; photo people on screens only; never the
+victim on by default). What went wrong on the way and how it was fixed:
+
+- **The generator** first made random people and threw away cases that didn't work out: Medium failed
+  most of the time and Hard always. It now builds each case on purpose (each innocent person is like the
+  murderer except for their own share of the clues), and averages 2 or 3 tries.
+- **Footsteps at the ends of the train**: if the body is in the first or last car, everyone is on the
+  same side of it, so "the footsteps went towards the back" can't rule anyone out. Those cases use the
+  height clue instead.
+- **All seven of your own people**: their hair and clothes are fixed, so a hair or thread clue often
+  couldn't be balanced. With two or more of your people a case may do without one.
+- **Hats and photo heads**: the avatars are in centimetres, so hats came out a hundred times too small
+  and photo heads a hundred times too big (a black disc on the ceiling). Sizes are now worked out in the
+  avatar's own units.
+- **Memory**: every person has their own skeleton, whose bone texture wasn't freed when a case ended
+  (about 24 textures a case). `Person.dispose` now frees it, and the test checks memory stays flat.
+- **Flicker**: lamp rims flush with the ceiling, gangway walls inside the cars' end walls, a door frame
+  against the sleeping car's cabins, the baggage car's tool board on a window sill (it also covered part
+  of a window), the platform rails inside the end wall. All moved apart; the test checks the boxes.
+- **The accusation scene** used real-time timers, so it couldn't run faster in tests and ignored the
+  game clock; it now runs on the game's own timeline.

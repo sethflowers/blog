@@ -1,0 +1,275 @@
+---
+title: Sherlock
+description: A murder mystery on a night train, on an iPad or in VR. The lights go out, and when they come back on someone is dead. Examine the crime scene, take fingerprints, measure footprints, question the six suspects (a baker, a mechanic, a gardener...) and accuse the murderer. Easy, Medium and Hard, a new mystery every time, and you can put your own people on the train from three photos.
+date: 2026-11-25
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1410">
+<meta name="apple-mobile-web-app-title" content="Sherlock">
+<link rel="manifest" href="/experiments/sherlock/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/sherlock/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/sherlock/icon-192.png">
+<title>Sherlock</title>
+<script>
+// the service worker first of all, so even a start that's closed before it finishes loading leaves the
+// game saved for playing offline (see "It must work offline" in CLAUDE.md)
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/sherlock/sw.js?v={% endraw %}{{ page.version }}{% raw %}', { scope: '/experiments/sherlock/', updateViaCache: 'none' }).catch(function(){});
+  if ((navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches)) && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+</script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#1a1410;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;
+    font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;}
+  canvas#game{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  button{font-family:inherit;cursor:pointer;}
+  /* title */
+  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;overflow-y:auto;touch-action:pan-y;
+    background:radial-gradient(ellipse at center,rgba(10,6,2,.35) 0%,rgba(10,6,2,.82) 75%);}
+  #title.hidden{display:none;}
+  .card{max-width:620px;width:100%;text-align:center;}
+  h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(52px,11vw,112px);line-height:.95;letter-spacing:.06em;font-weight:900;
+    color:#f0d080;text-shadow:0 3px 0 #6a4a14,0 7px 0 #2a1a06,0 14px 34px rgba(0,0,0,.7);}
+  h1 span{display:block;color:#fff4dc;font-size:.24em;letter-spacing:.22em;margin-top:12px;font-weight:700;text-shadow:0 2px 8px #000;}
+  .sub{margin:16px 0 18px;font-size:18px;font-weight:600;line-height:1.4;text-shadow:0 2px 6px rgba(0,0,0,.8);}
+  .tbtn{display:block;width:100%;max-width:360px;margin:11px auto;padding:16px 20px;font-size:22px;font-weight:bold;line-height:1;color:#1e1408;
+    background:#f0d080;border:0;border-radius:14px;box-shadow:0 6px 0 #8a6420;}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 3px 0 #8a6420;}
+  .tbtn:disabled{background:#6a6258;box-shadow:0 6px 0 #3a342c;color:#2a2620;cursor:default;}
+  .tbtn.second{background:#efe4cc;box-shadow:0 6px 0 #8a7a5a;font-size:18px;padding:13px;}
+  #status,#offline{margin-top:8px;font-size:14.5px;opacity:.95;min-height:18px;text-shadow:0 1px 4px #000;}
+  #offline{color:#a8e8a0;}
+  .help{margin-top:12px;font-size:13.5px;opacity:.95;line-height:1.6;text-shadow:0 1px 4px #000;}
+  .help b{color:#f0d080;}
+  .build-version{position:fixed;right:calc(12px + env(safe-area-inset-right));bottom:calc(10px + env(safe-area-inset-bottom));font:600 12px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.85;pointer-events:none;text-shadow:0 1px 3px #000;}
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
+  body.playing #hud{display:block;}
+  .chip{position:absolute;background:rgba(26,18,10,.78);border-radius:14px;padding:9px 13px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  #h-case{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));font-size:14.5px;line-height:1.5;}
+  #h-case b{color:#f0d080;}
+  #jobs{position:absolute;left:calc(10px + env(safe-area-inset-left));top:calc(76px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:6px;max-width:min(330px,40vw);}
+  .job{pointer-events:auto;border:0;text-align:left;background:rgba(26,18,10,.82);color:#fff;border-left:5px solid #f0d080;border-radius:10px;padding:8px 11px;font-size:14px;font-weight:700;line-height:1.25;}
+  .job.last{border-left-color:#e05a3a;}
+  #h-msg{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));width:min(560px,46vw);display:flex;flex-direction:column;gap:6px;}
+  .msg{background:rgba(26,18,10,.88);border-radius:12px;padding:9px 14px;font-size:16px;font-weight:600;text-align:center;animation:pop .25s ease-out;}
+  .msg.good{background:rgba(30,90,50,.92);} .msg.bad{background:rgba(150,30,24,.92);}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+  #topbtns{position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));display:flex;flex-direction:column;gap:8px;align-items:flex-end;}
+  .hbtn{pointer-events:auto;border:0;border-radius:14px;background:rgba(26,18,10,.85);color:#fff;font-weight:800;font-size:17px;padding:12px 15px;min-width:140px;text-align:left;}
+  .hbtn:active{background:#f0d080;color:#1e1408;}
+  .hbtn.gold{background:#f0d080;color:#1e1408;}
+  .hbtn.red{background:#a8301e;}
+  #b-use{position:absolute;right:calc(14px + env(safe-area-inset-right));bottom:calc(18px + env(safe-area-inset-bottom));display:none;font-size:20px;padding:16px 20px;max-width:46vw;text-align:center;background:#f0d080;color:#1e1408;box-shadow:0 5px 0 #8a6420;}
+  #b-use.show{display:block;}
+  #crosshair{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:4px;background:rgba(255,240,200,.6);}
+  /* the thumb stick appears wherever your left thumb goes down */
+  #stick{position:fixed;width:120px;height:120px;border-radius:60px;border:3px solid rgba(255,240,210,.55);background:rgba(20,14,8,.3);display:none;pointer-events:none;z-index:6;}
+  #stick.on{display:block;}
+  #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:27px;background:rgba(240,208,128,.9);box-shadow:0 3px 8px rgba(0,0,0,.4);}
+  #stick-hint{position:absolute;left:calc(26px + env(safe-area-inset-left));bottom:calc(26px + env(safe-area-inset-bottom));width:110px;height:110px;border-radius:55px;border:2px dashed rgba(255,246,220,.4);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;text-align:center;opacity:.85;text-shadow:0 1px 3px #000;}
+  @media (hover:hover) and (pointer:fine){ #stick-hint{display:none;} }
+  /* panels */
+  #panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(10,6,2,.4);padding:12px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom));}
+  #panel.show{display:flex;}
+  .card-panel{width:min(640px,100%);max-height:100%;display:flex;flex-direction:column;background:#f6efdc;color:#241a0e;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .card-panel.wide{width:min(820px,100%);}
+  .phead{display:flex;align-items:center;gap:12px;background:#2e1e0e;color:#fff4d8;padding:12px 16px;}
+  .phead h2{font-family:Georgia,serif;font-size:23px;flex:1;line-height:1.15;}
+  .pport{width:58px;height:58px;border-radius:10px;}
+  .phead .x{border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:10px;min-width:44px;height:44px;font-size:18px;padding:0 12px;}
+  .tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0;background:#e6d8b8;}
+  .tabs button{border:0;border-radius:12px 12px 0 0;padding:11px 13px;font-weight:800;font-size:15px;background:#d2bf98;color:#4a3618;}
+  .tabs button.on{background:#f6efdc;color:#241a0e;}
+  .pbody{overflow-y:auto;padding:6px 16px 18px;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  .psec{margin-top:12px;}
+  .psec h3{font-size:13.5px;text-transform:uppercase;letter-spacing:.06em;color:#8a4a1a;margin-bottom:6px;}
+  .psec p{font-size:16.5px;line-height:1.5;margin-bottom:8px;}
+  .psec p.quote{font-family:Georgia,serif;font-style:italic;background:#ece0c4;border-left:4px solid #b88a3a;padding:8px 12px;border-radius:6px;}
+  .imgs{display:flex;flex-wrap:wrap;gap:12px;}
+  .imgs figure{display:flex;flex-direction:column;align-items:center;gap:4px;max-width:150px;}
+  .imgs img{height:150px;border-radius:8px;border:2px solid #c8b080;background:#fff;}
+  .imgs figcaption{font-size:13px;font-weight:700;text-align:center;color:#4a3a28;}
+  .imgs figcaption.good{color:#1a7a2a;}
+  .row{display:flex;align-items:center;gap:12px;padding:9px 12px;margin:6px 0;background:#ebdfc4;border-radius:14px;}
+  .row.tap{cursor:pointer;} .row.tap:active{background:#e0cc9c;}
+  .row.on{background:#fff0b8;}
+  .row.struck b{text-decoration:line-through;color:#8a7a6a;}
+  .ricon{width:58px;height:58px;flex:0 0 58px;border-radius:10px;object-fit:cover;}
+  .rl{flex:1;}
+  .row b{display:block;font-size:16px;} .row small{display:block;font-size:13.5px;color:#5a4a30;margin-top:2px;line-height:1.35;}
+  .row button,.btns button,.grid button{border:0;border-radius:12px;padding:12px 15px;font-weight:800;font-size:15.5px;background:#4a3018;color:#fff;}
+  .row button:disabled,.btns button:disabled,.grid button:disabled{background:#c4baa8;color:#f4f4f4;}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .btns button{flex:1 1 auto;min-height:48px;}
+  .btns button.primary{background:#2a6a34;} .btns button.danger{background:#a8301e;}
+  .btns button.on,.grid button.on{background:#f0d080;color:#1e1408;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;}
+  .grid button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 8px;white-space:normal;position:relative;}
+  .grid button small{font-weight:600;font-size:12.5px;opacity:.92;}
+  .grid button.struck{background:#8a7a68;} .grid button.struck .bicon{opacity:.45;}
+  .grid button.struck::after{content:"✗";position:absolute;top:2px;right:10px;font-size:46px;color:#e04a3a;font-weight:900;}
+  .bicon{width:92px;height:92px;border-radius:10px;}
+  /* busy (a new case loading) */
+  #busy{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(10,6,2,.7);}
+  #busy.show{display:flex;}
+  #busy div{background:#2e1e0e;border-radius:18px;padding:22px 28px;font-size:19px;font-weight:700;display:flex;align-items:center;gap:14px;}
+  #busy i{width:30px;height:30px;border-radius:50%;border:5px solid rgba(255,255,255,.2);border-top-color:#f0d080;animation:ldspin .9s linear infinite;}
+  /* your own people (the cast editor) */
+  #cast{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;background:rgba(10,6,2,.6);padding:12px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom));touch-action:pan-y;}
+  #cast.show{display:flex;}
+  .cast-card{width:min(680px,100%);max-height:100%;display:flex;flex-direction:column;background:#f6efdc;color:#241a0e;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .cast-layer{position:fixed;inset:0;z-index:45;display:flex;align-items:center;justify-content:center;background:rgba(10,6,2,.75);padding:12px;}
+  .cast-intro{font-size:15px;line-height:1.45;margin:8px 0;}
+  .cast-input{width:100%;font-size:18px;padding:11px 12px;border-radius:10px;border:2px solid #c8b080;background:#fff;color:#241a0e;font-family:inherit;}
+  .cast-input.bad{border-color:#c83a2a;}
+  .cast-slots{display:flex;gap:10px;flex-wrap:wrap;}
+  .cast-slot{flex:1 1 140px;display:flex;flex-direction:column;align-items:center;gap:6px;border:0;border-radius:14px;padding:10px;background:#4a3018;color:#fff;font-weight:800;font-size:14.5px;}
+  .cast-slot img{width:110px;height:110px;border-radius:10px;object-fit:cover;background:#e8dcc0;}
+  .cast-align{display:block;width:min(360px,80vw);height:min(360px,80vw);margin:6px auto 10px;border-radius:12px;touch-action:none;}
+  .cast-check{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:600;}
+  .cast-check input{width:26px;height:26px;}
+  .swatch{display:block;width:26px;height:26px;border-radius:13px;border:2px solid #fff;}
+  /* loading screen: shown from the first paint until the game is ready (see "Loading screen" in CLAUDE.md) */
+  #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:#1a1410;color:#fff;transition:opacity .4s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .ld-box{width:min(420px,100%);text-align:center;}
+  .ld-name{font-family:Georgia,serif;font-weight:bold;font-size:clamp(36px,8vw,56px);line-height:1.05;margin-bottom:6px;color:#f0d080;letter-spacing:.06em;}
+  .ld-sub{font-size:15px;margin-bottom:24px;opacity:.85;}
+  .ld-spin{width:56px;height:56px;margin:0 auto 22px;border-radius:50%;border:7px solid rgba(255,255,255,.18);border-top-color:#f0d080;animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg)}}
+  .ld-bar{height:14px;border-radius:7px;background:rgba(255,255,255,.16);overflow:hidden;}
+  #ld-fill{display:block;height:100%;width:3%;background:#f0d080;border-radius:7px;transition:width .3s;}
+  #ld-text{margin-top:12px;font-size:17px;min-height:22px;}
+  #ld-note{margin-top:6px;font-size:14px;min-height:18px;opacity:.8;}
+  #ld-retry{display:none;margin:14px auto 0;padding:12px 24px;border:0;border-radius:12px;font-family:inherit;font-weight:bold;font-size:18px;background:#f0d080;color:#1e1408;}
+  .ld-ver{margin-top:20px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;}
+</style>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "three": "/experiments/sherlock/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/lib/three.core.min.js": "/experiments/sherlock/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/lib/addons/GLTFLoader.js": "/experiments/sherlock/lib/addons/GLTFLoader.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/lib/addons/SkeletonUtils.js": "/experiments/sherlock/lib/addons/SkeletonUtils.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/lib/addons/BufferGeometryUtils.js": "/experiments/sherlock/lib/addons/BufferGeometryUtils.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/audio.js": "/experiments/sherlock/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/case.js": "/experiments/sherlock/js/case.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/cast.js": "/experiments/sherlock/js/cast.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/evidence.js": "/experiments/sherlock/js/evidence.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/game.js": "/experiments/sherlock/js/game.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/mystery.js": "/experiments/sherlock/js/mystery.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/people.js": "/experiments/sherlock/js/people.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/train.js": "/experiments/sherlock/js/train.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/ui.js": "/experiments/sherlock/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/sherlock/js/util.js": "/experiments/sherlock/js/util.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<!-- loading screen: drawn before anything else, filled in as the game's files arrive, hidden by
+     main.js (window.__loaded) once the game is ready; says so (with a Try again button) if loading fails -->
+<div id="loading" role="status" aria-live="polite">
+  <div class="ld-box">
+    <div class="ld-name">SHERLOCK</div>
+    <div class="ld-sub">Murder on the Midnight Express</div>
+    <div class="ld-spin"></div>
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <div id="ld-text">Loading…</div>
+    <div id="ld-note"></div>
+    <button id="ld-retry" type="button">Try again</button>
+    <div class="ld-ver">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L = document.getElementById('loading'), fill = document.getElementById('ld-fill'), txt = document.getElementById('ld-text'),
+      note = document.getElementById('ld-note'), retry = document.getElementById('ld-retry');
+  var MAIN = '/experiments/sherlock/js/main.js', BUILD = 'Building the train…';
+  // the files to wait for: everything in the import map plus main.js (three.js counts for more: it is most of the download)
+  var want = {}, total = 0, have = 0, got = {}, shown = 3, building = false, done = false, failed = false, t0 = Date.now();
+  function add(u){ var p = u.split('?')[0]; if (!want[p]){ want[p] = /\/lib\/three/.test(p) ? 10 : 1; total += want[p]; } }
+  try { var m = JSON.parse(document.querySelector('script[type=importmap]').textContent).imports; for (var k in m) add(m[k]); } catch (e) {}
+  add(MAIN);
+  function show(p, t){ if (p > shown) shown = p; fill.style.width = shown + '%'; if (txt.textContent !== t) txt.textContent = t; }
+  function tick(){
+    if (done || failed) return;
+    try { performance.getEntriesByType('resource').forEach(function(e){ var p; try { p = new URL(e.name).pathname; } catch (x) { return; } if (want[p] && !got[p]){ got[p] = 1; have += want[p]; } }); } catch (e) {}
+    var f = total ? have / total : 0;
+    if (building || f >= 1) show(Math.min(97, shown + (97 - shown) * 0.03), BUILD);
+    else { show(3 + 82 * f, ''); txt.textContent = 'Loading… ' + Math.round(shown) + '%'; }
+    if (Date.now() - t0 > 20000 && !note.textContent){ note.textContent = 'Still going: a slow connection can take a minute.'; retry.style.display = 'inline-block'; }
+  }
+  var iv = setInterval(tick, 150); tick();
+  retry.onclick = function(){ location.reload(); };
+  // main.js: "await window.__loading()" before building the world, so "Building…" gets drawn first
+  window.__loading = function(){
+    building = true; tick();
+    return new Promise(function(r){ setTimeout(r, 120); requestAnimationFrame(function(){ setTimeout(r, 0); }); });
+  };
+  window.__loaded = function(){
+    if (done) return; done = true; clearInterval(iv);
+    show(100, 'Ready!'); note.textContent = ''; retry.style.display = 'none';
+    var hide = function(){ L.classList.add('done'); setTimeout(function(){ L.style.display = 'none'; }, 450); };
+    requestAnimationFrame(function(){ requestAnimationFrame(hide); }); setTimeout(hide, 600);
+  };
+  window.__loadFailed = function(why){
+    if (done || failed) return; failed = true; clearInterval(iv);
+    txt.textContent = 'Something went wrong while loading.'; note.textContent = why ? String(why).slice(0, 160) : '';
+    retry.style.display = 'inline-block';
+  };
+  addEventListener('error', function(e){ if (!done && e && e.message) window.__loadFailed(e.message); });
+  addEventListener('unhandledrejection', function(e){ if (!done) window.__loadFailed(e && e.reason && e.reason.message || 'A game file did not load.'); });
+})();
+</script>
+<div id="title">
+  <div class="card">
+    <h1>SHERLOCK<span>MURDER ON THE MIDNIGHT EXPRESS</span></h1>
+    <p class="sub">The lights go out. A scream in the dark. When they come back on, someone is dead... and one of the passengers did it.</p>
+    <button id="b-play" class="tbtn">▶ Play</button>
+    <button id="b-vr" class="tbtn">🥽 Play in VR</button>
+    <button id="b-new" class="tbtn second">🚂 New mystery</button>
+    <button id="b-cast" class="tbtn second">🎭 Add your own people</button>
+    <p id="status"></p>
+    <p id="offline"></p>
+    <div class="help">
+      <b>iPad:</b> left thumb walks · drag to look · tap things and people to examine them<br>
+      <b>Computer:</b> WASD to walk · drag to look · click things (or E) · N notebook<br>
+      <b>VR:</b> left stick walks · right stick turns · point and pull the trigger · your notebook is in your left hand
+    </div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="hud">
+  <div id="h-case" class="chip"></div>
+  <div id="jobs"></div>
+  <div id="h-msg"></div>
+  <div id="crosshair"></div>
+  <div id="topbtns">
+    <button id="b-notebook" class="hbtn gold">📓 Notebook</button>
+    <button id="b-accuse" class="hbtn red">👉 Accuse</button>
+    <button id="b-menu" class="hbtn">☰ Menu</button>
+  </div>
+  <button id="b-use" class="hbtn"></button>
+  <div id="stick-hint">walk<br>here</div>
+</div>
+<div id="stick"><div id="knob"></div></div>
+<div id="panel"></div>
+<div id="cast"></div>
+<div id="busy"><div><i></i><span id="busy-text">Loading…</span></div></div>
+<script type="module" src="/experiments/sherlock/js/main.js?v={% endraw %}{{ page.version }}{% raw %}" onerror="window.__loadFailed && window.__loadFailed('A game file did not arrive. Check the connection and try again.')"></script>
+</body>
+</html>
+{% endraw %}
