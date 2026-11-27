@@ -1,0 +1,16 @@
+{
+  "name": "Glue Gunner",
+  "short_name": "Glue Gunner",
+  "description": "Glue aliens to floating blocks and rip them apart, on an iPad or in VR.",
+  "start_url": "/experiments/glue-gunner/",
+  "scope": "/experiments/glue-gunner/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#140a14",
+  "theme_color": "#140a14",
+  "icons": [
+    { "src": "/experiments/glue-gunner/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/glue-gunner/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/experiments/glue-gunner/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

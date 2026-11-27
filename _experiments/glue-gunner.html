@@ -1,0 +1,238 @@
+---
+title: Glue Gunner
+description: A first-person fight on a floating deck the size of a football field, high in an alien sky. Your gun shoots glue strings that shrink as they set. Stick an alien to a floating block and rip it apart. On an iPad, a computer or in VR.
+date: 2026-11-27
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#140a14">
+<meta name="apple-mobile-web-app-title" content="Glue Gunner">
+<link rel="manifest" href="/experiments/glue-gunner/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/glue-gunner/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/glue-gunner/icon-192.png">
+<title>Glue Gunner</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#140a14;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;
+    font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;}
+  button{font-family:inherit;cursor:pointer;}
+  /* title */
+  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;overflow-y:auto;
+    background:linear-gradient(180deg,rgba(20,8,20,.05) 0%,rgba(20,8,20,.55) 55%,rgba(14,6,14,.9) 100%);}
+  #title.hidden{display:none;}
+  .card{max-width:680px;width:100%;text-align:center;}
+  h1{font-size:clamp(54px,12vw,118px);line-height:.9;font-weight:900;letter-spacing:.03em;color:#ffd23a;font-style:italic;
+    -webkit-text-stroke:2px #3a2400;text-shadow:0 0 18px rgba(255,190,40,.55),0 6px 0 #8a5a00,0 12px 30px rgba(0,0,0,.7);}
+  h1 span{display:block;font-size:.62em;color:#f4ece0;-webkit-text-stroke:2px #2a1018;text-shadow:0 4px 0 #6a1a20,0 10px 26px rgba(0,0,0,.7);letter-spacing:.22em;}
+  .drip{display:block;height:18px;margin:-6px auto 0;width:min(420px,70%);background:radial-gradient(circle at 12% 0,#ffd23a 0 7px,transparent 8px),radial-gradient(circle at 38% 0,#ffd23a 0 5px,transparent 6px),radial-gradient(circle at 71% 0,#ffd23a 0 9px,transparent 10px),radial-gradient(circle at 90% 0,#ffd23a 0 4px,transparent 5px);opacity:.9;}
+  .sub{margin:18px 0 20px;font-size:19px;font-weight:600;line-height:1.4;text-shadow:0 2px 6px rgba(0,0,0,.9);}
+  .tbtn{display:block;width:100%;max-width:360px;margin:12px auto;padding:17px 20px;font-size:23px;font-weight:800;line-height:1;color:#2a1a00;
+    background:#ffd23a;border:0;border-radius:16px;box-shadow:0 6px 0 #a87400,0 0 24px rgba(255,200,40,.25);}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 3px 0 #a87400;}
+  .tbtn:disabled{background:#7a7280;box-shadow:0 6px 0 #4a4450;color:#2a2830;cursor:default;}
+  .tbtn.second{background:#efe6f0;box-shadow:0 6px 0 #8a7a90;font-size:18px;padding:14px;color:#2a1a2a;}
+  #t-best{margin-top:8px;font-size:16px;font-weight:700;color:#ffe48a;min-height:20px;text-shadow:0 1px 4px #000;}
+  #status{margin-top:8px;font-size:15px;opacity:.95;min-height:20px;text-shadow:0 1px 4px #000;}
+  #offline{margin-top:2px;font-size:13px;opacity:.85;min-height:16px;text-shadow:0 1px 4px #000;}
+  .help{margin-top:12px;font-size:13.5px;opacity:.95;line-height:1.6;text-shadow:0 1px 4px #000;}
+  .help b{color:#ffd23a;}
+  .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.85;pointer-events:none;text-shadow:0 1px 3px #000;}
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
+  body.playing #hud{display:block;}
+  #hurt{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:0;background:radial-gradient(ellipse at center,rgba(120,0,0,0) 45%,rgba(150,0,10,.75) 100%);}
+  .chip{position:absolute;background:rgba(18,10,18,.72);border-radius:14px;padding:9px 14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  #h-stat{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));min-width:210px;}
+  #h-wave{font-size:19px;} #h-wave b{color:#ffd23a;}
+  #h-info{font-size:15px;margin-top:4px;} #h-info b{color:#ffd23a;}
+  #hp-bar{position:relative;height:20px;margin-top:7px;border-radius:10px;background:rgba(255,255,255,.12);overflow:hidden;}
+  #hp-fill{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(90deg,#3aa82a,#8adf3a);transition:width .2s;}
+  #hp-fill.low{background:linear-gradient(90deg,#b8141e,#ff4a3a);}
+  #hp-text{position:absolute;inset:0;text-align:center;font-size:13px;font-weight:800;line-height:20px;text-shadow:0 1px 2px #000;}
+  #h-msg{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));width:min(560px,52vw);display:flex;flex-direction:column;gap:6px;}
+  .msg{background:rgba(18,10,18,.88);border-radius:12px;padding:9px 14px;font-size:16px;font-weight:700;text-align:center;animation:pop .25s ease-out;}
+  .msg.good{background:rgba(90,120,10,.94);} .msg.bad{background:rgba(170,20,30,.94);}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+  #hint{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(28px + env(safe-area-inset-bottom));width:min(560px,46vw);text-align:center;font-size:16px;font-weight:700;color:#ffe48a;text-shadow:0 1px 4px #000,0 0 10px #000;}
+  .hbtn{pointer-events:auto;border:0;border-radius:14px;background:rgba(18,10,18,.82);color:#fff;font-weight:800;font-size:17px;padding:11px 15px;}
+  .hbtn:active{background:#ffd23a;color:#2a1a00;}
+  #b-menu{position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));}
+  .rbtn{pointer-events:auto;position:absolute;border:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:#fff;font-weight:900;line-height:1;box-shadow:0 6px 0 rgba(0,0,0,.4);}
+  .rbtn small{font-size:14px;margin-top:4px;letter-spacing:.05em;}
+  .rbtn:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(0,0,0,.4);}
+  #b-fire{right:calc(18px + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));width:122px;height:122px;font-size:44px;background:#e8a800;border:5px solid #ffe48a;color:#2a1a00;}
+  #b-fire.two{background:#ff7a1a;border-color:#ffd0a0;}
+  #b-fire.two small::after{content:" 2";} #b-fire small::after{content:" 1";}
+  #b-cut{right:calc(156px + env(safe-area-inset-right));bottom:calc(28px + env(safe-area-inset-bottom));width:84px;height:84px;font-size:32px;background:#4a3a52;border:4px solid #b8a8c8;}
+  /* the crosshair: says which shot is next, and lights up over aliens (red) and blocks (cyan) */
+  #cross{position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;border:3px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,.7);transition:border-color .1s,transform .1s;}
+  #cross::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:3px;background:#ffd23a;}
+  #cross-n{position:absolute;left:30px;top:-16px;font-size:15px;font-weight:900;color:#ffd23a;text-shadow:0 1px 3px #000;}
+  #cross.two{border-style:dashed;} #cross.two #cross-n{color:#ff9a3a;}
+  #cross[data-aim="alien"]{border-color:#ff4a3a;transform:scale(1.15);}
+  #cross[data-aim="block"]{border-color:#5af0ff;}
+  #cross[data-aim="none"]{opacity:.45;}
+  /* the thumb stick appears wherever your left thumb goes down */
+  #stick{position:fixed;width:120px;height:120px;border-radius:60px;border:3px solid rgba(255,230,160,.55);background:rgba(20,10,20,.28);display:none;pointer-events:none;z-index:6;}
+  #stick.on{display:block;}
+  #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:27px;background:rgba(255,210,58,.9);box-shadow:0 3px 8px rgba(0,0,0,.4);}
+  #stick-hint{position:absolute;left:calc(26px + env(safe-area-inset-left));bottom:calc(26px + env(safe-area-inset-bottom));width:110px;height:110px;border-radius:55px;border:2px dashed rgba(255,255,255,.5);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;text-align:center;opacity:.9;text-shadow:0 1px 3px #000;}
+  @media (hover:hover) and (pointer:fine){ #stick-hint{display:none;} }
+  /* panels */
+  #panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(14,6,14,.45);padding:14px;}
+  #panel.show{display:flex;}
+  .card-panel{width:min(640px,100%);max-height:min(90vh,920px);display:flex;flex-direction:column;background:#f6f0ea;color:#1e1418;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .phead{display:flex;align-items:center;gap:12px;background:#24161e;color:#fff;padding:13px 16px;border-bottom:4px solid #ffd23a;}
+  .phead h2{font-size:24px;flex:1;}
+  .pmoney{font-weight:900;color:#ffd23a;font-size:18px;}
+  .phead .x{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:10px;width:42px;height:42px;font-size:18px;}
+  .pbody{overflow-y:auto;padding:6px 18px 18px;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  .psec{margin-top:12px;}
+  .psec h3{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#a86a00;margin-bottom:6px;}
+  .psec p{font-size:17px;line-height:1.45;}
+  .psec ul{padding-left:20px;font-size:16px;line-height:1.55;}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .btns button{border:0;border-radius:12px;padding:12px 16px;font-weight:800;font-size:16px;background:#3a2a36;color:#fff;}
+  .btns button.on{background:#ffd23a;color:#2a1a00;}
+  .btns button.primary{background:#d89a00;color:#1e1000;font-size:19px;padding:14px 24px;} .btns button.danger{background:#a8303a;}
+  /* loading screen: shown from the first paint until the game is ready (see "Loading screen" in CLAUDE.md) */
+  #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:#140a14;color:#fff;transition:opacity .4s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .ld-box{width:min(420px,100%);text-align:center;}
+  .ld-name{font-weight:900;font-style:italic;font-size:clamp(32px,7vw,52px);line-height:1.05;margin-bottom:24px;color:#ffd23a;text-shadow:0 0 14px rgba(255,190,40,.4);}
+  .ld-spin{width:56px;height:56px;margin:0 auto 22px;border-radius:50%;border:7px solid rgba(255,255,255,.15);border-top-color:#ffd23a;animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg)}}
+  .ld-bar{height:14px;border-radius:7px;background:rgba(255,255,255,.14);overflow:hidden;}
+  #ld-fill{display:block;height:100%;width:3%;background:#ffd23a;border-radius:7px;transition:width .3s;}
+  #ld-text{margin-top:12px;font-size:17px;min-height:22px;}
+  #ld-note{margin-top:6px;font-size:14px;min-height:18px;opacity:.8;}
+  #ld-retry{display:none;margin:14px auto 0;padding:12px 24px;border:0;border-radius:12px;font-family:inherit;font-weight:bold;font-size:18px;background:#ffd23a;color:#2a1a00;}
+  .ld-ver{margin-top:20px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;}
+</style>
+<!-- the offline copy is saved straight away (not once the page has loaded: building the world takes a
+     while on an iPad, and closing the game before then would leave nothing saved for offline) -->
+<script>
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/glue-gunner/sw.js?v={% endraw %}{{ page.version }}{% raw %}', { scope: '/experiments/glue-gunner/', updateViaCache: 'none' }).catch(function(){});
+  // from the home screen, ask iOS to keep the saved copy
+  if ((navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches)) && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+</script>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "three": "/experiments/glue-gunner/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/lib/three.core.min.js": "/experiments/glue-gunner/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/alien.js": "/experiments/glue-gunner/js/alien.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/audio.js": "/experiments/glue-gunner/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/fx.js": "/experiments/glue-gunner/js/fx.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/gear.js": "/experiments/glue-gunner/js/gear.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/glue.js": "/experiments/glue-gunner/js/glue.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/ui.js": "/experiments/glue-gunner/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/util.js": "/experiments/glue-gunner/js/util.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/glue-gunner/js/world.js": "/experiments/glue-gunner/js/world.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<!-- loading screen: drawn before anything else, filled in as the game's files arrive, hidden by
+     main.js (window.__loaded) once the game is ready; says so (with a Try again button) if loading fails -->
+<div id="loading" role="status" aria-live="polite">
+  <div class="ld-box">
+    <div class="ld-name">Glue Gunner</div>
+    <div class="ld-spin"></div>
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <div id="ld-text">Loading…</div>
+    <div id="ld-note"></div>
+    <button id="ld-retry" type="button">Try again</button>
+    <div class="ld-ver">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L = document.getElementById('loading'), fill = document.getElementById('ld-fill'), txt = document.getElementById('ld-text'),
+      note = document.getElementById('ld-note'), retry = document.getElementById('ld-retry');
+  var MAIN = '/experiments/glue-gunner/js/main.js', BUILD = 'Building the deck and the aliens…';
+  // the files to wait for: everything in the import map plus main.js (three.js counts for more: it is most of the download)
+  var want = {}, total = 0, have = 0, got = {}, shown = 3, building = false, done = false, failed = false, t0 = Date.now();
+  function add(u){ var p = u.split('?')[0]; if (!want[p]){ want[p] = /\/lib\//.test(p) ? 10 : 1; total += want[p]; } }
+  try { var m = JSON.parse(document.querySelector('script[type=importmap]').textContent).imports; for (var k in m) add(m[k]); } catch (e) {}
+  add(MAIN);
+  function show(p, t){ if (p > shown) shown = p; fill.style.width = shown + '%'; if (txt.textContent !== t) txt.textContent = t; }
+  function tick(){
+    if (done || failed) return;
+    try { performance.getEntriesByType('resource').forEach(function(e){ var p; try { p = new URL(e.name).pathname; } catch (x) { return; } if (want[p] && !got[p]){ got[p] = 1; have += want[p]; } }); } catch (e) {}
+    var f = total ? have / total : 0;
+    if (building || f >= 1) show(Math.min(97, shown + (97 - shown) * 0.03), BUILD);
+    else { show(3 + 82 * f, ''); txt.textContent = 'Loading… ' + Math.round(shown) + '%'; }
+    if (Date.now() - t0 > 20000 && !note.textContent){ note.textContent = 'Still going: a slow connection can take a minute.'; retry.style.display = 'inline-block'; }
+  }
+  var iv = setInterval(tick, 150); tick();
+  retry.onclick = function(){ location.reload(); };
+  // main.js: "await window.__loading()" before building the world, so "Building…" gets drawn first
+  window.__loading = function(){
+    building = true; tick();
+    return new Promise(function(r){ setTimeout(r, 120); requestAnimationFrame(function(){ setTimeout(r, 0); }); });
+  };
+  window.__loaded = function(){
+    if (done) return; done = true; clearInterval(iv);
+    show(100, 'Ready!'); note.textContent = ''; retry.style.display = 'none';
+    var hide = function(){ L.classList.add('done'); setTimeout(function(){ L.style.display = 'none'; }, 450); };
+    requestAnimationFrame(function(){ requestAnimationFrame(hide); }); setTimeout(hide, 600);
+  };
+  window.__loadFailed = function(why){
+    if (done || failed) return; failed = true; clearInterval(iv);
+    txt.textContent = 'Something went wrong while loading.'; note.textContent = why ? String(why).slice(0, 160) : '';
+    retry.style.display = 'inline-block';
+  };
+  addEventListener('error', function(e){ if (!done && e && e.message) window.__loadFailed(e.message); });
+})();
+</script>
+<div id="title">
+  <div class="card">
+    <h1>GLUE<span>GUNNER</span></h1>
+    <i class="drip"></i>
+    <p class="sub">A deck floating in the sky. Ten aliens. One glue gun.<br>Stick them to the floating blocks and rip them apart.</p>
+    <button id="b-play" class="tbtn">Play</button>
+    <button id="b-vr" class="tbtn">Play in VR</button>
+    <button id="b-new" class="tbtn second">New game</button>
+    <p id="t-best"></p>
+    <p id="status">&nbsp;</p>
+    <p id="offline"></p>
+    <div class="help">
+      <b>iPad:</b> left thumb walks · drag to look · tap something to shoot it · 1st shot sticks a string, 2nd shot sticks the other end · ✂ cuts<br>
+      <b>Computer:</b> WASD to walk · drag to look · click or Space to shoot · C cuts every string · Esc: menu<br>
+      <b>VR:</b> a glue gun in each hand (triggers) · grip cuts · left stick walks · right stick turns · X/Y: menu
+    </div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="hurt"></div>
+<div id="hud">
+  <div id="h-stat" class="chip"><div id="h-wave"></div><div id="h-info"></div><div id="hp-bar"><i id="hp-fill"></i><span id="hp-text"></span></div></div>
+  <div id="h-msg"></div>
+  <button id="b-menu" class="hbtn">☰ Menu</button>
+  <div id="cross"><span id="cross-n">1</span></div>
+  <div id="hint"></div>
+  <button id="b-cut" class="rbtn">✂<small>CUT</small></button>
+  <button id="b-fire" class="rbtn">🧪<small>GLUE</small></button>
+  <div id="stick-hint">walk<br>here</div>
+</div>
+<div id="stick"><div id="knob"></div></div>
+<div id="panel"></div>
+<script type="module" src="/experiments/glue-gunner/js/main.js?v={% endraw %}{{ page.version }}{% raw %}" onerror="window.__loadFailed && window.__loadFailed('A game file did not arrive. Check the connection and try again.')"></script>
+</body>
+</html>
+{% endraw %}
