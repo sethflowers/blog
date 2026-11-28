@@ -193,6 +193,67 @@ if (FULL){
   }
 }
 
+// ---------- on a phone ----------
+// the person must fit the space the panels leave; the sheet tucks away; swiping the panel up and down
+// doesn't move a slider, dragging sideways does; the title fits a phone held sideways
+{
+  const inFree = () => ev(`(() => {
+    const C = __cc, S = C.studio; C.renderNow();
+    const f = S.free, cam = S.camera, W = innerWidth, H = innerHeight;
+    const pt = (v) => { const p = v.clone().project(cam); return { x: (p.x + 1) / 2 * W, y: (1 - p.y) / 2 * H }; };
+    C.character.root.updateMatrixWorld(true);
+    const head = C.character.bones.head.getWorldPosition(new cam.position.constructor()); head.y += 0.12;
+    const feet = C.character.bones['foot.L'].getWorldPosition(new cam.position.constructor()); feet.y = 0;
+    const a = pt(head), b = pt(feet);
+    const ok = (q) => q.x >= f.x - 2 && q.x <= f.x + f.w + 2 && q.y >= f.y - 2 && q.y <= f.y + f.h + 2;
+    return { ok: ok(a) && ok(b), a, b, f, span: (b.y - a.y) / f.h };
+  })()`);
+  await ev(`__cc.replaceSpec(__cc.PRESETS()[0])`); await settle();
+  await pg.setViewportSize({ width: 390, height: 844 }); await wait(600);
+  await ev(`__cc.showCat('body'); __cc.frameFor('body'); __cc.studio.frame('body', __cc.character, true)`); await wait(400);
+  check(await ev(`document.body.classList.contains('portrait') && document.body.classList.contains('small')`), 'a phone held upright gets the phone layout');
+  const side = await ev(`(() => { const r = document.getElementById('side').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, h: r.height }; })()`);
+  check(side.bottom > 780 && side.h > 300 && side.h < 520, `the panel is a sheet along the bottom (${Math.round(side.h)} px tall)`);
+  let fr = await inFree();
+  check(fr.ok && fr.span > 0.6, `the whole person fits above the sheet (${Math.round(fr.span * 100)}% of the free height)` + (fr.ok ? "" : " " + JSON.stringify(fr)));
+  await shot('11-phone-upright');
+  await ev(`document.getElementById('b-sheet').click()`); await wait(700); await ev('__cc.advance(1)');
+  const tucked = await ev(`document.getElementById('side').getBoundingClientRect().height`);
+  fr = await inFree();
+  check(tucked < 90 && fr.ok && fr.f.h > 550, `▾ tucks the sheet away and the person gets the room (sheet ${Math.round(tucked)} px, free ${Math.round(fr.f.h)} px)`);
+  await shot('12-phone-tucked');
+  await ev(`document.querySelector('#tabs button[data-cat="nose"]').click()`); await wait(700);
+  check(await ev(`document.getElementById('side').getBoundingClientRect().height`) > 300, 'choosing a tab brings the sheet back');
+  // a vertical swipe starting on a slider leaves it alone; a sideways drag moves it
+  const sw = await ev(`(() => {
+    const rg = document.querySelector('#side-body .rng'), b = rg.getBoundingClientRect(), key = 'mods.nose-trans-down|up';
+    const before = JSON.stringify(__cc.spec.mods);
+    const fire = (type, x, y) => rg.dispatchEvent(new PointerEvent(type, { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, bubbles: true }));
+    const x0 = b.left + b.width / 2, y0 = b.top + b.height / 2;
+    fire('pointerdown', x0, y0); fire('pointermove', x0 + 2, y0 + 20); fire('pointermove', x0 + 3, y0 + 60); fire('pointercancel', x0 + 3, y0 + 60);
+    const afterSwipe = JSON.stringify(__cc.spec.mods);
+    fire('pointerdown', x0, y0); fire('pointermove', x0 + 12, y0 + 1); fire('pointermove', b.right - 2, y0 + 2); fire('pointerup', b.right - 2, y0 + 2);
+    return { swipeKept: afterSwipe === before, dragged: JSON.stringify(__cc.spec.mods) !== before };
+  })()`);
+  check(sw.swipeKept, 'swiping the panel up and down over a slider leaves it alone');
+  check(sw.dragged, 'dragging a slider sideways moves it');
+  await ev(`__cc.undo()`); await settle();
+  // sideways
+  await pg.setViewportSize({ width: 844, height: 390 }); await wait(700);
+  await ev(`__cc.showCat('face'); __cc.frameFor('body'); __cc.studio.frame('body', __cc.character, true)`); await wait(300);
+  check(await ev(`!document.body.classList.contains('portrait') && document.body.classList.contains('small')`), 'a phone held sideways gets the small layout');
+  fr = await inFree();
+  check(fr.ok, 'the whole person fits between the tabs and the panel');
+  const topH = await ev(`document.getElementById('top').getBoundingClientRect().height`);
+  check(topH < 48, `the top bar is slim on a phone (${Math.round(topH)} px)`);
+  await shot('13-phone-sideways');
+  await ev('__cc.toTitle()'); await wait(300);
+  const t = await ev(`(() => { const h = document.querySelector('#title h1').getBoundingClientRect(), b = document.getElementById('b-play').getBoundingClientRect(); return { h: h.top, b: b.bottom }; })()`);
+  check(t.h >= 0 && t.b <= 390, `the title fits a phone held sideways (heading at ${Math.round(t.h)} px, button ends at ${Math.round(t.b)} px)`);
+  await shot('14-phone-title');
+  await pg.setViewportSize({ width: 1180, height: 820 }); await wait(500);
+}
+
 // ---------- VR ----------
 if (IWER){
   await ev('__cc.toTitle()');

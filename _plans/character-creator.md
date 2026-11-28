@@ -134,3 +134,29 @@ The first version: everything above. Things found and fixed on the way:
 Next, for even more realism: smoother silhouettes (one subdivision step for close-ups), screen-space
 ambient occlusion on a computer, more CC0 hair styles and clothes from MakeHuman's community packs
 (only the `_cc0` ones), beards, makeup layers painted into the skin texture.
+
+## Version 1.1: phones
+
+The user said it was hard to use on a phone. On a phone held upright the panel covered the bottom
+half and the person was cropped behind it, the bars took most of the screen, the version label sat on
+top of the sliders, and held sideways there was only a sliver for everything (and the title screen's
+heading was cut off).
+
+- **Held upright**: the person has the top of the screen and the panel is a **sheet** along the
+  bottom: drag its top edge (the grab bar) to make it taller or shorter (it settles at tucked away,
+  half or tall), or tap ▾ to tuck it away and see the whole person (▴, or choosing a tab, brings it
+  back). The tabs ride along the sheet's top edge and scroll sideways (the chosen one is kept in
+  view); Body / Head / Face / Spin are a little column in the top corner.
+- **Small screens** (phones either way round): slimmer top bar with icons instead of words, narrower
+  tabs, the version only on the title, bigger slider knobs and swatches.
+- **The camera fits the free space**: the panels report the part of the screen they leave free, and
+  the camera frames the body, head or face into it, whatever its shape (your own zoom stays on top).
+  When that would put the camera beyond the studio (a short, wide space above the sheet), it stays at
+  5.5 m and widens the lens instead.
+- **Sliders and scrolling**: a swipe up or down that starts on a slider now scrolls the panel (it used
+  to grab the slider); a sideways drag moves it, a tap jumps to the spot, a double tap resets it.
+- The title screen scrolls from the top on small screens (it was centred, so its top was cut off) and
+  is smaller, and the app can be used upright from the home screen (the manifest said landscape).
+- Test: a phone held upright (the sheet, the whole person above it, tucking it away, a tab bringing it
+  back, swipe vs drag on a slider) and sideways (the person between the tabs and the panel, a slim top
+  bar, the title fitting).

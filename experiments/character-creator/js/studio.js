@@ -56,7 +56,8 @@ export class Studio {
     this.view = { yaw: 0, height: 0, dist: 4.5, target: new THREE.Vector3(0, 1, 0) };
     this.want = { dist: 4.5, target: new THREE.Vector3(0, 1, 0) };
     this.spin = 0;
-    this.panelPx = 0;   // how much of the screen's right side the panel covers
+    this.free = null;   // the part of the screen the panels leave free ({ x, y, w, h } in CSS pixels), or all of it
+    this.zoomK = 1;     // your own zoom, on top of the framing
     this.setLight('studio');
     addEventListener('resize', () => this.resize());
   }
@@ -91,17 +92,38 @@ export class Studio {
     const H = character.height(), head = character.headPosition(new THREE.Vector3());
     // the eyes (the face's middle is a little below them)
     const eye = character.bones['eye.L'] ? character.bones['eye.L'].getWorldPosition(new THREE.Vector3()) : head.clone().setY(head.y + 0.1);
-    const f = { body: [H * 0.5, H * 2.9 + 0.3], head: [eye.y - 0.1, 1.35], face: [eye.y - 0.025, 0.78], eyes: [eye.y, 0.5] }[kind] || [H * 0.5, 5];
-    this.want.target.set(0, f[0], 0); this.want.dist = f[1];
+    // [where to look, how much height to show, how much width] in metres
+    const f = { body: [H * 0.5, H * 1.12, 0.8], head: [eye.y - 0.075, 0.52, 0.5], face: [eye.y - 0.025, 0.3, 0.27], eyes: [eye.y, 0.17, 0.2] }[kind] || [H * 0.5, H * 1.12, 0.8];
+    this.want.target.set(0, f[0], 0); this.extent = [f[1], f[2]]; this.zoomK = 1;
+    this.want.dist = this.fitDist();
     this.view.height = 0;
     if (instant){ this.view.target.copy(this.want.target); this.view.dist = this.want.dist; }
   }
+  // how far away the camera must be for the framed part to fit the free part of the screen
+  fitDist(){
+    const W = window.innerWidth, H = window.innerHeight, fr = this.free || { w: W, h: H };
+    const [eh, ew] = this.extent || [1.9, 0.8];
+    // distance × tan(half the field of view) needed to fit the height, and the width
+    const need = Math.max((eh / 2) * (H / Math.max(80, fr.h)), (ew / 2) / (W / H) * (W / Math.max(80, fr.w)));
+    // the usual lens (25°) unless that would put the camera out past the studio's lights (a phone held
+    // upright, with the panel below): then stay at 5.5 m and widen the lens instead
+    const t25 = Math.tan(THREE.MathUtils.degToRad(12.5));
+    const d = Math.min(5.5, need / t25), fov = 2 * THREE.MathUtils.radToDeg(Math.atan(need / d));
+    if (Math.abs(fov - this.camera.fov) > 0.05){ this.camera.fov = Math.min(60, fov); this.camera.updateProjectionMatrix(); }
+    return clamp(d * this.zoomK, 0.25, 9);
+  }
+  setFree(rect){
+    const old = JSON.stringify(this.free);
+    this.free = rect;
+    if (JSON.stringify(rect) !== old && this.extent) this.want.dist = this.fitDist();
+  }
   orbit(dx, dy){ this.turntable.rotation.y += dx * 0.01; this.view.height = clamp(this.view.height + dy * 0.004, -0.6, 0.8); }
-  zoom(k){ this.want.dist = clamp(this.want.dist * k, 0.35, 8); }
+  zoom(k){ this.zoomK = clamp(this.zoomK * k, 0.15, 4); this.want.dist = this.fitDist(); }
   resize(){
     if (this.renderer.xr.isPresenting) return;
     this.camera.aspect = window.innerWidth / window.innerHeight; this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    if (this.extent) this.want.dist = this.fitDist();
   }
   update(dt){
     if (this.renderer.xr.isPresenting) return;
@@ -112,10 +134,10 @@ export class Studio {
     const cam = this.camera;
     cam.position.set(0, v.target.y + v.height * v.dist * 0.6, v.dist);
     cam.lookAt(v.target);
-    // keep the person in the middle of what the panel leaves free
-    const W = window.innerWidth, Hh = window.innerHeight, portrait = W < Hh;
-    const off = portrait ? 0 : this.panelPx / 2, offY = portrait ? Hh * 0.22 : 0;
-    if (off || offY) cam.setViewOffset(W, Hh, off, offY, W, Hh); else cam.clearViewOffset();
+    // keep the person in the middle of what the panels leave free
+    const W = window.innerWidth, Hh = window.innerHeight, fr = this.free;
+    const offX = fr ? W / 2 - (fr.x + fr.w / 2) : 0, offY = fr ? Hh / 2 - (fr.y + fr.h / 2) : 0;
+    if (Math.abs(offX) > 0.5 || Math.abs(offY) > 0.5) cam.setViewOffset(W, Hh, offX, offY, W, Hh); else cam.clearViewOffset();
     // the key light's shadow follows the person
     this.key.target.position.set(0, 1, 0);
   }

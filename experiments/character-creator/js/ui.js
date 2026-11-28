@@ -49,19 +49,39 @@ export class ScreenPanel {
         v.textContent = r.text ? r.text(val) : '';
       };
       upd(); this.updaters.push(upd);
+      // a sideways drag moves the slider; an up-and-down swipe scrolls the panel instead (the browser
+      // takes it, touch-action: pan-y); a tap jumps to where you tapped; a double tap resets it
       let drag = null, lastTap = 0;
       const at = (e) => { const b = rg.getBoundingClientRect(); return r.min + clamp((e.clientX - b.left) / b.width) * (r.max - r.min); };
       rg.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        const now = performance.now();
-        if (now - lastTap < 320){ r.set(r.def, true); upd(); lastTap = 0; return; }   // double-tap: back to the middle
-        lastTap = now;
-        drag = e.pointerId; try { rg.setPointerCapture(e.pointerId); } catch (x) { /* fine */ }
+        if (e.pointerType === 'mouse') e.preventDefault();
+        drag = { id: e.pointerId, x: e.clientX, y: e.clientY, on: e.pointerType === 'mouse' };
+        if (drag.on){ try { rg.setPointerCapture(e.pointerId); } catch (x) { /* fine */ } r.set(at(e), false); upd(); }
+      });
+      rg.addEventListener('pointermove', (e) => {
+        if (!drag || drag.id !== e.pointerId) return;
+        if (!drag.on){
+          const dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
+          if (dx > 6 && dx > dy){ drag.on = true; try { rg.setPointerCapture(e.pointerId); } catch (x) { /* fine */ } }
+          else if (dy > 8){ drag = null; return; }
+          else return;
+        }
         r.set(at(e), false); upd();
       });
-      rg.addEventListener('pointermove', (e) => { if (drag === e.pointerId){ r.set(at(e), false); upd(); } });
-      const end = (e) => { if (drag === e.pointerId){ drag = null; r.set(r.get(), true); upd(); } };
-      rg.addEventListener('pointerup', end); rg.addEventListener('pointercancel', end); rg.addEventListener('lostpointercapture', end);
+      rg.addEventListener('pointerup', (e) => {
+        if (!drag || drag.id !== e.pointerId) return;
+        const d = drag; drag = null;
+        const now = performance.now();
+        if (!d.on){
+          if (now - lastTap < 350){ r.set(r.def, true); upd(); lastTap = 0; return; }   // double tap: back to the middle
+          lastTap = now; r.set(at(e), true); upd(); return;
+        }
+        if (Math.abs(e.clientX - d.x) < 4 && now - lastTap < 350){ r.set(r.def, true); upd(); lastTap = 0; return; }
+        lastTap = Math.abs(e.clientX - d.x) < 4 ? now : 0;
+        r.set(r.get(), true); upd();
+      });
+      const cancel = (e) => { if (drag && drag.id === e.pointerId){ const was = drag.on; drag = null; if (was){ r.set(r.get(), true); upd(); } } };
+      rg.addEventListener('pointercancel', cancel); rg.addEventListener('lostpointercapture', cancel);
       if (r.hint) d.appendChild(el('div', 'hint', r.hint));
     } else if (r.kind === 'colors'){
       const w = el('div', 'sw'), btns = [];

@@ -5,7 +5,7 @@
   "start_url": "/experiments/character-creator/",
   "scope": "/experiments/character-creator/",
   "display": "standalone",
-  "orientation": "landscape",
+  "orientation": "any",
   "background_color": "#16181d",
   "theme_color": "#16181d",
   "icons": [

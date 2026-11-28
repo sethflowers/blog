@@ -169,14 +169,14 @@ function buildTabs(){
   const T = $('tabs'); T.innerHTML = '';
   for (const c of CATEGORIES){
     const b = document.createElement('button');
-    b.innerHTML = `${c.icon}<small>${c.label}</small>`; b.dataset.cat = c.id;
-    b.onclick = () => showCat(c.id);
+    b.innerHTML = `${c.icon}<small>${c.label}</small>`; b.dataset.cat = c.id; b.title = c.label;
+    b.onclick = () => { if (document.body.classList.contains('portrait') && SHEET.h <= SHEET.min + 4) setSheet(window.innerHeight * 0.48); showCat(c.id); };
     T.appendChild(b);
   }
 }
 function showCat(id){
   const prev = cat; cat = id;
-  for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.cat === id);
+  for (const b of $('tabs').children){ b.classList.toggle('on', b.dataset.cat === id); if (b.dataset.cat === id && b.scrollIntoView) b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
   const C = CATEGORIES.find((c) => c.id === id);
   panel.render(C.label, rowsFor(id));
   $('b-catrand').style.display = ['presets', 'saved'].includes(id) ? 'none' : '';
@@ -290,8 +290,67 @@ addEventListener('pointerup', lift);
 addEventListener('blur', () => ptrs.clear());
 document.addEventListener('visibilitychange', () => { ptrs.clear(); if (document.hidden && mode !== 'title'){ save.current = spec; store(); } });
 canvas.addEventListener('wheel', (e) => { if (mode !== 'screen') return; e.preventDefault(); studio.zoom(Math.exp(e.deltaY * 0.0012)); }, { passive: false });
-function measurePanel(){ studio.panelPx = mode === 'screen' ? $('side').getBoundingClientRect().width - $('tabs').getBoundingClientRect().width - 20 : 0; }
-addEventListener('resize', measurePanel);
+// ---------- fitting the screen: a phone held upright, sideways, a tablet, a computer ----------
+// Upright, the panel is a sheet along the bottom (drag its top edge, or tap ▾ to tuck it away and see
+// the whole person); sideways it's down the right. The camera frames the person into whatever the
+// panels leave free.
+const SHEET = { min: 0, max: 0, h: 0 };
+function layoutClasses(){
+  const W = window.innerWidth, H = window.innerHeight, B = document.body.classList;
+  B.toggle('portrait', W < H);
+  B.toggle('small', Math.min(W, H) < 600);
+  B.toggle('tiny', Math.min(W, H) < 430);
+}
+function setSheet(h, animate = true){
+  const H = window.innerHeight;
+  SHEET.min = 64; SHEET.max = Math.round(H * 0.8);
+  SHEET.h = clamp(Math.round(h), SHEET.min, SHEET.max);
+  const side = $('side');
+  side.style.transition = $('tabs').style.transition = animate ? '' : 'none';
+  document.documentElement.style.setProperty('--sheet', SHEET.h + 'px');
+  $('b-sheet').textContent = SHEET.h <= SHEET.min + 4 ? '▴' : '▾';
+  setTimeout(measurePanel, animate ? 260 : 0);
+}
+function measurePanel(){
+  layoutClasses();
+  const W = window.innerWidth, H = window.innerHeight;
+  if (mode !== 'screen'){ studio.setFree(null); return; }
+  const r = (id) => $(id).getBoundingClientRect();
+  const top = r('top').bottom + 4;
+  if (W < H){
+    const bottom = Math.min(r('tabs').top, r('side').top) - 4;
+    studio.setFree({ x: 0, y: top, w: W, h: Math.max(80, bottom - top) });
+  } else {
+    const left = r('tabs').right + 4, right = r('side').left - 4;
+    studio.setFree({ x: left, y: top, w: Math.max(80, right - left), h: H - top });
+  }
+}
+addEventListener('resize', () => { layoutClasses(); if (document.body.classList.contains('portrait')) setSheet(SHEET.h || window.innerHeight * 0.48, false); measurePanel(); });
+// drag the sheet's top edge (its heading) up and down; a tap on ▾ / ▴ tucks it away or brings it back
+{
+  const head = $('side-head');
+  let drag = null;
+  head.addEventListener('pointerdown', (e) => {
+    if (!document.body.classList.contains('portrait') || e.target.closest('button')) return;
+    drag = { id: e.pointerId, y: e.clientY, h: SHEET.h, moved: false };
+    try { head.setPointerCapture(e.pointerId); } catch (x) { /* fine */ }
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    if (Math.abs(e.clientY - drag.y) > 4) drag.moved = true;
+    setSheet(drag.h - (e.clientY - drag.y), false);
+  });
+  const end = (e) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const d = drag; drag = null;
+    if (!d.moved){ setSheet(SHEET.h <= SHEET.min + 4 ? window.innerHeight * 0.48 : SHEET.min); return; }
+    // settle at tucked away, half, or tall
+    const H = window.innerHeight, stops = [SHEET.min, H * 0.48, SHEET.max];
+    setSheet(stops.reduce((a, b) => (Math.abs(b - SHEET.h) < Math.abs(a - SHEET.h) ? b : a)));
+  };
+  head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end); head.addEventListener('lostpointercapture', end);
+  $('b-sheet').onclick = () => setSheet(SHEET.h <= SHEET.min + 4 ? window.innerHeight * 0.48 : SHEET.min);
+}
 
 // ---------- VR ----------
 const board = new VRBoard();
@@ -347,7 +406,9 @@ function refreshTitle(){
 function startScreen(){
   studio.turntable.rotation.y = 0;   // (the title screen turns them slowly)
   mode = 'screen'; $('title').classList.add('hidden'); document.body.classList.add('designing');
+  layoutClasses(); setSheet(SHEET.h || window.innerHeight * 0.48, false);
   buildTabs(); showCat(cat); refreshTop(); measurePanel();
+  studio.frame(CATEGORIES.find((c) => c.id === cat).frame, character, true);
   $('name').value = spec.name || '';
   clock.getDelta();
 }
@@ -405,7 +466,7 @@ async function makePresetThumbs(){
 if (save.light) studio.setLight(save.light);
 await character.set(clone(spec)); lastBuilt = spec; castShadows();
 frameFor('body'); studio.frame('body', character, true);
-refreshTitle();
+refreshTitle(); layoutClasses();
 
 // ---------- for the headless test ----------
 window.__cc = {

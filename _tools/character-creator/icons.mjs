@@ -36,7 +36,7 @@ await pg.evaluate(async () => {
   C.replaceSpec(C.PRESETS()[1]); await C.settle();
   C.advance(0.2);
   C.studio.turntable.rotation.y = 0.45;
-  C.studio.panelPx = 0;
+  C.studio.setFree(null);
   C.studio.frame('face', C.character, true);
   C.studio.want.dist = C.studio.view.dist = 0.62;
   C.studio.update(0.5); C.studio.camera.clearViewOffset(); C.studio.camera.aspect = 1; C.studio.camera.updateProjectionMatrix();

@@ -2,7 +2,7 @@
 title: Character Creator
 description: Design a person, from photo-real to cartoon, with hundreds of sliders for every part of the face and body, hair, skin and clothes. Name and save them, and move them to another device (or another game) with a short code or a seed number. On an iPad, a computer or in VR.
 date: 2026-11-27
-version: "1.0"
+version: "1.1"
 layout: null
 ---
 {% raw %}
@@ -38,10 +38,10 @@ if ('serviceWorker' in navigator){
   button{font-family:inherit;cursor:pointer;color:inherit;}
   input{font-family:inherit;}
   /* title */
-  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:flex-start;padding:24px calc(24px + env(safe-area-inset-right)) 24px calc(6vw + env(safe-area-inset-left));z-index:20;overflow-y:auto;touch-action:pan-y;
+  #title{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:flex-start;padding:24px calc(24px + env(safe-area-inset-right)) 24px calc(6vw + env(safe-area-inset-left));z-index:20;overflow-y:auto;touch-action:pan-y;
     background:linear-gradient(90deg,rgba(14,15,19,.94) 0%,rgba(14,15,19,.75) 40%,rgba(14,15,19,0) 70%);}
   #title.hidden{display:none;}
-  .card{max-width:470px;width:100%;}
+  .card{max-width:470px;width:100%;margin:auto 0;}
   h1{font-size:clamp(44px,7vw,78px);line-height:.95;font-weight:800;letter-spacing:-.01em;}
   h1 span{display:block;color:var(--acc);}
   .sub{margin:16px 0 20px;font-size:18px;line-height:1.45;color:#d8d5cc;}
@@ -78,7 +78,7 @@ if ('serviceWorker' in navigator){
   .ctl .lab{display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px;}
   .ctl .lab b{font-weight:600;} .ctl .lab i{font-style:normal;color:var(--dim);font-variant-numeric:tabular-nums;}
   .ctl .hint{font-size:12px;color:var(--dim);margin-top:3px;}
-  .rng{position:relative;height:30px;touch-action:none;}
+  .rng{position:relative;height:30px;touch-action:pan-y;cursor:pointer;}
   .rng .tr{position:absolute;left:0;right:0;top:12px;height:6px;border-radius:3px;background:rgba(255,255,255,.14);}
   .rng .fl{position:absolute;top:12px;height:6px;border-radius:3px;background:var(--acc);}
   .rng .mid{position:absolute;left:50%;top:8px;width:2px;height:14px;margin-left:-1px;background:rgba(255,255,255,.25);}
@@ -119,14 +119,49 @@ if ('serviceWorker' in navigator){
   #busy{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(20,22,28,.85);border-radius:12px;padding:10px 16px;font-weight:700;display:none;}
   #busy.show{display:block;}
   #uver{position:absolute;left:calc(90px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;opacity:.6;}
-  /* narrow / portrait: the panel goes along the bottom */
-  @media (max-aspect-ratio: 1/1){
-    #side{left:calc(8px + env(safe-area-inset-left));width:auto;top:56%;}
-    #tabs{flex-direction:row;top:auto;bottom:calc(44% + 4px);left:calc(8px + env(safe-area-inset-left));right:calc(8px + env(safe-area-inset-right));width:auto;height:58px;overflow-x:auto;overflow-y:hidden;touch-action:pan-x;}
-    #tabs button{width:62px;}
-    #views{bottom:calc(44% + 70px);}
-    #top .lbl{display:none;}
-  }
+  #b-sheet{display:none;}
+  body.small #title{padding-top:calc(16px + env(safe-area-inset-top));padding-bottom:calc(16px + env(safe-area-inset-bottom));}
+  body.small h1{font-size:clamp(34px,9vw,48px);}
+  body.small .sub{font-size:15px;margin:10px 0 12px;}
+  body.small .tbtn{padding:12px 16px;font-size:18px;margin:8px 0;max-width:300px;}
+  body.small .tbtn.second{font-size:16px;padding:10px 16px;}
+  body.small .help{font-size:12px;line-height:1.5;}
+  body.small:not(.portrait) .help{display:none;}
+  body.portrait #title{background:linear-gradient(180deg,rgba(14,15,19,.92) 0%,rgba(14,15,19,.8) 55%,rgba(14,15,19,.55) 100%);}
+  /* small screens (phones): slimmer bars, icons without words, bigger things to touch */
+  body.small #top{gap:5px;top:calc(6px + env(safe-area-inset-top));}
+  body.small #top .tb{padding:8px 10px;font-size:15px;border-radius:10px;}
+  body.small #top .lbl{display:none;}
+  body.small #name{flex:1 1 120px;padding:8px 10px;font-size:16px;border-radius:10px;}
+  body.small #tabs{top:calc(52px + env(safe-area-inset-top));width:60px;gap:3px;}
+  body.small #tabs button{font-size:19px;padding:6px 1px 5px;border-radius:10px;}
+  body.small #tabs button small{font-size:9.5px;}
+  body.small #side{top:calc(52px + env(safe-area-inset-top));width:min(46vw,380px);border-radius:14px;}
+  body.small #side-head{padding:8px 10px 7px;gap:6px;} body.small #side-head h2{font-size:17px;}
+  body.small #side-body{padding:2px 12px 24px;}
+  body.small .ctl{margin-top:8px;} body.small .grp{margin-top:12px;}
+  body.small .rng{height:36px;} body.small .rng .tr,body.small .rng .fl{top:15px;} body.small .rng .mid{top:11px;}
+  body.small .rng .kn{top:4px;width:28px;height:28px;margin-left:-14px;border-radius:14px;}
+  body.small .sw button,body.small .sw input[type=color]{width:36px;height:36px;border-radius:18px;}
+  body.small .ch button{padding:10px 11px;}
+  body.small #views{left:calc(72px + env(safe-area-inset-left));transform:none;gap:4px;}
+  body.small #views button{padding:7px 10px;font-size:13px;}
+  body.small #uver{display:none;}
+  body.small #toast{top:calc(56px + env(safe-area-inset-top));font-size:14px;max-width:90vw;}
+  /* held upright: the person at the top, the panel a sheet along the bottom (drag its top edge) */
+  body.portrait #b-sheet{display:block;}
+  body.portrait #side{left:calc(6px + env(safe-area-inset-left));right:calc(6px + env(safe-area-inset-right));width:auto;top:auto;
+    bottom:calc(6px + env(safe-area-inset-bottom));height:var(--sheet,48vh);transition:height .25s ease;border-radius:16px 16px 12px 12px;}
+  body.portrait #side-head{cursor:ns-resize;touch-action:none;position:relative;padding-top:14px;}
+  body.portrait #side-head::before{content:"";position:absolute;left:50%;top:5px;width:44px;height:5px;margin-left:-22px;border-radius:3px;background:rgba(255,255,255,.3);}
+  body.portrait #tabs{flex-direction:row;top:auto;left:calc(6px + env(safe-area-inset-left));right:calc(6px + env(safe-area-inset-right));width:auto;height:56px;
+    bottom:calc(var(--sheet,48vh) + 10px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;touch-action:pan-x;transition:bottom .25s ease;}
+  body.portrait #tabs button{flex:0 0 58px;}
+  body.portrait #views{left:auto;right:calc(8px + env(safe-area-inset-right));top:calc(58px + env(safe-area-inset-top));bottom:auto;transform:none;flex-direction:column;}
+  body.portrait #views button{padding:7px 9px;font-size:13px;}
+  body.portrait #uver{display:none;}
+  body.portrait #busy{top:25%;}
+  body.portrait.small #top .tb{padding:8px 9px;}
   /* loading screen: shown from the first paint until the designer is ready (see "Loading screen" in CLAUDE.md) */
   #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);color:#fff;transition:opacity .4s;}
   #loading.done{opacity:0;pointer-events:none;}
@@ -243,7 +278,7 @@ if ('serviceWorker' in navigator){
     <button id="b-share" class="tb">🔗 <span class="lbl">Code</span></button>
   </div>
   <div id="tabs"></div>
-  <div id="side"><div id="side-head"><h2 id="side-title"></h2><button id="b-catrand" class="sbtn">🎲 This</button><button id="b-catreset" class="sbtn">↺</button></div><div id="side-body"></div></div>
+  <div id="side"><div id="side-head"><button id="b-sheet" class="sbtn" title="Tuck the panel away">▾</button><h2 id="side-title"></h2><button id="b-catrand" class="sbtn">🎲 This</button><button id="b-catreset" class="sbtn">↺</button></div><div id="side-body"></div></div>
   <div id="views"><button data-v="body">Body</button><button data-v="head">Head</button><button data-v="face">Face</button><button data-v="spin">⟳ Spin</button></div>
   <div id="toast"></div>
   <div id="busy">Making…</div>
