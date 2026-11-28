@@ -49,39 +49,57 @@ export class ScreenPanel {
         v.textContent = r.text ? r.text(val) : '';
       };
       upd(); this.updaters.push(upd);
-      // a sideways drag moves the slider; an up-and-down swipe scrolls the panel instead (the browser
-      // takes it, touch-action: pan-y); a tap jumps to where you tapped; a double tap resets it
+      // The slider takes every touch itself (touch-action: none: leaving vertical swipes to the browser
+      // made phones hand it the whole gesture, so a drag stopped after the first move). Then: a
+      // sideways drag moves the slider; an up-and-down swipe scrolls the panel (done here, with a
+      // little glide after); a tap jumps to where you tapped; a double tap resets it.
       let drag = null, lastTap = 0;
       const at = (e) => { const b = rg.getBoundingClientRect(); return r.min + clamp((e.clientX - b.left) / b.width) * (r.max - r.min); };
+      const scroller = () => rg.closest('#side-body');
       rg.addEventListener('pointerdown', (e) => {
-        if (e.pointerType === 'mouse') e.preventDefault();
-        drag = { id: e.pointerId, x: e.clientX, y: e.clientY, on: e.pointerType === 'mouse' };
-        if (drag.on){ try { rg.setPointerCapture(e.pointerId); } catch (x) { /* fine */ } r.set(at(e), false); upd(); }
+        e.preventDefault();
+        drag = { id: e.pointerId, x: e.clientX, y: e.clientY, mode: e.pointerType === 'mouse' ? 'slide' : 'wait', st: 0, vy: 0, t: performance.now(), ly: e.clientY };
+        try { rg.setPointerCapture(e.pointerId); } catch (x) { /* fine */ }
+        if (drag.mode === 'slide'){ r.set(at(e), false); upd(); }
       });
       rg.addEventListener('pointermove', (e) => {
         if (!drag || drag.id !== e.pointerId) return;
-        if (!drag.on){
+        if (drag.mode === 'wait'){
           const dx = Math.abs(e.clientX - drag.x), dy = Math.abs(e.clientY - drag.y);
-          if (dx > 6 && dx > dy){ drag.on = true; try { rg.setPointerCapture(e.pointerId); } catch (x) { /* fine */ } }
-          else if (dy > 8){ drag = null; return; }
+          if (dx > 6 && dx >= dy){ drag.mode = 'slide'; }
+          else if (dy > 6){ drag.mode = 'scroll'; const sc = scroller(); drag.st = sc ? sc.scrollTop : 0; }
           else return;
         }
-        r.set(at(e), false); upd();
+        if (drag.mode === 'slide'){ r.set(at(e), false); upd(); }
+        else if (drag.mode === 'scroll'){
+          const sc = scroller(); if (sc) sc.scrollTop = drag.st - (e.clientY - drag.y);
+          const now = performance.now(), dt = Math.max(1, now - drag.t);
+          drag.vy = 0.7 * drag.vy + 0.3 * ((e.clientY - drag.ly) / dt); drag.t = now; drag.ly = e.clientY;
+        }
       });
-      rg.addEventListener('pointerup', (e) => {
+      const finish = (e, cancelled) => {
         if (!drag || drag.id !== e.pointerId) return;
         const d = drag; drag = null;
         const now = performance.now();
-        if (!d.on){
+        if (d.mode === 'scroll'){
+          // glide on a little, as a flicked list does
+          const sc = scroller(); let v = -d.vy * 16;
+          const glide = () => { if (!sc || Math.abs(v) < 0.5) return; sc.scrollTop += v; v *= 0.92; requestAnimationFrame(glide); };
+          if (performance.now() - d.t < 80) requestAnimationFrame(glide);
+          return;
+        }
+        if (cancelled){ if (d.mode === 'slide'){ r.set(r.get(), true); upd(); } return; }
+        if (d.mode === 'wait'){
           if (now - lastTap < 350){ r.set(r.def, true); upd(); lastTap = 0; return; }   // double tap: back to the middle
           lastTap = now; r.set(at(e), true); upd(); return;
         }
         if (Math.abs(e.clientX - d.x) < 4 && now - lastTap < 350){ r.set(r.def, true); upd(); lastTap = 0; return; }
         lastTap = Math.abs(e.clientX - d.x) < 4 ? now : 0;
-        r.set(r.get(), true); upd();
-      });
-      const cancel = (e) => { if (drag && drag.id === e.pointerId){ const was = drag.on; drag = null; if (was){ r.set(r.get(), true); upd(); } } };
-      rg.addEventListener('pointercancel', cancel); rg.addEventListener('lostpointercapture', cancel);
+        r.set(at(e), true); upd();
+      };
+      rg.addEventListener('pointerup', (e) => finish(e, false));
+      rg.addEventListener('pointercancel', (e) => finish(e, true));
+      rg.addEventListener('lostpointercapture', (e) => finish(e, true));
       if (r.hint) d.appendChild(el('div', 'hint', r.hint));
     } else if (r.kind === 'colors'){
       const w = el('div', 'sw'), btns = [];

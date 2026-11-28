@@ -23,7 +23,8 @@ u32 JSON length, the JSON (array names, types, offsets, lengths), padding to 4 b
 Use (Python 3 with numpy and Pillow):
   git clone --depth 1 https://github.com/makehumancommunity/makehuman.git /tmp/mh/mh
   curl -LO https://files2.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
-  unzip makehuman_system_assets_cc0.zip -d /tmp/mh/sys        (and any *_cc0.zip packs into /tmp/mh/packs/<name>)
+  unzip makehuman_system_assets_cc0.zip -d /tmp/mh/sys
+  curl -LO https://files2.makehumancommunity.org/asset_packs/hair01/hair01_cc0.zip && unzip hair01_cc0.zip -d /tmp/mh/packs/hair01_cc0
   python3 _tools/character-creator/build_assets.py /tmp/mh/mh/makehuman/data /tmp/mh/sys [/tmp/mh/packs]
 """
 import gzip, io, json, os, re, struct, sys, glob
@@ -346,7 +347,7 @@ def add_asset(kind, aid, mhclo, label, texsize=1024, gray=False, keep_color=True
         mat = read_mhmat(mat_path) if cand else {}
     tex = {}
     for key, out, alpha in [('diffuseTexture', 'map', True), ('normalmapTexture', 'normal', False), ('aomapTexture', 'ao', False), ('transparencymapTexture', 'alpha', False)]:
-        if key in mat:
+        if key in mat and not (kind == 'hair' and out == 'normal'):   # (hair normal maps made strands look like chrome)
             src = os.path.join(os.path.dirname(mat_path), os.path.basename(mat[key]))
             if not os.path.exists(src): src = os.path.join(c['folder'], os.path.basename(mat[key]))
             if os.path.exists(src):
@@ -383,13 +384,19 @@ CLOTHES = {'male_casualsuit01': ('outfit', 'Denim shirt, jeans'), 'male_casualsu
 for cid, (kind, label) in CLOTHES.items():
     f = glob.glob(os.path.join(SYS, f'clothes/{cid}/*.mhclo'))
     if f: add_asset(kind, cid, f[0], label, 1024)
-# CC0 community packs, if unpacked (packs/<pack>/...)
-for f in sorted(glob.glob(os.path.join(PACKS, '*_cc0/**/*.mhclo'), recursive=True)):
-    pk = f.split(os.sep)
-    kind = 'hair' if '/hair' in f else 'brows' if 'eyebrow' in f else 'hat' if '/hats' in f else 'glasses' if 'glasses' in f else 'shoes' if 'shoes' in f else 'cloth'
-    aid = os.path.basename(f)[:-6]
-    if any(a['id'] == aid for a in assets): continue
-    add_asset(kind, aid, f, pretty(aid.replace('_', ' ')), 1024, gray=(kind in ('hair', 'brows')))
+# More hair from MakeHuman's community pack "hair01" (hair01_cc0.zip, unpacked into PACKS/hair01_cc0).
+# The pack's index calls every style CC0, but some files' own headers say AGPL or CC-BY: only the ones
+# where both agree (or the file says nothing and its author's entry says CC0) are used. Appended after
+# the system hair, so the order of the hair choices (which character codes rely on) doesn't change.
+PACK_HAIR = {'cortu_shaggy_green_hair': 'Shaggy', 'cortu_short_messy_hair': 'Messy', 'cortu_straight_bangs': 'Straight, fringe',
+             'cortu_strawberry_cloud_hair': 'Curly', 'culturalibre_hair_05': 'Swept', 'culturalibre_hair_06': 'Choppy',
+             'faydaen_hair_1': 'Tousled', 'toigo_blunt_bob': 'Blunt bob', 'toigo_blunt_bob_with_bangs': 'Blunt bob, fringe',
+             'toigo_curled_under_bob': 'Curled bob', 'toigo_curled_under_bob_with_bangs': 'Curled bob, fringe',
+             'toigo_inverted_bob': 'Inverted bob', 'toigo_inverted_bob_with_bangs': 'Inverted bob, fringe'}
+for h, label in PACK_HAIR.items():
+    f = os.path.join(PACKS, 'hair01_cc0', 'hair', h, h + '.mhclo')
+    if os.path.exists(f): add_asset('hair', h, f, label, 1024, gray=True)
+    else: print('   (hair pack not unpacked: skipping', h + ')')
 
 pack(os.path.join(OUT, 'assets.bin'), arrays, {'assets': assets})
 

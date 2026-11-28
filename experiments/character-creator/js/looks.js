@@ -166,6 +166,7 @@ export class Looks {
         const hc = clay ? linHex(CLAY) : hairCol;
         m.color.setRGB(...hc.map((v) => v / (d.gray || 0.3)));
         if (m.sheenColor){ m.sheen = 0.35; m.sheenColor.setRGB(...hc.map((v) => Math.min(1, v * 1.5 + 0.04))); }
+        m.normalMap = null;   // (some styles' normal maps made the strands look like chrome)
         // and a soft blended layer for the wispy ends
         softLayer(part, m, this.mat('hairsoft' + id, () => { const mm = m.clone(); mm.alphaToCoverage = false; mm.alphaTest = 0.04; mm.transparent = true; mm.depthWrite = false; return mm; }));
       } else {
@@ -206,7 +207,7 @@ function softLayer(part, solid, soft){
     part.soft.bind(part.mesh.skeleton, new THREE.Matrix4());
   }
   part.soft.material = soft;
-  soft.map = solid.map; soft.color.copy(solid.color); if (soft.sheenColor && solid.sheenColor) soft.sheenColor.copy(solid.sheenColor);
+  soft.map = solid.map; soft.normalMap = solid.normalMap; soft.color.copy(solid.color); if (soft.sheenColor && solid.sheenColor) soft.sheenColor.copy(solid.sheenColor);
   soft.alphaTest = 0.04; soft.transparent = true; soft.depthWrite = false;
 }
 

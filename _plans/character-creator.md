@@ -160,3 +160,24 @@ heading was cut off).
 - Test: a phone held upright (the sheet, the whole person above it, tucking it away, a tab bringing it
   back, swipe vs drag on a slider) and sideways (the person between the tabs and the panel, a slim top
   bar, the title fitting).
+
+## Version 1.2: sliders drag on a phone, more hair
+
+- **Sliders only jumped to where you touched.** 1.1 let the browser keep vertical swipes on a slider
+  (`touch-action: pan-y`) so the panel could still scroll, and only took over once a drag went
+  sideways. On phones the browser then claimed the whole gesture after the first move, so the slider
+  jumped to the first touch and stopped following the finger. My test hadn't caught it because it sent
+  synthetic pointer events, which skip the browser's touch handling. Now the slider takes every touch
+  itself (`touch-action: none`): a sideways drag moves it the whole way, a vertical swipe scrolls the
+  panel (done by the slider, with a little glide after a flick), a tap jumps, a double tap resets.
+  The test now drives a real touchscreen through Chromium's DevTools (touchStart/touchMove/touchEnd)
+  and checks that a finger drags a slider all the way and that a swipe scrolls instead.
+- **13 more hair styles** (23 in all), from MakeHuman's community pack hair01: shaggy, messy,
+  straight with a fringe, curly, swept, choppy, tousled, and six bobs (blunt, curled under, inverted,
+  each with or without a fringe). The pack calls everything CC0, but some files' own headers say AGPL
+  or CC-BY, so only the styles where both agree (or the file says nothing and its author's entry says
+  CC0) are used. Their normal maps made the strands look like chrome, so hair doesn't use them.
+- **Seeds and codes don't change**: the new styles come after the old ones in the hair list (codes
+  store a choice by its position), and a random person still picks from the first ten (the Hair tab's
+  own dice picks from all 23). Checked by loading 1.1's code beside the new one: the same people for
+  every seed tried, and 1.1's codes open the same. The test pins Person 1234 so this can't drift.

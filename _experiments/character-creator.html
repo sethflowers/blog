@@ -2,7 +2,7 @@
 title: Character Creator
 description: Design a person, from photo-real to cartoon, with hundreds of sliders for every part of the face and body, hair, skin and clothes. Name and save them, and move them to another device (or another game) with a short code or a seed number. On an iPad, a computer or in VR.
 date: 2026-11-27
-version: "1.1"
+version: "1.2"
 layout: null
 ---
 {% raw %}
@@ -78,7 +78,7 @@ if ('serviceWorker' in navigator){
   .ctl .lab{display:flex;justify-content:space-between;font-size:14px;margin-bottom:5px;}
   .ctl .lab b{font-weight:600;} .ctl .lab i{font-style:normal;color:var(--dim);font-variant-numeric:tabular-nums;}
   .ctl .hint{font-size:12px;color:var(--dim);margin-top:3px;}
-  .rng{position:relative;height:30px;touch-action:pan-y;cursor:pointer;}
+  .rng{position:relative;height:30px;touch-action:none;cursor:pointer;}
   .rng .tr{position:absolute;left:0;right:0;top:12px;height:6px;border-radius:3px;background:rgba(255,255,255,.14);}
   .rng .fl{position:absolute;top:12px;height:6px;border-radius:3px;background:var(--acc);}
   .rng .mid{position:absolute;left:50%;top:8px;width:2px;height:14px;margin-left:-1px;background:rgba(255,255,255,.25);}

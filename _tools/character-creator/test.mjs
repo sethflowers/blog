@@ -146,6 +146,11 @@ const same = await ev(`(() => {
 check(same.ok, `a character code gives exactly the same person (${same.code})`);
 check(same.seedOk, 'a seed number gives the same person every time');
 check(same.len < 40, `a tweaked random person has a short code (${same.len} characters)`);
+// seed numbers handed out before must keep giving the same person (adding hair styles, sliders or
+// presets must not change them): Person 1234 as version 1.1 made them
+const pin = await ev(`(() => { const s = JSON.stringify(__cc.fromSeed(1234)); let h = 0; for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0; return h; })()`);
+check(pin === 1081896175, `Person 1234 is still the same person as in version 1.1 (${pin})`);
+check(await ev(`__cc.CONTROL['hair.style'].options.length`) >= 24, `more hair styles (${await ev(`__cc.CONTROL['hair.style'].options.length - 1`)})`);
 const presetsOk = await ev(`__cc.PRESETS().every((p) => JSON.stringify(__cc.fromCode(__cc.toCode(p))) === JSON.stringify(p))`);
 check(presetsOk, 'every preset survives its code');
 
@@ -252,6 +257,37 @@ if (FULL){
   check(t.h >= 0 && t.b <= 390, `the title fits a phone held sideways (heading at ${Math.round(t.h)} px, button ends at ${Math.round(t.b)} px)`);
   await shot('14-phone-title');
   await pg.setViewportSize({ width: 1180, height: 820 }); await wait(500);
+}
+
+// ---------- real touches on a phone ----------
+// (Chromium's own touch pipeline, through DevTools: synthetic pointer events missed that a phone took
+// over a slider drag after its first move, so the slider only jumped to where you touched)
+{
+  const tctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
+  const tp = await tctx.newPage();
+  tp.on('pageerror', (e) => errors.push(e.message));
+  await tp.goto(BASE);
+  await tp.waitForFunction('window.__cc', null, { timeout: 180000 });
+  await tp.evaluate('__cc.noThumbs = true; __cc.startScreen(); __cc.showCat("body")');
+  await tp.waitForTimeout(600);
+  const cdp = await tctx.newCDPSession(tp);
+  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+  const r = await tp.evaluate(`(() => { const e = document.querySelectorAll('#side-body .rng')[2]; const b = e.getBoundingClientRect(); return { x: b.left, y: b.top + b.height / 2, w: b.width }; })()`);
+  await tp.evaluate('__cc.spec.macro.height = 0.5');
+  const val = () => tp.evaluate('__cc.spec.macro.height');
+  await touch('touchStart', r.x + r.w * 0.2, r.y);
+  let mid = 0;
+  for (let i = 1; i <= 12; i++){ await touch('touchMove', r.x + r.w * (0.2 + 0.65 * i / 12), r.y + i * 0.6); await tp.waitForTimeout(25); if (i === 6) mid = await val(); }
+  await touch('touchEnd'); await tp.waitForTimeout(200);
+  const end = await val();
+  check(mid > 0.4 && mid < 0.65 && end > 0.8, `a finger drags a slider all the way (${mid.toFixed(2)} half way, ${end.toFixed(2)} at the end)`);
+  const sc = () => tp.evaluate('document.getElementById("side-body").scrollTop');
+  const s0 = await sc();
+  await touch('touchStart', r.x + r.w * 0.5, r.y);
+  for (let i = 1; i <= 10; i++){ await touch('touchMove', r.x + r.w * 0.5 + 1, r.y - i * 15); await tp.waitForTimeout(25); }
+  await touch('touchEnd'); await tp.waitForTimeout(300);
+  check((await sc()) > s0 + 80 && Math.abs((await val()) - end) < 1e-6, 'a finger swiping up over a slider scrolls the panel and leaves the slider alone');
+  await tctx.close();
 }
 
 // ---------- VR ----------

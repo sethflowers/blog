@@ -265,7 +265,9 @@ export function randomize(spec, cat, seed = 1 + Math.floor(Math.random() * MAX_S
     if (!want(c)) continue;
     if (c.mod){ const sd = c.cat === 'shape' ? 0.08 : 0.13; set(s, c.key, clamp(c.min < 0 ? normal(sd) : Math.max(0, normal(sd)), c.min, c.max)); continue; }
     switch (c.key){
-      case 'hair.style': s.hair.style = r() < (male ? 0.12 : 0.02) ? 'none' : pick(male ? ['short01', 'short02', 'short03', 'short04', 'short02', 'afro01', 'bob02'] : ['long01', 'bob01', 'bob02', 'ponytail01', 'braid01', 'afro01', 'short02', 'long01']); break;
+      // (a random person keeps the first ten styles, so seed numbers made before more hair arrived still
+      // give the same person; the Hair tab's own dice picks from them all)
+      case 'hair.style': if (cat === 'hair'){ s.hair.style = r() < (male ? 0.08 : 0.02) ? 'none' : pick(opts('hair.style')); break; } s.hair.style = r() < (male ? 0.12 : 0.02) ? 'none' : pick(male ? ['short01', 'short02', 'short03', 'short04', 'short02', 'afro01', 'bob02'] : ['long01', 'bob01', 'bob02', 'ponytail01', 'braid01', 'afro01', 'short02', 'long01']); break;
       case 'hair.color': s.hair.color = old && r() < 0.7 ? pick(['#7d7a76', '#d9d6d0']) : dark || asian ? pick(['#0e0b09', '#24170f', '#24170f']) : pick(PALETTES.hair.slice(0, 10)); break;
       case 'brows.color': s.brows.color = s.hair.color === '#d9d6d0' ? '#7d7a76' : s.hair.color; break;
       case 'brows.style': s.brows.style = pick(opts('brows.style')); break;
