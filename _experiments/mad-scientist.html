@@ -1,0 +1,252 @@
+---
+title: Mad Scientist
+description: You're a mad scientist with an ice cream shop. Put crazy ingredients in the ice cream and see what happens to the customers who eat it. Keep a catalogue of your recipes. On an iPad, a computer or in VR.
+date: 2026-11-28
+version: "1.0"
+layout: null
+---
+{% raw %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#2a1640">
+<meta name="apple-mobile-web-app-title" content="Mad Scientist">
+<link rel="manifest" href="/experiments/mad-scientist/manifest.json">
+<link rel="apple-touch-icon" href="/experiments/mad-scientist/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/experiments/mad-scientist/icon-192.png">
+<title>Mad Scientist</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{width:100%;height:100%;overflow:hidden;background:#2a1640;color:#fff;touch-action:none;-webkit-user-select:none;user-select:none;
+    font-family:"Avenir Next","Trebuchet MS","Helvetica Neue",Helvetica,Arial,sans-serif;}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%;touch-action:none;}
+  button{font-family:inherit;cursor:pointer;}
+  /* title */
+  #title{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;z-index:20;overflow-y:auto;
+    background:radial-gradient(ellipse at center,rgba(42,22,64,.25) 0%,rgba(42,22,64,.7) 70%,rgba(26,12,40,.92) 100%);}
+  #title.hidden{display:none;}
+  .card{max-width:700px;width:100%;text-align:center;}
+  h1{font-size:clamp(52px,11vw,112px);line-height:.88;font-weight:900;letter-spacing:.02em;color:#6aff3a;font-style:italic;
+    -webkit-text-stroke:2px #0a3a00;text-shadow:0 0 22px rgba(106,255,58,.6),0 6px 0 #1a6a10,0 12px 30px rgba(0,0,0,.7);transform:rotate(-3deg);}
+  h1 span{display:block;font-size:.5em;color:#ff8ad8;-webkit-text-stroke:2px #4a1038;text-shadow:0 4px 0 #8a1a5a,0 10px 26px rgba(0,0,0,.7);letter-spacing:.12em;margin-top:6px;}
+  .bubbles{display:block;height:22px;margin:4px auto 0;width:min(420px,70%);background:radial-gradient(circle at 12% 60%,#6aff3a 0 6px,transparent 7px),radial-gradient(circle at 30% 30%,#ff8ad8 0 4px,transparent 5px),radial-gradient(circle at 55% 70%,#7ad8ff 0 8px,transparent 9px),radial-gradient(circle at 78% 35%,#ffe02a 0 5px,transparent 6px),radial-gradient(circle at 92% 65%,#6aff3a 0 4px,transparent 5px);}
+  .sub{margin:14px 0 18px;font-size:19px;font-weight:600;line-height:1.4;text-shadow:0 2px 6px rgba(0,0,0,.9);}
+  .tbtn{display:block;width:100%;max-width:360px;margin:12px auto;padding:17px 20px;font-size:23px;font-weight:800;line-height:1;color:#0a2a00;
+    background:#6aff3a;border:0;border-radius:18px;box-shadow:0 6px 0 #2a9a10,0 0 24px rgba(106,255,58,.3);}
+  .tbtn:active{transform:translateY(3px);box-shadow:0 3px 0 #2a9a10;}
+  .tbtn:disabled{background:#7a7280;box-shadow:0 6px 0 #4a4450;color:#2a2830;cursor:default;}
+  .tbtn.second{background:#ffe0f4;box-shadow:0 6px 0 #b87aa0;font-size:18px;padding:14px;color:#3a1a30;}
+  #t-best{margin-top:8px;font-size:16px;font-weight:700;color:#c8ffb0;min-height:20px;text-shadow:0 1px 4px #000;}
+  #status{margin-top:8px;font-size:15px;opacity:.95;min-height:20px;text-shadow:0 1px 4px #000;}
+  #offline{margin-top:2px;font-size:13px;opacity:.85;min-height:16px;text-shadow:0 1px 4px #000;}
+  .help{margin-top:12px;font-size:13.5px;opacity:.95;line-height:1.6;text-shadow:0 1px 4px #000;}
+  .help b{color:#6aff3a;}
+  .build-version{position:fixed;right:12px;bottom:10px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.85;pointer-events:none;text-shadow:0 1px 3px #000;}
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5;}
+  body.playing #hud{display:block;}
+  .chip{position:absolute;background:rgba(42,22,64,.82);border-radius:14px;padding:9px 14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  #h-stat{left:calc(10px + env(safe-area-inset-left));top:calc(10px + env(safe-area-inset-top));}
+  #h-money{font-size:21px;} #h-money b{color:#6aff3a;}
+  #h-info{font-size:14.5px;margin-top:3px;} #h-info b{color:#ffe07a;}
+  #h-order{left:calc(10px + env(safe-area-inset-left));top:calc(84px + env(safe-area-inset-top));font-size:16px;max-width:min(360px,40vw);background:rgba(255,255,255,.92);color:#2a1640;}
+  #h-order b{color:#a0108a;}
+  #h-msg{position:absolute;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top));width:min(520px,46vw);display:flex;flex-direction:column;gap:6px;}
+  .msg{background:rgba(42,22,64,.9);border-radius:12px;padding:9px 14px;font-size:15.5px;font-weight:700;text-align:center;animation:pop .25s ease-out;}
+  .msg.good{background:rgba(30,130,40,.94);} .msg.bad{background:rgba(170,20,60,.94);}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+  #banner{position:absolute;left:50%;top:32%;transform:translate(-50%,-50%) scale(.6);opacity:0;pointer-events:none;width:min(620px,86vw);text-align:center;
+    background:linear-gradient(180deg,#5a1a8a,#3a0a5a);border:4px solid #6aff3a;border-radius:22px;padding:14px 18px;box-shadow:0 0 40px rgba(106,255,58,.5);}
+  #banner b{display:block;font-size:24px;color:#fff;} #banner small{display:block;margin-top:6px;font-size:16px;color:#a8ff8a;}
+  #banner.show{animation:ban 4s ease-out forwards;}
+  @keyframes ban{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}8%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}14%{transform:translate(-50%,-50%) scale(1)}85%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) scale(1)}}
+  .hbtn{pointer-events:auto;border:0;border-radius:14px;background:rgba(42,22,64,.86);color:#fff;font-weight:800;font-size:17px;padding:11px 15px;}
+  .hbtn:active{background:#6aff3a;color:#0a2a00;}
+  #b-menu{position:absolute;right:calc(10px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));}
+  #b-cat{position:absolute;right:calc(108px + env(safe-area-inset-right));top:calc(10px + env(safe-area-inset-top));}
+  /* the cone's status and the tray of ingredients along the bottom */
+  #cone-status{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(98px + env(safe-area-inset-bottom));max-width:min(640px,70vw);
+    background:rgba(42,22,64,.86);border-radius:14px;padding:7px 14px;font-size:15px;font-weight:700;text-align:center;line-height:1.35;}
+  #cone-status span{display:block;} #cone-status .known{color:#a8ff8a;} #cone-status .unknown{color:#ffe07a;} #cone-status .match{color:#6aff3a;font-size:17px;}
+  #tray{pointer-events:auto;position:absolute;left:calc(8px + env(safe-area-inset-left));right:calc(228px + env(safe-area-inset-right));bottom:calc(8px + env(safe-area-inset-bottom));height:84px;
+    display:flex;gap:6px;align-items:center;overflow-x:auto;overflow-y:hidden;padding:4px 6px;background:rgba(42,22,64,.7);border-radius:16px;touch-action:pan-x;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  #tray::-webkit-scrollbar{display:none;}
+  .tb{position:relative;flex:0 0 auto;width:72px;height:74px;border:0;border-radius:12px;background:#fff8f0;color:#2a1640;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    border-bottom:6px solid var(--c,#ccc);box-shadow:0 3px 0 rgba(0,0,0,.25);}
+  .tb i{font-style:normal;font-size:28px;line-height:1;} .tb span{font-size:10.5px;font-weight:800;line-height:1.05;max-width:68px;overflow:hidden;}
+  .tb.on{background:#6aff3a;transform:translateY(-3px);} .tb:active{transform:translateY(2px);}
+  .tb em{position:absolute;right:3px;top:2px;font-style:normal;font-size:11px;font-weight:900;color:#a0108a;}
+  .tb.base{background:var(--c);} .tb.base.on{outline:4px solid #6aff3a;}
+  #tray .sep{flex:0 0 3px;height:60px;background:rgba(255,255,255,.35);border-radius:2px;margin:0 3px;}
+  .rbtn{pointer-events:auto;position:absolute;border:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:#fff;font-weight:900;line-height:1;box-shadow:0 6px 0 rgba(0,0,0,.4);}
+  .rbtn small{font-size:13px;margin-top:4px;letter-spacing:.05em;}
+  .rbtn:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(0,0,0,.4);}
+  #b-serve{right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:118px;height:118px;font-size:44px;background:#b8a050;border:5px solid #ffe8a0;color:#2a1a00;opacity:.8;}
+  #b-serve.ready{background:#ffc83a;opacity:1;animation:ready 1.2s ease-in-out infinite;}
+  @keyframes ready{50%{box-shadow:0 6px 0 rgba(0,0,0,.4),0 0 0 10px rgba(255,200,58,.35);}}
+  #b-bin{right:calc(142px + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));width:78px;height:78px;font-size:30px;background:#4a8a5a;border:4px solid #b8f0c0;}
+  /* the thumb stick appears wherever your left thumb goes down */
+  #stick{position:fixed;width:120px;height:120px;border-radius:60px;border:3px solid rgba(160,255,140,.55);background:rgba(20,10,30,.28);display:none;pointer-events:none;z-index:6;}
+  #stick.on{display:block;}
+  #knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:27px;background:rgba(106,255,58,.9);box-shadow:0 3px 8px rgba(0,0,0,.4);}
+  /* panels */
+  #panel{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:rgba(26,12,40,.45);padding:14px;}
+  #panel.show{display:flex;}
+  .card-panel{width:min(680px,100%);max-height:min(92vh,940px);display:flex;flex-direction:column;background:#fbf6ff;color:#22142e;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .phead{display:flex;align-items:center;gap:12px;background:#3a1a5a;color:#fff;padding:13px 16px;border-bottom:4px solid #6aff3a;}
+  .phead h2{font-size:23px;flex:1;}
+  .pmoney{font-weight:900;color:#6aff3a;font-size:18px;}
+  .phead .x{border:0;background:rgba(255,255,255,.2);color:#fff;border-radius:10px;width:42px;height:42px;font-size:18px;}
+  .pbody{overflow-y:auto;padding:6px 18px 18px;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
+  .psec{margin-top:12px;}
+  .psec h3{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:#8a2a9a;margin-bottom:6px;}
+  .psec p{font-size:17px;line-height:1.45;}
+  .psec ul{padding-left:20px;font-size:16px;line-height:1.55;}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;}
+  .btns button,.grid button,.row button{border:0;border-radius:12px;padding:12px 16px;font-weight:800;font-size:16px;background:#4a2a6a;color:#fff;}
+  .btns button.on,.grid button.on{background:#6aff3a;color:#0a2a00;}
+  .btns button.primary{background:#2a9a3a;font-size:19px;padding:14px 24px;} .btns button.danger{background:#a8303a;}
+  button:disabled{opacity:.45;cursor:default;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:7px;}
+  .grid button{font-size:14px;padding:10px 8px;line-height:1.2;}
+  .row{display:flex;align-items:center;gap:10px;padding:8px 10px;margin:6px 0;background:#efe4f8;border-radius:14px;}
+  .row .rl{flex:1;min-width:0;} .row .rl b{display:block;font-size:15.5px;} .row .rl small{display:block;font-size:14px;color:#6a3a8a;margin-top:2px;}
+  .row button{flex:0 0 auto;font-size:15px;padding:10px 14px;background:#2a9a3a;}
+  /* loading screen: shown from the first paint until the game is ready (see "Loading screen" in CLAUDE.md) */
+  #loading{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px;background:#2a1640;color:#fff;transition:opacity .4s;}
+  #loading.done{opacity:0;pointer-events:none;}
+  .ld-box{width:min(420px,100%);text-align:center;}
+  .ld-name{font-weight:900;font-style:italic;font-size:clamp(32px,7vw,52px);line-height:1.05;margin-bottom:24px;color:#6aff3a;text-shadow:0 0 14px rgba(106,255,58,.45);}
+  .ld-spin{width:56px;height:56px;margin:0 auto 22px;border-radius:50%;border:7px solid rgba(255,255,255,.15);border-top-color:#6aff3a;animation:ldspin .9s linear infinite;}
+  @keyframes ldspin{to{transform:rotate(360deg)}}
+  .ld-bar{height:14px;border-radius:7px;background:rgba(255,255,255,.14);overflow:hidden;}
+  #ld-fill{display:block;height:100%;width:3%;background:#6aff3a;border-radius:7px;transition:width .3s;}
+  #ld-text{margin-top:12px;font-size:17px;min-height:22px;}
+  #ld-note{margin-top:6px;font-size:14px;min-height:18px;opacity:.8;}
+  #ld-retry{display:none;margin:14px auto 0;padding:12px 24px;border:0;border-radius:12px;font-family:inherit;font-weight:bold;font-size:18px;background:#6aff3a;color:#0a2a00;}
+  .ld-ver{margin-top:20px;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;opacity:.6;}
+  @media (max-height:520px){ #h-order{top:calc(74px + env(safe-area-inset-top));} #cone-status{bottom:calc(94px + env(safe-area-inset-bottom));font-size:13px;} }
+</style>
+<!-- the offline copy is saved straight away (not once the page has loaded: building the shop takes a
+     while on an iPad, and closing the game before then would leave nothing saved for offline) -->
+<script>
+if ('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/experiments/mad-scientist/sw.js?v={% endraw %}{{ page.version }}{% raw %}', { scope: '/experiments/mad-scientist/', updateViaCache: 'none' }).catch(function(){});
+  // from the home screen, ask iOS to keep the saved copy
+  if ((navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches)) && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+</script>
+<!-- every script address carries the version, so a new page never runs old code from a cache -->
+<script type="importmap">
+{ "imports": {
+    "three": "/experiments/mad-scientist/lib/three.module.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/lib/three.core.min.js": "/experiments/mad-scientist/lib/three.core.min.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/audio.js": "/experiments/mad-scientist/js/audio.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/fx.js": "/experiments/mad-scientist/js/fx.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/icecream.js": "/experiments/mad-scientist/js/icecream.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/people.js": "/experiments/mad-scientist/js/people.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/recipes.js": "/experiments/mad-scientist/js/recipes.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/ui.js": "/experiments/mad-scientist/js/ui.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/util.js": "/experiments/mad-scientist/js/util.js?v={% endraw %}{{ page.version }}{% raw %}",
+    "/experiments/mad-scientist/js/world.js": "/experiments/mad-scientist/js/world.js?v={% endraw %}{{ page.version }}{% raw %}"
+} }
+</script>
+</head>
+<body data-version="{% endraw %}{{ page.version }}{% raw %}">
+<!-- loading screen: drawn before anything else, filled in as the game's files arrive, hidden by
+     main.js (window.__loaded) once the game is ready; says so (with a Try again button) if loading fails -->
+<div id="loading" role="status" aria-live="polite">
+  <div class="ld-box">
+    <div class="ld-name">Mad Scientist</div>
+    <div class="ld-spin"></div>
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <div id="ld-text">Loading…</div>
+    <div id="ld-note"></div>
+    <button id="ld-retry" type="button">Try again</button>
+    <div class="ld-ver">v{% endraw %}{{ page.version }}{% raw %}</div>
+  </div>
+</div>
+<script>
+(function(){
+  var L = document.getElementById('loading'), fill = document.getElementById('ld-fill'), txt = document.getElementById('ld-text'),
+      note = document.getElementById('ld-note'), retry = document.getElementById('ld-retry');
+  var MAIN = '/experiments/mad-scientist/js/main.js', BUILD = 'Building the lab and mixing the ice cream…';
+  // the files to wait for: everything in the import map plus main.js (three.js counts for more: it is most of the download)
+  var want = {}, total = 0, have = 0, got = {}, shown = 3, building = false, done = false, failed = false, t0 = Date.now();
+  function add(u){ var p = u.split('?')[0]; if (!want[p]){ want[p] = /\/lib\//.test(p) ? 10 : 1; total += want[p]; } }
+  try { var m = JSON.parse(document.querySelector('script[type=importmap]').textContent).imports; for (var k in m) add(m[k]); } catch (e) {}
+  add(MAIN);
+  function show(p, t){ if (p > shown) shown = p; fill.style.width = shown + '%'; if (txt.textContent !== t) txt.textContent = t; }
+  function tick(){
+    if (done || failed) return;
+    try { performance.getEntriesByType('resource').forEach(function(e){ var p; try { p = new URL(e.name).pathname; } catch (x) { return; } if (want[p] && !got[p]){ got[p] = 1; have += want[p]; } }); } catch (e) {}
+    var f = total ? have / total : 0;
+    if (building || f >= 1) show(Math.min(97, shown + (97 - shown) * 0.03), BUILD);
+    else { show(3 + 82 * f, ''); txt.textContent = 'Loading… ' + Math.round(shown) + '%'; }
+    if (Date.now() - t0 > 20000 && !note.textContent){ note.textContent = 'Still going: a slow connection can take a minute.'; retry.style.display = 'inline-block'; }
+  }
+  var iv = setInterval(tick, 150); tick();
+  retry.onclick = function(){ location.reload(); };
+  // main.js: "await window.__loading()" before building the world, so "Building…" gets drawn first
+  window.__loading = function(){
+    building = true; tick();
+    return new Promise(function(r){ setTimeout(r, 120); requestAnimationFrame(function(){ setTimeout(r, 0); }); });
+  };
+  window.__loaded = function(){
+    if (done) return; done = true; clearInterval(iv);
+    show(100, 'Ready!'); note.textContent = ''; retry.style.display = 'none';
+    var hide = function(){ L.classList.add('done'); setTimeout(function(){ L.style.display = 'none'; }, 450); };
+    requestAnimationFrame(function(){ requestAnimationFrame(hide); }); setTimeout(hide, 600);
+  };
+  window.__loadFailed = function(why){
+    if (done || failed) return; failed = true; clearInterval(iv);
+    txt.textContent = 'Something went wrong while loading.'; note.textContent = why ? String(why).slice(0, 160) : '';
+    retry.style.display = 'inline-block';
+  };
+  addEventListener('error', function(e){ if (!done && e && e.message) window.__loadFailed(e.message); });
+})();
+</script>
+<div id="title">
+  <div class="card">
+    <h1>MAD SCIENTIST<span>ICE CREAM LAB</span></h1>
+    <i class="bubbles"></i>
+    <p class="sub">Put crazy ingredients in the ice cream and serve it.<br>Delicious? Or do they turn into a frog? Only one way to find out!</p>
+    <button id="b-play" class="tbtn">Open the shop</button>
+    <button id="b-vr" class="tbtn">Play in VR</button>
+    <button id="b-new" class="tbtn second">New shop</button>
+    <p id="t-best"></p>
+    <p id="status">&nbsp;</p>
+    <p id="offline"></p>
+    <div class="help">
+      <b>iPad:</b> tap the tubs, jars and bell (or the buttons along the bottom) · drag to look · left thumb walks<br>
+      <b>Computer:</b> click things · drag to look · WASD walks · Space serves · X bins · C catalogue · Esc: menu<br>
+      <b>VR:</b> point and pull the trigger · A serves · left stick walks · right stick turns · X/Y: menu
+    </div>
+  </div>
+  <div class="build-version">v{% endraw %}{{ page.version }}{% raw %}</div>
+</div>
+<div id="hud">
+  <div id="h-stat" class="chip"><div id="h-money"></div><div id="h-info"></div></div>
+  <div id="h-order" class="chip"></div>
+  <div id="h-msg"></div>
+  <div id="banner"></div>
+  <button id="b-cat" class="hbtn">📖 Catalogue</button>
+  <button id="b-menu" class="hbtn">☰ Menu</button>
+  <div id="cone-status"></div>
+  <div id="tray"></div>
+  <button id="b-bin" class="rbtn">🗑<small>BIN</small></button>
+  <button id="b-serve" class="rbtn">🔔<small>SERVE</small></button>
+</div>
+<div id="stick"><div id="knob"></div></div>
+<div id="panel"></div>
+<script type="module" src="/experiments/mad-scientist/js/main.js?v={% endraw %}{{ page.version }}{% raw %}" onerror="window.__loadFailed && window.__loadFailed('A game file did not arrive. Check the connection and try again.')"></script>
+</body>
+</html>
+{% endraw %}
